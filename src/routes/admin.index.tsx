@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Trash2, X, ChevronRight, Activity, ShieldCheck, Database } from "lucide-react";
+import { Trash2, X, ChevronRight, Terminal, Zap, ShieldAlert } from "lucide-react";
 
 export const Route = createFileRoute("/admin/")({
   component: AdminDashboard,
@@ -13,92 +13,71 @@ function AdminDashboard() {
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchStream = async () => {
+  const sync = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("orders")
-      .select("*")
-      .order("created_at", { ascending: false });
-    
-    if (error) toast.error("CONNECTION_ERROR");
-    else setOrders(data || []);
+    const { data } = await supabase.from("orders").select("*").order("created_at", { ascending: false });
+    setOrders(data || []);
     setLoading(false);
   };
 
-  const purgeRecord = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevents opening the panel when clicking delete
-    if (!confirm("ACTION_REQUIRED: PERMANENT_DATABASE_REMOVAL?")) return;
-
+  const hardDelete = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     const { error } = await supabase.from("orders").delete().eq("id", id);
-
     if (error) {
-      console.error(error);
-      toast.error(`PURGE_DENIED: ${error.message}`);
+      toast.error(`ROOT_ACCESS_DENIED: ${error.message}`);
     } else {
-      toast.success("DATA_REMOVED_FROM_VAULT");
+      toast.success("DATA_PURGED");
       setSelectedOrder(null);
-      fetchStream();
+      sync();
     }
   };
 
-  useEffect(() => { fetchStream(); }, []);
+  useEffect(() => { sync(); }, []);
 
   return (
-    <div className="min-h-screen bg-[#050505] text-[#E5E5E5] font-sans antialiased overflow-hidden flex flex-col">
-      {/* ADVANCED TOP NAV */}
-      <header className="border-b border-white/5 bg-black/50 backdrop-blur-xl p-6 flex justify-between items-center z-20">
-        <div className="flex items-center gap-8">
-          <div>
-            <h1 className="text-xl font-bold tracking-[0.2em] uppercase italic">System_Admin</h1>
-            <div className="flex items-center gap-2 mt-1">
-              <div className="h-1 w-1 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-[8px] font-mono text-white/30 uppercase tracking-[0.3em]">Node_Live // Tulsa_Central</span>
-            </div>
+    <div className="min-h-screen bg-[#000] text-[#fff] font-sans selection:bg-white selection:text-black">
+      {/* HUD HEADER */}
+      <header className="p-8 border-b border-white/10 flex justify-between items-end bg-black sticky top-0 z-30">
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Terminal size={12} className="text-white/40" />
+            <span className="text-[10px] font-mono tracking-[0.4em] text-white/40 uppercase">System.Root.Tulsa</span>
           </div>
+          <h1 className="text-5xl font-light italic tracking-tighter uppercase leading-none">Command_Vault</h1>
         </div>
-        <div className="flex gap-4">
-          <div className="px-4 py-2 border border-white/5 bg-white/5 flex items-center gap-3">
-             <Database size={12} className="text-white/20" />
-             <span className="text-[10px] font-mono font-bold tracking-widest">{orders.length} RECORDS</span>
-          </div>
+        <div className="flex gap-8">
+          <Stat value={orders.length} label="Live_Nodes" />
+          <Stat value={`$${(orders.reduce((acc, o) => acc + (o.amount_cents || 0), 0) / 100).toLocaleString()}`} label="Net_Volume" />
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-8 space-y-4 relative">
+      {/* STREAM FEED */}
+      <main className="p-8 max-w-5xl mx-auto">
         {loading ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm z-10">
-             <Activity className="animate-spin text-white/20" size={32} />
-          </div>
+          <div className="py-20 text-center animate-pulse font-mono text-[10px] tracking-[1em] opacity-20">Accessing_Database...</div>
         ) : (
-          <div className="max-w-6xl mx-auto space-y-2">
-            {orders.map((order) => (
+          <div className="space-y-1">
+            {orders.map((o) => (
               <div 
-                key={order.id}
-                onClick={() => setSelectedOrder(order)}
-                className="group flex items-center justify-between p-5 bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-white/20 transition-all cursor-pointer rounded-sm"
+                key={o.id}
+                onClick={() => setSelectedOrder(o)}
+                className="group flex items-center justify-between p-6 border border-white/5 bg-white/[0.02] hover:bg-white/5 hover:border-white/20 transition-all cursor-pointer"
               >
-                <div className="flex items-center gap-6">
-                  <div className={`h-2 w-2 rounded-full ${order.status === 'paid' ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-white/10'}`} />
+                <div className="flex items-center gap-8">
+                  <div className={`h-1.5 w-1.5 rounded-full ${o.status === 'paid' ? 'bg-white shadow-[0_0_8px_#fff]' : 'bg-white/10'}`} />
                   <div>
-                    <p className="text-sm font-bold tracking-tight uppercase">{order.email}</p>
-                    <p className="text-[9px] font-mono text-white/20 uppercase tracking-widest mt-1">
-                      {new Date(order.created_at).toLocaleDateString()} // ID: {order.id.split('-')[0]}
-                    </p>
+                    <p className="text-sm font-bold uppercase tracking-tight">{o.email}</p>
+                    <p className="text-[9px] font-mono opacity-20 uppercase tracking-[0.2em] mt-1">{o.id.slice(0,8)} // {new Date(o.created_at).toLocaleDateString()}</p>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-12">
-                  <span className="text-lg font-light italic tabular-nums tracking-tighter">
-                    ${(order.amount_cents / 100).toFixed(2)}
-                  </span>
-                  <div className="flex items-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button 
-                      onClick={(e) => purgeRecord(order.id, e)}
-                      className="p-2 hover:bg-red-500/20 text-white/20 hover:text-red-500 transition-all"
-                    >
+                
+                <div className="flex items-center gap-10">
+                  <span className="text-xl font-light italic tabular-nums tracking-tighter">${(o.amount_cents / 100).toFixed(2)}</span>
+                  <div className="opacity-0 group-hover:opacity-100 transition-all flex items-center gap-4">
+                    <button onClick={(e) => hardDelete(o.id, e)} className="p-2 hover:bg-white hover:text-black transition-colors">
                       <Trash2 size={14} />
                     </button>
-                    <ChevronRight size={14} className="text-white/20" />
+                    <ChevronRight size={14} className="opacity-20" />
                   </div>
                 </div>
               </div>
@@ -107,56 +86,64 @@ function AdminDashboard() {
         )}
       </main>
 
-      {/* THE "DRAWER" - ADVANCED DETAIL VIEW */}
+      {/* DETAIL SIDE-DRAWER */}
       {selectedOrder && (
-        <div className="fixed inset-y-0 right-0 w-full md:w-[450px] bg-[#0A0A0A] border-l border-white/10 shadow-2xl z-50 animate-in slide-in-from-right duration-300">
-          <div className="p-8 h-full flex flex-col">
-            <div className="flex justify-between items-center mb-12">
-              <h2 className="text-[10px] font-bold uppercase tracking-[0.5em] text-white/30">Object_Details</h2>
-              <button onClick={() => setSelectedOrder(null)} className="p-2 hover:bg-white/5 rounded-full transition-colors">
-                <X size={20} />
+        <>
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40" onClick={() => setSelectedOrder(null)} />
+          <div className="fixed inset-y-0 right-0 w-full md:w-[500px] bg-black border-l border-white/10 z-50 p-12 flex flex-col shadow-2xl animate-in slide-in-from-right duration-500">
+            <div className="flex justify-between items-start mb-20">
+              <Zap size={20} className="text-white" />
+              <button onClick={() => setSelectedOrder(null)} className="hover:rotate-90 transition-transform duration-300">
+                <X size={24} />
               </button>
             </div>
 
-            <div className="space-y-8 flex-1">
+            <div className="flex-1 space-y-12">
               <div>
-                <label className="text-[8px] font-mono uppercase text-white/20 tracking-widest block mb-2">Subject_Identity</label>
-                <p className="text-2xl font-light tracking-tight truncate">{selectedOrder.email}</p>
+                <label className="text-[9px] font-mono uppercase opacity-30 tracking-[0.4em] block mb-4">Identity_Ref</label>
+                <h2 className="text-4xl font-light italic tracking-tighter truncate">{selectedOrder.email}</h2>
               </div>
 
-              <div className="grid grid-cols-2 gap-8">
+              <div className="grid grid-cols-2 gap-12 pt-12 border-t border-white/10">
                 <div>
-                  <label className="text-[8px] font-mono uppercase text-white/20 tracking-widest block mb-2">Transaction_Value</label>
-                  <p className="text-xl italic font-light">${(selectedOrder.amount_cents / 100).toFixed(2)}</p>
+                  <label className="text-[9px] font-mono uppercase opacity-30 tracking-[0.4em] block mb-2">Value</label>
+                  <p className="text-2xl font-light">${(selectedOrder.amount_cents / 100).toFixed(2)}</p>
                 </div>
                 <div>
-                  <label className="text-[8px] font-mono uppercase text-white/20 tracking-widest block mb-2">Network_Status</label>
-                  <p className="text-xs font-bold uppercase flex items-center gap-2">
-                    <ShieldCheck size={12} className="text-green-500" />
-                    {selectedOrder.status}
-                  </p>
+                  <label className="text-[9px] font-mono uppercase opacity-30 tracking-[0.4em] block mb-2">Status</label>
+                  <p className="text-xs font-bold uppercase tracking-widest bg-white text-black px-2 py-1 inline-block">{selectedOrder.status}</p>
                 </div>
               </div>
 
-              <div className="pt-8 border-t border-white/5">
-                <label className="text-[8px] font-mono uppercase text-white/20 tracking-widest block mb-2">Metadata_Dump</label>
-                <div className="bg-black p-4 rounded border border-white/5 overflow-auto max-h-[300px]">
-                  <pre className="text-[10px] font-mono text-green-500/70 whitespace-pre-wrap">
-                    {JSON.stringify(selectedOrder, null, 2)}
+              <div className="pt-12">
+                <label className="text-[9px] font-mono uppercase opacity-30 tracking-[0.4em] block mb-4">Payload_Data</label>
+                <div className="bg-white/[0.03] p-6 rounded-sm border border-white/5 max-h-[250px] overflow-auto">
+                  <pre className="text-[10px] font-mono text-white/50 leading-relaxed">
+                    {JSON.stringify(selectedOrder, null, 4)}
                   </pre>
                 </div>
               </div>
             </div>
 
             <button 
-              onClick={(e) => purgeRecord(selectedOrder.id, e)}
-              className="w-full py-4 border border-red-500/20 text-red-500 text-[10px] font-bold uppercase tracking-[0.3em] hover:bg-red-500 hover:text-white transition-all"
+              onClick={(e) => hardDelete(selectedOrder.id, e)}
+              className="mt-12 w-full py-5 border border-white/10 text-[10px] font-bold uppercase tracking-[0.5em] hover:bg-white hover:text-black transition-all flex items-center justify-center gap-3 group"
             >
-              Destroy_Record_Permanently
+              <ShieldAlert size={14} className="group-hover:animate-bounce" />
+              Purge_From_Vault
             </button>
           </div>
-        </div>
+        </>
       )}
+    </div>
+  );
+}
+
+function Stat({ value, label }: { value: any, label: string }) {
+  return (
+    <div className="text-right">
+      <p className="text-[24px] font-light italic tracking-tighter leading-none">{value}</p>
+      <p className="text-[8px] font-mono uppercase opacity-30 tracking-[0.3em] mt-1">{label}</p>
     </div>
   );
 }
