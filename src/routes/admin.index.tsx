@@ -14,7 +14,7 @@ function AdminDashboard() {
 
   const syncHub = async () => {
     setLoading(true);
-    // Direct Client Fetch - Bypasses the compiler error
+    // Direct fetch - no server functions to trigger build errors
     const { data: orderData } = await supabase.from("orders").select("*").order("created_at", { ascending: false });
     const { count: leadCount } = await supabase.from("leads").select("*", { count: 'exact', head: true });
 
@@ -31,7 +31,7 @@ function AdminDashboard() {
     if (error) {
       toast.error("UPDATE_FAILED");
     } else {
-      toast.success(`ORDER_${id.slice(0,4).toUpperCase()}: ${status.toUpperCase()}`);
+      toast.success(`ORDER_UPDATED: ${status.toUpperCase()}`);
       syncHub();
     }
   };
@@ -46,6 +46,7 @@ function AdminDashboard() {
 
   return (
     <div className="p-8 space-y-12 max-w-7xl mx-auto font-sans">
+      {/* Header */}
       <div className="flex justify-between items-end border-b-4 border-black pb-6">
         <div>
           <h1 className="text-5xl font-black tracking-tighter uppercase italic leading-none">Tulsa_HQ</h1>
@@ -56,12 +57,14 @@ function AdminDashboard() {
         </button>
       </div>
 
+      {/* Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <MetricCard label="Net Revenue" value={`$${(stats.revenue / 100).toLocaleString()}`} />
         <MetricCard label="Inbound Leads" value={stats.leads} />
         <MetricCard label="Paid Sales" value={stats.sales} />
       </div>
 
+      {/* Table */}
       <div className="border-4 border-black rounded-[2.5rem] overflow-hidden bg-white shadow-[10px_10px_0px_0px_rgba(0,0,0,1)]">
         <table className="w-full text-left">
           <thead>
@@ -85,8 +88,8 @@ function AdminDashboard() {
                   </span>
                 </td>
                 <td className="p-6 text-right space-x-6 font-black uppercase italic text-[11px]">
-                  <button onClick={() => patchOrder(o.id, 'paid')} className="hover:underline decoration-2 text-black">Mark_Paid</button>
-                  <button onClick={() => patchOrder(o.id, 'cancelled')} className="hover:underline decoration-2 text-red-600">Cancel</button>
+                  <button onClick={() => patchOrder(o.id, 'paid')} className="hover:underline decoration-2 text-black underline-offset-4">Mark_Paid</button>
+                  <button onClick={() => patchOrder(o.id, 'cancelled')} className="hover:underline decoration-2 text-red-600 underline-offset-4">Cancel</button>
                 </td>
               </tr>
             ))}
