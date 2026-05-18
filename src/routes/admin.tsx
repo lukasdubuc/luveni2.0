@@ -22,29 +22,41 @@ function AdminLayout() {
         return;
       }
 
-      // Direct client check - builds 100% of the time
-      const { data } = await supabase
+      // Direct client check - no server functions
+      const { data: roleData } = await supabase
         .from("user_roles")
         .select("role")
         .eq("user_id", user.id)
         .eq("role", "admin")
         .maybeSingle();
 
-      setStatus(data ? "ok" : "forbidden");
+      setStatus(roleData ? "ok" : "forbidden");
     };
     verifyAccess();
   }, []);
 
-  if (status === "loading") return <div className="p-20 text-center font-black uppercase tracking-widest animate-pulse">Checking_Credentials...</div>;
-
-  if (status === "forbidden") return (
-    <div className="grid min-h-screen place-items-center">
-      <div className="text-center">
-        <h1 className="text-2xl font-black uppercase italic">Access_Denied</h1>
-        <Link to="/" className="text-xs underline uppercase mt-4 inline-block">Return_Home</Link>
+  if (status === "loading") {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-[10px] font-black uppercase tracking-[0.5em] animate-pulse">
+          Establishing_Secure_Link...
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  if (status === "forbidden") {
+    return (
+      <div className="grid min-h-screen place-items-center p-6 text-center">
+        <div>
+          <h1 className="text-xl font-black uppercase tracking-tighter italic">Access_Denied</h1>
+          <Link to="/" className="mt-4 inline-block text-xs underline uppercase tracking-widest opacity-50 hover:opacity-100">
+            Exit_Portal
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AdminShell>
