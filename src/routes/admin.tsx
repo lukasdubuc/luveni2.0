@@ -2,7 +2,7 @@ import { createFileRoute, Outlet, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminShell } from "@/components/admin/AdminShell";
-import { useServerFn } from "@tanstack/react-start";
+import { useServerFn } from "@tanstack/start/client"; // Updated import path
 import { checkIsAdmin } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/admin")({
@@ -60,9 +60,6 @@ function AdminLayout() {
       <div className="grid min-h-screen place-items-center p-6 text-center">
         <div className="max-w-md">
           <h1 className="text-xl font-semibold uppercase tracking-tighter">Access Denied</h1>
-          <p className="mt-2 text-sm text-muted-foreground uppercase tracking-widest text-[10px]">
-            Admin credentials required for Tulsa Hub Ops.
-          </p>
           <Link to="/" className="mt-4 inline-block text-xs underline uppercase tracking-widest">
             Return to site
           </Link>
