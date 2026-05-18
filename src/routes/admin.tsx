@@ -60,20 +60,14 @@ function AdminLayout() {
     );
   }
 
-  if (status === "forbidden") {
+    if (status === "forbidden") {
     return (
       <div className="grid min-h-screen place-items-center p-6 text-center">
         <div className="max-w-md">
           <h1 className="text-xl font-semibold">Not authorized</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Your account isn't an admin yet. You need to promote your email
-            in the Supabase SQL Editor:
+            Your account does not have admin access to the owner portal. Please contact the site administrator if you believe this is an error.
           </p>
-          <pre className="mt-3 overflow-x-auto rounded-md bg-muted p-3 text-left text-xs">
-{`INSERT INTO public.user_roles (user_id, role)
-SELECT id, 'admin' FROM auth.users
-WHERE email = 'lukasdubuc@gmail.com';`}
-          </pre>
           <Link to="/" className="mt-4 inline-block text-sm underline">
             Back to site
           </Link>
