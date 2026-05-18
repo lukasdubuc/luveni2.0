@@ -1,8 +1,3 @@
-This is the **full, corrected file code** for `src/routes/admin.index.tsx`.
-
-I have added **diagnostic logs** to the auth gate. If it still redirects you, you can open your browser console (F12) and it will tell you exactly why (e.g., if the session is null or if the email doesn't match).
-
-```tsx
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,33 +18,27 @@ import {
   Activity
 } from "lucide-react";
 
-// SECURITY GATE: Integrated directly to prevent redirect loops
+// SECURITY GATE: diagnostic logging to fix the redirect loop
 export const Route = createFileRoute("/admin/")({
   beforeLoad: async () => {
     const { data: { session } } = await supabase.auth.getSession();
     
-    console.log("ADMIN_AUTH_CHECK: Running...");
-
-    // If no session exists
+    console.log("AUTH_LOG: Initializing Admin Check...");
+    
     if (!session) {
-      console.error("ADMIN_AUTH_CHECK: No session found. Redirecting to login.");
-      throw redirect({
-        to: "/login",
-      });
+      console.error("AUTH_LOG: No session found. Kicking to login.");
+      throw redirect({ to: "/login" });
     }
 
-    // Clean comparison to avoid case-sensitivity issues
     const userEmail = session.user.email?.toLowerCase().trim();
     const adminEmail = "lukasdubuc@gmail.com".toLowerCase().trim();
 
     if (userEmail !== adminEmail) {
-      console.warn(`ADMIN_AUTH_CHECK: Access Denied for ${userEmail}. Redirecting.`);
-      throw redirect({
-        to: "/login",
-      });
+      console.warn(`AUTH_LOG: Access Denied. User ${userEmail} is not authorized.`);
+      throw redirect({ to: "/login" });
     }
-    
-    console.log("ADMIN_AUTH_CHECK: Access Granted.");
+
+    console.log("AUTH_LOG: Access Granted. Welcome, Admin.");
   },
   component: AdminDashboard,
 });
@@ -77,7 +66,7 @@ function AdminDashboard() {
       setOrders(orderData || []);
       setProducts(productData || []);
     } catch (error) {
-      toast.error("SYNC_FAILURE");
+      toast.error("SYNC_FAILURE: Check database permissions");
     } finally {
       setLoading(false);
     }
@@ -85,12 +74,11 @@ function AdminDashboard() {
 
   const hardPurge = async (table: 'orders' | 'products', id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!confirm(`PERMANENT_ERASURE: ${id}?`)) return;
+    if (!confirm(`PERMANENT_ERASURE: Confirm wiping record ${id}?`)) return;
     
     const { error } = await supabase.from(table).delete().eq("id", id);
     if (error) {
-      toast.error("ACCESS_DENIED: Check RLS Policies");
-      console.error(error);
+      toast.error("ACCESS_DENIED: RLS Policy Violation");
     } else {
       toast.success("RECORD_WIPED");
       setSelectedItem(null);
@@ -121,7 +109,7 @@ function AdminDashboard() {
       {/* HUD HEADER */}
       <header className="border border-white/10 bg-black/40 backdrop-blur-md p-6 mb-8 flex flex-col md:flex-row justify-between items-center gap-6">
         <div className="flex items-center gap-6">
-          <div className="h-12 w-12 bg-white flex items-center justify-center rounded-none shadow-[0_0_15px_rgba(255,255,255,0.1)]">
+          <div className="h-12 w-12 bg-white flex items-center justify-center rounded-none">
             <Layers size={24} className="text-black" />
           </div>
           <div>
@@ -154,7 +142,6 @@ function AdminDashboard() {
       </header>
 
       <main className="grid grid-cols-12 gap-8 max-w-7xl mx-auto">
-        {/* DATA STREAM */}
         <section className="col-span-12 lg:col-span-8 space-y-4">
           <div className="flex justify-between items-center mb-4 px-2">
             <h2 className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40 italic">
@@ -183,7 +170,6 @@ function AdminDashboard() {
                 orders.map((o) => (
                   <DataRow 
                     key={o.id}
-                    id={o.id}
                     title={o.email}
                     subtitle={`REF: ${o.id.slice(0, 8)} // ${new Date(o.created_at).toLocaleDateString()}`}
                     value={`$${(o.amount_cents / 100).toFixed(2)}`}
@@ -196,7 +182,6 @@ function AdminDashboard() {
                 products.map((p) => (
                   <DataRow 
                     key={p.id}
-                    id={p.id}
                     title={p.title}
                     subtitle={`SLUG: /${p.slug} // ${p.is_published ? 'LIVE' : 'DRAFT'}`}
                     value={`$${(p.price_cents / 100).toFixed(2)}`}
@@ -210,7 +195,6 @@ function AdminDashboard() {
           </div>
         </section>
 
-        {/* SIDEBAR: INSIGHTS */}
         <aside className="col-span-12 lg:col-span-4 space-y-8">
           <div className="p-8 border border-white/10 bg-white/[0.02]">
             <h3 className="text-[10px] font-black uppercase tracking-[0.3em] mb-8 flex items-center gap-3">
@@ -221,9 +205,6 @@ function AdminDashboard() {
               <DiagnosticItem label="VAULT_STATUS" value="encrypted" />
               <DiagnosticItem label="API_UPTIME" value="99.9%" />
             </div>
-          </div>
-          <div className="p-8 border border-white/10 bg-white/[0.02] text-center italic opacity-20">
-             <p className="text-[9px] uppercase tracking-[0.5em]">Efficiency // Scale // Control</p>
           </div>
         </aside>
       </main>
@@ -238,11 +219,6 @@ function AdminDashboard() {
             <div className="grid grid-cols-2 gap-12">
               <Detail label="VALUATION" value={`$${((selectedItem.amount_cents || selectedItem.price_cents) / 100).toFixed(2)}`} />
               <Detail label="TIMESTAMP" value={new Date(selectedItem.created_at).toLocaleString()} />
-            </div>
-            <div className="bg-black p-6 border border-white/10">
-               <pre className="text-[10px] opacity-40 overflow-auto max-h-[300px] leading-relaxed">
-                 {JSON.stringify(selectedItem, null, 2)}
-               </pre>
             </div>
             <button 
               onClick={() => hardPurge(mode === 'revenue' ? 'orders' : 'products', selectedItem.id)}
@@ -262,10 +238,7 @@ function AdminDashboard() {
               <InputGroup label="URL_SLUG" value={newProduct.slug} onChange={(v: string) => setNewProduct({...newProduct, slug: v})} />
               <InputGroup label="PRICE_CENTS" type="number" value={newProduct.price_cents.toString()} onChange={(v: string) => setNewProduct({...newProduct, price_cents: parseInt(v) || 0})} />
             </div>
-            <button 
-              type="submit"
-              className="w-full py-4 bg-white text-black text-[10px] font-black uppercase tracking-[0.5em] hover:invert transition-all"
-            >
+            <button type="submit" className="w-full py-4 bg-white text-black text-[10px] font-black uppercase tracking-[0.5em] hover:invert transition-all">
               Execute_Deployment
             </button>
           </form>
@@ -275,7 +248,6 @@ function AdminDashboard() {
   );
 }
 
-// SUB-COMPONENTS
 function Metric({ label, value }: { label: string, value: any }) {
   return (
     <div className="text-right">
@@ -287,10 +259,7 @@ function Metric({ label, value }: { label: string, value: any }) {
 
 function DataRow({ title, subtitle, value, status, onClick, onDelete }: any) {
   return (
-    <div 
-      onClick={onClick}
-      className="group flex items-center justify-between p-6 hover:bg-white/[0.04] transition-all cursor-pointer border-l-2 border-transparent hover:border-white"
-    >
+    <div onClick={onClick} className="group flex items-center justify-between p-6 hover:bg-white/[0.04] transition-all cursor-pointer border-l-2 border-transparent hover:border-white">
       <div className="flex items-center gap-8">
         <div className={`h-2 w-2 ${status === 'paid' || status === 'active' ? 'bg-white shadow-[0_0_8px_#fff]' : 'bg-white/10'}`} />
         <div>
@@ -312,10 +281,7 @@ function DiagnosticItem({ label, value }: any) {
   return (
     <div className="flex justify-between items-center">
       <span className="text-[10px] font-black uppercase tracking-widest opacity-30">{label}</span>
-      <div className="flex items-center gap-3">
-        <span className="text-[10px] font-black uppercase">{value}</span>
-        <div className="h-1 w-1 bg-white" />
-      </div>
+      <span className="text-[10px] font-black uppercase">{value}</span>
     </div>
   );
 }
@@ -359,5 +325,3 @@ function InputGroup({ label, value, onChange, type = "text" }: any) {
     </div>
   );
 }
-
-```
