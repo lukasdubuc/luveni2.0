@@ -4,7 +4,7 @@ import { z } from "zod";
 const Schema = z.object({
   email: z.string().trim().email().max(255),
   source: z.string().trim().max(64).optional(),
-  metadata: z.record(z.string().max(64), z.any()).optional(),
+  metadata: z.record(z.any()).optional(),
 });
 
 export const captureLead = createServerFn({ method: "POST" })

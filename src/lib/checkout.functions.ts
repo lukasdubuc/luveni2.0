@@ -6,7 +6,7 @@ const Schema = z.object({
   name: z.string().trim().min(1).max(120),
   amountCents: z.number().int().positive().max(10_000_000),
   currency: z.string().trim().length(3),
-  metadata: z.record(z.string().max(64), z.any()).optional(),
+  metadata: z.record(z.any()).optional(),
 });
 
 /**
