@@ -1,6 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import { offer } from "@/config/site";
-
 import { z } from "zod";
 
 const Schema = z.object({
@@ -69,15 +68,10 @@ export const createCheckout = createServerFn({ method: "POST" })
     }
 
     const stripe = new Stripe(stripeKey);
-    const origin = process.env.SITE_URL?.replace(/\/$/, "") ?? "";
-    if (!origin) {
-      console.error("SITE_URL is not configured; refusing to build Stripe redirect URLs from request headers.");
-      await supabaseAdmin
-        .from("orders")
-        .update({ status: "failed", metadata: { error: "SITE_URL not configured" } })
-        .eq("id", order.id);
-      return { ok: false as const, error: "Payments not configured (missing SITE_URL)." };
-    }
+    
+    // HARD-CODED ORIGIN FIX: Bypassing process.env.SITE_URL for reliability
+    const origin = "https://services2day.lovable.app";
+
     try {
       const session = await stripe.checkout.sessions.create({
         mode: "payment",
