@@ -35,14 +35,20 @@ function AdminLayout() {
   }, [check]);
 
   if (status === "loading") {
-    return <div className="p-20 text-center animate-pulse text-[10px] uppercase tracking-widest">Verifying Ops...</div>;
+    return (
+      <div className="p-20 text-center animate-pulse text-[10px] uppercase tracking-[0.4em]">
+        Initializing Tulsa Ops...
+      </div>
+    );
   }
 
   if (status === "forbidden") {
     return (
       <div className="grid min-h-screen place-items-center p-6 text-center">
         <h1 className="text-xl font-bold uppercase tracking-tighter">Access Denied</h1>
-        <Link to="/" className="mt-4 text-xs underline uppercase tracking-widest">Return to Home</Link>
+        <Link to="/" className="mt-4 text-xs underline uppercase tracking-widest">
+          Return to Site
+        </Link>
       </div>
     );
   }
