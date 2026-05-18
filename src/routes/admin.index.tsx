@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
+import { useServerFn } from "@tanstack/start/client"; // Updated import path
 import { getRevenueStats, purgeOrders } from "@/lib/admin.functions";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -25,7 +25,6 @@ function AdminDashboard() {
     try {
       const res = await runPurge();
       if (res?.ok) {
-        // Invalidate and refetch to force the UI to update
         await queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
         await refetch();
         toast.success("Environment Reset", { id: tid });
