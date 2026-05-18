@@ -12,9 +12,8 @@ function AdminDashboard() {
   const [stats, setStats] = useState({ revenue: 0, leads: 0 });
   const [loading, setLoading] = useState(true);
 
-  const syncHub = async () => {
+  const loadData = async () => {
     setLoading(true);
-    // Fetch Data
     const { data: orderData } = await supabase.from("orders").select("*").order("created_at", { ascending: false });
     const { count: leadCount } = await supabase.from("leads").select("*", { count: 'exact', head: true });
 
@@ -26,60 +25,61 @@ function AdminDashboard() {
     setLoading(false);
   };
 
-  useEffect(() => { syncHub(); }, []);
-
-  const updateStatus = async (id: string, status: string) => {
-    const { error } = await supabase.from("orders").update({ status }).eq("id", id);
-    if (error) toast.error("ACTION_FAILED");
+  const updateOrder = async (id: string, newStatus: string) => {
+    const { error } = await supabase.from("orders").update({ status: newStatus }).eq("id", id);
+    if (error) toast.error("Update failed");
     else {
-      toast.success(`ORDER_${status.toUpperCase()}`);
-      syncHub();
+      toast.success(`Order set to ${newStatus}`);
+      loadData();
     }
   };
 
-  if (loading) return <div className="p-20 text-center text-[10px] font-black tracking-[0.8em] animate-pulse">SYNCING_HUB...</div>;
+  useEffect(() => { loadData(); }, []);
+
+  if (loading) return <div className="p-20 text-center font-black uppercase tracking-widest opacity-20">Loading_System...</div>;
 
   return (
-    <div className="p-8 space-y-12 max-w-7xl mx-auto">
-      {/* Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="p-10 border-4 border-black rounded-[2.5rem] bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-          <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-30">Total_Revenue</p>
-          <p className="text-6xl font-black mt-2 tracking-tighter italic">${(stats.revenue / 100).toLocaleString()}</p>
+    <div className="p-8 space-y-10">
+      <div className="flex justify-between items-end border-b-4 border-black pb-4">
+        <h1 className="text-5xl font-black tracking-tighter uppercase italic">Tulsa_Hub</h1>
+        <button onClick={loadData} className="text-[10px] font-black border-2 border-black px-4 py-1 rounded-full hover:bg-black hover:text-white transition-all">Sync</button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="p-8 border-4 border-black rounded-[2rem] shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+          <p className="text-[10px] font-black uppercase opacity-30 tracking-widest">Net Revenue</p>
+          <p className="text-5xl font-black mt-2">${(stats.revenue / 100).toLocaleString()}</p>
         </div>
-        <div className="p-10 border-4 border-black rounded-[2.5rem] bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-          <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-30">Active_Leads</p>
-          <p className="text-6xl font-black mt-2 tracking-tighter italic">{stats.leads}</p>
+        <div className="p-8 border-4 border-black rounded-[2rem] shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+          <p className="text-[10px] font-black uppercase opacity-30 tracking-widest">Active Leads</p>
+          <p className="text-5xl font-black mt-2">{stats.leads}</p>
         </div>
       </div>
 
-      {/* Control Stream */}
-      <div className="border-4 border-black rounded-[2.5rem] overflow-hidden bg-white shadow-[12px_12px_0px_0px_rgba(0,0,0,1)]">
-        <div className="p-6 border-b-4 border-black flex justify-between items-center bg-slate-50">
-          <h2 className="text-sm font-black uppercase tracking-[0.2em]">Live_Order_Feed</h2>
-          <button onClick={syncHub} className="text-[10px] font-black border-2 border-black px-4 py-1 rounded-full uppercase hover:bg-black hover:text-white transition-all">Refresh</button>
-        </div>
+      <div className="border-4 border-black rounded-[2.5rem] overflow-hidden bg-white shadow-[10px_10px_0px_0px_rgba(0,0,0,1)]">
         <table className="w-full text-left">
-          <thead>
-            <tr className="bg-black text-white text-[9px] uppercase tracking-widest">
-              <th className="p-6">Identity</th>
-              <th className="p-6">Value</th>
-              <th className="p-4 text-right">Operations</th>
+          <thead className="bg-black text-white text-[10px] uppercase">
+            <tr>
+              <th className="p-5">Customer</th>
+              <th className="p-5 text-center">Status</th>
+              <th className="p-5 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y-2 divide-black/10">
             {orders.map(o => (
-              <tr key={o.id} className="hover:bg-slate-50 transition-colors">
-                <td className="p-6 font-bold uppercase tracking-tighter">
-                  <div>{o.email}</div>
-                  <div className={`text-[9px] mt-1 inline-block px-2 py-0.5 rounded border-2 border-black ${o.status === 'paid' ? 'bg-black text-white' : 'bg-transparent'}`}>
-                    {o.status}
-                  </div>
+              <tr key={o.id} className="text-xs font-bold uppercase">
+                <td className="p-5">
+                  <div className="font-black">{o.email}</div>
+                  <div className="text-[9px] opacity-40 font-normal italic">${(o.amount_cents/100).toFixed(2)}</div>
                 </td>
-                <td className="p-6 font-black italic">${(o.amount_cents / 100).toFixed(2)}</td>
-                <td className="p-6 text-right space-x-6 font-black uppercase italic text-[11px]">
-                  <button onClick={() => updateStatus(o.id, 'paid')} className="hover:underline decoration-2">Mark_Paid</button>
-                  <button onClick={() => updateStatus(o.id, 'cancelled')} className="text-red-500 hover:underline decoration-2">Cancel</button>
+                <td className="p-5 text-center">
+                  <span className={`px-3 py-1 rounded-full border-2 border-black ${o.status === 'paid' ? 'bg-black text-white' : ''}`}>
+                    {o.status}
+                  </span>
+                </td>
+                <td className="p-5 text-right space-x-4">
+                  <button onClick={() => updateOrder(o.id, 'paid')} className="underline decoration-2">Paid</button>
+                  <button onClick={() => updateOrder(o.id, 'cancelled')} className="text-red-500 underline decoration-2">Cancel</button>
                 </td>
               </tr>
             ))}
