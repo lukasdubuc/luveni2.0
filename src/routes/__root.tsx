@@ -76,48 +76,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Northwind — a simple, modern way to get the result you want" },
-      {
-        name: "description",
-        content:
-          "Northwind is a focused, no-fluff package that gets you to the result faster. 30-day money-back guarantee.",
-      },
-      { name: "author", content: "Northwind" },
-      {
-        property: "og:title",
-        content: "Northwind — a simple, modern way to get the result you want",
-      },
-      {
-        property: "og:description",
-        content:
-          "Northwind is a focused, no-fluff package that gets you to the result faster. 30-day money-back guarantee.",
-      },
-      { property: "og:type", content: "website" },
-      {
-        property: "og:image",
-        content:
-          "https://storage.googleapis.com/gpt-engineer-file-uploads/mUu9kVdlfuZBJn5FEpIbj2v5TgP2/social-images/social-1779119371818-IMG_6764.webp",
-      },
-      { name: "twitter:card", content: "summary_large_image" },
-      {
-        name: "twitter:title",
-        content: "Northwind — a simple, modern way to get the result you want",
-      },
-      {
-        name: "twitter:description",
-        content:
-          "Northwind is a focused, no-fluff package that gets you to the result faster. 30-day money-back guarantee.",
-      },
-      {
-        name: "twitter:image",
-        content:
-          "https://storage.googleapis.com/gpt-engineer-file-uploads/mUu9kVdlfuZBJn5FEpIbj2v5TgP2/social-images/social-1779119371818-IMG_6764.webp",
-      },
-      { property: "og:title", content: "Northwind — a simple, modern way to get the result you want" },
-      { name: "twitter:title", content: "Northwind — a simple, modern way to get the result you want" },
       { name: "description", content: "Build a conversion-focused e-commerce website for immediate online sales and lead capture." },
+      { name: "author", content: "Northwind" },
+      { property: "og:title", content: "Northwind — a simple, modern way to get the result you want" },
       { property: "og:description", content: "Build a conversion-focused e-commerce website for immediate online sales and lead capture." },
-      { name: "twitter:description", content: "Build a conversion-focused e-commerce website for immediate online sales and lead capture." },
+      { property: "og:type", content: "website" },
       { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/54e7092f-b4a4-45a7-8b63-b64da287028a/id-preview-6d531494--4a024234-3250-4065-952b-d4f55051792b.lovable.app-1779121531928.png" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Northwind — a simple, modern way to get the result you want" },
+      { name: "twitter:description", content: "Build a conversion-focused e-commerce website for immediate online sales and lead capture." },
       { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/54e7092f-b4a4-45a7-8b63-b64da287028a/id-preview-6d531494--4a024234-3250-4065-952b-d4f55051792b.lovable.app-1779121531928.png" },
     ],
     links: [{ rel: "stylesheet", href: appCss }],
@@ -149,14 +116,18 @@ function RootComponent() {
   const isBare = path.startsWith("/admin") || path === "/login";
 
   useEffect(() => {
-    const {
-       { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
+    if (typeof window === "undefined") return;
+
+    const { data } = supabase.auth.onAuthStateChange(() => {
       router.invalidate();
       queryClient.invalidateQueries();
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      if (data?.subscription) {
+        data.subscription.unsubscribe();
+      }
+    };
   }, [router, queryClient]);
 
   return (
