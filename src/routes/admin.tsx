@@ -36,8 +36,10 @@ function AdminLayout() {
 
   if (status === "loading") {
     return (
-      <div className="p-20 text-center animate-pulse text-[10px] uppercase tracking-[0.4em]">
-        Initializing Tulsa Ops...
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-[10px] font-bold uppercase tracking-[0.4em] animate-pulse">
+          Secure Tunnel Establishing...
+        </div>
       </div>
     );
   }
@@ -45,10 +47,12 @@ function AdminLayout() {
   if (status === "forbidden") {
     return (
       <div className="grid min-h-screen place-items-center p-6 text-center">
-        <h1 className="text-xl font-bold uppercase tracking-tighter">Access Denied</h1>
-        <Link to="/" className="mt-4 text-xs underline uppercase tracking-widest">
-          Return to Site
-        </Link>
+        <div>
+          <h1 className="text-xl font-black uppercase tracking-tighter">Access Denied</h1>
+          <Link to="/" className="mt-4 inline-block text-xs underline uppercase tracking-widest opacity-50 hover:opacity-100">
+            Exit Portal
+          </Link>
+        </div>
       </div>
     );
   }
