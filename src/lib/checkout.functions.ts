@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
+
 import { z } from "zod";
 
 const Schema = z.object({
@@ -67,17 +67,14 @@ export const createCheckout = createServerFn({ method: "POST" })
     }
 
     const stripe = new Stripe(stripeKey);
-    const siteUrl = process.env.SITE_URL;
-    let origin = siteUrl?.replace(/\/$/, "") ?? "";
+    const origin = process.env.SITE_URL?.replace(/\/$/, "") ?? "";
     if (!origin) {
-      try {
-        const req = getRequest();
-        const host = req.headers.get("host");
-        const proto = req.headers.get("x-forwarded-proto") ?? "https";
-        if (host) origin = `${proto}://${host}`;
-      } catch {
-        // ignore
-      }
+      console.error("SITE_URL is not configured; refusing to build Stripe redirect URLs from request headers.");
+      await supabaseAdmin
+        .from("orders")
+        .update({ status: "failed", metadata: { error: "SITE_URL not configured" } })
+        .eq("id", order.id);
+      return { ok: false as const, error: "Payments not configured (missing SITE_URL)." };
     }
     try {
       const session = await stripe.checkout.sessions.create({
