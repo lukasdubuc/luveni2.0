@@ -19,14 +19,14 @@ function AdminDashboard() {
   });
 
   const handlePurge = async () => {
-    if (!confirm("Wipe test orders?")) return;
-    const tid = toast.loading("Processing...");
+    if (!confirm("Wipe unpaid test orders?")) return;
+    const tid = toast.loading("Purging test data...");
     try {
       const res = await runPurge();
       if (res?.ok) {
         await queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
         await refetch();
-        toast.success("Cleanup successful", { id: tid });
+        toast.success("Database Cleared", { id: tid });
       }
     } catch (e) {
       toast.error("Action failed", { id: tid });
@@ -42,26 +42,26 @@ function AdminDashboard() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
         <div className="p-6 border rounded-2xl bg-card">
           <div className="text-[10px] font-bold uppercase tracking-widest opacity-40">Revenue</div>
-          <div className="text-3xl font-black tracking-tighter">{formatPrice(stats?.totalCents || 0)}</div>
+          <div className="text-3xl font-black mt-1">{formatPrice(stats?.totalCents || 0)}</div>
         </div>
         <div className="p-6 border rounded-2xl bg-card">
-          <div className="text-[10px] font-bold uppercase tracking-widest opacity-40">Leads</div>
-          <div className="text-3xl font-black tracking-tighter">{stats?.leadCount || 0}</div>
+          <div className="text-[10px] font-bold uppercase tracking-widest opacity-40">Total Leads</div>
+          <div className="text-3xl font-black mt-1">{stats?.leadCount || 0}</div>
         </div>
         <div className="p-6 border rounded-2xl bg-card">
           <div className="text-[10px] font-bold uppercase tracking-widest opacity-40">Paid</div>
-          <div className="text-3xl font-black tracking-tighter">{stats?.paidCount || 0}</div>
+          <div className="text-3xl font-black mt-1">{stats?.paidCount || 0}</div>
         </div>
       </div>
 
       <div className="border rounded-2xl bg-card overflow-hidden">
         <div className="p-4 border-b flex justify-between items-center bg-muted/20">
-          <div className="text-[10px] font-black uppercase tracking-widest">Order Feed</div>
+          <div className="text-[10px] font-black uppercase tracking-widest">Orders</div>
           <button onClick={handlePurge} className="text-[9px] font-black uppercase border px-3 py-1 rounded-full hover:bg-red-500 hover:text-white transition-all">
-            Clear Noise
+            Purge Noise
           </button>
         </div>
         <table className="w-full text-left text-xs">
@@ -75,10 +75,12 @@ function AdminDashboard() {
           <tbody className="divide-y">
             {stats?.recent?.map((o: any) => (
               <tr key={o.id} className="hover:bg-muted/5 transition-colors">
-                <td className="p-4">{o.email}</td>
-                <td className="p-4 font-medium">{formatPrice(o.amount_cents)}</td>
+                <td className="p-4 truncate max-w-[200px]">{o.email}</td>
+                <td className="p-4">{formatPrice(o.amount_cents)}</td>
                 <td className="p-4 text-right">
-                  <span className="bg-muted px-2 py-0.5 rounded text-[9px] font-bold uppercase">{o.status}</span>
+                  <span className="bg-muted px-2 py-0.5 rounded text-[9px] font-bold uppercase border">
+                    {o.status}
+                  </span>
                 </td>
               </tr>
             ))}
