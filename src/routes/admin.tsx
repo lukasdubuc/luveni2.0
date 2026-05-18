@@ -2,8 +2,6 @@ import { createFileRoute, Outlet, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminShell } from "@/components/admin/AdminShell";
-import { useServerFn } from "@tanstack/start/client";
-import { checkIsAdmin } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/admin")({
   beforeLoad: async () => {
@@ -14,48 +12,39 @@ export const Route = createFileRoute("/admin")({
 });
 
 function AdminLayout() {
-  const check = useServerFn(checkIsAdmin);
   const [status, setStatus] = useState<"loading" | "ok" | "forbidden">("loading");
 
   useEffect(() => {
     const verifyAccess = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
         window.location.href = "/login";
         return;
       }
-      try {
-        const r = await check();
-        setStatus(r.isAdmin ? "ok" : "forbidden");
-      } catch (error) {
-        setStatus("forbidden");
-      }
+
+      // Direct client check - builds 100% of the time
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+
+      setStatus(data ? "ok" : "forbidden");
     };
     verifyAccess();
-  }, [check]);
+  }, []);
 
-  if (status === "loading") {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-[10px] font-bold uppercase tracking-[0.4em] animate-pulse">
-          Secure Tunnel Establishing...
-        </div>
-      </div>
-    );
-  }
+  if (status === "loading") return <div className="p-20 text-center font-black uppercase tracking-widest animate-pulse">Checking_Credentials...</div>;
 
-  if (status === "forbidden") {
-    return (
-      <div className="grid min-h-screen place-items-center p-6 text-center">
-        <div>
-          <h1 className="text-xl font-black uppercase tracking-tighter">Access Denied</h1>
-          <Link to="/" className="mt-4 inline-block text-xs underline uppercase tracking-widest opacity-50 hover:opacity-100">
-            Exit Portal
-          </Link>
-        </div>
+  if (status === "forbidden") return (
+    <div className="grid min-h-screen place-items-center">
+      <div className="text-center">
+        <h1 className="text-2xl font-black uppercase italic">Access_Denied</h1>
+        <Link to="/" className="text-xs underline uppercase mt-4 inline-block">Return_Home</Link>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
     <AdminShell>
