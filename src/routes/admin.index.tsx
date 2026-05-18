@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -14,10 +14,22 @@ import {
   Search,
   Check,
   Package,
-  ShoppingCart
+  ShoppingCart,
+  Activity
 } from "lucide-react";
 
+// SECURITY GATE: Integrated directly to prevent redirect loops
 export const Route = createFileRoute("/admin/")({
+  beforeLoad: async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    // If no session or email doesn't match your specific admin email
+    if (!session || session.user.email !== "lukasdubuc@gmail.com") {
+      throw redirect({
+        to: "/login",
+      });
+    }
+  },
   component: AdminDashboard,
 });
 
@@ -55,8 +67,10 @@ function AdminDashboard() {
     if (!confirm(`PERMANENT_ERASURE: ${id}?`)) return;
     
     const { error } = await supabase.from(table).delete().eq("id", id);
-    if (error) toast.error("ACCESS_DENIED");
-    else {
+    if (error) {
+      toast.error("ACCESS_DENIED: Check RLS Policies");
+      console.error(error);
+    } else {
       toast.success("RECORD_WIPED");
       setSelectedItem(null);
       syncData();
@@ -80,16 +94,18 @@ function AdminDashboard() {
   const totalRev = orders.filter(o => o.status === 'paid').reduce((acc, o) => acc + (o.amount_cents || 0), 0) / 100;
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-white font-mono selection:bg-white selection:text-black antialiased p-4 md:p-8">
+    <div className="min-h-screen bg-[#050505] text-white font-mono selection:bg-white selection:text-black antialiased p-4 md:p-8">
       {/* HUD HEADER */}
       <header className="border border-white/10 bg-black/40 backdrop-blur-md p-6 mb-8 flex flex-col md:flex-row justify-between items-center gap-6">
         <div className="flex items-center gap-6">
-          <div className="h-12 w-12 bg-white flex items-center justify-center rounded-none">
+          <div className="h-12 w-12 bg-white flex items-center justify-center rounded-none shadow-[0_0_15px_rgba(255,255,255,0.1)]">
             <Layers size={24} className="text-black" />
           </div>
           <div>
             <h1 className="text-sm font-black uppercase tracking-[0.5em]">Ops_Terminal_v2.0</h1>
-            <p className="text-[10px] opacity-30 mt-1 uppercase tracking-widest italic">Status: Online // Unit: Tulsa_Relocation</p>
+            <p className="text-[10px] opacity-30 mt-1 uppercase tracking-widest italic flex items-center gap-2">
+              <span className="h-1 w-1 bg-green-500 animate-pulse" /> Status: Online // Unit: Tulsa_Branch
+            </p>
           </div>
         </div>
 
@@ -114,7 +130,7 @@ function AdminDashboard() {
         </div>
       </header>
 
-      <main className="grid grid-cols-12 gap-8">
+      <main className="grid grid-cols-12 gap-8 max-w-7xl mx-auto">
         {/* DATA STREAM */}
         <section className="col-span-12 lg:col-span-8 space-y-4">
           <div className="flex justify-between items-center mb-4 px-2">
@@ -137,32 +153,36 @@ function AdminDashboard() {
           </div>
 
           <div className="border border-white/10 divide-y divide-white/5 bg-white/[0.02]">
-            {mode === 'revenue' ? (
-              orders.map((o) => (
-                <DataRow 
-                  key={o.id}
-                  id={o.id}
-                  title={o.email}
-                  subtitle={`REF: ${o.id.slice(0, 8)} // ${new Date(o.created_at).toLocaleDateString()}`}
-                  value={`$${(o.amount_cents / 100).toFixed(2)}`}
-                  status={o.status}
-                  onClick={() => setSelectedItem(o)}
-                  onDelete={(e) => hardPurge('orders', o.id, e)}
-                />
-              ))
+            {loading ? (
+              <div className="p-20 text-center text-[10px] uppercase tracking-[1em] opacity-10 animate-pulse">Scanning_Database...</div>
             ) : (
-              products.map((p) => (
-                <DataRow 
-                  key={p.id}
-                  id={p.id}
-                  title={p.title}
-                  subtitle={`SLUG: /${p.slug} // ${p.is_published ? 'LIVE' : 'DRAFT'}`}
-                  value={`$${(p.price_cents / 100).toFixed(2)}`}
-                  status={p.is_published ? 'active' : 'inactive'}
-                  onClick={() => setSelectedItem(p)}
-                  onDelete={(e) => hardPurge('products', p.id, e)}
-                />
-              ))
+              mode === 'revenue' ? (
+                orders.map((o) => (
+                  <DataRow 
+                    key={o.id}
+                    id={o.id}
+                    title={o.email}
+                    subtitle={`REF: ${o.id.slice(0, 8)} // ${new Date(o.created_at).toLocaleDateString()}`}
+                    value={`$${(o.amount_cents / 100).toFixed(2)}`}
+                    status={o.status}
+                    onClick={() => setSelectedItem(o)}
+                    onDelete={(e) => hardPurge('orders', o.id, e)}
+                  />
+                ))
+              ) : (
+                products.map((p) => (
+                  <DataRow 
+                    key={p.id}
+                    id={p.id}
+                    title={p.title}
+                    subtitle={`SLUG: /${p.slug} // ${p.is_published ? 'LIVE' : 'DRAFT'}`}
+                    value={`$${(p.price_cents / 100).toFixed(2)}`}
+                    status={p.is_published ? 'active' : 'inactive'}
+                    onClick={() => setSelectedItem(p)}
+                    onDelete={(e) => hardPurge('products', p.id, e)}
+                  />
+                ))
+              )
             )}
           </div>
         </section>
@@ -174,14 +194,13 @@ function AdminDashboard() {
               <BarChart3 size={14} /> System_Diagnostics
             </h3>
             <div className="space-y-6">
-              <DiagnosticItem label="DB_LATENCY" value="24ms" status="optimal" />
-              <DiagnosticItem label="AUTH_SESSION" value="verified" status="optimal" />
-              <DiagnosticItem label="API_UPTIME" value="99.98%" status="optimal" />
+              <DiagnosticItem label="DB_LATENCY" value="21ms" />
+              <DiagnosticItem label="VAULT_STATUS" value="encrypted" />
+              <DiagnosticItem label="API_UPTIME" value="99.9%" />
             </div>
           </div>
-
           <div className="p-8 border border-white/10 bg-white/[0.02] text-center italic opacity-20">
-             <p className="text-[10px] uppercase tracking-[0.5em]">Operational // Efficiency // Tulsa</p>
+             <p className="text-[9px] uppercase tracking-[0.5em]">Efficiency // Scale // Control</p>
           </div>
         </aside>
       </main>
@@ -198,7 +217,7 @@ function AdminDashboard() {
               <Detail label="TIMESTAMP" value={new Date(selectedItem.created_at).toLocaleString()} />
             </div>
             <div className="bg-black p-6 border border-white/10">
-               <pre className="text-[10px] opacity-40 overflow-auto max-h-[300px]">
+               <pre className="text-[10px] opacity-40 overflow-auto max-h-[300px] leading-relaxed">
                  {JSON.stringify(selectedItem, null, 2)}
                </pre>
             </div>
@@ -233,11 +252,12 @@ function AdminDashboard() {
   );
 }
 
+// SUB-COMPONENTS
 function Metric({ label, value }: { label: string, value: any }) {
   return (
     <div className="text-right">
       <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-30 mb-1">{label}</p>
-      <p className="text-2xl font-black italic tracking-tighter">{value}</p>
+      <p className="text-2xl font-black italic tracking-tighter tabular-nums">{value}</p>
     </div>
   );
 }
@@ -246,17 +266,17 @@ function DataRow({ title, subtitle, value, status, onClick, onDelete }: any) {
   return (
     <div 
       onClick={onClick}
-      className="group flex items-center justify-between p-6 hover:bg-white/[0.03] transition-all cursor-pointer"
+      className="group flex items-center justify-between p-6 hover:bg-white/[0.04] transition-all cursor-pointer border-l-2 border-transparent hover:border-white"
     >
       <div className="flex items-center gap-8">
-        <div className={`h-2 w-2 rounded-none ${status === 'paid' || status === 'active' ? 'bg-white' : 'bg-white/10'}`} />
+        <div className={`h-2 w-2 ${status === 'paid' || status === 'active' ? 'bg-white shadow-[0_0_8px_#fff]' : 'bg-white/10'}`} />
         <div>
           <p className="text-sm font-black uppercase tracking-tight mb-1">{title}</p>
           <p className="text-[10px] opacity-20 uppercase tracking-widest">{subtitle}</p>
         </div>
       </div>
-      <div className="flex items-center gap-12">
-        <p className="text-xl font-black italic tabular-nums">{value}</p>
+      <div className="flex items-center gap-12 text-right">
+        <p className="text-xl font-black italic tabular-nums tracking-tighter">{value}</p>
         <button onClick={onDelete} className="p-2 opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all">
           <Trash2 size={16} />
         </button>
@@ -265,13 +285,13 @@ function DataRow({ title, subtitle, value, status, onClick, onDelete }: any) {
   );
 }
 
-function DiagnosticItem({ label, value, status }: any) {
+function DiagnosticItem({ label, value }: any) {
   return (
     <div className="flex justify-between items-center">
       <span className="text-[10px] font-black uppercase tracking-widest opacity-30">{label}</span>
       <div className="flex items-center gap-3">
         <span className="text-[10px] font-black uppercase">{value}</span>
-        <div className="h-1.5 w-1.5 bg-white" />
+        <div className="h-1 w-1 bg-white" />
       </div>
     </div>
   );
@@ -280,7 +300,7 @@ function DiagnosticItem({ label, value, status }: any) {
 function Modal({ children, onClose, title }: any) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/95 backdrop-blur-md">
-      <div className="w-full max-w-3xl bg-[#0A0A0A] border border-white/20 p-12 relative">
+      <div className="w-full max-w-3xl bg-[#0A0A0A] border border-white/20 p-12 relative overflow-y-auto max-h-[90vh]">
         <div className="flex justify-between items-center mb-12 border-b border-white/10 pb-6">
           <span className="text-[10px] font-black uppercase tracking-[0.8em] opacity-30">{title}</span>
           <button onClick={onClose} className="text-white/20 hover:text-white transition-colors">
@@ -297,7 +317,7 @@ function Detail({ label, value }: any) {
   return (
     <div>
       <p className="text-[10px] opacity-30 uppercase mb-2 tracking-widest">{label}</p>
-      <p className="text-2xl font-black italic">{value}</p>
+      <p className="text-2xl font-black italic tracking-tighter">{value}</p>
     </div>
   );
 }
