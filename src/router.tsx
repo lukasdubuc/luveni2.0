@@ -1,19 +1,16 @@
-import { createRouter as createTanStackRouter } from '@tanstack/react-router'
+import { QueryClient } from "@tanstack/react-query";
+import { createRouter } from "@tanstack/react-router";
+import { routeTree } from "./routeTree.gen";
 
-// We are defining a "Dummy" route tree here to stop the plugin from crawling
-// and crashing your build.
-const rootRoute = { id: '__root', children: [] }
-const dummyRouteTree = rootRoute as any
+export const getRouter = () => {
+  const queryClient = new QueryClient();
 
-export function createRouter() {
-  return createTanStackRouter({
-    routeTree: dummyRouteTree,
-    defaultPreload: 'intent',
-  })
-}
+  const router = createRouter({
+    routeTree,
+    context: { queryClient },
+    scrollRestoration: true,
+    defaultPreloadStaleTime: 0,
+  });
 
-declare module '@tanstack/react-router' {
-  interface Register {
-    router: ReturnType<typeof createRouter>
-  }
-}
+  return router;
+};

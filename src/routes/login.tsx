@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
@@ -22,33 +22,9 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    supabase.auth.getSession().then(({ data }) => {
-      if (!cancelled && data.session) {
-        navigate({ to: "/admin", replace: true });
-      }
-    });
-
-    const {
-       { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        navigate({ to: "/admin", replace: true });
-      }
-    });
-
-    return () => {
-      cancelled = true;
-      subscription.unsubscribe();
-    };
-  }, [navigate]);
-
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-
     try {
       if (mode === "signup") {
         const { error } = await supabase.auth.signUp({
@@ -57,15 +33,12 @@ function LoginPage() {
           options: { emailRedirectTo: `${window.location.origin}/admin` },
         });
         if (error) throw error;
-        toast.success("Account created. Check your email if confirmation is required.");
+        toast.success("Account created. You can sign in now.");
         setMode("signin");
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        navigate({ to: "/admin", replace: true });
+        navigate({ to: "/admin" });
       }
     } catch (e: any) {
       toast.error(e?.message ?? "Authentication failed");
@@ -78,19 +51,15 @@ function LoginPage() {
     setLoading(true);
     try {
       const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: `${window.location.origin}/login`,
+        redirect_uri: window.location.origin + "/admin",
       });
-
       if (result.error) {
-        throw result.error;
+        toast.error(result.error.message ?? "Google sign-in failed");
+        setLoading(false);
+        return;
       }
-
       if (result.redirected) return;
-
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        navigate({ to: "/admin", replace: true });
-      }
+      navigate({ to: "/admin" });
     } catch (e: any) {
       toast.error(e?.message ?? "Google sign-in failed");
       setLoading(false);
@@ -113,7 +82,6 @@ function LoginPage() {
             disabled={loading}
             className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-muted disabled:opacity-60"
           >
-            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             Continue with Google
           </button>
 

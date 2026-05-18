@@ -38,30 +38,21 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
-
   return (
     <SiteShell>
       <div className="mx-auto max-w-md px-4 py-24 text-center">
-        <h1 className="text-xl font-semibold tracking-tight">
-          This page didn't load
-        </h1>
+        <h1 className="text-xl font-semibold tracking-tight">This page didn't load</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Something went wrong on our end. Try refreshing or head back home.
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
-            onClick={() => {
-              router.invalidate();
-              reset();
-            }}
+            onClick={() => { router.invalidate(); reset(); }}
             className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
           >
             Try again
           </button>
-          <a
-            href="/"
-            className="rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
-          >
+          <a href="/" className="rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent">
             Go home
           </a>
         </div>
@@ -76,16 +67,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Northwind — a simple, modern way to get the result you want" },
-      { name: "description", content: "Build a conversion-focused e-commerce website for immediate online sales and lead capture." },
+      { name: "description", content: "Northwind is a focused, no-fluff package that gets you to the result faster. 30-day money-back guarantee." },
       { name: "author", content: "Northwind" },
       { property: "og:title", content: "Northwind — a simple, modern way to get the result you want" },
-      { property: "og:description", content: "Build a conversion-focused e-commerce website for immediate online sales and lead capture." },
+      { property: "og:description", content: "Northwind is a focused, no-fluff package that gets you to the result faster. 30-day money-back guarantee." },
       { property: "og:type", content: "website" },
-      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/mUu9kVdlfuZBJn5FEpIbj2v5TgP2/social-images/social-1779122994682-IMG_6764.webp" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Northwind — a simple, modern way to get the result you want" },
-      { name: "twitter:description", content: "Build a conversion-focused e-commerce website for immediate online sales and lead capture." },
-      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/mUu9kVdlfuZBJn5FEpIbj2v5TgP2/social-images/social-1779122994682-IMG_6764.webp" },
+      { name: "twitter:description", content: "Northwind is a focused, no-fluff package that gets you to the result faster. 30-day money-back guarantee." },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/6f3e525f-a7aa-493b-a378-6c699f7e5e57" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/6f3e525f-a7aa-493b-a378-6c699f7e5e57" },
     ],
     links: [{ rel: "stylesheet", href: appCss }],
   }),
@@ -116,29 +107,16 @@ function RootComponent() {
   const isBare = path.startsWith("/admin") || path === "/login";
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const { data } = supabase.auth.onAuthStateChange(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
       router.invalidate();
       queryClient.invalidateQueries();
     });
-
-    return () => {
-      if (data?.subscription) {
-        data.subscription.unsubscribe();
-      }
-    };
+    return () => subscription.unsubscribe();
   }, [router, queryClient]);
 
   return (
     <QueryClientProvider client={queryClient}>
-      {isBare ? (
-        <Outlet />
-      ) : (
-        <SiteShell>
-          <Outlet />
-        </SiteShell>
-      )}
+      {isBare ? <Outlet /> : <SiteShell><Outlet /></SiteShell>}
       <Toaster position="top-center" richColors />
     </QueryClientProvider>
   );
