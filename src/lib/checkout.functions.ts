@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 
 const Schema = z.object({
@@ -9,7 +10,6 @@ const Schema = z.object({
   amountCents: z.number().int().positive().max(10_000_000).optional(),
   currency: z.string().trim().length(3).optional(),
   productName: z.string().trim().min(1).max(200).optional(),
-  origin: z.string().url(),
 });
 
 export const createCheckout = createServerFn({ method: "POST" })
