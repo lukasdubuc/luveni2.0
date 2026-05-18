@@ -1,71 +1,110 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { getRevenueStats } from "@/lib/admin.functions";
+import { getRevenueStats, purgeOrders } from "@/lib/admin.functions";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/")({
-  component: RevenuePage,
+  component: AdminDashboard,
 });
 
-function fmt(cents: number, currency: string) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currency.toUpperCase(),
-  }).format(cents / 100);
-}
+function AdminDashboard() {
+  const getStats = useServerFn(getRevenueStats);
+  const runPurge = useServerFn(purgeOrders);
 
-function RevenuePage() {
-  const fetchStats = useServerFn(getRevenueStats);
-  const { data, isLoading } = useQuery({ queryKey: ["revenue"], queryFn: () => fetchStats() });
+  const { data: stats, refetch } = useQuery({
+    queryKey: ["admin-stats"],
+    queryFn: () => getStats(),
+  });
 
-  if (isLoading || !data) return <div className="text-sm text-muted-foreground">Loading…</div>;
+  const handlePurge = async () => {
+    if (!confirm("Clear all unpaid test orders? This keeps your real revenue data clean.")) return;
+    try {
+      const res = await runPurge();
+      if (res?.ok) {
+        toast.success("Test history cleared");
+        refetch(); // This updates the UI without a full page reload
+      }
+    } catch (error) {
+      toast.error("Cleanup failed");
+    }
+  };
 
-  const tiles = [
-    { label: "Total revenue", value: fmt(data.totalCents, data.currency) },
-    { label: "Last 7 days", value: fmt(data.recentCents, data.currency) },
-    { label: "Paid orders", value: String(data.paidCount) },
-    { label: "Leads captured", value: String(data.leadCount) },
-  ];
+  const formatPrice = (cents: number) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: stats?.currency || "USD",
+    }).format(cents / 100);
+  };
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Revenue</h1>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {tiles.map((t) => (
-          <div key={t.label} className="rounded-xl border border-border bg-card p-5">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">{t.label}</p>
-            <p className="mt-2 text-2xl font-semibold">{t.value}</p>
-          </div>
-        ))}
+    <div className="space-y-8">
+      {/* Stats Overview */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="p-6 rounded-xl border bg-card">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Total Revenue</p>
+          <h3 className="text-2xl font-black mt-1 tracking-tighter">{formatPrice(stats?.totalCents || 0)}</h3>
+        </div>
+        <div className="p-6 rounded-xl border bg-card">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Total Leads</p>
+          <h3 className="text-2xl font-black mt-1 tracking-tighter">{stats?.leadCount || 0}</h3>
+        </div>
+        <div className="p-6 rounded-xl border bg-card">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Paid Orders</p>
+          <h3 className="text-2xl font-black mt-1 tracking-tighter">{stats?.paidCount || 0}</h3>
+        </div>
       </div>
-      <div className="rounded-xl border border-border bg-card p-5">
-        <h2 className="text-sm font-semibold">Recent orders</h2>
-        {data.recent.length === 0 ? (
-          <p className="mt-3 text-sm text-muted-foreground">No orders yet.</p>
-        ) : (
-          <table className="mt-3 w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs uppercase text-muted-foreground">
-                <th className="py-2">When</th>
-                <th>Email</th>
-                <th>Status</th>
-                <th className="text-right">Amount</th>
+
+      {/* Orders Table Section */}
+      <div className="rounded-xl border bg-card overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b bg-muted/30">
+          <h2 className="text-xs font-black uppercase tracking-widest">Order History</h2>
+          <button 
+            onClick={handlePurge}
+            className="text-[9px] font-bold uppercase tracking-tighter border px-2 py-1 rounded hover:bg-destructive hover:text-destructive-foreground transition-colors"
+          >
+            Purge Test Noise
+          </button>
+        </div>
+        
+        <div className="p-0">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-muted/50 border-b text-[10px] uppercase tracking-widest text-muted-foreground font-bold">
+              <tr>
+                <th className="px-6 py-3">Customer</th>
+                <th className="px-6 py-3">Amount</th>
+                <th className="px-6 py-3">Status</th>
+                <th className="px-6 py-3 text-right">Date</th>
               </tr>
             </thead>
-            <tbody>
-              {data.recent.map((o: any) => (
-                <tr key={o.created_at + o.email} className="border-t border-border">
-                  <td className="py-2">{new Date(o.created_at).toLocaleString()}</td>
-                  <td>{o.email}</td>
-                  <td>
-                    <span className="rounded bg-muted px-2 py-0.5 text-xs">{o.status}</span>
+            <tbody className="divide-y">
+              {stats?.recent?.length ? (
+                stats.recent.map((order: any) => (
+                  <tr key={order.id} className="hover:bg-muted/20 transition-colors">
+                    <td className="px-6 py-4 font-medium">{order.email}</td>
+                    <td className="px-6 py-4">{formatPrice(order.amount_cents)}</td>
+                    <td className="px-6 py-4 capitalize">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        order.status === 'paid' ? 'bg-green-500/10 text-green-500' : 'bg-yellow-500/10 text-yellow-500'
+                      }`}>
+                        {order.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right opacity-50">
+                      {new Date(order.created_at).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4} className="px-6 py-12 text-center text-muted-foreground uppercase tracking-widest opacity-30">
+                    No active orders found
                   </td>
-                  <td className="text-right">{fmt(o.amount_cents, o.currency)}</td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
-        )}
+        </div>
       </div>
     </div>
   );
