@@ -10,127 +10,107 @@ export const Route = createFileRoute("/admin/")({
 function AdminDashboard() {
   const [data, setData] = useState<{ orders: any[], stats: any }>({ 
     orders: [], 
-    stats: { revenue: 0, leadCount: 0, paidCount: 0 } 
+    stats: { revenue: 0, leads: 0, sales: 0 } 
   });
   const [loading, setLoading] = useState(true);
 
-  const loadEverything = async () => {
+  const syncHub = async () => {
     setLoading(true);
-    
-    // 1. Fetch Orders
-    const { data: orders, error: orderError } = await supabase
-      .from("orders")
-      .select("*")
-      .order("created_at", { ascending: false });
+    // Direct browser-to-Supabase fetch
+    const { data: orders } = await supabase.from("orders").select("*").order("created_at", { ascending: false });
+    const { count: leads } = await supabase.from("leads").select("*", { count: 'exact', head: true });
 
-    // 2. Fetch Leads
-    const { count: leadCount } = await supabase
-      .from("leads")
-      .select("*", { count: 'exact', head: true });
+    const paid = (orders || []).filter(o => o.status === 'paid' || o.status === 'fulfilled');
+    const revenue = paid.reduce((acc, o) => acc + (o.amount_cents || 0), 0);
 
-    if (orderError) {
-      toast.error("Database connection error");
-    } else {
-      const paid = (orders || []).filter(o => o.status === 'paid' || o.status === 'fulfilled');
-      const revenue = paid.reduce((acc, o) => acc + (o.amount_cents || 0), 0);
-
-      setData({
-        orders: orders || [],
-        stats: { revenue, leadCount: leadCount || 0, paidCount: paid.length }
-      });
-    }
+    setData({
+      orders: orders || [],
+      stats: { revenue, leads: leads || 0, sales: paid.length }
+    });
     setLoading(false);
   };
 
-  useEffect(() => {
-    loadEverything();
-  }, []);
+  useEffect(() => { syncHub(); }, []);
 
-  const updateStatus = async (id: string, status: string) => {
-    const { error } = await supabase
-      .from("orders")
-      .update({ status })
-      .eq("id", id);
-
+  const patchOrder = async (id: string, status: string) => {
+    const { error } = await supabase.from("orders").update({ status }).eq("id", id);
     if (error) {
-      toast.error("Update failed");
+      toast.error("SYSTEM_ERROR: Update Failed");
     } else {
-      toast.success(`Order set to ${status}`);
-      loadEverything(); // Refresh data immediately
+      toast.success(`ORDER_${id.slice(0,4).toUpperCase()}: ${status.toUpperCase()}`);
+      syncHub();
     }
   };
 
   if (loading) return (
-    <div className="p-20 text-center text-[10px] uppercase tracking-[0.5em] animate-pulse">
-      Syncing Tulsa Hub...
+    <div className="p-20 text-center text-[10px] font-black uppercase tracking-[0.8em] animate-pulse">
+      Syncing_Tulsa_Hub...
     </div>
   );
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Metric Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="p-6 border rounded-2xl bg-card">
-          <p className="text-[10px] font-bold uppercase opacity-40 tracking-widest">Revenue</p>
-          <h3 className="text-3xl font-black tracking-tighter">${(data.stats.revenue / 100).toLocaleString()}</h3>
+    <div className="p-8 space-y-10 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="flex justify-between items-end border-b pb-4 border-black/10">
+        <div>
+          <h1 className="text-4xl font-black tracking-tighter uppercase italic">Control_Center</h1>
+          <p className="text-[10px] font-bold uppercase tracking-widest opacity-40">Operational Overview // {new Date().toLocaleDateString()}</p>
         </div>
-        <div className="p-6 border rounded-2xl bg-card">
-          <p className="text-[10px] font-bold uppercase opacity-40 tracking-widest">Total Leads</p>
-          <h3 className="text-3xl font-black tracking-tighter">{data.stats.leadCount}</h3>
-        </div>
-        <div className="p-6 border rounded-2xl bg-card">
-          <p className="text-[10px] font-bold uppercase opacity-40 tracking-widest">Paid Orders</p>
-          <h3 className="text-3xl font-black tracking-tighter">{data.stats.paidCount}</h3>
-        </div>
+        <button onClick={syncHub} className="text-[9px] font-black border-2 border-black px-4 py-1.5 rounded-full uppercase hover:bg-black hover:text-white transition-all active:scale-95">
+          Refresh_Feed
+        </button>
       </div>
 
-      {/* Control Center Table */}
-      <div className="border rounded-2xl bg-card overflow-hidden shadow-sm">
-        <div className="p-4 border-b bg-muted/20 flex justify-between items-center">
-          <h2 className="text-[10px] font-black uppercase tracking-widest">Order Customization</h2>
-          <button onClick={loadEverything} className="text-[9px] font-bold border px-3 py-1 rounded-full uppercase hover:bg-black hover:text-white transition-all">
-            Refresh
-          </button>
-        </div>
+      {/* Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <MetricBox label="Net Revenue" value={`$${(data.stats.revenue / 100).toLocaleString()}`} />
+        <MetricBox label="Inbound Leads" value={data.stats.leads} />
+        <MetricBox label="Total Sales" value={data.stats.sales} />
+      </div>
+
+      {/* Table */}
+      <div className="border-2 border-black rounded-3xl overflow-hidden bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="bg-muted/10 text-[9px] uppercase tracking-widest opacity-50 border-b">
-                <th className="p-4">Customer</th>
-                <th className="p-4">Amount</th>
-                <th className="p-4">Status</th>
-                <th className="p-4 text-right">Manual Edit</th>
+              <tr className="bg-black text-white text-[9px] uppercase tracking-[0.2em]">
+                <th className="p-5 font-black">Customer_Identifier</th>
+                <th className="p-5 font-black">Valuation</th>
+                <th className="p-5 font-black text-center">Status</th>
+                <th className="p-5 font-black text-right">Quick_Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y">
+            <tbody className="divide-y divide-black/5">
               {data.orders.map(o => (
-                <tr key={o.id} className="hover:bg-muted/5 transition-colors">
-                  <td className="p-4 font-medium">{o.email}</td>
-                  <td className="p-4 font-mono">${(o.amount_cents / 100).toFixed(2)}</td>
-                  <td className="p-4">
-                    <span className="px-2 py-0.5 rounded border text-[9px] font-bold uppercase tracking-tighter">
+                <tr key={o.id} className="hover:bg-muted/30 transition-colors">
+                  <td className="p-5 font-bold truncate max-w-[240px] uppercase tracking-tight">{o.email}</td>
+                  <td className="p-5 font-black italic">${(o.amount_cents / 100).toFixed(2)}</td>
+                  <td className="p-5 text-center">
+                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase border-2 ${
+                      o.status === 'paid' ? 'bg-black text-white border-black' : 'bg-transparent border-black/10 opacity-40'
+                    }`}>
                       {o.status}
                     </span>
                   </td>
-                  <td className="p-4 text-right space-x-3">
-                    <button 
-                      onClick={() => updateStatus(o.id, 'paid')} 
-                      className="text-[10px] font-bold uppercase underline hover:text-green-600 transition-colors"
-                    >
-                      Mark Paid
-                    </button>
-                    <button 
-                      onClick={() => updateStatus(o.id, 'cancelled')} 
-                      className="text-[10px] font-bold uppercase underline text-red-500 hover:text-red-700 transition-colors"
-                    >
-                      Cancel
-                    </td>
+                  <td className="p-5 text-right space-x-4 font-black uppercase italic text-[10px]">
+                    <button onClick={() => patchOrder(o.id, 'paid')} className="hover:underline text-black decoration-2">Mark_Paid</button>
+                    <button onClick={() => patchOrder(o.id, 'cancelled')} className="hover:underline text-red-500 decoration-2">Cancel</button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
+    </div>
+  );
+}
+
+function MetricBox({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="p-8 border-2 border-black rounded-3xl bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+      <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-30">{label}</p>
+      <p className="text-4xl font-black mt-2 tracking-tighter italic uppercase">{value}</p>
     </div>
   );
 }
