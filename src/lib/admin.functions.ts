@@ -19,6 +19,7 @@ export const checkIsAdmin = createServerFn({ method: "GET" })
 export const purgeOrders = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    // Aggressively targets unpaid test noise
     const { error } = await context.supabase
       .from("orders")
       .delete()
