@@ -3,14 +3,17 @@ import {
   Outlet,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
   Link,
 } from "@tanstack/react-router";
 import { Toaster } from "sonner";
+import { useEffect } from "react";
 
 import appCss from "../styles.css?url";
 import { SiteShell } from "@/components/site/SiteShell";
+import { supabase } from "@/integrations/supabase/client";
 
 function NotFoundComponent() {
   return (
@@ -99,11 +102,21 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const router = useRouter();
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  const isBare = path.startsWith("/admin") || path === "/login";
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      router.invalidate();
+      queryClient.invalidateQueries();
+    });
+    return () => subscription.unsubscribe();
+  }, [router, queryClient]);
+
   return (
     <QueryClientProvider client={queryClient}>
-      <SiteShell>
-        <Outlet />
-      </SiteShell>
+      {isBare ? <Outlet /> : <SiteShell><Outlet /></SiteShell>}
       <Toaster position="top-center" richColors />
     </QueryClientProvider>
   );
