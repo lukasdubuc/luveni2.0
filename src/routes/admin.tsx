@@ -3,26 +3,23 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/admin")({
   beforeLoad: async () => {
+    // Check session
     const { data: { session } } = await supabase.auth.getSession();
     
-    // 1. If no session, kick to login
+    // If no session exists, send to login
     if (!session) {
       throw redirect({ to: "/login" });
     }
 
-    // 2. SECURITY LOCK: Only allow your specific email to access the Command Vault
-    // This prevents random customers from seeing your revenue/products
+    // AUTH LOCK: Ensure only you can see the money
     if (session.user.email !== "lukasdubuc@gmail.com") {
+      console.warn("Unauthorized access attempt by:", session.user.email);
       throw redirect({ to: "/" });
     }
   },
-  component: AdminLayout,
-});
-
-function AdminLayout() {
-  return (
-    <div className="min-h-screen bg-[#000] text-white selection:bg-white selection:text-black antialiased">
+  component: () => (
+    <div className="min-h-screen bg-black">
       <Outlet />
     </div>
-  );
-}
+  ),
+});
