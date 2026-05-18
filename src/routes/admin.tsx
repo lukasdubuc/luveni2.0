@@ -25,6 +25,7 @@ function AdminLayout() {
   >("loading");
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
     let cancelled = false;
 
     supabase.auth.getSession().then(({ data }) => {
@@ -32,16 +33,16 @@ function AdminLayout() {
       setSessionStatus(data.session ? "signed-in" : "signed-out");
     });
 
-    const {
-       { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       if (cancelled) return;
       setSessionStatus(session ? "signed-in" : "signed-out");
     });
 
     return () => {
       cancelled = true;
-      subscription.unsubscribe();
+      if (data?.subscription) {
+        data.subscription.unsubscribe();
+      }
     };
   }, []);
 
