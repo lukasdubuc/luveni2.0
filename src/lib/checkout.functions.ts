@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { offer } from "@/config/site";
 
 import { z } from "zod";
 
@@ -6,10 +7,6 @@ const Schema = z.object({
   email: z.string().trim().email().max(255),
   name: z.string().trim().min(1).max(120),
   productId: z.string().uuid().optional(),
-  // Fallback when no productId is provided (uses site config offer).
-  amountCents: z.number().int().positive().max(10_000_000).optional(),
-  currency: z.string().trim().length(3).optional(),
-  productName: z.string().trim().min(1).max(200).optional(),
 });
 
 export const createCheckout = createServerFn({ method: "POST" })
@@ -23,9 +20,10 @@ export const createCheckout = createServerFn({ method: "POST" })
       return { ok: false as const, error: "Payments not configured (missing Stripe key)." };
     }
 
-    let amountCents = data.amountCents ?? 0;
-    let currency = (data.currency ?? "usd").toLowerCase();
-    let productName = data.productName ?? "Order";
+    // Always derive price authoritatively server-side — never trust the caller.
+    let amountCents: number;
+    let currency: string;
+    let productName: string;
 
     if (data.productId) {
       const { data: product } = await supabaseAdmin
@@ -39,6 +37,10 @@ export const createCheckout = createServerFn({ method: "POST" })
       amountCents = product.price_cents;
       currency = product.currency.toLowerCase();
       productName = product.title;
+    } else {
+      amountCents = offer.priceCents;
+      currency = offer.currency.toLowerCase();
+      productName = offer.name;
     }
 
     if (!amountCents || amountCents < 50) {

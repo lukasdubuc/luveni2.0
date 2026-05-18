@@ -43,9 +43,6 @@ function Checkout() {
         data: {
           name: parsed.data.name,
           email: parsed.data.email,
-          amountCents: offer.priceCents,
-          currency: offer.currency,
-          productName: offer.name,
         },
       });
       if (!res?.ok) {
