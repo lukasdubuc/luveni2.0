@@ -1,49 +1,56 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
-import { listLeads } from "@/lib/admin.functions";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/admin/leads")({
   component: LeadsPage,
 });
 
 function LeadsPage() {
-  const fetchLeads = useServerFn(listLeads);
-  const { data, isLoading } = useQuery({ queryKey: ["leads"], queryFn: () => fetchLeads() });
+  const [leads, setLeads] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchLeads = async () => {
+      const { data } = await supabase.from("leads").select("*").order("created_at", { ascending: false });
+      setLeads(data || []);
+      setLoading(false);
+    };
+    fetchLeads();
+  }, []);
+
+  if (loading) return (
+    <div className="p-20 text-center animate-pulse font-mono text-[10px] tracking-[0.8em] uppercase">
+      Syncing_Leads...
+    </div>
+  );
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Leads</h1>
-      <div className="overflow-x-auto rounded-xl border border-border bg-card">
-        {isLoading ? (
-          <p className="p-6 text-sm text-muted-foreground">Loading…</p>
-        ) : !data?.length ? (
-          <p className="p-6 text-sm text-muted-foreground">No leads captured yet.</p>
+    <div className="min-h-screen bg-[#FBFBFB] p-8 font-sans text-black">
+      <div className="max-w-7xl mx-auto border-b border-black/10 pb-8 mb-12">
+        <h1 className="text-4xl font-light tracking-tighter uppercase italic leading-none">Lead_Intake</h1>
+        <p className="text-[9px] font-mono font-bold uppercase tracking-[0.4em] opacity-30 mt-3">Active_Capture // Tulsa_Unit</p>
+      </div>
+
+      <div className="max-w-7xl mx-auto space-y-4">
+        {leads.length === 0 ? (
+          <p className="text-[10px] font-mono uppercase opacity-30 tracking-widest text-center py-20">Zero_Leads_Captured</p>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3">Email</th>
-                <th className="px-4 py-3">Source</th>
-                <th className="px-4 py-3">Metadata</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((l: any) => (
-                <tr key={l.id} className="border-t border-border">
-                  <td className="px-4 py-3">{new Date(l.created_at).toLocaleString()}</td>
-                  <td className="px-4 py-3">{l.email}</td>
-                  <td className="px-4 py-3">{l.source ?? "—"}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                    {Object.keys(l.metadata ?? {}).length
-                      ? JSON.stringify(l.metadata)
-                      : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          leads.map((l) => (
+            <div key={l.id} className="p-6 border border-black/10 bg-white shadow-sm flex justify-between items-center group hover:border-black transition-all">
+              <div>
+                <p className="text-[9px] font-mono font-bold uppercase opacity-30 tracking-widest mb-1">
+                  {new Date(l.created_at).toLocaleDateString()} // {new Date(l.created_at).toLocaleTimeString()}
+                </p>
+                <h3 className="font-bold uppercase text-sm tracking-tight">{l.email}</h3>
+              </div>
+              <div className="text-right">
+                <span className="text-[8px] font-bold border border-black/10 px-2 py-1 uppercase opacity-40">
+                  Source: {l.source ?? "DIRECT"}
+                </span>
+              </div>
+            </div>
+          ))
         )}
       </div>
     </div>
