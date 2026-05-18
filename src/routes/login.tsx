@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable/index";
 import { Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
@@ -49,16 +50,21 @@ function LoginPage() {
   async function onGoogle() {
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          // The trailing slash is important to match your admin.index.tsx route
-          redirectTo: window.location.origin + "/admin/",
-        },
+      // Using lovable.auth specifically to handle the oauth.lovable.app proxy
+      const result = await lovable.auth.signInWithOAuth("google", {
+        redirectTo: window.location.origin + "/admin/",
       });
-      
-      if (error) throw error;
-      // The browser will handle the redirect to Google's consent screen automatically
+
+      if (result.error) {
+        toast.error(result.error.message ?? "Google sign-in failed");
+        setLoading(false);
+        return;
+      }
+
+      // If the helper doesn't trigger an automatic redirect, manually navigate
+      if (!result.redirected) {
+        navigate({ to: "/admin" });
+      }
     } catch (e: any) {
       console.error("Google Auth Error:", e);
       toast.error(e?.message ?? "Google sign-in failed");
