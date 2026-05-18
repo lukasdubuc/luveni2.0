@@ -3,11 +3,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminShell } from "@/components/admin/AdminShell";
 
+// We remove beforeLoad entirely to stop the compiler from over-analyzing
 export const Route = createFileRoute("/admin")({
-  beforeLoad: async () => {
-    const { data } = await supabase.auth.getUser();
-    return { user: data.user };
-  },
   component: AdminLayout,
 });
 
@@ -15,31 +12,34 @@ function AdminLayout() {
   const [status, setStatus] = useState<"loading" | "ok" | "forbidden">("loading");
 
   useEffect(() => {
-    const verifyAccess = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+    const checkAccess = async () => {
+      // Get session
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
         window.location.href = "/login";
         return;
       }
 
-      // Direct client check - no server functions to break the build
-      const { data: roleData } = await supabase
+      // Direct Role Check
+      const { data } = await supabase
         .from("user_roles")
         .select("role")
-        .eq("user_id", user.id)
+        .eq("user_id", session.user.id)
         .eq("role", "admin")
         .maybeSingle();
 
-      setStatus(roleData ? "ok" : "forbidden");
+      setStatus(data ? "ok" : "forbidden");
     };
-    verifyAccess();
+
+    checkAccess();
   }, []);
 
   if (status === "loading") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white">
-        <div className="text-[10px] font-black uppercase tracking-[0.6em] animate-pulse">
-          INITIALIZING_SECURE_ACCESS...
+        <div className="text-[10px] font-black uppercase tracking-[0.5em] animate-pulse">
+          Establishing_Secure_Link...
         </div>
       </div>
     );
@@ -49,9 +49,9 @@ function AdminLayout() {
     return (
       <div className="grid min-h-screen place-items-center bg-white p-6 text-center">
         <div>
-          <h1 className="text-2xl font-black uppercase tracking-tighter italic underline decoration-4">ACCESS_DENIED</h1>
-          <Link to="/" className="mt-6 inline-block text-[10px] font-bold uppercase tracking-widest opacity-40 hover:opacity-100 transition-opacity">
-            [ Return_to_Site ]
+          <h1 className="text-3xl font-black uppercase tracking-tighter italic">Access_Denied</h1>
+          <Link to="/" className="mt-4 inline-block text-[10px] font-bold uppercase tracking-widest underline decoration-2">
+            Back_To_Site
           </Link>
         </div>
       </div>
