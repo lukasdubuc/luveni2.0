@@ -67,6 +67,18 @@ export const createCheckout = createServerFn({ method: "POST" })
     }
 
     const stripe = new Stripe(stripeKey);
+    const siteUrl = process.env.SITE_URL;
+    let origin = siteUrl?.replace(/\/$/, "") ?? "";
+    if (!origin) {
+      try {
+        const req = getRequest();
+        const host = req.headers.get("host");
+        const proto = req.headers.get("x-forwarded-proto") ?? "https";
+        if (host) origin = `${proto}://${host}`;
+      } catch {
+        // ignore
+      }
+    }
     try {
       const session = await stripe.checkout.sessions.create({
         mode: "payment",
