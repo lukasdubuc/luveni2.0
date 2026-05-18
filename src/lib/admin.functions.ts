@@ -16,10 +16,22 @@ export const checkIsAdmin = createServerFn({ method: "GET" })
     return { isAdmin: !!data };
   });
 
+export const updateOrderStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { id: string; status: string }) => d)
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      .from("orders")
+      .update({ status: data.status })
+      .eq("id", data.id);
+    
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 export const purgeOrders = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    // Aggressively delete unpaid test noise
     const { error } = await context.supabase
       .from("orders")
       .delete()
@@ -34,7 +46,7 @@ export const getRevenueStats = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data: orders } = await context.supabase
       .from("orders")
-      .select("amount_cents,currency,status,created_at,email")
+      .select("id,amount_cents,currency,status,created_at,email")
       .order("created_at", { ascending: false });
 
     const all = orders ?? [];
