@@ -1,3 +1,8 @@
+This is the **full, corrected file code** for `src/routes/admin.index.tsx`.
+
+I have added **diagnostic logs** to the auth gate. If it still redirects you, you can open your browser console (F12) and it will tell you exactly why (e.g., if the session is null or if the email doesn't match).
+
+```tsx
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,12 +28,28 @@ export const Route = createFileRoute("/admin/")({
   beforeLoad: async () => {
     const { data: { session } } = await supabase.auth.getSession();
     
-    // If no session or email doesn't match your specific admin email
-    if (!session || session.user.email !== "lukasdubuc@gmail.com") {
+    console.log("ADMIN_AUTH_CHECK: Running...");
+
+    // If no session exists
+    if (!session) {
+      console.error("ADMIN_AUTH_CHECK: No session found. Redirecting to login.");
       throw redirect({
         to: "/login",
       });
     }
+
+    // Clean comparison to avoid case-sensitivity issues
+    const userEmail = session.user.email?.toLowerCase().trim();
+    const adminEmail = "lukasdubuc@gmail.com".toLowerCase().trim();
+
+    if (userEmail !== adminEmail) {
+      console.warn(`ADMIN_AUTH_CHECK: Access Denied for ${userEmail}. Redirecting.`);
+      throw redirect({
+        to: "/login",
+      });
+    }
+    
+    console.log("ADMIN_AUTH_CHECK: Access Granted.");
   },
   component: AdminDashboard,
 });
@@ -89,7 +110,9 @@ function AdminDashboard() {
     }
   };
 
-  useEffect(() => { syncData(); }, []);
+  useEffect(() => { 
+    syncData(); 
+  }, []);
 
   const totalRev = orders.filter(o => o.status === 'paid').reduce((acc, o) => acc + (o.amount_cents || 0), 0) / 100;
 
@@ -166,7 +189,7 @@ function AdminDashboard() {
                     value={`$${(o.amount_cents / 100).toFixed(2)}`}
                     status={o.status}
                     onClick={() => setSelectedItem(o)}
-                    onDelete={(e) => hardPurge('orders', o.id, e)}
+                    onDelete={(e: any) => hardPurge('orders', o.id, e)}
                   />
                 ))
               ) : (
@@ -179,7 +202,7 @@ function AdminDashboard() {
                     value={`$${(p.price_cents / 100).toFixed(2)}`}
                     status={p.is_published ? 'active' : 'inactive'}
                     onClick={() => setSelectedItem(p)}
-                    onDelete={(e) => hardPurge('products', p.id, e)}
+                    onDelete={(e: any) => hardPurge('products', p.id, e)}
                   />
                 ))
               )
@@ -235,9 +258,9 @@ function AdminDashboard() {
         <Modal onClose={() => setIsAddingProduct(false)} title="Deploy_New_Inventory">
           <form onSubmit={createProduct} className="space-y-8">
             <div className="grid gap-6">
-              <InputGroup label="PRODUCT_TITLE" value={newProduct.title} onChange={v => setNewProduct({...newProduct, title: v})} />
-              <InputGroup label="URL_SLUG" value={newProduct.slug} onChange={v => setNewProduct({...newProduct, slug: v})} />
-              <InputGroup label="PRICE_CENTS" type="number" value={newProduct.price_cents.toString()} onChange={v => setNewProduct({...newProduct, price_cents: parseInt(v) || 0})} />
+              <InputGroup label="PRODUCT_TITLE" value={newProduct.title} onChange={(v: string) => setNewProduct({...newProduct, title: v})} />
+              <InputGroup label="URL_SLUG" value={newProduct.slug} onChange={(v: string) => setNewProduct({...newProduct, slug: v})} />
+              <InputGroup label="PRICE_CENTS" type="number" value={newProduct.price_cents.toString()} onChange={(v: string) => setNewProduct({...newProduct, price_cents: parseInt(v) || 0})} />
             </div>
             <button 
               type="submit"
@@ -277,7 +300,7 @@ function DataRow({ title, subtitle, value, status, onClick, onDelete }: any) {
       </div>
       <div className="flex items-center gap-12 text-right">
         <p className="text-xl font-black italic tabular-nums tracking-tighter">{value}</p>
-        <button onClick={onDelete} className="p-2 opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all">
+        <button onClick={(e) => { e.stopPropagation(); onDelete(e); }} className="p-2 opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all">
           <Trash2 size={16} />
         </button>
       </div>
@@ -336,3 +359,5 @@ function InputGroup({ label, value, onChange, type = "text" }: any) {
     </div>
   );
 }
+
+```
