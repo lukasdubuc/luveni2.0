@@ -1,9 +1,10 @@
-"use server"; // Critical: Tells the bundler this is server-side only
+"use server";
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+// Secure internal helper - never exported to client
 async function ensureAdmin(supabase: any, userId: string) {
   const { data, error } = await supabase
     .from("user_roles")
@@ -11,7 +12,7 @@ async function ensureAdmin(supabase: any, userId: string) {
     .eq("user_id", userId)
     .eq("role", "admin")
     .maybeSingle();
-  if (error || !data) throw new Error("Forbidden: admin only");
+  if (error || !data) throw new Error("Unauthorized: Admin Access Required");
 }
 
 export const checkIsAdmin = createServerFn({ method: "GET" })
@@ -31,6 +32,7 @@ export const purgeOrders = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await ensureAdmin(context.supabase, context.userId);
+    // Case-insensitive delete for test noise
     const { error } = await context.supabase
       .from("orders")
       .delete()
@@ -47,12 +49,15 @@ export const getRevenueStats = createServerFn({ method: "GET" })
       .from("orders")
       .select("amount_cents,currency,status,created_at,email")
       .order("created_at", { ascending: false });
+    
     const all = orders ?? [];
     const paid = all.filter((o) => o.status === "paid" || o.status === "fulfilled");
     const totalCents = paid.reduce((s, o) => s + (o.amount_cents ?? 0), 0);
+    
     const { count: leadCount } = await context.supabase
       .from("leads")
       .select("id", { count: "exact", head: true });
+
     return {
       totalCents,
       orderCount: all.length,
