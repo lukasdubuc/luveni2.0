@@ -112,6 +112,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content:
           "https://storage.googleapis.com/gpt-engineer-file-uploads/mUu9kVdlfuZBJn5FEpIbj2v5TgP2/social-images/social-1779119371818-IMG_6764.webp",
       },
+      { property: "og:title", content: "Northwind — a simple, modern way to get the result you want" },
+      { name: "twitter:title", content: "Northwind — a simple, modern way to get the result you want" },
+      { name: "description", content: "Build a conversion-focused e-commerce website for immediate online sales and lead capture." },
+      { property: "og:description", content: "Build a conversion-focused e-commerce website for immediate online sales and lead capture." },
+      { name: "twitter:description", content: "Build a conversion-focused e-commerce website for immediate online sales and lead capture." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/54e7092f-b4a4-45a7-8b63-b64da287028a/id-preview-6d531494--4a024234-3250-4065-952b-d4f55051792b.lovable.app-1779121531928.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/54e7092f-b4a4-45a7-8b63-b64da287028a/id-preview-6d531494--4a024234-3250-4065-952b-d4f55051792b.lovable.app-1779121531928.png" },
     ],
     links: [{ rel: "stylesheet", href: appCss }],
   }),
