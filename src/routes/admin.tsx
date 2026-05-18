@@ -22,7 +22,7 @@ function AdminLayout() {
         return;
       }
 
-      // Direct client check - no server functions
+      // Direct client check - no server functions to break the build
       const { data: roleData } = await supabase
         .from("user_roles")
         .select("role")
@@ -37,9 +37,9 @@ function AdminLayout() {
 
   if (status === "loading") {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-[10px] font-black uppercase tracking-[0.5em] animate-pulse">
-          Establishing_Secure_Link...
+      <div className="flex min-h-screen items-center justify-center bg-white">
+        <div className="text-[10px] font-black uppercase tracking-[0.6em] animate-pulse">
+          INITIALIZING_SECURE_ACCESS...
         </div>
       </div>
     );
@@ -47,11 +47,11 @@ function AdminLayout() {
 
   if (status === "forbidden") {
     return (
-      <div className="grid min-h-screen place-items-center p-6 text-center">
+      <div className="grid min-h-screen place-items-center bg-white p-6 text-center">
         <div>
-          <h1 className="text-xl font-black uppercase tracking-tighter italic">Access_Denied</h1>
-          <Link to="/" className="mt-4 inline-block text-xs underline uppercase tracking-widest opacity-50 hover:opacity-100">
-            Exit_Portal
+          <h1 className="text-2xl font-black uppercase tracking-tighter italic underline decoration-4">ACCESS_DENIED</h1>
+          <Link to="/" className="mt-6 inline-block text-[10px] font-bold uppercase tracking-widest opacity-40 hover:opacity-100 transition-opacity">
+            [ Return_to_Site ]
           </Link>
         </div>
       </div>
