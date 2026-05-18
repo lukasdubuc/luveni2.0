@@ -46,7 +46,6 @@ function Checkout() {
           amountCents: offer.priceCents,
           currency: offer.currency,
           productName: offer.name,
-          origin: window.location.origin,
         },
       });
       if (!res?.ok) {

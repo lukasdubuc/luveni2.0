@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 
 const Schema = z.object({
@@ -9,7 +10,6 @@ const Schema = z.object({
   amountCents: z.number().int().positive().max(10_000_000).optional(),
   currency: z.string().trim().length(3).optional(),
   productName: z.string().trim().min(1).max(200).optional(),
-  origin: z.string().url(),
 });
 
 export const createCheckout = createServerFn({ method: "POST" })
@@ -67,6 +67,18 @@ export const createCheckout = createServerFn({ method: "POST" })
     }
 
     const stripe = new Stripe(stripeKey);
+    const siteUrl = process.env.SITE_URL;
+    let origin = siteUrl?.replace(/\/$/, "") ?? "";
+    if (!origin) {
+      try {
+        const req = getRequest();
+        const host = req.headers.get("host");
+        const proto = req.headers.get("x-forwarded-proto") ?? "https";
+        if (host) origin = `${proto}://${host}`;
+      } catch {
+        // ignore
+      }
+    }
     try {
       const session = await stripe.checkout.sessions.create({
         mode: "payment",
@@ -81,8 +93,8 @@ export const createCheckout = createServerFn({ method: "POST" })
             },
           },
         ],
-        success_url: `${data.origin}/thank-you?order=${order.id}`,
-        cancel_url: `${data.origin}/checkout?canceled=1`,
+        success_url: `${origin}/thank-you?order=${order.id}`,
+        cancel_url: `${origin}/checkout?canceled=1`,
         metadata: { order_id: order.id },
       });
 
