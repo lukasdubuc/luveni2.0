@@ -81,8 +81,8 @@ export const createCheckout = createServerFn({ method: "POST" })
             },
           },
         ],
-        success_url: `${data.origin}/thank-you?order=${order.id}`,
-        cancel_url: `${data.origin}/checkout?canceled=1`,
+        success_url: `${origin}/thank-you?order=${order.id}`,
+        cancel_url: `${origin}/checkout?canceled=1`,
         metadata: { order_id: order.id },
       });
 
