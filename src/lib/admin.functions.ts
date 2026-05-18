@@ -19,7 +19,6 @@ export const checkIsAdmin = createServerFn({ method: "GET" })
 export const purgeOrders = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    // Delete any order that isn't paid/fulfilled
     const { error } = await context.supabase
       .from("orders")
       .delete()
@@ -37,7 +36,8 @@ export const getRevenueStats = createServerFn({ method: "GET" })
       .select("amount_cents,currency,status,created_at,email")
       .order("created_at", { ascending: false });
 
-    const paid = (orders ?? []).filter((o: any) => o.status === "paid" || o.status === "fulfilled");
+    const all = orders ?? [];
+    const paid = all.filter((o: any) => o.status === "paid" || o.status === "fulfilled");
     const totalCents = paid.reduce((s: number, o: any) => s + (o.amount_cents ?? 0), 0);
     
     const { count: leadCount } = await context.supabase
@@ -48,6 +48,7 @@ export const getRevenueStats = createServerFn({ method: "GET" })
       totalCents,
       paidCount: paid.length,
       leadCount: leadCount ?? 0,
-      recent: (orders ?? []).slice(0, 50),
+      recent: all.slice(0, 50),
+      currency: all[0]?.currency || "usd"
     };
   });
