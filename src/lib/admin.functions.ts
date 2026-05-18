@@ -25,6 +25,24 @@ export const checkIsAdmin = createServerFn({ method: "GET" })
     return { isAdmin: !!data, userId };
   });
 
+// --- PURGE FUNCTION START ---
+export const purgeOrders = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await ensureAdmin(context.supabase, context.userId);
+    
+    // Deletes everything that isn't 'paid' or 'fulfilled'
+    // This cleans up all your $49 test attempts in one click
+    const { error } = await context.supabase
+      .from("orders")
+      .delete()
+      .not("status", "in", '("paid","fulfilled")');
+
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+// --- PURGE FUNCTION END ---
+
 export const listOrders = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -189,14 +207,12 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
     } catch {
       return { ok: false as const, error: "Could not fetch the URL." };
     }
-    // Strip scripts/styles, collapse whitespace, truncate
     const text = html
       .replace(/<script[\s\S]*?<\/script>/gi, " ")
       .replace(/<style[\s\S]*?<\/style>/gi, " ")
       .replace(/<[^>]+>/g, " ")
       .replace(/\s+/g, " ")
       .slice(0, 12000);
-    // Extract og:image as a hint
     const ogImage = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1];
 
     try {
