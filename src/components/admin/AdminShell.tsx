@@ -3,13 +3,13 @@ import { LayoutDashboard, ShoppingCart, Users, Package, Settings, LogOut } from 
 import type { ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-const nav = [
+const nav: { to: string; label: string; icon: typeof LayoutDashboard; exact?: boolean }[] = [
   { to: "/admin", label: "Revenue", icon: LayoutDashboard, exact: true },
   { to: "/admin/orders", label: "Orders", icon: ShoppingCart },
   { to: "/admin/leads", label: "Leads", icon: Users },
   { to: "/admin/products", label: "Products", icon: Package },
   { to: "/admin/settings", label: "Settings", icon: Settings },
-] as const;
+];
 
 export function AdminShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
