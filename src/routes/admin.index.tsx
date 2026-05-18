@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/start/client"; // Updated import path
+import { useServerFn } from "@tanstack/start/client";
 import { getRevenueStats, purgeOrders } from "@/lib/admin.functions";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -19,18 +19,17 @@ function AdminDashboard() {
   });
 
   const handlePurge = async () => {
-    if (!confirm("Clear test noise? This permanently removes unpaid orders.")) return;
-    
-    const tid = toast.loading("Syncing with database...");
+    if (!confirm("Wipe test orders?")) return;
+    const tid = toast.loading("Processing...");
     try {
       const res = await runPurge();
       if (res?.ok) {
         await queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
         await refetch();
-        toast.success("Environment Reset", { id: tid });
+        toast.success("Cleanup successful", { id: tid });
       }
-    } catch (error) {
-      toast.error("Purge failed. Verify database connection.", { id: tid });
+    } catch (e) {
+      toast.error("Action failed", { id: tid });
     }
   };
 
@@ -42,67 +41,47 @@ function AdminDashboard() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="p-6 rounded-xl border bg-card">
-          <p className="text-[10px] font-bold uppercase tracking-widest opacity-50">Revenue</p>
-          <h3 className="text-2xl font-black tracking-tighter">{formatPrice(stats?.totalCents || 0)}</h3>
+    <div className="p-6 space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="p-6 border rounded-2xl bg-card">
+          <div className="text-[10px] font-bold uppercase tracking-widest opacity-40">Revenue</div>
+          <div className="text-3xl font-black tracking-tighter">{formatPrice(stats?.totalCents || 0)}</div>
         </div>
-        <div className="p-6 rounded-xl border bg-card">
-          <p className="text-[10px] font-bold uppercase tracking-widest opacity-50">Total Leads</p>
-          <h3 className="text-2xl font-black tracking-tighter">{stats?.leadCount || 0}</h3>
+        <div className="p-6 border rounded-2xl bg-card">
+          <div className="text-[10px] font-bold uppercase tracking-widest opacity-40">Leads</div>
+          <div className="text-3xl font-black tracking-tighter">{stats?.leadCount || 0}</div>
         </div>
-        <div className="p-6 rounded-xl border bg-card">
-          <p className="text-[10px] font-bold uppercase tracking-widest opacity-50">Successes</p>
-          <h3 className="text-2xl font-black tracking-tighter">{stats?.paidCount || 0}</h3>
+        <div className="p-6 border rounded-2xl bg-card">
+          <div className="text-[10px] font-bold uppercase tracking-widest opacity-40">Paid</div>
+          <div className="text-3xl font-black tracking-tighter">{stats?.paidCount || 0}</div>
         </div>
       </div>
 
-      <div className="rounded-xl border bg-card">
-        <div className="flex items-center justify-between px-6 py-4 border-b">
-          <h2 className="text-[10px] font-black uppercase tracking-[0.2em]">Live Order Stream</h2>
-          <button 
-            onClick={handlePurge}
-            className="text-[9px] font-bold uppercase tracking-tighter px-3 py-1 border rounded-full hover:bg-red-500 hover:text-white transition-all"
-          >
-            Purge Test Noise
+      <div className="border rounded-2xl bg-card overflow-hidden">
+        <div className="p-4 border-b flex justify-between items-center bg-muted/20">
+          <div className="text-[10px] font-black uppercase tracking-widest">Order Feed</div>
+          <button onClick={handlePurge} className="text-[9px] font-black uppercase border px-3 py-1 rounded-full hover:bg-red-500 hover:text-white transition-all">
+            Clear Noise
           </button>
         </div>
-        
         <table className="w-full text-left text-xs">
-          <thead className="bg-muted/50 border-b text-[9px] uppercase tracking-widest opacity-70">
-            <tr>
-              <th className="px-6 py-3">Identifier</th>
-              <th className="px-6 py-3">Value</th>
-              <th className="px-6 py-3">Status</th>
-              <th className="px-6 py-3 text-right">Timestamp</th>
+          <thead>
+            <tr className="border-b bg-muted/10 text-[9px] uppercase tracking-widest opacity-50">
+              <th className="p-4">Customer</th>
+              <th className="p-4">Amount</th>
+              <th className="p-4 text-right">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y">
-            {stats?.recent?.length ? (
-              stats.recent.map((order: any) => (
-                <tr key={order.id} className="hover:bg-muted/10">
-                  <td className="px-6 py-4 font-medium">{order.email}</td>
-                  <td className="px-6 py-4">{formatPrice(order.amount_cents)}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                      order.status === 'paid' ? 'bg-green-500/10 text-green-500' : 'bg-yellow-500/10 text-yellow-500'
-                    }`}>
-                      {order.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right opacity-40">
-                    {new Date(order.created_at).toLocaleDateString()}
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={4} className="px-6 py-20 text-center opacity-20 uppercase tracking-[0.5em] text-[10px]">
-                  No Data Detected
+            {stats?.recent?.map((o: any) => (
+              <tr key={o.id} className="hover:bg-muted/5 transition-colors">
+                <td className="p-4">{o.email}</td>
+                <td className="p-4 font-medium">{formatPrice(o.amount_cents)}</td>
+                <td className="p-4 text-right">
+                  <span className="bg-muted px-2 py-0.5 rounded text-[9px] font-bold uppercase">{o.status}</span>
                 </td>
               </tr>
-            )}
+            ))}
           </tbody>
         </table>
       </div>
