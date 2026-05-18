@@ -1,26 +1,46 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Hero } from "@/components/site/Hero";
+import { Benefits } from "@/components/site/Benefits";
+import { OfferSection } from "@/components/site/OfferSection";
+import { Testimonials } from "@/components/site/Testimonials";
+import { FAQ } from "@/components/site/FAQ";
+import { CTASection } from "@/components/site/CTASection";
+import { LeadCaptureForm } from "@/components/site/LeadCaptureForm";
 
 export const Route = createFileRoute("/")({
-  component: Index,
+  head: () => ({
+    meta: [
+      { title: "Northwind — get the result you actually want" },
+      { name: "description", content: "A focused, no-fluff package that gets you to the result faster. Instant access, lifetime updates, 30-day money-back guarantee." },
+      { property: "og:title", content: "Northwind — get the result you actually want" },
+      { property: "og:description", content: "A focused, no-fluff package that gets you to the result faster." },
+    ],
+  }),
+  component: Home,
 });
 
-// IMPORTANT: Replace this placeholder. For sites with multiple pages (About, Services, Contact, etc.),
-// create separate route files (about.tsx, services.tsx, contact.tsx) — don't put all pages in this file.
-function PlaceholderIndex() {
+function Home() {
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
+    <>
+      <Hero />
+      <Benefits />
+      <OfferSection />
+      <Testimonials />
+      <section className="border-t border-border bg-background">
+        <div className="mx-auto max-w-2xl px-4 py-20 text-center">
+          <h2 className="text-2xl font-semibold tracking-tight md:text-3xl">
+            Not ready to buy? Get updates.
+          </h2>
+          <p className="mt-3 text-sm text-muted-foreground">
+            One email when there's something genuinely worth your time.
+          </p>
+          <div className="mx-auto mt-6 max-w-md">
+            <LeadCaptureForm source="home-newsletter" />
+          </div>
+        </div>
+      </section>
+      <FAQ />
+      <CTASection />
+    </>
   );
-}
-
-function Index() {
-  return <PlaceholderIndex />;
 }
