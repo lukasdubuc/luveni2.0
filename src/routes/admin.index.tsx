@@ -5,10 +5,10 @@ import { toast } from "sonner";
 import {
   LayoutDashboard, ShoppingBag, Package, Users, Settings,
   TrendingUp, DollarSign, ArrowUpRight, ArrowDownRight,
-  RefreshCw, ExternalLink, Archive, Plus, X, ChevronDown,
+  RefreshCw, ExternalLink, Archive, Plus, X,
   Globe, Edit3, Eye, EyeOff, Save, LogOut, Bell, Search,
-  Filter, Download, MoreHorizontal, CheckCircle2, Clock,
-  XCircle, Zap, BarChart2, Mail, Calendar, Tag
+  Download, MoreHorizontal, CheckCircle2, Clock,
+  XCircle, Zap, BarChart2, Mail, Tag, Menu,
 } from "lucide-react";
 
 export const Route = createFileRoute("/admin/")({
@@ -27,51 +27,61 @@ export const Route = createFileRoute("/admin/")({
 type NavSection = "overview" | "orders" | "products" | "leads" | "site" | "settings";
 
 const NAV_ITEMS = [
-  { id: "overview" as NavSection, label: "Overview", icon: LayoutDashboard },
-  { id: "orders" as NavSection, label: "Orders", icon: ShoppingBag },
-  { id: "products" as NavSection, label: "Products", icon: Package },
-  { id: "leads" as NavSection, label: "Leads", icon: Users },
-  { id: "site" as NavSection, label: "Website", icon: Globe },
-  { id: "settings" as NavSection, label: "Settings", icon: Settings },
+  { id: "overview"  as NavSection, label: "Overview",  icon: LayoutDashboard },
+  { id: "orders"    as NavSection, label: "Orders",    icon: ShoppingBag     },
+  { id: "products"  as NavSection, label: "Products",  icon: Package         },
+  { id: "leads"     as NavSection, label: "Leads",     icon: Users           },
+  { id: "site"      as NavSection, label: "Website",   icon: Globe           },
+  { id: "settings"  as NavSection, label: "Settings",  icon: Settings        },
 ];
 
+// Bottom nav: 5 items (Settings goes in the drawer)
+const BOTTOM_NAV = NAV_ITEMS.slice(0, 5);
+
 const STATUS_CONFIG: Record<string, { color: string; icon: any; label: string }> = {
-  paid:      { color: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20", icon: CheckCircle2, label: "Paid" },
+  paid:      { color: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20", icon: CheckCircle2, label: "Paid"      },
   completed: { color: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20", icon: CheckCircle2, label: "Completed" },
-  pending:   { color: "text-amber-400 bg-amber-400/10 border-amber-400/20",       icon: Clock,        label: "Pending" },
-  failed:    { color: "text-red-400 bg-red-400/10 border-red-400/20",             icon: XCircle,      label: "Failed" },
-  archived:  { color: "text-slate-400 bg-slate-400/10 border-slate-400/20",       icon: Archive,      label: "Archived" },
+  pending:   { color: "text-amber-400  bg-amber-400/10  border-amber-400/20",     icon: Clock,        label: "Pending"   },
+  failed:    { color: "text-red-400    bg-red-400/10    border-red-400/20",        icon: XCircle,      label: "Failed"    },
+  archived:  { color: "text-slate-400  bg-slate-400/10  border-slate-400/20",     icon: Archive,      label: "Archived"  },
 };
 
-function fmt$(cents: number) { return `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}` }
+function fmt$(cents: number) {
+  return `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+}
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
+function fmtDateShort(iso: string) {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function AdminDashboard() {
-  const [section, setSection] = useState<NavSection>("overview");
-  const [orders, setOrders] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
-  const [leads, setLeads] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [selectedRow, setSelectedRow] = useState<any | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [section,      setSection    ] = useState<NavSection>("overview");
+  const [orders,       setOrders     ] = useState<any[]>([]);
+  const [products,     setProducts   ] = useState<any[]>([]);
+  const [leads,        setLeads      ] = useState<any[]>([]);
+  const [loading,      setLoading    ] = useState(true);
+  const [drawerOpen,   setDrawerOpen ] = useState(false);
+  const [selectedRow,  setSelectedRow] = useState<any | null>(null);
+  const [searchQuery,  setSearchQuery] = useState("");
+  const [searchOpen,   setSearchOpen ] = useState(false);
 
-  // Product form
   const [productForm, setProductForm] = useState({
     title: "", description: "", price_cents: "", slug: "",
-    stripe_price_id: "", is_published: true, editingId: null as string | null
+    stripe_price_id: "", is_published: true, editingId: null as string | null,
   });
-  // Site editor: placeholder fields
+
   const [siteContent, setSiteContent] = useState({
-    hero_headline: "A simple, modern way to actually get the result you want.",
-    hero_subheadline: "Everything you need to get started in one focused, no-fluff package.",
-    hero_cta: "Get instant access — $49",
-    price_display: "$49",
-    price_original: "$129",
+    hero_headline:         "A simple, modern way to actually get the result you want.",
+    hero_subheadline:      "Everything you need to get started in one focused, no-fluff package.",
+    hero_cta:              "Get instant access — $49",
+    price_display:         "$49",
+    price_original:        "$129",
     launch_pricing_active: true,
-    guarantee_days: "30",
+    guarantee_days:        "30",
   });
   const [siteEdited, setSiteEdited] = useState(false);
 
@@ -116,8 +126,7 @@ function AdminDashboard() {
       price_cents: Math.round(parseFloat(price_cents) * 100),
       slug: slug || title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
       stripe_price_id: stripe_price_id || null,
-      is_published,
-      currency: "usd",
+      is_published, currency: "usd",
     };
     if (editingId) {
       const { error } = await supabase.from("products").update(payload as any).eq("id", editingId);
@@ -132,7 +141,7 @@ function AdminDashboard() {
 
   const togglePublished = async (id: string, current: boolean) => {
     const { error } = await supabase.from("products").update({ is_published: !current } as any).eq("id", id);
-    if (!error) { setProducts(prev => prev.map(p => p.id === id ? { ...p, is_published: !current } : p)); }
+    if (!error) setProducts(prev => prev.map(p => p.id === id ? { ...p, is_published: !current } : p));
   };
 
   const archiveProduct = async (id: string) => {
@@ -143,7 +152,7 @@ function AdminDashboard() {
 
   const resetProductForm = () => setProductForm({
     title: "", description: "", price_cents: "", slug: "",
-    stripe_price_id: "", is_published: true, editingId: null
+    stripe_price_id: "", is_published: true, editingId: null,
   });
 
   const startEditProduct = (p: any) => {
@@ -151,217 +160,314 @@ function AdminDashboard() {
       title: p.title, description: p.description || "",
       price_cents: (p.price_cents / 100).toString(),
       slug: p.slug, stripe_price_id: p.stripe_price_id || "",
-      is_published: p.is_published, editingId: p.id
+      is_published: p.is_published, editingId: p.id,
     });
     setSection("products");
+    setDrawerOpen(false);
   };
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    window.location.href = "/login";
-  };
+  const handleSignOut = async () => { await supabase.auth.signOut(); window.location.href = "/login"; };
+  const navigate = (s: NavSection) => { setSection(s); setDrawerOpen(false); };
+
+  const filteredOrders = activeOrders.filter(o =>
+    !searchQuery ||
+    o.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    o.name?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  const filteredLeads = leads.filter(l =>
+    !searchQuery || l.email?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const pageTitle = NAV_ITEMS.find(n => n.id === section)?.label ?? "Dashboard";
 
   return (
-    <div className="min-h-screen bg-[#0f1117] text-slate-100 flex font-sans antialiased" style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
+    <div className="min-h-screen bg-[#0f1117] text-slate-100 flex font-sans antialiased"
+      style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
 
-      {/* ── SIDEBAR ─────────────────────────────────── */}
-      <aside className={`${sidebarCollapsed ? "w-16" : "w-56"} flex-shrink-0 bg-[#13151c] border-r border-white/5 flex flex-col transition-all duration-300 relative z-10`}>
-        {/* Logo */}
+      {/* ══ DESKTOP SIDEBAR ══════════════════════════════ */}
+      <aside className="hidden md:flex w-56 flex-shrink-0 bg-[#13151c] border-r border-white/5 flex-col">
         <div className="p-4 flex items-center gap-3 border-b border-white/5">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center flex-shrink-0">
             <Zap size={14} className="text-white" />
           </div>
-          {!sidebarCollapsed && <span className="font-semibold text-sm tracking-tight">Northwind HQ</span>}
+          <span className="font-semibold text-sm tracking-tight">Northwind HQ</span>
         </div>
-
-        {/* Nav */}
         <nav className="flex-1 p-2 space-y-0.5">
           {NAV_ITEMS.map(item => {
             const Icon = item.icon;
             const active = section === item.id;
             return (
-              <button key={item.id} onClick={() => setSection(item.id)}
+              <button key={item.id} onClick={() => navigate(item.id)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
                   active ? "bg-violet-500/15 text-violet-300 font-medium" : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
                 }`}>
                 <Icon size={16} className="flex-shrink-0" />
-                {!sidebarCollapsed && <span>{item.label}</span>}
-                {!sidebarCollapsed && item.id === "orders" && pendingOrders.length > 0 && (
-                  <span className="ml-auto text-[10px] bg-amber-400/20 text-amber-400 px-1.5 py-0.5 rounded-full font-medium">{pendingOrders.length}</span>
+                <span>{item.label}</span>
+                {item.id === "orders" && pendingOrders.length > 0 && (
+                  <span className="ml-auto text-[10px] bg-amber-400/20 text-amber-400 px-1.5 py-0.5 rounded-full font-medium">
+                    {pendingOrders.length}
+                  </span>
                 )}
               </button>
             );
           })}
         </nav>
-
-        {/* Bottom */}
         <div className="p-2 border-t border-white/5 space-y-0.5">
-          <a href="/" target="_blank" className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-slate-200 transition-all">
-            <ExternalLink size={16} className="flex-shrink-0" />
-            {!sidebarCollapsed && <span>View Site</span>}
+          <a href="/" target="_blank"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-slate-200 transition-all">
+            <ExternalLink size={16} className="flex-shrink-0" /><span>View Site</span>
           </a>
-          <button onClick={handleSignOut} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-all">
-            <LogOut size={16} className="flex-shrink-0" />
-            {!sidebarCollapsed && <span>Sign Out</span>}
+          <button onClick={handleSignOut}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-all">
+            <LogOut size={16} className="flex-shrink-0" /><span>Sign Out</span>
           </button>
         </div>
       </aside>
 
-      {/* ── MAIN ────────────────────────────────────── */}
+      {/* ══ MOBILE DRAWER ════════════════════════════════ */}
+      {drawerOpen && (
+        <div className="md:hidden fixed inset-0 z-40 flex">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDrawerOpen(false)} />
+          <div className="relative w-64 bg-[#13151c] flex flex-col h-full shadow-2xl animate-in slide-in-from-left duration-200">
+            <div className="p-4 flex items-center justify-between border-b border-white/5">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center">
+                  <Zap size={14} className="text-white" />
+                </div>
+                <span className="font-semibold text-sm">Northwind HQ</span>
+              </div>
+              <button onClick={() => setDrawerOpen(false)} className="text-slate-500 hover:text-white p-1 rounded transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+            <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
+              {NAV_ITEMS.map(item => {
+                const Icon = item.icon;
+                const active = section === item.id;
+                return (
+                  <button key={item.id} onClick={() => navigate(item.id)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all ${
+                      active ? "bg-violet-500/15 text-violet-300 font-medium" : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                    }`}>
+                    <Icon size={17} className="flex-shrink-0" />
+                    <span>{item.label}</span>
+                    {item.id === "orders" && pendingOrders.length > 0 && (
+                      <span className="ml-auto text-[10px] bg-amber-400/20 text-amber-400 px-1.5 py-0.5 rounded-full font-medium">
+                        {pendingOrders.length}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+            <div className="p-3 border-t border-white/5 space-y-1">
+              <a href="/" target="_blank"
+                className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-slate-200 transition-all">
+                <ExternalLink size={16} /> View Site
+              </a>
+              <button onClick={handleSignOut}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-red-400 hover:bg-red-500/10 transition-all">
+                <LogOut size={16} /> Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ MAIN ═════════════════════════════════════════ */}
       <div className="flex-1 flex flex-col min-w-0">
 
         {/* Topbar */}
-        <header className="h-14 flex items-center justify-between px-6 border-b border-white/5 bg-[#0f1117]/80 backdrop-blur sticky top-0 z-10">
+        <header className="h-14 flex items-center justify-between px-4 md:px-6 border-b border-white/5 bg-[#0f1117]/90 backdrop-blur sticky top-0 z-10">
           <div className="flex items-center gap-3">
-            <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="text-slate-400 hover:text-white transition-colors p-1 rounded">
-              <BarChart2 size={16} />
+            <button onClick={() => setDrawerOpen(true)}
+              className="md:hidden text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors">
+              <Menu size={18} />
             </button>
-            <div className="relative">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <input
-                value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search orders, products…"
-                className="bg-white/5 border border-white/8 rounded-lg pl-9 pr-4 py-1.5 text-sm text-slate-300 placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50 w-56 transition-all"
-              />
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button onClick={fetchData} className="text-slate-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/5">
+            <button onClick={fetchData}
+              className="hidden md:flex text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors">
               <RefreshCw size={14} />
             </button>
-            <div className="flex items-center gap-2 bg-white/5 border border-white/8 rounded-lg px-3 py-1.5">
-              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-violet-400 to-indigo-500 text-[9px] font-bold flex items-center justify-center text-white">L</div>
-              <span className="text-sm text-slate-300 font-medium">Lukas</span>
+            <h1 className="font-semibold text-sm text-white md:hidden">{pageTitle}</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setSearchOpen(v => !v)}
+              className="md:hidden text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors">
+              <Search size={16} />
+            </button>
+            <div className="relative hidden md:block">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search…"
+                className="bg-white/5 border border-white/8 rounded-lg pl-9 pr-4 py-1.5 text-sm text-slate-300 placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50 w-48 transition-all" />
+            </div>
+            <div className="flex items-center gap-2 bg-white/5 border border-white/8 rounded-lg px-2.5 py-1.5">
+              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-violet-400 to-indigo-500 text-[9px] font-bold flex items-center justify-center text-white flex-shrink-0">L</div>
+              <span className="text-sm text-slate-300 font-medium hidden sm:block">Lukas</span>
             </div>
           </div>
         </header>
 
-        {/* Page Content */}
-        <main className="flex-1 overflow-auto p-6">
+        {/* Mobile expandable search */}
+        {searchOpen && (
+          <div className="md:hidden px-4 py-2 bg-[#0f1117] border-b border-white/5">
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input autoFocus value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search orders, leads…"
+                className="w-full bg-white/5 border border-white/8 rounded-lg pl-9 pr-4 py-2 text-sm text-slate-300 placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50" />
+            </div>
+          </div>
+        )}
+
+        {/* Content — extra bottom padding on mobile for the bottom nav */}
+        <main className="flex-1 overflow-auto p-4 md:p-6 pb-24 md:pb-6">
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="flex flex-col items-center gap-3">
                 <div className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm text-slate-500">Loading data…</p>
+                <p className="text-sm text-slate-500">Loading…</p>
               </div>
             </div>
           ) : (
             <>
-              {/* ── OVERVIEW ── */}
+              {/* ── OVERVIEW ─────────────────────────── */}
               {section === "overview" && (
-                <div className="space-y-6 animate-in fade-in duration-300">
-                  <div>
+                <div className="space-y-4 animate-in fade-in duration-300">
+                  <div className="hidden md:block">
                     <h1 className="text-xl font-semibold text-white">Overview</h1>
                     <p className="text-sm text-slate-500 mt-0.5">Your business at a glance</p>
                   </div>
 
-                  {/* KPI Cards */}
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <KPICard label="Total Revenue" value={fmt$(totalRevenue)} sub="All time" icon={DollarSign} trend={+12} color="violet" />
-                    <KPICard label="Total Orders" value={paidOrders.length} sub="Completed" icon={ShoppingBag} trend={+8} color="indigo" />
-                    <KPICard label="Conversion" value={`${convRate}%`} sub="Paid / Total" icon={TrendingUp} trend={+3} color="emerald" />
-                    <KPICard label="Avg Ticket" value={fmt$(avgTicket)} sub="Per order" icon={Tag} trend={0} color="amber" />
+                  {/* KPI: 2 cols on mobile, 4 on desktop */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <KPICard label="Revenue"    value={fmt$(totalRevenue)}  sub="All time"     icon={DollarSign}  color="violet"  />
+                    <KPICard label="Orders"     value={paidOrders.length}   sub="Completed"    icon={ShoppingBag} color="indigo"  />
+                    <KPICard label="Conversion" value={`${convRate}%`}      sub="Paid / total" icon={TrendingUp}  color="emerald" />
+                    <KPICard label="Avg Ticket" value={fmt$(avgTicket)}     sub="Per order"    icon={Tag}         color="amber"   />
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    {/* Recent orders */}
-                    <div className="lg:col-span-2 bg-[#13151c] border border-white/5 rounded-xl p-5">
-                      <div className="flex items-center justify-between mb-4">
-                        <h2 className="font-medium text-sm text-white">Recent Orders</h2>
-                        <button onClick={() => setSection("orders")} className="text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1">
-                          View all <ArrowUpRight size={12} />
-                        </button>
-                      </div>
-                      <div className="space-y-2">
-                        {activeOrders.slice(0, 6).map(o => {
-                          const cfg = STATUS_CONFIG[o.status] || STATUS_CONFIG.pending;
-                          const Icon = cfg.icon;
-                          return (
-                            <div key={o.id} className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-white/3 transition-colors group">
-                              <div className="flex items-center gap-3">
-                                <div className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-[10px] font-bold text-slate-400 uppercase">
-                                  {(o.name || o.email || "?")[0]}
-                                </div>
-                                <div>
-                                  <p className="text-sm font-medium text-slate-200">{o.name || o.email}</p>
-                                  <p className="text-xs text-slate-500">{o.email !== o.name ? o.email : ""} · {fmtDate(o.created_at)}</p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <span className={`text-[10px] px-2 py-0.5 rounded-full border flex items-center gap-1 ${cfg.color}`}>
-                                  <Icon size={9} /> {cfg.label}
-                                </span>
-                                <span className="font-mono text-sm font-medium text-slate-200">{fmt$(o.amount_cents)}</span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                        {activeOrders.length === 0 && <p className="text-sm text-slate-500 text-center py-8">No orders yet</p>}
-                      </div>
+                  {/* Recent orders — card style, works on all sizes */}
+                  <div className="bg-[#13151c] border border-white/5 rounded-xl overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+                      <h2 className="font-medium text-sm text-white">Recent Orders</h2>
+                      <button onClick={() => setSection("orders")} className="text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1">
+                        View all <ArrowUpRight size={11} />
+                      </button>
                     </div>
-
-                    {/* Quick Stats */}
-                    <div className="space-y-4">
-                      <div className="bg-[#13151c] border border-white/5 rounded-xl p-5">
-                        <h2 className="font-medium text-sm text-white mb-4">Products</h2>
-                        <div className="space-y-2">
-                          {products.slice(0, 4).map(p => (
-                            <div key={p.id} className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <div className={`w-1.5 h-1.5 rounded-full ${p.is_published ? "bg-emerald-400" : "bg-slate-500"}`} />
-                                <span className="text-sm text-slate-300 truncate max-w-[120px]">{p.title}</span>
+                    <div className="divide-y divide-white/5">
+                      {activeOrders.slice(0, 5).map(o => {
+                        const cfg  = STATUS_CONFIG[o.status] || STATUS_CONFIG.pending;
+                        const Icon = cfg.icon;
+                        return (
+                          <div key={o.id} onClick={() => setSelectedRow({ ...o, _type: "order" })}
+                            className="flex items-center justify-between px-4 py-3 hover:bg-white/3 active:bg-white/5 cursor-pointer transition-colors">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-8 h-8 rounded-full bg-white/8 flex items-center justify-center text-[11px] font-bold text-slate-400 uppercase flex-shrink-0">
+                                {(o.name || o.email || "?")[0]}
                               </div>
-                              <span className="font-mono text-sm text-slate-400">{fmt$(p.price_cents)}</span>
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-slate-200 truncate">{o.name || o.email}</p>
+                                <p className="text-xs text-slate-500">{fmtDateShort(o.created_at)}</p>
+                              </div>
                             </div>
-                          ))}
-                          {products.length === 0 && <p className="text-sm text-slate-500">No products yet</p>}
-                        </div>
-                      </div>
-                      <div className="bg-[#13151c] border border-white/5 rounded-xl p-5">
-                        <h2 className="font-medium text-sm text-white mb-3">Email Leads</h2>
-                        <p className="text-3xl font-semibold text-white">{leads.length}</p>
-                        <p className="text-xs text-slate-500 mt-1">Subscribers collected</p>
-                        <button onClick={() => setSection("leads")} className="mt-3 text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1">
-                          View leads <ArrowUpRight size={12} />
-                        </button>
-                      </div>
+                            <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                              <span className={`hidden sm:flex text-[10px] px-2 py-0.5 rounded-full border items-center gap-1 ${cfg.color}`}>
+                                <Icon size={9} /> {cfg.label}
+                              </span>
+                              <span className="font-mono text-sm font-semibold text-slate-100">{fmt$(o.amount_cents)}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {activeOrders.length === 0 && (
+                        <p className="text-sm text-slate-500 text-center py-10">No orders yet</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Quick stats */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-[#13151c] border border-white/5 rounded-xl p-4">
+                      <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider mb-2">Products</p>
+                      <p className="text-2xl font-semibold text-white">{products.length}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{products.filter(p => p.is_published).length} live</p>
+                      <button onClick={() => setSection("products")} className="mt-3 text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1">
+                        Manage <ArrowUpRight size={11} />
+                      </button>
+                    </div>
+                    <div className="bg-[#13151c] border border-white/5 rounded-xl p-4">
+                      <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider mb-2">Leads</p>
+                      <p className="text-2xl font-semibold text-white">{leads.length}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Subscribers</p>
+                      <button onClick={() => setSection("leads")} className="mt-3 text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1">
+                        View all <ArrowUpRight size={11} />
+                      </button>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* ── ORDERS ── */}
+              {/* ── ORDERS ───────────────────────────── */}
               {section === "orders" && (
-                <div className="space-y-5 animate-in fade-in duration-300">
+                <div className="space-y-4 animate-in fade-in duration-300">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h1 className="text-xl font-semibold text-white">Orders</h1>
-                      <p className="text-sm text-slate-500 mt-0.5">{activeOrders.length} active · {paidOrders.length} paid</p>
+                      <h1 className="text-lg md:text-xl font-semibold text-white">Orders</h1>
+                      <p className="text-xs md:text-sm text-slate-500 mt-0.5">{activeOrders.length} active · {paidOrders.length} paid</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button className="flex items-center gap-2 text-sm text-slate-400 hover:text-white bg-white/5 border border-white/8 px-3 py-1.5 rounded-lg transition-colors">
-                        <Filter size={13} /> Filter
-                      </button>
-                      <button className="flex items-center gap-2 text-sm text-slate-400 hover:text-white bg-white/5 border border-white/8 px-3 py-1.5 rounded-lg transition-colors">
-                        <Download size={13} /> Export
-                      </button>
-                    </div>
+                    <button className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-white/5 border border-white/8 px-3 py-1.5 rounded-lg transition-colors">
+                      <Download size={12} /> Export
+                    </button>
                   </div>
 
-                  <div className="bg-[#13151c] border border-white/5 rounded-xl overflow-hidden">
+                  {/* Mobile: card list */}
+                  <div className="md:hidden space-y-2">
+                    {filteredOrders.map(o => {
+                      const cfg  = STATUS_CONFIG[o.status] || STATUS_CONFIG.pending;
+                      const Icon = cfg.icon;
+                      return (
+                        <div key={o.id} onClick={() => setSelectedRow({ ...o, _type: "order" })}
+                          className="bg-[#13151c] border border-white/5 rounded-xl px-4 py-3.5 flex items-center justify-between active:bg-white/5 transition-colors cursor-pointer">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-9 h-9 rounded-full bg-white/8 flex items-center justify-center text-[12px] font-bold text-slate-400 uppercase flex-shrink-0">
+                              {(o.name || o.email || "?")[0]}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-slate-200 truncate">{o.name || o.email}</p>
+                              <p className="text-xs text-slate-500 truncate">{o.name ? o.email : fmtDateShort(o.created_at)}</p>
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-2">
+                            <span className="font-mono text-sm font-semibold text-slate-100">{fmt$(o.amount_cents || 0)}</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-1 ${cfg.color}`}>
+                              <Icon size={8} /> {cfg.label}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {filteredOrders.length === 0 && (
+                      <div className="text-center py-16 text-slate-500">
+                        <ShoppingBag size={28} className="mx-auto mb-3 opacity-30" />
+                        <p className="text-sm">No orders</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Desktop: table */}
+                  <div className="hidden md:block bg-[#13151c] border border-white/5 rounded-xl overflow-hidden">
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-white/5">
-                          {["Customer", "Product", "Amount", "Status", "Date", ""].map(h => (
+                          {["Customer", "Amount", "Status", "Date", ""].map(h => (
                             <th key={h} className="text-left px-5 py-3 text-[11px] font-medium text-slate-500 uppercase tracking-wider">{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/3">
-                        {activeOrders.filter(o =>
-                          !searchQuery || o.email?.includes(searchQuery) || o.name?.toLowerCase().includes(searchQuery.toLowerCase())
-                        ).map(o => {
-                          const cfg = STATUS_CONFIG[o.status] || STATUS_CONFIG.pending;
+                        {filteredOrders.map(o => {
+                          const cfg  = STATUS_CONFIG[o.status] || STATUS_CONFIG.pending;
                           const Icon = cfg.icon;
                           return (
                             <tr key={o.id} className="hover:bg-white/2 transition-colors group">
@@ -376,7 +482,6 @@ function AdminDashboard() {
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-5 py-4 text-sm text-slate-400">{o.product_id ? products.find(p => p.id === o.product_id)?.title || o.product_id.slice(0, 8) : "—"}</td>
                               <td className="px-5 py-4 font-mono text-sm font-medium text-slate-200">{fmt$(o.amount_cents || 0)}</td>
                               <td className="px-5 py-4">
                                 <span className={`text-[10px] px-2 py-1 rounded-full border flex items-center gap-1.5 w-fit ${cfg.color}`}>
@@ -386,7 +491,7 @@ function AdminDashboard() {
                               <td className="px-5 py-4 text-sm text-slate-500">{fmtDate(o.created_at)}</td>
                               <td className="px-5 py-4">
                                 <button onClick={() => setSelectedRow({ ...o, _type: "order" })}
-                                  className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-white transition-all p-1 rounded">
+                                  className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-white p-1 rounded transition-all">
                                   <MoreHorizontal size={14} />
                                 </button>
                               </td>
@@ -395,66 +500,98 @@ function AdminDashboard() {
                         })}
                       </tbody>
                     </table>
-                    {activeOrders.length === 0 && (
+                    {filteredOrders.length === 0 && (
                       <div className="text-center py-16 text-slate-500">
                         <ShoppingBag size={28} className="mx-auto mb-3 opacity-30" />
-                        <p className="text-sm">No orders yet</p>
+                        <p className="text-sm">No orders</p>
                       </div>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* ── PRODUCTS ── */}
+              {/* ── PRODUCTS ─────────────────────────── */}
               {section === "products" && (
-                <div className="space-y-5 animate-in fade-in duration-300">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h1 className="text-xl font-semibold text-white">Products</h1>
-                      <p className="text-sm text-slate-500 mt-0.5">{products.length} total · {products.filter(p => p.is_published).length} published</p>
-                    </div>
+                <div className="space-y-4 animate-in fade-in duration-300">
+                  <div>
+                    <h1 className="text-lg md:text-xl font-semibold text-white">Products</h1>
+                    <p className="text-xs md:text-sm text-slate-500 mt-0.5">{products.length} total · {products.filter(p => p.is_published).length} live</p>
                   </div>
 
-                  {/* Add / Edit Form */}
-                  <div className="bg-[#13151c] border border-white/5 rounded-xl p-5">
+                  {/* Form */}
+                  <div className="bg-[#13151c] border border-white/5 rounded-xl p-4 md:p-5">
                     <h2 className="text-sm font-medium text-white mb-4 flex items-center gap-2">
                       {productForm.editingId ? <><Edit3 size={14} /> Edit Product</> : <><Plus size={14} /> New Product</>}
                     </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      <FormInput label="Title" value={productForm.title} onChange={v => setProductForm(f => ({ ...f, title: v }))} placeholder="Starter Package" />
-                      <FormInput label="Price (USD)" value={productForm.price_cents} onChange={v => setProductForm(f => ({ ...f, price_cents: v }))} placeholder="49.00" type="number" />
-                      <FormInput label="Stripe Price ID" value={productForm.stripe_price_id} onChange={v => setProductForm(f => ({ ...f, stripe_price_id: v }))} placeholder="price_xxxx" />
-                      <FormInput label="Slug" value={productForm.slug} onChange={v => setProductForm(f => ({ ...f, slug: v }))} placeholder="starter-package" />
-                      <div className="md:col-span-2">
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <FormInput label="Title"            value={productForm.title}            onChange={(v: string) => setProductForm(f => ({ ...f, title: v }))}            placeholder="Starter Package" />
+                        <FormInput label="Price (USD)"      value={productForm.price_cents}      onChange={(v: string) => setProductForm(f => ({ ...f, price_cents: v }))}      placeholder="49.00" type="number" />
+                        <FormInput label="Stripe Price ID"  value={productForm.stripe_price_id}  onChange={(v: string) => setProductForm(f => ({ ...f, stripe_price_id: v }))}  placeholder="price_xxxx" />
+                        <FormInput label="Slug"             value={productForm.slug}             onChange={(v: string) => setProductForm(f => ({ ...f, slug: v }))}             placeholder="starter-package" />
+                      </div>
+                      <div>
                         <label className="block text-xs text-slate-500 mb-1.5 font-medium">Description</label>
-                        <textarea value={productForm.description} onChange={e => setProductForm(f => ({ ...f, description: e.target.value }))}
+                        <textarea value={productForm.description}
+                          onChange={e => setProductForm(f => ({ ...f, description: e.target.value }))}
                           placeholder="What's included…" rows={2}
-                          className="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50 resize-none" />
+                          className="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50 resize-none" />
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 mt-4">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <div onClick={() => setProductForm(f => ({ ...f, is_published: !f.is_published }))}
-                          className={`w-9 h-5 rounded-full transition-colors relative ${productForm.is_published ? "bg-violet-500" : "bg-white/10"}`}>
-                          <div className={`w-3.5 h-3.5 bg-white rounded-full absolute top-0.75 transition-all ${productForm.is_published ? "left-4.5" : "left-0.75"}`} style={{ top: 3, left: productForm.is_published ? 18 : 3 }} />
+                    <div className="flex items-center justify-between mt-4">
+                      <label className="flex items-center gap-2 cursor-pointer" onClick={() => setProductForm(f => ({ ...f, is_published: !f.is_published }))}>
+                        <div className="relative w-9 rounded-full transition-colors" style={{ backgroundColor: productForm.is_published ? "#8b5cf6" : "rgba(255,255,255,0.1)", height: 20 }}>
+                          <div className="w-3.5 h-3.5 bg-white rounded-full absolute top-[2px] transition-all" style={{ left: productForm.is_published ? 18 : 2 }} />
                         </div>
                         <span className="text-sm text-slate-400">Published</span>
                       </label>
-                      <div className="ml-auto flex gap-2">
+                      <div className="flex gap-2">
                         {productForm.editingId && (
-                          <button onClick={resetProductForm} className="text-sm text-slate-400 hover:text-white px-4 py-2 rounded-lg border border-white/8 hover:bg-white/5 transition-all">
-                            Cancel
-                          </button>
+                          <button onClick={resetProductForm} className="text-sm text-slate-400 px-3 py-2 rounded-lg border border-white/8 hover:bg-white/5 transition-all">Cancel</button>
                         )}
-                        <button onClick={saveProduct} className="flex items-center gap-2 text-sm font-medium bg-violet-500 hover:bg-violet-400 text-white px-5 py-2 rounded-lg transition-colors">
-                          <Save size={13} /> {productForm.editingId ? "Save Changes" : "Create Product"}
+                        <button onClick={saveProduct}
+                          className="flex items-center gap-1.5 text-sm font-medium bg-violet-500 hover:bg-violet-400 text-white px-4 py-2 rounded-lg transition-colors">
+                          <Save size={13} /> {productForm.editingId ? "Save" : "Create"}
                         </button>
                       </div>
                     </div>
                   </div>
 
-                  {/* Products Table */}
-                  <div className="bg-[#13151c] border border-white/5 rounded-xl overflow-hidden">
+                  {/* Mobile: card list */}
+                  <div className="md:hidden space-y-2">
+                    {products.map(p => (
+                      <div key={p.id} className="bg-[#13151c] border border-white/5 rounded-xl px-4 py-3.5">
+                        <div className="flex items-center justify-between">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-slate-200 truncate">{p.title}</p>
+                            <p className="text-xs text-slate-500 font-mono mt-0.5">{fmt$(p.price_cents)}</p>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                            <button onClick={() => togglePublished(p.id, p.is_published)}
+                              className={`text-[10px] px-2 py-1 rounded-full border flex items-center gap-1 ${
+                                p.is_published ? "text-emerald-400 bg-emerald-400/10 border-emerald-400/20" : "text-slate-400 bg-slate-400/10 border-slate-400/20"
+                              }`}>
+                              {p.is_published ? <Eye size={9} /> : <EyeOff size={9} />}
+                              {p.is_published ? "Live" : "Draft"}
+                            </button>
+                            <button onClick={() => setSelectedRow({ ...p, _type: "product" })}
+                              className="text-slate-500 hover:text-white p-1 rounded transition-colors">
+                              <MoreHorizontal size={15} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {products.length === 0 && (
+                      <div className="text-center py-12 text-slate-500">
+                        <Package size={28} className="mx-auto mb-3 opacity-30" />
+                        <p className="text-sm">No products yet</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Desktop: table */}
+                  <div className="hidden md:block bg-[#13151c] border border-white/5 rounded-xl overflow-hidden">
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-white/5">
@@ -484,12 +621,8 @@ function AdminDashboard() {
                             <td className="px-5 py-4 text-sm text-slate-500">{fmtDate(p.created_at)}</td>
                             <td className="px-5 py-4">
                               <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all">
-                                <button onClick={() => startEditProduct(p)} className="text-slate-500 hover:text-violet-400 transition-colors p-1 rounded">
-                                  <Edit3 size={13} />
-                                </button>
-                                <button onClick={() => setSelectedRow({ ...p, _type: "product" })} className="text-slate-500 hover:text-red-400 transition-colors p-1 rounded">
-                                  <Archive size={13} />
-                                </button>
+                                <button onClick={() => startEditProduct(p)} className="text-slate-500 hover:text-violet-400 p-1 rounded transition-colors"><Edit3 size={13} /></button>
+                                <button onClick={() => setSelectedRow({ ...p, _type: "product" })} className="text-slate-500 hover:text-red-400 p-1 rounded transition-colors"><Archive size={13} /></button>
                               </div>
                             </td>
                           </tr>
@@ -499,26 +632,52 @@ function AdminDashboard() {
                     {products.length === 0 && (
                       <div className="text-center py-16 text-slate-500">
                         <Package size={28} className="mx-auto mb-3 opacity-30" />
-                        <p className="text-sm">No products yet — create your first one above</p>
+                        <p className="text-sm">No products yet</p>
                       </div>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* ── LEADS ── */}
+              {/* ── LEADS ────────────────────────────── */}
               {section === "leads" && (
-                <div className="space-y-5 animate-in fade-in duration-300">
+                <div className="space-y-4 animate-in fade-in duration-300">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h1 className="text-xl font-semibold text-white">Email Leads</h1>
-                      <p className="text-sm text-slate-500 mt-0.5">{leads.length} subscribers</p>
+                      <h1 className="text-lg md:text-xl font-semibold text-white">Email Leads</h1>
+                      <p className="text-xs md:text-sm text-slate-500 mt-0.5">{leads.length} subscribers</p>
                     </div>
-                    <button className="flex items-center gap-2 text-sm text-slate-400 hover:text-white bg-white/5 border border-white/8 px-3 py-1.5 rounded-lg transition-colors">
-                      <Download size={13} /> Export CSV
+                    <button className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-white/5 border border-white/8 px-3 py-1.5 rounded-lg transition-colors">
+                      <Download size={12} /> Export
                     </button>
                   </div>
-                  <div className="bg-[#13151c] border border-white/5 rounded-xl overflow-hidden">
+
+                  {/* Mobile cards */}
+                  <div className="md:hidden space-y-2">
+                    {filteredLeads.map(l => (
+                      <div key={l.id} className="bg-[#13151c] border border-white/5 rounded-xl px-4 py-3.5 flex items-center justify-between">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 rounded-full bg-white/8 flex items-center justify-center flex-shrink-0">
+                            <Mail size={13} className="text-slate-400" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm text-slate-200 truncate">{l.email}</p>
+                            <p className="text-xs text-slate-500 capitalize">{l.source || "homepage"}</p>
+                          </div>
+                        </div>
+                        <span className="text-xs text-slate-500 flex-shrink-0 ml-2">{fmtDateShort(l.created_at)}</span>
+                      </div>
+                    ))}
+                    {filteredLeads.length === 0 && (
+                      <div className="text-center py-16 text-slate-500">
+                        <Users size={28} className="mx-auto mb-3 opacity-30" />
+                        <p className="text-sm">No leads yet</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Desktop table */}
+                  <div className="hidden md:block bg-[#13151c] border border-white/5 rounded-xl overflow-hidden">
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-white/5">
@@ -528,114 +687,103 @@ function AdminDashboard() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/3">
-                        {leads.filter(l => !searchQuery || l.email?.includes(searchQuery)).map(l => (
+                        {filteredLeads.map(l => (
                           <tr key={l.id} className="hover:bg-white/2 transition-colors">
-                            <td className="px-5 py-3">
-                              <div className="flex items-center gap-2">
-                                <Mail size={13} className="text-slate-500" />
-                                <span className="text-sm text-slate-200">{l.email}</span>
-                              </div>
-                            </td>
+                            <td className="px-5 py-3"><div className="flex items-center gap-2"><Mail size={13} className="text-slate-500" /><span className="text-sm text-slate-200">{l.email}</span></div></td>
                             <td className="px-5 py-3 text-sm text-slate-400 capitalize">{l.source || "homepage"}</td>
                             <td className="px-5 py-3 text-sm text-slate-500">{fmtDate(l.created_at)}</td>
-                            <td className="px-5 py-3 font-mono text-xs text-slate-600 truncate max-w-[200px]">
-                              {l.metadata ? JSON.stringify(l.metadata).slice(0, 60) : "—"}
-                            </td>
+                            <td className="px-5 py-3 font-mono text-xs text-slate-600 truncate max-w-[180px]">{l.metadata ? JSON.stringify(l.metadata).slice(0, 50) : "—"}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
-                    {leads.length === 0 && (
-                      <div className="text-center py-16 text-slate-500">
-                        <Users size={28} className="mx-auto mb-3 opacity-30" />
-                        <p className="text-sm">No leads yet</p>
-                      </div>
+                    {filteredLeads.length === 0 && (
+                      <div className="text-center py-16 text-slate-500"><Users size={28} className="mx-auto mb-3 opacity-30" /><p className="text-sm">No leads yet</p></div>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* ── SITE EDITOR ── */}
+              {/* ── SITE EDITOR ──────────────────────── */}
               {section === "site" && (
-                <div className="space-y-5 animate-in fade-in duration-300">
+                <div className="space-y-4 animate-in fade-in duration-300">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h1 className="text-xl font-semibold text-white">Website Editor</h1>
-                      <p className="text-sm text-slate-500 mt-0.5">Edit live site content</p>
+                      <h1 className="text-lg md:text-xl font-semibold text-white">Website Editor</h1>
+                      <p className="text-xs md:text-sm text-slate-500 mt-0.5">Edit live site content</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <a href="/" target="_blank" className="flex items-center gap-2 text-sm text-slate-400 hover:text-white bg-white/5 border border-white/8 px-3 py-1.5 rounded-lg transition-colors">
-                        <ExternalLink size={13} /> Preview
+                      <a href="/" target="_blank"
+                        className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-white/5 border border-white/8 px-3 py-1.5 rounded-lg transition-colors">
+                        <ExternalLink size={12} /> Preview
                       </a>
                       {siteEdited && (
-                        <button onClick={() => { toast.success("Site content saved (wire to Supabase/CMS)"); setSiteEdited(false); }}
-                          className="flex items-center gap-2 text-sm font-medium bg-violet-500 hover:bg-violet-400 text-white px-4 py-1.5 rounded-lg transition-colors">
-                          <Save size={13} /> Save Changes
+                        <button onClick={() => { toast.success("Saved (wire to Supabase)"); setSiteEdited(false); }}
+                          className="flex items-center gap-1.5 text-xs font-medium bg-violet-500 hover:bg-violet-400 text-white px-3 py-1.5 rounded-lg transition-colors">
+                          <Save size={12} /> Save
                         </button>
                       )}
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div className="bg-[#13151c] border border-white/5 rounded-xl p-5 space-y-4">
-                      <h2 className="text-sm font-medium text-white flex items-center gap-2"><Edit3 size={14} /> Hero Section</h2>
-                      <SiteField label="Headline" value={siteContent.hero_headline} rows={2}
-                        onChange={v => { setSiteContent(s => ({ ...s, hero_headline: v })); setSiteEdited(true); }} />
-                      <SiteField label="Subheadline" value={siteContent.hero_subheadline} rows={2}
-                        onChange={v => { setSiteContent(s => ({ ...s, hero_subheadline: v })); setSiteEdited(true); }} />
-                      <SiteField label="CTA Button Text" value={siteContent.hero_cta}
-                        onChange={v => { setSiteContent(s => ({ ...s, hero_cta: v })); setSiteEdited(true); }} />
-                    </div>
+                  <div className="bg-[#13151c] border border-white/5 rounded-xl p-4 space-y-4">
+                    <h2 className="text-sm font-medium text-white flex items-center gap-2"><Edit3 size={14} /> Hero Section</h2>
+                    <SiteField label="Headline" value={siteContent.hero_headline} rows={2}
+                      onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_headline: v })); setSiteEdited(true); }} />
+                    <SiteField label="Subheadline" value={siteContent.hero_subheadline} rows={2}
+                      onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_subheadline: v })); setSiteEdited(true); }} />
+                    <SiteField label="CTA Button" value={siteContent.hero_cta}
+                      onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_cta: v })); setSiteEdited(true); }} />
+                  </div>
 
-                    <div className="bg-[#13151c] border border-white/5 rounded-xl p-5 space-y-4">
-                      <h2 className="text-sm font-medium text-white flex items-center gap-2"><Tag size={14} /> Pricing</h2>
-                      <div className="grid grid-cols-2 gap-3">
-                        <SiteField label="Display Price" value={siteContent.price_display}
-                          onChange={v => { setSiteContent(s => ({ ...s, price_display: v })); setSiteEdited(true); }} />
-                        <SiteField label="Original Price" value={siteContent.price_original}
-                          onChange={v => { setSiteContent(s => ({ ...s, price_original: v })); setSiteEdited(true); }} />
-                      </div>
-                      <SiteField label="Guarantee Days" value={siteContent.guarantee_days}
-                        onChange={v => { setSiteContent(s => ({ ...s, guarantee_days: v })); setSiteEdited(true); }} />
-                      <div className="flex items-center justify-between py-2 px-3 bg-white/3 rounded-lg">
-                        <span className="text-sm text-slate-300">Launch Pricing Active</span>
-                        <button onClick={() => { setSiteContent(s => ({ ...s, launch_pricing_active: !s.launch_pricing_active })); setSiteEdited(true); }}
-                          className={`w-10 h-5.5 rounded-full transition-colors relative flex-shrink-0`}
-                          style={{ backgroundColor: siteContent.launch_pricing_active ? "#8b5cf6" : "#ffffff18", height: 22, width: 40 }}>
-                          <div className="w-3.5 h-3.5 bg-white rounded-full absolute top-[3px] transition-all"
-                            style={{ left: siteContent.launch_pricing_active ? 22 : 3 }} />
-                        </button>
-                      </div>
+                  <div className="bg-[#13151c] border border-white/5 rounded-xl p-4 space-y-4">
+                    <h2 className="text-sm font-medium text-white flex items-center gap-2"><Tag size={14} /> Pricing</h2>
+                    <div className="grid grid-cols-2 gap-3">
+                      <SiteField label="Display Price" value={siteContent.price_display}
+                        onChange={(v: string) => { setSiteContent(s => ({ ...s, price_display: v })); setSiteEdited(true); }} />
+                      <SiteField label="Original Price" value={siteContent.price_original}
+                        onChange={(v: string) => { setSiteContent(s => ({ ...s, price_original: v })); setSiteEdited(true); }} />
+                    </div>
+                    <SiteField label="Guarantee (days)" value={siteContent.guarantee_days}
+                      onChange={(v: string) => { setSiteContent(s => ({ ...s, guarantee_days: v })); setSiteEdited(true); }} />
+                    <div className="flex items-center justify-between py-2.5 px-3 bg-white/3 rounded-lg">
+                      <span className="text-sm text-slate-300">Launch Pricing Active</span>
+                      <button onClick={() => { setSiteContent(s => ({ ...s, launch_pricing_active: !s.launch_pricing_active })); setSiteEdited(true); }}
+                        className="relative w-10 rounded-full flex-shrink-0 transition-colors"
+                        style={{ backgroundColor: siteContent.launch_pricing_active ? "#8b5cf6" : "rgba(255,255,255,0.1)", height: 22 }}>
+                        <div className="w-3.5 h-3.5 bg-white rounded-full absolute top-[3px] transition-all"
+                          style={{ left: siteContent.launch_pricing_active ? 22 : 3 }} />
+                      </button>
                     </div>
                   </div>
 
                   <div className="bg-amber-500/5 border border-amber-500/15 rounded-xl p-4 flex items-start gap-3">
                     <Bell size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm text-amber-300/80">
-                      To make site content fully dynamic, connect these fields to a <code className="font-mono text-amber-300 bg-amber-300/10 px-1 rounded">site_config</code> Supabase table. The save button above will write to that table, and the public site will read from it.
+                    <p className="text-xs text-amber-300/80 leading-relaxed">
+                      Connect these fields to a <code className="font-mono text-amber-300 bg-amber-300/10 px-1 rounded">site_config</code> Supabase table to make edits go live on the public site.
                     </p>
                   </div>
                 </div>
               )}
 
-              {/* ── SETTINGS ── */}
+              {/* ── SETTINGS ─────────────────────────── */}
               {section === "settings" && (
-                <div className="space-y-5 animate-in fade-in duration-300 max-w-2xl">
+                <div className="space-y-4 animate-in fade-in duration-300">
                   <div>
-                    <h1 className="text-xl font-semibold text-white">Settings</h1>
-                    <p className="text-sm text-slate-500 mt-0.5">Account & application settings</p>
+                    <h1 className="text-lg md:text-xl font-semibold text-white">Settings</h1>
+                    <p className="text-xs md:text-sm text-slate-500 mt-0.5">Account & application</p>
                   </div>
                   <div className="bg-[#13151c] border border-white/5 rounded-xl divide-y divide-white/5">
-                    <SettingsRow label="Admin Email" value="lukasdubuc@gmail.com" />
-                    <SettingsRow label="Auth Provider" value="Google OAuth + Email" />
-                    <SettingsRow label="Database" value="Supabase (PostgreSQL)" />
-                    <SettingsRow label="Payments" value="Stripe" />
-                    <SettingsRow label="Deployment" value="Cloudflare Workers (wrangler)" />
+                    <SettingsRow label="Admin Email" value="lukasdubuc@gmail.com"   />
+                    <SettingsRow label="Auth"        value="Google OAuth + Email"    />
+                    <SettingsRow label="Database"    value="Supabase (PostgreSQL)"   />
+                    <SettingsRow label="Payments"    value="Stripe"                  />
+                    <SettingsRow label="Deployment"  value="Cloudflare Workers"      />
                   </div>
-                  <div className="bg-[#13151c] border border-white/5 rounded-xl p-5">
-                    <h2 className="text-sm font-medium text-white mb-4">Danger Zone</h2>
+                  <div className="bg-[#13151c] border border-white/5 rounded-xl p-4">
+                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-3">Danger Zone</p>
                     <button onClick={handleSignOut}
-                      className="flex items-center gap-2 text-sm text-red-400 border border-red-400/20 bg-red-400/5 hover:bg-red-400/10 px-4 py-2 rounded-lg transition-colors">
+                      className="flex items-center justify-center gap-2 text-sm text-red-400 border border-red-400/20 bg-red-400/5 hover:bg-red-400/10 px-4 py-2.5 rounded-lg transition-colors w-full">
                       <LogOut size={13} /> Sign Out
                     </button>
                   </div>
@@ -644,54 +792,81 @@ function AdminDashboard() {
             </>
           )}
         </main>
+
+        {/* ══ MOBILE BOTTOM NAV ════════════════════════ */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-20 bg-[#13151c]/95 backdrop-blur border-t border-white/8 flex items-stretch"
+          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+          {BOTTOM_NAV.map(item => {
+            const Icon   = item.icon;
+            const active = section === item.id;
+            return (
+              <button key={item.id} onClick={() => setSection(item.id)}
+                className={`flex flex-col items-center justify-center gap-1 py-2.5 flex-1 relative transition-colors min-w-0 ${
+                  active ? "text-violet-400" : "text-slate-500"
+                }`}>
+                {active && <div className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-violet-400 rounded-full" />}
+                <div className="relative">
+                  <Icon size={19} />
+                  {item.id === "orders" && pendingOrders.length > 0 && (
+                    <span className="absolute -top-1 -right-1.5 w-3.5 h-3.5 bg-amber-400 rounded-full text-[8px] font-bold text-black flex items-center justify-center leading-none">
+                      {pendingOrders.length}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] font-medium leading-none truncate w-full text-center px-1">{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
       </div>
 
-      {/* ── ROW DETAIL MODAL ── */}
+      {/* ══ DETAIL MODAL — bottom sheet on mobile ════ */}
       {selectedRow && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-in fade-in duration-200"
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-6 animate-in fade-in duration-150"
           onClick={() => setSelectedRow(null)}>
-          <div className="bg-[#13151c] border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-[#13151c] border border-white/10 rounded-t-2xl sm:rounded-2xl p-5 w-full sm:max-w-md shadow-2xl animate-in slide-in-from-bottom duration-200"
+            onClick={e => e.stopPropagation()}>
+            {/* Drag handle (mobile only) */}
+            <div className="w-10 h-1 bg-white/15 rounded-full mx-auto mb-5 sm:hidden" />
             <div className="flex items-center justify-between mb-5">
               <h3 className="font-semibold text-white">{selectedRow._type === "order" ? "Order Details" : "Product Details"}</h3>
-              <button onClick={() => setSelectedRow(null)} className="text-slate-500 hover:text-white transition-colors">
-                <X size={16} />
-              </button>
+              <button onClick={() => setSelectedRow(null)} className="text-slate-500 hover:text-white p-1 rounded transition-colors"><X size={16} /></button>
             </div>
-            <div className="space-y-3 mb-6">
+            <div className="space-y-2.5 mb-6">
               {selectedRow._type === "order" ? (
                 <>
-                  <DetailRow label="Customer" value={selectedRow.name || "—"} />
-                  <DetailRow label="Email" value={selectedRow.email} />
-                  <DetailRow label="Amount" value={fmt$(selectedRow.amount_cents || 0)} mono />
-                  <DetailRow label="Status" value={selectedRow.status} />
-                  <DetailRow label="Provider" value={selectedRow.provider || "—"} />
-                  <DetailRow label="Provider Ref" value={selectedRow.provider_ref || "—"} mono />
-                  <DetailRow label="Date" value={fmtDate(selectedRow.created_at)} />
+                  <DetailRow label="Customer"  value={selectedRow.name || "—"}              />
+                  <DetailRow label="Email"      value={selectedRow.email}                    />
+                  <DetailRow label="Amount"     value={fmt$(selectedRow.amount_cents || 0)} mono />
+                  <DetailRow label="Status"     value={selectedRow.status}                   />
+                  <DetailRow label="Provider"   value={selectedRow.provider || "—"}          />
+                  <DetailRow label="Ref"        value={selectedRow.provider_ref || "—"} mono />
+                  <DetailRow label="Date"       value={fmtDate(selectedRow.created_at)}      />
                 </>
               ) : (
                 <>
-                  <DetailRow label="Title" value={selectedRow.title} />
-                  <DetailRow label="Slug" value={selectedRow.slug} mono />
-                  <DetailRow label="Price" value={fmt$(selectedRow.price_cents)} mono />
-                  <DetailRow label="Published" value={selectedRow.is_published ? "Yes" : "No"} />
-                  <DetailRow label="Stripe ID" value={selectedRow.stripe_price_id || "—"} mono />
+                  <DetailRow label="Title"     value={selectedRow.title}                         />
+                  <DetailRow label="Slug"      value={selectedRow.slug}                    mono  />
+                  <DetailRow label="Price"     value={fmt$(selectedRow.price_cents)}       mono  />
+                  <DetailRow label="Published" value={selectedRow.is_published ? "Yes" : "No"}   />
+                  <DetailRow label="Stripe ID" value={selectedRow.stripe_price_id || "—"}  mono  />
                 </>
               )}
             </div>
             <div className="flex gap-2">
               {selectedRow._type === "order" ? (
                 <button onClick={() => handleArchiveOrder(selectedRow.id)}
-                  className="flex-1 flex items-center justify-center gap-2 text-sm font-medium text-red-400 border border-red-400/20 bg-red-400/5 hover:bg-red-400/10 py-2.5 rounded-lg transition-colors">
+                  className="flex-1 flex items-center justify-center gap-2 text-sm font-medium text-red-400 border border-red-400/20 bg-red-400/5 hover:bg-red-400/10 py-3 rounded-xl transition-colors">
                   <Archive size={13} /> Archive Order
                 </button>
               ) : (
                 <>
                   <button onClick={() => { startEditProduct(selectedRow); setSelectedRow(null); }}
-                    className="flex-1 flex items-center justify-center gap-2 text-sm font-medium text-violet-400 border border-violet-400/20 bg-violet-400/5 hover:bg-violet-400/10 py-2.5 rounded-lg transition-colors">
+                    className="flex-1 flex items-center justify-center gap-2 text-sm font-medium text-violet-400 border border-violet-400/20 bg-violet-400/5 hover:bg-violet-400/10 py-3 rounded-xl transition-colors">
                     <Edit3 size={13} /> Edit
                   </button>
                   <button onClick={() => archiveProduct(selectedRow.id)}
-                    className="flex-1 flex items-center justify-center gap-2 text-sm font-medium text-red-400 border border-red-400/20 bg-red-400/5 hover:bg-red-400/10 py-2.5 rounded-lg transition-colors">
+                    className="flex-1 flex items-center justify-center gap-2 text-sm font-medium text-red-400 border border-red-400/20 bg-red-400/5 hover:bg-red-400/10 py-3 rounded-xl transition-colors">
                     <Archive size={13} /> Delete
                   </button>
                 </>
@@ -704,29 +879,25 @@ function AdminDashboard() {
   );
 }
 
-// ── Sub-components ──────────────────────────────────
+// ── Sub-components ────────────────────────────────────────────────────────────
 
-function KPICard({ label, value, sub, icon: Icon, trend, color }: any) {
-  const colors: Record<string, string> = {
-    violet: "from-violet-500/20 to-violet-500/5 border-violet-500/15",
-    indigo: "from-indigo-500/20 to-indigo-500/5 border-indigo-500/15",
-    emerald: "from-emerald-500/20 to-emerald-500/5 border-emerald-500/15",
-    amber: "from-amber-500/20 to-amber-500/5 border-amber-500/15",
+function KPICard({ label, value, sub, icon: Icon, color }: any) {
+  const border: Record<string, string> = {
+    violet: "border-violet-500/15", indigo: "border-indigo-500/15",
+    emerald: "border-emerald-500/15", amber: "border-amber-500/15",
   };
-  const iconColors: Record<string, string> = {
-    violet: "text-violet-400", indigo: "text-indigo-400", emerald: "text-emerald-400", amber: "text-amber-400",
+  const iconCol: Record<string, string> = {
+    violet: "text-violet-400", indigo: "text-indigo-400",
+    emerald: "text-emerald-400", amber: "text-amber-400",
   };
   return (
-    <div className={`bg-gradient-to-br ${colors[color]} border rounded-xl p-5`}>
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">{label}</p>
-        <Icon size={15} className={iconColors[color]} />
+    <div className={`bg-[#13151c] border ${border[color]} rounded-xl p-3.5 md:p-4`}>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider leading-tight">{label}</p>
+        <Icon size={13} className={iconCol[color]} />
       </div>
-      <p className="text-2xl font-semibold text-white tracking-tight">{value}</p>
-      <div className="flex items-center gap-1.5 mt-2">
-        {trend > 0 ? <ArrowUpRight size={11} className="text-emerald-400" /> : trend < 0 ? <ArrowDownRight size={11} className="text-red-400" /> : null}
-        <p className="text-xs text-slate-500">{sub}</p>
-      </div>
+      <p className="text-xl md:text-2xl font-semibold text-white tracking-tight">{value}</p>
+      <p className="text-[11px] text-slate-500 mt-1">{sub}</p>
     </div>
   );
 }
@@ -736,7 +907,7 @@ function FormInput({ label, value, onChange, placeholder, type = "text" }: any) 
     <div>
       <label className="block text-xs text-slate-500 mb-1.5 font-medium">{label}</label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50 transition-colors" />
+        className="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50 transition-colors" />
     </div>
   );
 }
@@ -747,10 +918,10 @@ function SiteField({ label, value, onChange, rows }: any) {
       <label className="block text-xs text-slate-500 mb-1.5 font-medium">{label}</label>
       {rows ? (
         <textarea value={value} onChange={e => onChange(e.target.value)} rows={rows}
-          className="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-violet-500/50 resize-none transition-colors" />
+          className="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-violet-500/50 resize-none transition-colors" />
       ) : (
         <input value={value} onChange={e => onChange(e.target.value)}
-          className="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-violet-500/50 transition-colors" />
+          className="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-violet-500/50 transition-colors" />
       )}
     </div>
   );
@@ -759,17 +930,17 @@ function SiteField({ label, value, onChange, rows }: any) {
 function DetailRow({ label, value, mono }: any) {
   return (
     <div className="flex items-start justify-between gap-4">
-      <span className="text-xs text-slate-500 font-medium pt-0.5 flex-shrink-0">{label}</span>
-      <span className={`text-sm text-slate-200 text-right ${mono ? "font-mono" : ""}`}>{value}</span>
+      <span className="text-xs text-slate-500 font-medium flex-shrink-0 w-20 pt-0.5">{label}</span>
+      <span className={`text-sm text-slate-200 text-right break-all ${mono ? "font-mono text-xs" : ""}`}>{value}</span>
     </div>
   );
 }
 
 function SettingsRow({ label, value }: any) {
   return (
-    <div className="flex items-center justify-between px-5 py-3.5">
-      <span className="text-sm text-slate-400">{label}</span>
-      <span className="text-sm font-medium text-slate-200">{value}</span>
+    <div className="flex items-center justify-between px-4 py-3.5 gap-4">
+      <span className="text-sm text-slate-400 flex-shrink-0">{label}</span>
+      <span className="text-sm font-medium text-slate-200 text-right">{value}</span>
     </div>
   );
 }
