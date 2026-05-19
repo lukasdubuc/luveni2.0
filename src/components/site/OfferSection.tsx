@@ -2,59 +2,76 @@ import { Link } from "@tanstack/react-router";
 import { Check, ArrowRight } from "lucide-react";
 import { offer } from "@/config/site";
 
-export function OfferSection({ products }: { products: any[] }) {
-  // We grab the most recent product you deployed in the Admin
+export function OfferSection({ products }: { products?: any[] }) {
   const activeOffer = products && products.length > 0 ? products[0] : null;
-  
-  const handlePurchase = () => {
-    // If you have a Stripe ID, we redirect to a checkout session
-    if (activeOffer?.stripe_price_id) {
-      window.location.href = `https://buy.stripe.com/${activeOffer.stripe_price_id}`;
-    } else {
-      // Fallback to a default or contact page if no Stripe ID set
-      window.location.href = "/checkout";
-    }
-  };
 
   return (
-    <section id="offer" className="border-t border-border bg-muted/40">
-      <div className="mx-auto max-w-6xl px-4 py-20">
-        <div className="grid items-center gap-10 md:grid-cols-2">
+    <section
+      id="offer"
+      className="relative border-t border-border bg-background"
+    >
+      <div className="mx-auto max-w-6xl px-6 py-24 md:py-32">
+        <div className="grid items-center gap-12 md:grid-cols-2">
           <div>
-            <p className="text-sm font-medium uppercase tracking-wider text-accent">Current Offer</p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">
+            <p className="text-xs font-medium uppercase tracking-[0.2em] text-accent">
+              The offer
+            </p>
+            <h2 className="mt-4 text-4xl tracking-tight md:text-5xl">
               {activeOffer?.title || offer.name}
             </h2>
-            <p className="mt-4 text-muted-foreground">{offer.shortPitch}</p>
-            <ul className="mt-6 space-y-3">
+            <p className="mt-5 max-w-md text-muted-foreground">{offer.shortPitch}</p>
+            <ul className="mt-8 space-y-4">
               {offer.bullets.map((b) => (
                 <li key={b} className="flex items-start gap-3 text-sm">
-                  <span className="mt-0.5 grid h-5 w-5 flex-none place-items-center rounded-full bg-success/15 text-success">
-                    <Check className="h-3.5 w-3.5" />
+                  <span className="mt-0.5 grid h-5 w-5 flex-none place-items-center rounded-full bg-accent/15 text-accent">
+                    <Check className="h-3 w-3" />
                   </span>
-                  <span>{b}</span>
+                  <span className="text-foreground/90">{b}</span>
                 </li>
               ))}
             </ul>
           </div>
 
-          <div className="rounded-2xl border border-border bg-card p-8 shadow-elevated">
-            <div className="flex items-baseline gap-3">
-              <span className="text-5xl font-semibold tracking-tight">
-                ${activeOffer ? (activeOffer.price_cents / 100).toFixed(0) : offer.price}
-              </span>
-              <span className="text-base text-muted-foreground line-through">{offer.originalPrice}</span>
+          <div
+            className="relative overflow-hidden rounded-3xl border border-border p-10"
+            style={{ backgroundImage: "var(--gradient-surface)" }}
+          >
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full opacity-30 blur-3xl"
+              style={{ background: "var(--gradient-accent)" }}
+            />
+            <div className="relative">
+              <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                {offer.badge}
+              </p>
+              <div className="mt-6 flex items-baseline gap-3">
+                <span className="font-display text-7xl tracking-tight">
+                  ${activeOffer ? (activeOffer.price_cents / 100).toFixed(0) : offer.price.replace("$", "")}
+                </span>
+                <span className="text-sm text-muted-foreground line-through">
+                  {offer.originalPrice}
+                </span>
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                One-time. Lifetime updates included.
+              </p>
+
+              <Link
+                to="/checkout"
+                className="group mt-8 inline-flex w-full items-center justify-center gap-2 rounded-md px-6 py-3.5 text-sm font-medium text-accent-foreground transition-transform hover:-translate-y-0.5"
+                style={{
+                  backgroundImage: "var(--gradient-accent)",
+                  boxShadow: "var(--shadow-glow)",
+                }}
+              >
+                Get started now
+                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+              </Link>
+              <p className="mt-5 text-center text-xs text-muted-foreground">
+                {offer.guarantee}
+              </p>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">Secure your spot today.</p>
-            
-            <button
-              onClick={handlePurchase}
-              className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-md px-6 py-3 text-base font-medium text-accent-foreground shadow-soft transition-transform hover:-translate-y-0.5"
-              style={{ backgroundImage: "var(--gradient-accent)" }}
-            >
-              Get Started Now <ArrowRight className="h-4 w-4" />
-            </button>
-            <p className="mt-4 text-center text-xs text-muted-foreground">{offer.guarantee}</p>
           </div>
         </div>
       </div>

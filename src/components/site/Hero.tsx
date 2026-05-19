@@ -8,35 +8,59 @@ export function Hero() {
       className="relative overflow-hidden"
       style={{ backgroundImage: "var(--gradient-hero)" }}
     >
-      <div className="mx-auto max-w-6xl px-4 pt-20 pb-24 md:pt-28 md:pb-32">
+      {/* Ambient orb */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-32 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full opacity-60 blur-3xl"
+        style={{ background: "var(--gradient-accent)" }}
+      />
+      {/* Grid texture */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-[0.07]"
+        style={{
+          backgroundImage:
+            "linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)",
+          backgroundSize: "64px 64px",
+          maskImage:
+            "radial-gradient(ellipse at center, black 30%, transparent 75%)",
+        }}
+      />
+
+      <div className="relative mx-auto max-w-6xl px-6 pt-24 pb-28 md:pt-36 md:pb-40">
         <div className="mx-auto max-w-3xl text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground shadow-soft">
+          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
             <Sparkles className="h-3.5 w-3.5 text-accent" />
             {offer.badge}
           </div>
-          <h1 className="mt-6 text-4xl font-semibold tracking-tight md:text-6xl">
-            {site.tagline}
+          <h1 className="mt-8 text-5xl tracking-tight md:text-7xl">
+            A simple, modern way to{" "}
+            <span className="serif-italic text-accent">actually</span> get the
+            result you want.
           </h1>
-          <p className="mt-5 text-lg text-muted-foreground md:text-xl">
-            {offer.shortPitch}
+          <p className="mx-auto mt-6 max-w-xl text-base text-muted-foreground md:text-lg">
+            {offer.shortPitch} {site.tagline}
           </p>
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
               to="/checkout"
-              className="group inline-flex w-full items-center justify-center gap-2 rounded-md px-6 py-3 text-base font-medium text-accent-foreground shadow-elevated transition-transform hover:-translate-y-0.5 sm:w-auto"
-              style={{ backgroundImage: "var(--gradient-accent)" }}
+              className="group inline-flex w-full items-center justify-center gap-2 rounded-md px-7 py-3.5 text-sm font-medium text-accent-foreground transition-transform hover:-translate-y-0.5 sm:w-auto"
+              style={{
+                backgroundImage: "var(--gradient-accent)",
+                boxShadow: "var(--shadow-glow)",
+              }}
             >
               Get instant access — {offer.price}
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Link>
             <Link
               to="/offer"
-              className="inline-flex w-full items-center justify-center rounded-md border border-border bg-card px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-muted sm:w-auto"
+              className="inline-flex w-full items-center justify-center rounded-md border border-border bg-card/40 px-7 py-3.5 text-sm font-medium text-foreground backdrop-blur transition-colors hover:bg-card sm:w-auto"
             >
               See what's included
             </Link>
           </div>
-          <p className="mt-4 text-xs text-muted-foreground">
+          <p className="mt-5 text-xs text-muted-foreground">
             {offer.guarantee}
           </p>
         </div>

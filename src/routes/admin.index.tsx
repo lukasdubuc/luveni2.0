@@ -46,8 +46,8 @@ function AdminDashboard() {
         supabase.from("products").select("*").order("created_at", { ascending: false })
       ]);
       
-      setOrders((orderRes.data || []).filter(o => o.status !== 'archived'));
-      setProducts((productRes.data || []).filter(p => p.status !== 'archived'));
+      setOrders((orderRes.data || []).filter((o: any) => o.status !== 'archived'));
+      setProducts((productRes.data || []).filter((p: any) => (p as any).status !== 'archived'));
     } catch (err) {
       console.error("Sync Error:", err);
       toast.error("Cloud Sync Failed");
@@ -73,7 +73,7 @@ function AdminDashboard() {
   const handleArchive = async (id: string) => {
     const table = activeTab === 'orders' ? 'orders' : 'products';
     const toastId = toast.loading("Archiving...");
-    const { error } = await supabase.from(table).update({ status: 'archived' }).eq("id", id);
+    const { error } = await supabase.from(table).update({ status: 'archived' } as any).eq("id", id);
     
     if (!error) {
       toast.success("Archived", { id: toastId });
@@ -89,10 +89,11 @@ function AdminDashboard() {
     if (!newTitle || !newPrice) return toast.error("Incomplete Fields");
     const { data, error } = await supabase.from("products").insert([{ 
       title: newTitle, 
+      slug: newTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
       price_cents: Math.round(parseFloat(newPrice) * 100),
       stripe_price_id: stripeId,
       status: 'active'
-    }]).select();
+    } as any]).select();
 
     if (!error) {
       setProducts(prev => [data[0], ...prev]);
