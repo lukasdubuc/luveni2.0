@@ -2,26 +2,28 @@ import { Link } from "@tanstack/react-router";
 import { Check, ArrowRight } from "lucide-react";
 import { offer } from "@/config/site";
 
-// We now accept 'products' as a prop from the home page
 export function OfferSection({ products }: { products: any[] }) {
-  // Use the first product from Supabase, or fall back to config if empty
-  const liveOffer = products && products.length > 0 ? products[0] : null;
+  // We grab the most recent product you deployed in the Admin
+  const activeOffer = products && products.length > 0 ? products[0] : null;
   
-  // Format price: Supabase stores cents (e.g. 4900), we want string (e.g. "$49")
-  const displayPrice = liveOffer 
-    ? `$${Math.floor(liveOffer.price_cents / 100)}` 
-    : offer.price;
+  const handlePurchase = () => {
+    // If you have a Stripe ID, we redirect to a checkout session
+    if (activeOffer?.stripe_price_id) {
+      window.location.href = `https://buy.stripe.com/${activeOffer.stripe_price_id}`;
+    } else {
+      // Fallback to a default or contact page if no Stripe ID set
+      window.location.href = "/checkout";
+    }
+  };
 
   return (
     <section id="offer" className="border-t border-border bg-muted/40">
       <div className="mx-auto max-w-6xl px-4 py-20">
         <div className="grid items-center gap-10 md:grid-cols-2">
           <div>
-            <p className="text-sm font-medium uppercase tracking-wider text-accent">
-              The offer
-            </p>
+            <p className="text-sm font-medium uppercase tracking-wider text-accent">Current Offer</p>
             <h2 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">
-              {liveOffer?.title || offer.name}
+              {activeOffer?.title || offer.name}
             </h2>
             <p className="mt-4 text-muted-foreground">{offer.shortPitch}</p>
             <ul className="mt-6 space-y-3">
@@ -35,27 +37,24 @@ export function OfferSection({ products }: { products: any[] }) {
               ))}
             </ul>
           </div>
+
           <div className="rounded-2xl border border-border bg-card p-8 shadow-elevated">
             <div className="flex items-baseline gap-3">
-              <span className="text-5xl font-semibold tracking-tight">{displayPrice}</span>
+              <span className="text-5xl font-semibold tracking-tight">
+                ${activeOffer ? (activeOffer.price_cents / 100).toFixed(0) : offer.price}
+              </span>
               <span className="text-base text-muted-foreground line-through">{offer.originalPrice}</span>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">One-time payment. Lifetime access.</p>
-            <Link
-              to="/checkout"
-              // Pass the product ID to the checkout if needed
-              search={{ plan: liveOffer?.id }}
+            <p className="mt-1 text-sm text-muted-foreground">Secure your spot today.</p>
+            
+            <button
+              onClick={handlePurchase}
               className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-md px-6 py-3 text-base font-medium text-accent-foreground shadow-soft transition-transform hover:-translate-y-0.5"
               style={{ backgroundImage: "var(--gradient-accent)" }}
             >
-              Buy now <ArrowRight className="h-4 w-4" />
-            </Link>
+              Get Started Now <ArrowRight className="h-4 w-4" />
+            </button>
             <p className="mt-4 text-center text-xs text-muted-foreground">{offer.guarantee}</p>
-            <div className="mt-6 grid grid-cols-3 gap-3 text-center text-xs text-muted-foreground">
-              <div className="rounded-md border border-border py-2">Secure</div>
-              <div className="rounded-md border border-border py-2">Instant</div>
-              <div className="rounded-md border border-border py-2">Guaranteed</div>
-            </div>
           </div>
         </div>
       </div>
