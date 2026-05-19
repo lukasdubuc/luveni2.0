@@ -61,7 +61,7 @@ function LoginPage() {
   async function onGoogle() {
     setLoading(true);
     try {
-      // FIX: Pass redirect parameters directly into the lovable auth helper
+      // Pass redirect parameters directly into the lovable auth helper
       const result = await lovable.auth.signInWithOAuth("google", {
         redirectTo: `${window.location.origin}/admin`,
       });
