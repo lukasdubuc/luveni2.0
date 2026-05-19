@@ -1,5 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { createFileRoute } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Hero } from "@/components/site/Hero";
 import { Benefits } from "@/components/site/Benefits";
@@ -31,36 +30,8 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
-  const navigate = useNavigate();
   // STEP 2: Use the live data in your component
   const { products } = Route.useLoaderData();
-
-  // SMART INTERCEPTOR HOOK: Only redirect to /admin if we are actively processing a fresh login event
-  useEffect(() => {
-    const handleAuthRedirect = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      // Check if the URL contains auth parameters (only present immediately after clicking Google Sign-In)
-      const hasAuthParams = window.location.hash.includes("access_token") || window.location.search.includes("code");
-      
-      if (session?.user?.email?.toLowerCase() === "lukasdubuc@gmail.com" && hasAuthParams) {
-        navigate({ to: "/admin" });
-      }
-    };
-    
-    handleAuthRedirect();
-    
-    // Catch the active event handshake when Lovable's proxy drops the session tokens back into the app
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.user?.email?.toLowerCase() === "lukasdubuc@gmail.com" && event === "SIGNED_IN") {
-        navigate({ to: "/admin" });
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [navigate]);
 
   return (
     <>
