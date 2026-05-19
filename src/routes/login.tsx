@@ -61,8 +61,10 @@ function LoginPage() {
   async function onGoogle() {
     setLoading(true);
     try {
-      // Use the lovable helper for the proxy callback
-      const result = await lovable.auth.signInWithOAuth("google");
+      // FIX: Pass redirect parameters directly into the lovable auth helper
+      const result = await lovable.auth.signInWithOAuth("google", {
+        redirectTo: `${window.location.origin}/admin`,
+      });
 
       if (result.error) {
         toast.error(result.error.message ?? "Google sign-in failed");
@@ -148,3 +150,5 @@ function LoginPage() {
     </section>
   );
 }
+
+export default LoginPage;
