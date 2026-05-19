@@ -35,22 +35,24 @@ function Home() {
   // STEP 2: Use the live data in your component
   const { products } = Route.useLoaderData();
 
-  // INTERCEPTOR HOOK: Catch the Google Auth redirect session and immediately bounce to /admin
+  // SMART INTERCEPTOR HOOK: Only redirect to /admin if we are actively processing a fresh login event
   useEffect(() => {
-    const checkUserSession = async () => {
+    const handleAuthRedirect = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       
-      // If the authenticated user matches your email, push them directly to the admin suite
-      if (session?.user?.email?.toLowerCase() === "lukasdubuc@gmail.com") {
+      // Check if the URL contains auth parameters (only present immediately after clicking Google Sign-In)
+      const hasAuthParams = window.location.hash.includes("access_token") || window.location.search.includes("code");
+      
+      if (session?.user?.email?.toLowerCase() === "lukasdubuc@gmail.com" && hasAuthParams) {
         navigate({ to: "/admin" });
       }
     };
     
-    checkUserSession();
+    handleAuthRedirect();
     
-    // Set up a listener for auth state changes to catch async login sessions instantly
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user?.email?.toLowerCase() === "lukasdubuc@gmail.com") {
+    // Catch the active event handshake when Lovable's proxy drops the session tokens back into the app
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user?.email?.toLowerCase() === "lukasdubuc@gmail.com" && event === "SIGNED_IN") {
         navigate({ to: "/admin" });
       }
     });
@@ -85,3 +87,5 @@ function Home() {
     </>
   );
 }
+
+export default Home;
