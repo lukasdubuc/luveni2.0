@@ -16,7 +16,6 @@ export const offer = {
   name: "The Starter Package",
   shortPitch:
     "Everything you need to get started in one focused, no-fluff package.",
-  // Display price (string). Real charge amount is in priceCents.
   price: "$49",
   priceCents: 4900,
   currency: "usd",
@@ -89,3 +88,28 @@ export const faqs = [
     a: "Email support is included. We typically reply within 24 hours, often much faster.",
   },
 ];
+
+// ─── Dynamic site config (DB-driven, admin-editable) ─────────────────────────
+// Shape mirrors the `site_config` Supabase table.
+// SITE_CONFIG_FALLBACK is used when the table is empty, missing, or errors.
+// The admin "Website Editor" upserts into this table to update the live site.
+
+export type SiteConfig = {
+  hero_headline:         string;
+  hero_subheadline:      string;
+  hero_cta:              string;
+  price_display:         string;
+  price_original:        string;
+  launch_pricing_active: boolean;
+  guarantee_days:        string;
+};
+
+export const SITE_CONFIG_FALLBACK: SiteConfig = {
+  hero_headline:         site.tagline,
+  hero_subheadline:      offer.shortPitch,
+  hero_cta:              `Get instant access — ${offer.price}`,
+  price_display:         offer.price,
+  price_original:        offer.originalPrice,
+  launch_pricing_active: true,
+  guarantee_days:        "30",
+};
