@@ -14,7 +14,8 @@ export const Route = createFileRoute("/")({
     const { data: products, error } = await supabase
       .from("products")
       .select("*")
-      .order("created_at", { ascending: true });
+      // Latest created product first
+      .order("created_at", { ascending: false });
     
     if (error) console.error("Sync Error:", error);
     return { products: products || [] };
