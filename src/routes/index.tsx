@@ -1,4 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Hero } from "@/components/site/Hero";
 import { Benefits } from "@/components/site/Benefits";
@@ -30,8 +31,34 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
+  const navigate = useNavigate();
   // STEP 2: Use the live data in your component
   const { products } = Route.useLoaderData();
+
+  // INTERCEPTOR HOOK: Catch the Google Auth redirect session and immediately bounce to /admin
+  useEffect(() => {
+    const checkUserSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // If the authenticated user matches your email, push them directly to the admin suite
+      if (session?.user?.email?.toLowerCase() === "lukasdubuc@gmail.com") {
+        navigate({ to: "/admin" });
+      }
+    };
+    
+    checkUserSession();
+    
+    // Set up a listener for auth state changes to catch async login sessions instantly
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user?.email?.toLowerCase() === "lukasdubuc@gmail.com") {
+        navigate({ to: "/admin" });
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [navigate]);
 
   return (
     <>
