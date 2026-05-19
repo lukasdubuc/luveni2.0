@@ -24,32 +24,24 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // ── Auto-redirect if a valid admin session already exists ────────────────
-  // This fires on mount so that refreshing /login when already authenticated
-  // brings the admin straight back to the dashboard without re-entering creds.
+  // Auto-redirect if a valid admin session already exists
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (
-        session?.user?.email?.toLowerCase() === AUTHORIZED_EMAIL.toLowerCase()
-      ) {
+      if (session?.user?.email?.toLowerCase() === AUTHORIZED_EMAIL.toLowerCase()) {
         navigate({ to: "/admin", replace: true });
       }
     });
   }, [navigate]);
 
-  // ── Email / password submit ──────────────────────────────────────────────
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-
     try {
       if (mode === "signup") {
         const { error } = await supabase.auth.signUp({
           email,
           password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/admin`,
-          },
+          options: { emailRedirectTo: `${window.location.origin}/admin` },
         });
         if (error) throw error;
         toast.success("Account created. Check your email or sign in.");
@@ -61,10 +53,8 @@ function LoginPage() {
         });
         if (error) throw error;
 
-        // Strict email gate — sign out any non-admin who somehow has an account
-        if (
-          data.user?.email?.toLowerCase() !== AUTHORIZED_EMAIL.toLowerCase()
-        ) {
+        // Strict email gate — eject anyone who isn't the authorised admin
+        if (data.user?.email?.toLowerCase() !== AUTHORIZED_EMAIL.toLowerCase()) {
           await supabase.auth.signOut();
           toast.error("Access restricted to authorised personnel only.");
           return;
@@ -79,41 +69,34 @@ function LoginPage() {
     }
   }
 
-  // ── Google OAuth ─────────────────────────────────────────────────────────
-  // IMPORTANT: We set the sessionStorage intent flag HERE, before the OAuth
-  // redirect fires. The homepage (/) will read this flag after Lovable's proxy
-  // drops the user back on "/" and redirect them to /admin if authorised.
   async function onGoogle() {
     setLoading(true);
-
     try {
-      // Plant the intent flag so the homepage redirect intercept activates
-      // after the OAuth callback lands on "/".
+      // Plant the intent flag BEFORE the OAuth redirect fires.
+      // The homepage useEffect reads this after Lovable's proxy
+      // lands the user on "/" and redirects them to /admin.
       sessionStorage.setItem("active_login_intent", "1");
 
       const result = await lovable.auth.signInWithOAuth("google", {
+        // Must redirect to "/" — Lovable's proxy requires this.
+        // The homepage intercept handles the onward route to /admin.
         redirectTo: `${window.location.origin}/`,
       });
 
       if (result.error) {
-        // If OAuth setup itself fails, remove the flag so the homepage
-        // doesn't trigger a spurious redirect for a normal visitor later.
         sessionStorage.removeItem("active_login_intent");
         toast.error(result.error.message ?? "Google sign-in failed");
         setLoading(false);
         return;
       }
 
-      // If the provider didn't trigger a browser redirect (e.g. popup mode),
-      // fall back to a manual session check and navigate.
+      // If the provider didn't redirect (e.g. popup mode), handle manually
       if (!result.redirected) {
         sessionStorage.removeItem("active_login_intent");
         await supabase.auth.refreshSession();
         const { data: { session } } = await supabase.auth.getSession();
 
-        if (
-          session?.user?.email?.toLowerCase() !== AUTHORIZED_EMAIL.toLowerCase()
-        ) {
+        if (session?.user?.email?.toLowerCase() !== AUTHORIZED_EMAIL.toLowerCase()) {
           await supabase.auth.signOut();
           toast.error("Access restricted to authorised personnel only.");
           setLoading(false);
@@ -122,10 +105,8 @@ function LoginPage() {
 
         navigate({ to: "/admin", replace: true });
       }
-      // If result.redirected === true, the browser is navigating away.
-      // The sessionStorage flag survives the redirect and will be read
-      // by the homepage useEffect. Loading state intentionally stays true
-      // because the page is leaving.
+      // If result.redirected === true the browser is navigating away.
+      // Loading stays true intentionally — the page is leaving.
     } catch (e: any) {
       sessionStorage.removeItem("active_login_intent");
       console.error("Google Auth Error:", e);
@@ -137,7 +118,6 @@ function LoginPage() {
   return (
     <section className="bg-muted/40 min-h-screen flex items-center justify-center p-4 font-mono">
       <div className="w-full max-w-md rounded-none border border-border bg-card p-8 shadow-sm">
-        {/* Header */}
         <div className="mb-8 border-b border-border pb-6">
           <h1 className="text-xl font-black uppercase tracking-widest">
             {mode === "signin" ? "Terminal_Login" : "Create_Access"}
@@ -147,27 +127,20 @@ function LoginPage() {
           </p>
         </div>
 
-        {/* Google OAuth button */}
         <button
           onClick={onGoogle}
           disabled={loading}
           className="inline-flex h-12 w-full items-center justify-center gap-3 rounded-none border border-black bg-white text-black px-3 text-xs font-black uppercase tracking-widest hover:bg-black hover:text-white transition-all disabled:opacity-30"
         >
-          {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            "Authorize with Google"
-          )}
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Authorize with Google"}
         </button>
 
-        {/* Divider */}
         <div className="my-8 flex items-center gap-4 text-[10px] font-black uppercase opacity-20">
           <div className="h-px flex-1 bg-current" />
           <span>OR</span>
           <div className="h-px flex-1 bg-current" />
         </div>
 
-        {/* Email / password form */}
         <form onSubmit={onSubmit} className="space-y-6">
           <input
             type="email"
@@ -191,21 +164,16 @@ function LoginPage() {
             disabled={loading}
             className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-none bg-black text-white px-3 text-xs font-black uppercase tracking-widest hover:opacity-80 transition-all disabled:opacity-30"
           >
-            {loading && mode !== "signin" ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : null}
+            {loading && mode !== "signin" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             {mode === "signin" ? "Initialize_Session" : "Register_Identity"}
           </button>
         </form>
 
-        {/* Toggle mode */}
         <button
           onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
           className="mt-8 w-full text-center text-[10px] font-black uppercase tracking-widest opacity-40 hover:opacity-100 transition-opacity"
         >
-          {mode === "signin"
-            ? "[ Request_New_Credentials ]"
-            : "[ Return_to_Portal ]"}
+          {mode === "signin" ? "[ Request_New_Credentials ]" : "[ Return_to_Portal ]"}
         </button>
       </div>
     </section>
