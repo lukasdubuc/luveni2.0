@@ -2,7 +2,16 @@ import { Link } from "@tanstack/react-router";
 import { Check, ArrowRight } from "lucide-react";
 import { offer } from "@/config/site";
 
-export function OfferSection() {
+// We now accept 'products' as a prop from the home page
+export function OfferSection({ products }: { products: any[] }) {
+  // Use the first product from Supabase, or fall back to config if empty
+  const liveOffer = products && products.length > 0 ? products[0] : null;
+  
+  // Format price: Supabase stores cents (e.g. 4900), we want string (e.g. "$49")
+  const displayPrice = liveOffer 
+    ? `$${Math.floor(liveOffer.price_cents / 100)}` 
+    : offer.price;
+
   return (
     <section id="offer" className="border-t border-border bg-muted/40">
       <div className="mx-auto max-w-6xl px-4 py-20">
@@ -12,7 +21,7 @@ export function OfferSection() {
               The offer
             </p>
             <h2 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">
-              {offer.name}
+              {liveOffer?.title || offer.name}
             </h2>
             <p className="mt-4 text-muted-foreground">{offer.shortPitch}</p>
             <ul className="mt-6 space-y-3">
@@ -28,12 +37,14 @@ export function OfferSection() {
           </div>
           <div className="rounded-2xl border border-border bg-card p-8 shadow-elevated">
             <div className="flex items-baseline gap-3">
-              <span className="text-5xl font-semibold tracking-tight">{offer.price}</span>
+              <span className="text-5xl font-semibold tracking-tight">{displayPrice}</span>
               <span className="text-base text-muted-foreground line-through">{offer.originalPrice}</span>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">One-time payment. Lifetime access.</p>
             <Link
               to="/checkout"
+              // Pass the product ID to the checkout if needed
+              search={{ plan: liveOffer?.id }}
               className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-md px-6 py-3 text-base font-medium text-accent-foreground shadow-soft transition-transform hover:-translate-y-0.5"
               style={{ backgroundImage: "var(--gradient-accent)" }}
             >
