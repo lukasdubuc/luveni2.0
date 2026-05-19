@@ -3,15 +3,8 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { 
-  Trash2, 
-  TrendingUp, 
-  Package, 
-  DollarSign, 
-  X, 
-  ChevronRight, 
-  Clock, 
-  Plus,
-  LayoutDashboard
+  Trash2, TrendingUp, Package, DollarSign, X, 
+  ChevronRight, Clock, Plus, ShieldCheck 
 } from "lucide-react";
 
 export const Route = createFileRoute("/admin/")({
@@ -35,208 +28,102 @@ function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
 
-  // Form State for Adding Products
   const [newTitle, setNewTitle] = useState("");
   const [newPrice, setNewPrice] = useState("");
+  const [stripeId, setStripeId] = useState(""); // Link to your Stripe Product
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    try {
-      const [orderRes, productRes] = await Promise.all([
-        supabase.from("orders").select("*").order("created_at", { ascending: false }),
-        supabase.from("products").select("*").order("created_at", { ascending: false })
-      ]);
-      setOrders(orderRes.data || []);
-      setProducts(productRes.data || []);
-    } catch (error: any) {
-      toast.error("SYNC_ERROR: Check database connection");
-    } finally {
-      setLoading(false);
-    }
+    const [orderRes, productRes] = await Promise.all([
+      supabase.from("orders").select("*").order("created_at", { ascending: false }),
+      supabase.from("products").select("*").order("created_at", { ascending: false })
+    ]);
+    setOrders(orderRes.data || []);
+    setProducts(productRes.data || []);
+    setLoading(false);
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const saveNewProduct = async () => {
-    if (!newTitle || !newPrice) {
-      toast.error("Please provide a name and price");
-      return;
-    }
+  const saveProduct = async () => {
+    if (!newTitle || !newPrice) return toast.error("Missing fields");
+    const { data, error } = await supabase.from("products").insert([{ 
+      title: newTitle, 
+      price_cents: Math.round(parseFloat(newPrice) * 100),
+      stripe_price_id: stripeId 
+    }]).select();
 
-    const toastId = toast.loading("Deploying offer...");
-    try {
-      const { data, error } = await supabase
-        .from("products")
-        .insert([{ 
-          title: newTitle, 
-          price_cents: Math.round(parseFloat(newPrice) * 100) 
-        }])
-        .select();
-
-      if (error) throw error;
-
+    if (!error) {
       setProducts(prev => [data[0], ...prev]);
-      setNewTitle("");
-      setNewPrice("");
-      toast.success("Offer is now LIVE", { id: toastId });
-    } catch (err: any) {
-      toast.error(`Deploy Failed: ${err.message}`, { id: toastId });
+      setNewTitle(""); setNewPrice(""); setStripeId("");
+      toast.success("OFFER_PUSHED_LIVE");
     }
   };
 
   const handleHardPurge = async (id: string) => {
     const table = activeTab === 'orders' ? 'orders' : 'products';
-    const toastId = toast.loading("Executing permanent wipe...");
-
-    try {
-      const { error } = await supabase.from(table).delete().eq("id", id);
-      if (error) throw error;
-
-      if (activeTab === 'orders') {
-        setOrders(prev => prev.filter(item => item.id !== id));
-      } else {
-        setProducts(prev => prev.filter(item => item.id !== id));
-      }
-
+    const { error } = await supabase.from(table).delete().eq("id", id);
+    
+    if (!error) {
+      if (activeTab === 'orders') setOrders(prev => prev.filter(i => i.id !== id));
+      else setProducts(prev => prev.filter(i => i.id !== id));
       setSelectedItem(null);
-      toast.success("Record erased from database", { id: toastId });
-    } catch (err: any) {
-      toast.error(`Wipe Failed: ${err.message}`, { id: toastId });
+      toast.success("DELETED_PERMANENTLY");
+    } else {
+      toast.error("DELETE_FAILED: Check RLS Policies");
     }
   };
 
-  const totalRevenue = orders.reduce((acc, curr) => acc + (curr.amount_cents || 0), 0) / 100;
-
   return (
-    <div className="min-h-screen bg-[#fafafa] text-[#1a1a1a] font-sans antialiased pb-24 md:pb-0">
-      <nav className="fixed bottom-0 left-0 right-0 md:top-0 md:bottom-auto md:w-64 md:h-screen bg-white border-t md:border-t-0 md:border-r border-gray-200 z-50 flex md:flex-col p-2 md:p-6 justify-around md:justify-start gap-2">
-        <div className="hidden md:flex items-center gap-3 mb-10 px-2">
-          <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center">
-            <LayoutDashboard size={18} className="text-white" />
-          </div>
-          <span className="font-bold tracking-tight">Admin Portal</span>
-        </div>
-        <NavButton active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={<TrendingUp size={20}/>} label="Overview" />
-        <NavButton active={activeTab === 'orders'} onClick={() => setActiveTab('orders')} icon={<DollarSign size={20}/>} label="Orders" />
-        <NavButton active={activeTab === 'inventory'} onClick={() => setActiveTab('inventory')} icon={<Package size={20}/>} label="Stock" />
+    <div className="min-h-screen bg-[#fafafa] flex flex-col md:flex-row">
+      <nav className="w-full md:w-64 bg-white border-r p-6 flex md:flex-col gap-4">
+        <div className="hidden md:flex items-center gap-2 mb-8"><ShieldCheck /> <b className="text-sm">OWNER</b></div>
+        <button onClick={() => setActiveTab('overview')} className={`p-3 rounded-xl text-xs font-bold ${activeTab === 'overview' ? 'bg-black text-white' : ''}`}>OVERVIEW</button>
+        <button onClick={() => setActiveTab('orders')} className={`p-3 rounded-xl text-xs font-bold ${activeTab === 'orders' ? 'bg-black text-white' : ''}`}>ORDERS</button>
+        <button onClick={() => setActiveTab('inventory')} className={`p-3 rounded-xl text-xs font-bold ${activeTab === 'inventory' ? 'bg-black text-white' : ''}`}>STOCK</button>
       </nav>
 
-      <main className="md:ml-64 p-4 md:p-10 max-w-5xl mx-auto">
-        {activeTab === 'overview' && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <header>
-              <h1 className="text-3xl font-black tracking-tighter uppercase">Dashboard</h1>
-              <p className="text-gray-400 text-xs font-bold uppercase tracking-widest">System Status: Optimal</p>
-            </header>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <StatCard label="Revenue" value={`$${totalRevenue.toFixed(2)}`} />
-              <StatCard label="Orders" value={orders.length} />
-              <StatCard label="Stock" value={products.length} />
-            </div>
-          </div>
-        )}
-
+      <main className="flex-1 p-6 md:p-12 max-w-5xl">
         {activeTab === 'inventory' && (
-          <div className="mb-8 p-6 bg-white rounded-3xl border border-gray-100 shadow-sm animate-in slide-in-from-top-4">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] mb-4 text-gray-400">Deploy_New_Offer</h3>
-            <div className="flex flex-col md:flex-row gap-4">
-              <input 
-                placeholder="SERVICE_NAME" 
-                className="flex-1 bg-gray-50 border-none rounded-xl px-4 py-3 text-xs font-bold outline-none focus:ring-2 focus:ring-black transition-all"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-              />
-              <input 
-                placeholder="PRICE" 
-                type="number"
-                className="md:w-32 bg-gray-50 border-none rounded-xl px-4 py-3 text-xs font-bold outline-none focus:ring-2 focus:ring-black transition-all"
-                value={newPrice}
-                onChange={(e) => setNewPrice(e.target.value)}
-              />
-              <button 
-                onClick={saveNewProduct}
-                className="bg-black text-white px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:opacity-80 transition-all flex items-center justify-center gap-2"
-              >
-                <Plus size={14} /> Push_Live
-              </button>
+          <div className="mb-12 p-8 bg-white rounded-3xl border shadow-sm">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-4">Command_Input</p>
+            <div className="grid gap-4 md:grid-cols-4">
+              <input placeholder="Service Name" className="bg-gray-50 p-3 rounded-xl text-sm outline-none" value={newTitle} onChange={e => setNewTitle(e.target.value)} />
+              <input placeholder="Price" className="bg-gray-50 p-3 rounded-xl text-sm outline-none" value={newPrice} onChange={e => setNewPrice(e.target.value)} />
+              <input placeholder="Stripe Price ID" className="bg-gray-50 p-3 rounded-xl text-sm outline-none" value={stripeId} onChange={e => setStripeId(e.target.value)} />
+              <button onClick={saveProduct} className="bg-black text-white rounded-xl font-bold text-xs uppercase tracking-widest">Deploy</button>
             </div>
           </div>
         )}
 
-        {(activeTab === 'orders' || activeTab === 'inventory') && (
-          <div className="animate-in fade-in duration-300">
-            <h1 className="text-3xl font-black tracking-tighter uppercase mb-8">{activeTab}</h1>
-            <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
-              {loading ? (
-                <div className="p-20 text-center text-xs font-bold uppercase opacity-20">Syncing_Records...</div>
-              ) : (
-                <div className="divide-y divide-gray-50">
-                  {(activeTab === 'orders' ? orders : products).map(item => (
-                    <div key={item.id} onClick={() => setSelectedItem(item)} className="flex items-center justify-between p-5 hover:bg-gray-50 transition-all cursor-pointer group">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 group-hover:bg-white group-hover:shadow-sm">
-                          {activeTab === 'orders' ? <Clock size={20}/> : <Package size={20}/>}
-                        </div>
-                        <div>
-                          <p className="font-bold text-sm text-gray-800">{item.email || item.title}</p>
-                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{item.status || 'Verified'}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <p className="font-mono font-bold text-gray-900">${((item.amount_cents || item.price_cents || 0) / 100).toFixed(2)}</p>
-                        <ChevronRight size={18} className="text-gray-200 group-hover:text-black" />
-                      </div>
-                    </div>
-                  ))}
+        <div className="bg-white rounded-3xl border overflow-hidden">
+          {loading ? <div className="p-20 text-center animate-pulse text-xs font-bold">SYNCING...</div> : (
+            <div className="divide-y">
+              {(activeTab === 'orders' ? orders : products).map(item => (
+                <div key={item.id} onClick={() => setSelectedItem(item)} className="p-6 hover:bg-gray-50 flex justify-between cursor-pointer">
+                  <div>
+                    <p className="font-bold text-sm">{item.email || item.title}</p>
+                    <p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">{item.status || 'Active'}</p>
+                  </div>
+                  <p className="font-mono font-bold">${((item.amount_cents || item.price_cents) / 100).toFixed(2)}</p>
                 </div>
-              )}
+              ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </main>
 
       {selectedItem && (
-        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-6 bg-black/60 backdrop-blur-md">
-          <div className="bg-white w-full max-w-lg rounded-t-[2.5rem] md:rounded-[2rem] p-10 shadow-2xl">
-            <div className="flex justify-between items-center mb-10">
-              <span className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-300">Record_Node</span>
-              <button onClick={() => setSelectedItem(null)} className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-50"><X size={20}/></button>
-            </div>
-            <h2 className="text-3xl font-black tracking-tighter mb-8">{selectedItem.email || selectedItem.title}</h2>
-            <div className="grid grid-cols-2 gap-8 mb-12">
-              <div className="space-y-1">
-                <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Value</p>
-                <p className="text-xl font-bold">${((selectedItem.amount_cents || selectedItem.price_cents) / 100).toFixed(2)}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Date</p>
-                <p className="text-xl font-bold">{new Date(selectedItem.created_at).toLocaleDateString()}</p>
-              </div>
-            </div>
-            <button onClick={() => handleHardPurge(selectedItem.id)} className="w-full bg-red-50 text-red-500 font-black text-xs uppercase tracking-[0.2em] py-5 rounded-2xl hover:bg-red-500 hover:text-white transition-all">
-              Wipe From Database
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+          <div className="bg-white p-10 rounded-[2.5rem] w-full max-w-md shadow-2xl">
+            <h2 className="text-2xl font-black mb-6">{selectedItem.email || selectedItem.title}</h2>
+            <button onClick={() => handleHardPurge(selectedItem.id)} className="w-full bg-red-50 text-red-500 p-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all">
+              WIPE RECORD
             </button>
+            <button onClick={() => setSelectedItem(null)} className="w-full mt-4 text-xs font-bold text-gray-400">CLOSE</button>
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function NavButton({ active, onClick, icon, label }: any) {
-  return (
-    <button onClick={onClick} className={`flex flex-col md:flex-row items-center gap-1 md:gap-4 px-4 py-4 md:w-full rounded-2xl transition-all ${active ? 'bg-black text-white shadow-xl shadow-black/10' : 'text-gray-300 hover:text-black hover:bg-gray-50'}`}>
-      {icon}
-      <span className="text-[9px] md:text-sm font-black uppercase tracking-widest md:tracking-normal">{label}</span>
-    </button>
-  );
-}
-
-function StatCard({ label, value }: any) {
-  return (
-    <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
-      <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] mb-3">{label}</p>
-      <h2 className="text-3xl font-black tracking-tighter">{value}</h2>
     </div>
   );
 }
