@@ -8,24 +8,8 @@ import { Testimonials } from "@/components/site/Testimonials";
 import { FAQ } from "@/components/site/FAQ";
 import { CTASection } from "@/components/site/CTASection";
 import { LeadCaptureForm } from "@/components/site/LeadCaptureForm";
+import { SITE_CONFIG_FALLBACK, type SiteConfig } from "@/lib/site-config";
 
-// ─── Fallback site config ────────────────────────────────────────────────────
-// Used when the site_config table is empty, missing, or returns an error.
-// Once you wire the admin "Website Editor" save button to Supabase, these
-// values will be overridden by live DB data automatically.
-export const SITE_CONFIG_FALLBACK = {
-  hero_headline:         "A simple, modern way to actually get the result you want.",
-  hero_subheadline:      "Everything you need to get started in one focused, no-fluff package.",
-  hero_cta:              "Get instant access — $49",
-  price_display:         "$49",
-  price_original:        "$129",
-  launch_pricing_active: true,
-  guarantee_days:        "30",
-};
-
-export type SiteConfig = typeof SITE_CONFIG_FALLBACK;
-
-// ─── Route definition ────────────────────────────────────────────────────────
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
@@ -37,10 +21,7 @@ export const Route = createFileRoute("/")({
     ],
   }),
 
-  // Loader runs server-side (SSR) or on navigation. Both fetches are
-  // independent — a failure in one never blocks the other.
   loader: async () => {
-    // Run both fetches concurrently; never throw — always return safe shapes.
     const [productsResult, configResult] = await Promise.allSettled([
       supabase
         .from("products")
@@ -56,29 +37,22 @@ export const Route = createFileRoute("/")({
         .maybeSingle(),
     ]);
 
-    // ── Products ──────────────────────────────────────────────────────────
+    // Products — safe fallback to empty array on any failure
     let products: any[] = [];
     if (productsResult.status === "fulfilled") {
       const { data, error } = productsResult.value;
-      if (error) {
-        console.warn("[Northwind] products fetch error:", error.message);
-      } else {
-        products = data ?? [];
-      }
+      if (error) console.warn("[Northwind] products fetch error:", error.message);
+      else products = data ?? [];
     } else {
       console.warn("[Northwind] products fetch rejected:", productsResult.reason);
     }
 
-    // ── Site config ───────────────────────────────────────────────────────
+    // Site config — safe fallback to hardcoded defaults on any failure
     let siteConfig: SiteConfig = SITE_CONFIG_FALLBACK;
     if (configResult.status === "fulfilled") {
       const { data, error } = configResult.value;
-      if (error) {
-        console.warn("[Northwind] site_config fetch error:", error.message);
-      } else if (data) {
-        // Merge DB values over fallback so partial rows still work safely
-        siteConfig = { ...SITE_CONFIG_FALLBACK, ...data };
-      }
+      if (error) console.warn("[Northwind] site_config fetch error:", error.message);
+      else if (data) siteConfig = { ...SITE_CONFIG_FALLBACK, ...data };
     } else {
       console.warn("[Northwind] site_config fetch rejected:", configResult.reason);
     }
@@ -89,44 +63,34 @@ export const Route = createFileRoute("/")({
   component: Home,
 });
 
-// ─── Home component ──────────────────────────────────────────────────────────
 function Home() {
   const { products, siteConfig } = Route.useLoaderData();
   const navigate = useNavigate();
 
-  // ── OAuth redirect intercept ─────────────────────────────────────────────
-  // Lovable's OAuth proxy always lands the user on "/" after Google sign-in.
-  // The login page sets sessionStorage['active_login_intent'] = '1' before
-  // triggering the OAuth flow. We detect that flag here and redirect to /admin
-  // if the authenticated user is the authorised admin email.
-  //
-  // We do this in a useEffect (client-only) so:
-  //   1. The loader's HTML never flashes the homepage visually for the admin.
-  //   2. We avoid any SSR / hydration mismatch.
-  //   3. We don't create an infinite loop (flag is removed immediately).
+  // OAuth redirect intercept ─────────────────────────────────────────────────
+  // Lovable's proxy always drops the user on "/" after Google sign-in.
+  // The login page plants sessionStorage['active_login_intent'] before
+  // triggering the OAuth flow. We read it here and redirect to /admin
+  // if the session belongs to the authorised admin email.
+  // The flag is deleted immediately so it never fires twice and never
+  // affects normal public visitors.
   useEffect(() => {
     const intent = sessionStorage.getItem("active_login_intent");
-    if (!intent) return; // Normal public visitor — do nothing.
+    if (!intent) return;
 
-    // Remove the flag immediately so this block never fires twice.
     sessionStorage.removeItem("active_login_intent");
 
-    const AUTHORIZED_EMAIL = "lukasdubuc@gmail.com";
-
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user?.email?.toLowerCase() === AUTHORIZED_EMAIL.toLowerCase()) {
-        // Hard replace so the homepage never sits in browser history
-        // between the OAuth callback and the admin dashboard.
+      if (
+        session?.user?.email?.toLowerCase() === "lukasdubuc@gmail.com"
+      ) {
         navigate({ to: "/admin", replace: true });
       }
-      // If somehow a non-admin completed OAuth, do nothing — they stay on
-      // the public storefront, which is the correct behaviour.
     });
   }, [navigate]);
 
   return (
     <>
-      {/* Pass live config so every copy block can be driven from the DB */}
       <Hero siteConfig={siteConfig} />
       <Benefits />
       <OfferSection products={products} siteConfig={siteConfig} />
