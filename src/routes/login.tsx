@@ -2,7 +2,6 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
 import { Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
@@ -24,7 +23,6 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Auto-redirect if a valid admin session already exists
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user?.email?.toLowerCase() === AUTHORIZED_EMAIL.toLowerCase()) {
@@ -53,7 +51,6 @@ function LoginPage() {
         });
         if (error) throw error;
 
-        // Strict email gate — eject anyone who isn't the authorised admin
         if (data.user?.email?.toLowerCase() !== AUTHORIZED_EMAIL.toLowerCase()) {
           await supabase.auth.signOut();
           toast.error("Access restricted to authorised personnel only.");
@@ -72,41 +69,21 @@ function LoginPage() {
   async function onGoogle() {
     setLoading(true);
     try {
-      // Plant the intent flag BEFORE the OAuth redirect fires.
-      // The homepage useEffect reads this after Lovable's proxy
-      // lands the user on "/" and redirects them to /admin.
       sessionStorage.setItem("active_login_intent", "1");
 
-      const result = await lovable.auth.signInWithOAuth("google", {
-        // Must redirect to "/" — Lovable's proxy requires this.
-        // The homepage intercept handles the onward route to /admin.
-        redirectTo: `${window.location.origin}/`,
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/`,
+        },
       });
 
-      if (result.error) {
+      if (error) {
         sessionStorage.removeItem("active_login_intent");
-        toast.error(result.error.message ?? "Google sign-in failed");
+        toast.error(error.message ?? "Google sign-in failed");
         setLoading(false);
-        return;
       }
-
-      // If the provider didn't redirect (e.g. popup mode), handle manually
-      if (!result.redirected) {
-        sessionStorage.removeItem("active_login_intent");
-        await supabase.auth.refreshSession();
-        const { data: { session } } = await supabase.auth.getSession();
-
-        if (session?.user?.email?.toLowerCase() !== AUTHORIZED_EMAIL.toLowerCase()) {
-          await supabase.auth.signOut();
-          toast.error("Access restricted to authorised personnel only.");
-          setLoading(false);
-          return;
-        }
-
-        navigate({ to: "/admin", replace: true });
-      }
-      // If result.redirected === true the browser is navigating away.
-      // Loading stays true intentionally — the page is leaving.
+      // If no error, browser is redirecting — leave loading=true intentionally
     } catch (e: any) {
       sessionStorage.removeItem("active_login_intent");
       console.error("Google Auth Error:", e);
