@@ -32,7 +32,7 @@ export function LeadCaptureForm({ source = "site" }: { source?: string }) {
 
   if (done) {
     return (
-      <div className="rounded-xl border border-border bg-card p-6 text-center shadow-soft">
+      <div className="rounded-xl border border-border bg-card p-6 text-center">
         <p className="text-sm font-medium text-success">Thanks — you're in.</p>
         <p className="mt-1 text-xs text-muted-foreground">
           We'll send the first email shortly.
@@ -53,13 +53,14 @@ export function LeadCaptureForm({ source = "site" }: { source?: string }) {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@email.com"
-          className="h-11 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none ring-ring focus:ring-2"
+          className="h-11 w-full rounded-md border border-input bg-card pl-9 pr-3 text-sm outline-none ring-ring focus:ring-2"
         />
       </div>
       <button
         type="submit"
         disabled={loading}
-        className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground transition-opacity disabled:opacity-60"
+        className="inline-flex h-11 items-center justify-center gap-2 rounded-md px-5 text-sm font-medium text-accent-foreground transition-opacity disabled:opacity-60"
+        style={{ backgroundImage: "var(--gradient-accent)" }}
       >
         {loading && <Loader2 className="h-4 w-4 animate-spin" />}
         Notify me
