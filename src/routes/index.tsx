@@ -111,58 +111,6 @@ function Home() {
   return (
     <>
       <Hero siteConfig={siteConfig} />
-      <section className="border-t border-border bg-background">
-        <div className="mx-auto max-w-6xl px-6 py-14">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.2em] text-accent">
-                Activity filters
-              </p>
-              <h2 className="mt-3 text-3xl font-semibold tracking-tight">
-                Review the homepage view by time range.
-              </h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Switch between Past Year, Month, Week, and Day to preview how recent activity is reflected.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {[
-                { key: "year", label: "Past Year" },
-                { key: "month", label: "Past Month" },
-                { key: "week", label: "Past Week" },
-                { key: "day", label: "Past Day" },
-              ].map(option => (
-                <button
-                  key={option.key}
-                  type="button"
-                  onClick={() => setRange(option.key as any)}
-                  className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${range === option.key ? "bg-violet-500 text-white" : "bg-white/5 text-slate-300 hover:bg-white/10"}`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-8 grid gap-4 sm:grid-cols-3">
-            <div className="rounded-3xl border border-border bg-card p-6">
-              <p className="text-xs uppercase tracking-[0.2em] text-accent">Recent products</p>
-              <p className="mt-4 text-4xl font-semibold text-white">{rangeCounts.recentProducts}</p>
-              <p className="mt-2 text-sm text-muted-foreground">Created in the selected range</p>
-            </div>
-            <div className="rounded-3xl border border-border bg-card p-6">
-              <p className="text-xs uppercase tracking-[0.2em] text-accent">Live products</p>
-              <p className="mt-4 text-4xl font-semibold text-white">{rangeCounts.totalPublished}</p>
-              <p className="mt-2 text-sm text-muted-foreground">Published on the site</p>
-            </div>
-            <div className="rounded-3xl border border-border bg-card p-6">
-              <p className="text-xs uppercase tracking-[0.2em] text-accent">Latest launch</p>
-              <p className="mt-4 text-4xl font-semibold text-white">{rangeCounts.latestProduct}</p>
-              <p className="mt-2 text-sm text-muted-foreground">Most recent offer title</p>
-            </div>
-          </div>
-        </div>
-      </section>
       <Benefits benefits={siteConfig.metadata?.features ?? []} />
       <OfferSection products={products} siteConfig={siteConfig} />
       <Testimonials testimonials={siteConfig.metadata?.testimonials ?? []} />
