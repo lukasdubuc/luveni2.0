@@ -37,12 +37,14 @@ export function Hero({ siteConfig }: { siteConfig?: SiteConfig }) {
               {offer.badge}
             </div>
           )}
-          <h1 className="mt-8 text-5xl tracking-tight md:text-7xl">
-            {cfg.hero_headline}
-          </h1>
-          <p className="mx-auto mt-6 max-w-xl text-base text-muted-foreground md:text-lg">
-            {cfg.hero_subheadline}
-          </p>
+          <h1 
+            className="mt-8 text-5xl tracking-tight md:text-7xl"
+            dangerouslySetInnerHTML={{ __html: cfg.hero_headline }}
+          />
+          <p 
+            className="mx-auto mt-6 max-w-xl text-base text-muted-foreground md:text-lg"
+            dangerouslySetInnerHTML={{ __html: cfg.hero_subheadline }}
+          />
           <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
               to="/checkout"

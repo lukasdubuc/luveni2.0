@@ -75,7 +75,7 @@ function AdminDashboard() {
 
   const [productForm, setProductForm] = useState({
     title: "", description: "", price_cents: "", slug: "",
-    stripe_price_id: "", image_url: "", source_url: "", fulfillment_notes: "",
+    image_url: "", source_url: "", fulfillment_notes: "",
     is_published: true, editingId: null as string | null,
   });
 
@@ -161,45 +161,76 @@ const [siteSaving, setSiteSaving] = useState(false);
   };
 
   const saveProduct = async () => {
-    const { title, description, price_cents, slug, stripe_price_id, image_url, source_url, fulfillment_notes, is_published, editingId } = productForm;
+    const { title, description, price_cents, slug, image_url, source_url, fulfillment_notes, is_published, editingId } = productForm;
     if (!title || !price_cents) return toast.error("Title and price required");
+    
     const image_urls = image_url
       .split(",")
       .map(u => u.trim())
       .filter(Boolean);
+    
     const payload = {
-      title, description: description || null,
+      title,
+      description: description || null,
       price_cents: Math.round(parseFloat(price_cents) * 100),
       slug: slug || title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-      stripe_price_id: stripe_price_id || null,
+      image_urls, // Text array stored in Supabase
+      source_url: source_url || null,
+      fulfillment_notes: fulfillment_notes || null,
       is_published,
       currency: "usd",
     };
+    
     if (editingId) {
       const { error } = await supabase.from("products").update(payload as any).eq("id", editingId);
-      if (!error) { fetchData(); resetProductForm(); toast.success("Product updated"); }
-      else toast.error(error.message || "Update failed");
+      if (!error) { 
+        fetchData(); 
+        resetProductForm(); 
+        toast.success("Product updated"); 
+      } else {
+        console.error("[Admin] Product update error:", error);
+        toast.error(error.message || "Update failed");
+      }
     } else {
       const { error } = await supabase.from("products").insert([payload as any]);
-      if (!error) { fetchData(); resetProductForm(); toast.success("Product created"); }
-      else toast.error(error.message || "Create failed");
+      if (!error) { 
+        fetchData(); 
+        resetProductForm(); 
+        toast.success("Product created"); 
+      } else {
+        console.error("[Admin] Product insert error:", error);
+        toast.error(error.message || "Create failed");
+      }
     }
   };
 
   const togglePublished = async (id: string, current: boolean) => {
     const { error } = await supabase.from("products").update({ is_published: !current } as any).eq("id", id);
-    if (!error) setProducts(prev => prev.map(p => p.id === id ? { ...p, is_published: !current } : p));
+    if (!error) { 
+      setProducts(prev => prev.map(p => p.id === id ? { ...p, is_published: !current } : p));
+      toast.success(!current ? "Product published" : "Product unpublished");
+    } else {
+      console.error("[Admin] Toggle published error:", error);
+      toast.error("Failed to update product status");
+    }
   };
 
   const archiveProduct = async (id: string) => {
+    if (!window.confirm("Delete this product? This cannot be undone.")) return;
     const { error } = await supabase.from("products").delete().eq("id", id);
-    if (!error) { setProducts(prev => prev.filter(p => p.id !== id)); setSelectedRow(null); toast.success("Product deleted"); }
-    else toast.error("Failed to delete product");
+    if (!error) { 
+      setProducts(prev => prev.filter(p => p.id !== id)); 
+      setSelectedRow(null); 
+      toast.success("Product deleted"); 
+    } else {
+      console.error("[Admin] Delete product error:", error);
+      toast.error("Failed to delete product");
+    }
   };
 
   const resetProductForm = () => setProductForm({
     title: "", description: "", price_cents: "", slug: "",
-    stripe_price_id: "", image_url: "", source_url: "", fulfillment_notes: "",
+    image_url: "", source_url: "", fulfillment_notes: "",
     is_published: true, editingId: null,
   });
 
@@ -208,7 +239,6 @@ const [siteSaving, setSiteSaving] = useState(false);
       title: p.title, description: p.description || "",
       price_cents: (p.price_cents / 100).toString(),
       slug: p.slug,
-      stripe_price_id: p.stripe_price_id || "",
       image_url: Array.isArray(p.image_urls) ? p.image_urls.join(", ") : "",
       source_url: p.source_url || "",
       fulfillment_notes: p.fulfillment_notes || "",
@@ -827,18 +857,20 @@ const [siteSaving, setSiteSaving] = useState(false);
                       label="Headline"
                       value={siteContent.hero_headline}
                       rows={2}
-                      onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_headline: v })); setSiteEdited(true); }}
+                      onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_headline: v })); setVerifiedEdited(true); setSiteEdited(true); }}
+                      hint="Supports HTML: use &lt;span class='text-gradient'&gt;text&lt;/span&gt; for styled text"
                     />
                     <SiteField
                       label="Subheadline"
                       value={siteContent.hero_subheadline}
                       rows={2}
-                      onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_subheadline: v })); setSiteEdited(true); }}
+                      onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_subheadline: v })); setVerifiedEdited(true); setSiteEdited(true); }}
+                      hint="Supports HTML: use &lt;strong&gt;, &lt;em&gt;, or custom &lt;span&gt; tags"
                     />
                     <SiteField
                       label="CTA Button"
                       value={siteContent.hero_cta}
-                      onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_cta: v })); setSiteEdited(true); }}
+                      onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_cta: v })); setVerifiedEdited(true); setSiteEdited(true); }}
                     />
                   </Accordion>
 
@@ -1066,8 +1098,8 @@ function FormInput({ label, value, onChange, placeholder, type = "text" }: {
   );
 }
 
-function SiteField({ label, value, onChange, rows }: {
-  label: string; value: string; onChange: (v: string) => void; rows?: number;
+function SiteField({ label, value, onChange, rows, hint }: {
+  label: string; value: string; onChange: (v: string) => void; rows?: number; hint?: string;
 }) {
   const base = "w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-violet-500/50 transition-colors";
   return (
@@ -1077,6 +1109,9 @@ function SiteField({ label, value, onChange, rows }: {
         ? <textarea value={value} onChange={e => onChange(e.target.value)} rows={rows} className={`${base} resize-none`} />
         : <input value={value} onChange={e => onChange(e.target.value)} className={base} />
       }
+      {hint && (
+        <p className="text-[11px] text-slate-400 mt-1.5">💡 {hint}</p>
+      )}
     </div>
   );
 }
