@@ -1,8 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { Check, ArrowRight } from "lucide-react";
 import { offer } from "@/config/site";
+import type { SiteConfig } from "@/lib/site-config";
 
-export function OfferSection({ products }: { products?: any[] }) {
+export function OfferSection({ products, siteConfig }: { products?: any[]; siteConfig?: SiteConfig }) {
   const activeOffer = products && products.length > 0 ? products[0] : null;
 
   return (
@@ -19,9 +20,11 @@ export function OfferSection({ products }: { products?: any[] }) {
             <h2 className="mt-4 text-4xl tracking-tight md:text-5xl">
               {activeOffer?.title || offer.name}
             </h2>
-            <p className="mt-5 max-w-md text-muted-foreground">{offer.shortPitch}</p>
+            <p className="mt-5 max-w-md text-muted-foreground">
+              {activeOffer?.description || siteConfig?.hero_subheadline || offer.shortPitch}
+            </p>
             <ul className="mt-8 space-y-4">
-              {offer.bullets.map((b) => (
+              {(activeOffer?.fulfillment_notes ? activeOffer.fulfillment_notes.split("\n") : offer.bullets).map((b: string) => (
                 <li key={b} className="flex items-start gap-3 text-sm">
                   <span className="mt-0.5 grid h-5 w-5 flex-none place-items-center rounded-full bg-accent/15 text-accent">
                     <Check className="h-3 w-3" />
@@ -50,7 +53,7 @@ export function OfferSection({ products }: { products?: any[] }) {
                   ${activeOffer ? (activeOffer.price_cents / 100).toFixed(0) : offer.price.replace("$", "")}
                 </span>
                 <span className="text-sm text-muted-foreground line-through">
-                  {offer.originalPrice}
+                  {activeOffer?.price_original || siteConfig?.price_original || offer.originalPrice}
                 </span>
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
@@ -65,11 +68,11 @@ export function OfferSection({ products }: { products?: any[] }) {
                   boxShadow: "var(--shadow-glow)",
                 }}
               >
-                Get started now
+                {siteConfig?.metadata?.newsletter_button_text || "Get started now"}
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
               </Link>
               <p className="mt-5 text-center text-xs text-muted-foreground">
-                {offer.guarantee}
+                {activeOffer?.guarantee || offer.guarantee}
               </p>
             </div>
           </div>

@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { site } from "@/config/site";
 
-export function Footer() {
+export function Footer({ description }: { description?: string }) {
   return (
     <footer className="border-t border-border bg-background">
       <div className="mx-auto grid max-w-6xl grid-cols-2 gap-10 px-6 py-16 md:grid-cols-4">
@@ -16,7 +16,7 @@ export function Footer() {
             <span className="font-display text-lg">{site.brand}</span>
           </div>
           <p className="mt-4 max-w-sm font-display text-xl leading-snug tracking-tight text-muted-foreground">
-            {site.tagline}
+            {description ?? site.tagline}
           </p>
         </div>
         <div>

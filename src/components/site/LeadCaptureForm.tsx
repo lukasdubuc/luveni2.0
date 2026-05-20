@@ -4,7 +4,7 @@ import { Loader2, Mail } from "lucide-react";
 import { captureLead } from "@/lib/leads.functions";
 import { toast } from "sonner";
 
-export function LeadCaptureForm({ source = "site" }: { source?: string }) {
+export function LeadCaptureForm({ source = "site", buttonText = "Notify me" }: { source?: string; buttonText?: string }) {
   const submit = useServerFn(captureLead);
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -63,7 +63,7 @@ export function LeadCaptureForm({ source = "site" }: { source?: string }) {
         style={{ backgroundImage: "var(--gradient-accent)" }}
       >
         {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-        Notify me
+        {buttonText}
       </button>
     </form>
   );

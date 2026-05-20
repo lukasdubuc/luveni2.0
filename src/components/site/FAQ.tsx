@@ -1,12 +1,15 @@
-import { faqs } from "@/config/site";
+import { faqs as defaultFaqs } from "@/config/site";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import type { FAQItem } from "@/lib/site-config";
 
-export function FAQ() {
+export function FAQ({ faqs }: { faqs?: FAQItem[] }) {
+  const items = faqs ?? defaultFaqs;
+
   return (
     <section className="border-t border-border bg-background">
       <div className="mx-auto grid max-w-6xl gap-16 px-6 py-24 md:grid-cols-[1fr_1.5fr] md:py-32">
@@ -22,9 +25,9 @@ export function FAQ() {
           </p>
         </div>
         <Accordion type="single" collapsible className="space-y-2">
-          {faqs.map((f, i) => (
+          {items.map((f, i) => (
             <AccordionItem
-              key={f.q}
+              key={`${f.q}-${i}`}
               value={`item-${i}`}
               className="overflow-hidden rounded-xl border border-border bg-card px-5"
             >

@@ -1,7 +1,10 @@
-import { benefits } from "@/config/site";
+import { benefits as defaultBenefits } from "@/config/site";
 import { ArrowUpRight } from "lucide-react";
+import type { FeatureItem } from "@/lib/site-config";
 
-export function Benefits() {
+export function Benefits({ benefits }: { benefits?: FeatureItem[] }) {
+  const items = benefits ?? defaultBenefits;
+
   return (
     <section className="border-t border-border bg-background">
       <div className="mx-auto max-w-6xl px-6 py-24 md:py-32">
@@ -17,9 +20,9 @@ export function Benefits() {
           </p>
         </div>
         <div className="mt-16 grid gap-px overflow-hidden rounded-2xl border border-border bg-border md:grid-cols-3">
-          {benefits.map((b, i) => (
+          {items.map((b, i) => (
             <div
-              key={b.title}
+              key={`${b.title}-${i}`}
               className="group relative bg-card p-8 transition-colors hover:bg-secondary/40 md:p-10"
             >
               <div className="flex items-center justify-between">

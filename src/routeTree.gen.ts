@@ -8,227 +8,227 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as ThankYouRouteImport } from './routes/thank-you'
-import { Route as TermsRouteImport } from './routes/terms'
-import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
-import { Route as RefundRouteImport } from './routes/refund'
-import { Route as PrivacyRouteImport } from './routes/privacy'
-import { Route as OfferRouteImport } from './routes/offer'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as ContactRouteImport } from './routes/contact'
-import { Route as CheckoutRouteImport } from './routes/checkout'
-import { Route as AboutRouteImport } from './routes/about'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as AdminIndexRouteImport } from './routes/admin.index'
-import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
-import { Route as AdminProductsRouteImport } from './routes/admin.products'
-import { Route as AdminOrdersRouteImport } from './routes/admin.orders'
-import { Route as AdminLeadsRouteImport } from './routes/admin.leads'
-import { Route as ApiPublicStripeWebhookRouteImport } from './routes/api/public/stripe-webhook'
+import { Route as rootRouteImport } from "./routes/__root"
+import { Route as ThankYouRouteImport } from "./routes/thank-you"
+import { Route as TermsRouteImport } from "./routes/terms"
+import { Route as SitemapDotxmlRouteImport } from "./routes/sitemap[.]xml"
+import { Route as RefundRouteImport } from "./routes/refund"
+import { Route as PrivacyRouteImport } from "./routes/privacy"
+import { Route as OfferRouteImport } from "./routes/offer"
+import { Route as LoginRouteImport } from "./routes/login"
+import { Route as ContactRouteImport } from "./routes/contact"
+import { Route as CheckoutRouteImport } from "./routes/checkout"
+import { Route as AboutRouteImport } from "./routes/about"
+import { Route as IndexRouteImport } from "./routes/index"
+import { Route as AdminIndexRouteImport } from "./routes/admin.index"
+import { Route as AdminSettingsRouteImport } from "./routes/admin.settings"
+import { Route as AdminProductsRouteImport } from "./routes/admin.products"
+import { Route as AdminOrdersRouteImport } from "./routes/admin.orders"
+import { Route as AdminLeadsRouteImport } from "./routes/admin.leads"
+import { Route as ApiPublicStripeWebhookRouteImport } from "./routes/api/public/stripe-webhook"
 
 const ThankYouRoute = ThankYouRouteImport.update({
-  id: '/thank-you',
-  path: '/thank-you',
+  id: "/thank-you",
+  path: "/thank-you",
   getParentRoute: () => rootRouteImport,
 } as any)
 const TermsRoute = TermsRouteImport.update({
-  id: '/terms',
-  path: '/terms',
+  id: "/terms",
+  path: "/terms",
   getParentRoute: () => rootRouteImport,
 } as any)
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
-  id: '/sitemap.xml',
-  path: '/sitemap.xml',
+  id: "/sitemap.xml",
+  path: "/sitemap.xml",
   getParentRoute: () => rootRouteImport,
 } as any)
 const RefundRoute = RefundRouteImport.update({
-  id: '/refund',
-  path: '/refund',
+  id: "/refund",
+  path: "/refund",
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacyRoute = PrivacyRouteImport.update({
-  id: '/privacy',
-  path: '/privacy',
+  id: "/privacy",
+  path: "/privacy",
   getParentRoute: () => rootRouteImport,
 } as any)
 const OfferRoute = OfferRouteImport.update({
-  id: '/offer',
-  path: '/offer',
+  id: "/offer",
+  path: "/offer",
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
+  id: "/login",
+  path: "/login",
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContactRoute = ContactRouteImport.update({
-  id: '/contact',
-  path: '/contact',
+  id: "/contact",
+  path: "/contact",
   getParentRoute: () => rootRouteImport,
 } as any)
 const CheckoutRoute = CheckoutRouteImport.update({
-  id: '/checkout',
-  path: '/checkout',
+  id: "/checkout",
+  path: "/checkout",
   getParentRoute: () => rootRouteImport,
 } as any)
 const AboutRoute = AboutRouteImport.update({
-  id: '/about',
-  path: '/about',
+  id: "/about",
+  path: "/about",
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+  id: "/",
+  path: "/",
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
-  id: '/admin/',
-  path: '/admin/',
+  id: "/admin/",
+  path: "/admin/",
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
-  id: '/admin/settings',
-  path: '/admin/settings',
+  id: "/admin/settings",
+  path: "/admin/settings",
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminProductsRoute = AdminProductsRouteImport.update({
-  id: '/admin/products',
-  path: '/admin/products',
+  id: "/admin/products",
+  path: "/admin/products",
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminOrdersRoute = AdminOrdersRouteImport.update({
-  id: '/admin/orders',
-  path: '/admin/orders',
+  id: "/admin/orders",
+  path: "/admin/orders",
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminLeadsRoute = AdminLeadsRouteImport.update({
-  id: '/admin/leads',
-  path: '/admin/leads',
+  id: "/admin/leads",
+  path: "/admin/leads",
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicStripeWebhookRoute = ApiPublicStripeWebhookRouteImport.update({
-  id: '/api/public/stripe-webhook',
-  path: '/api/public/stripe-webhook',
+  id: "/api/public/stripe-webhook",
+  path: "/api/public/stripe-webhook",
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/about': typeof AboutRoute
-  '/checkout': typeof CheckoutRoute
-  '/contact': typeof ContactRoute
-  '/login': typeof LoginRoute
-  '/offer': typeof OfferRoute
-  '/privacy': typeof PrivacyRoute
-  '/refund': typeof RefundRoute
-  '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/terms': typeof TermsRoute
-  '/thank-you': typeof ThankYouRoute
-  '/admin/leads': typeof AdminLeadsRoute
-  '/admin/orders': typeof AdminOrdersRoute
-  '/admin/products': typeof AdminProductsRoute
-  '/admin/settings': typeof AdminSettingsRoute
-  '/admin/': typeof AdminIndexRoute
-  '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
+  "/": typeof IndexRoute
+  "/about": typeof AboutRoute
+  "/checkout": typeof CheckoutRoute
+  "/contact": typeof ContactRoute
+  "/login": typeof LoginRoute
+  "/offer": typeof OfferRoute
+  "/privacy": typeof PrivacyRoute
+  "/refund": typeof RefundRoute
+  "/sitemap.xml": typeof SitemapDotxmlRoute
+  "/terms": typeof TermsRoute
+  "/thank-you": typeof ThankYouRoute
+  "/admin/leads": typeof AdminLeadsRoute
+  "/admin/orders": typeof AdminOrdersRoute
+  "/admin/products": typeof AdminProductsRoute
+  "/admin/settings": typeof AdminSettingsRoute
+  "/admin/": typeof AdminIndexRoute
+  "/api/public/stripe-webhook": typeof ApiPublicStripeWebhookRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/about': typeof AboutRoute
-  '/checkout': typeof CheckoutRoute
-  '/contact': typeof ContactRoute
-  '/login': typeof LoginRoute
-  '/offer': typeof OfferRoute
-  '/privacy': typeof PrivacyRoute
-  '/refund': typeof RefundRoute
-  '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/terms': typeof TermsRoute
-  '/thank-you': typeof ThankYouRoute
-  '/admin/leads': typeof AdminLeadsRoute
-  '/admin/orders': typeof AdminOrdersRoute
-  '/admin/products': typeof AdminProductsRoute
-  '/admin/settings': typeof AdminSettingsRoute
-  '/admin': typeof AdminIndexRoute
-  '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
+  "/": typeof IndexRoute
+  "/about": typeof AboutRoute
+  "/checkout": typeof CheckoutRoute
+  "/contact": typeof ContactRoute
+  "/login": typeof LoginRoute
+  "/offer": typeof OfferRoute
+  "/privacy": typeof PrivacyRoute
+  "/refund": typeof RefundRoute
+  "/sitemap.xml": typeof SitemapDotxmlRoute
+  "/terms": typeof TermsRoute
+  "/thank-you": typeof ThankYouRoute
+  "/admin/leads": typeof AdminLeadsRoute
+  "/admin/orders": typeof AdminOrdersRoute
+  "/admin/products": typeof AdminProductsRoute
+  "/admin/settings": typeof AdminSettingsRoute
+  "/admin": typeof AdminIndexRoute
+  "/api/public/stripe-webhook": typeof ApiPublicStripeWebhookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/about': typeof AboutRoute
-  '/checkout': typeof CheckoutRoute
-  '/contact': typeof ContactRoute
-  '/login': typeof LoginRoute
-  '/offer': typeof OfferRoute
-  '/privacy': typeof PrivacyRoute
-  '/refund': typeof RefundRoute
-  '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/terms': typeof TermsRoute
-  '/thank-you': typeof ThankYouRoute
-  '/admin/leads': typeof AdminLeadsRoute
-  '/admin/orders': typeof AdminOrdersRoute
-  '/admin/products': typeof AdminProductsRoute
-  '/admin/settings': typeof AdminSettingsRoute
-  '/admin/': typeof AdminIndexRoute
-  '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
+  "/": typeof IndexRoute
+  "/about": typeof AboutRoute
+  "/checkout": typeof CheckoutRoute
+  "/contact": typeof ContactRoute
+  "/login": typeof LoginRoute
+  "/offer": typeof OfferRoute
+  "/privacy": typeof PrivacyRoute
+  "/refund": typeof RefundRoute
+  "/sitemap.xml": typeof SitemapDotxmlRoute
+  "/terms": typeof TermsRoute
+  "/thank-you": typeof ThankYouRoute
+  "/admin/leads": typeof AdminLeadsRoute
+  "/admin/orders": typeof AdminOrdersRoute
+  "/admin/products": typeof AdminProductsRoute
+  "/admin/settings": typeof AdminSettingsRoute
+  "/admin/": typeof AdminIndexRoute
+  "/api/public/stripe-webhook": typeof ApiPublicStripeWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    | '/'
-    | '/about'
-    | '/checkout'
-    | '/contact'
-    | '/login'
-    | '/offer'
-    | '/privacy'
-    | '/refund'
-    | '/sitemap.xml'
-    | '/terms'
-    | '/thank-you'
-    | '/admin/leads'
-    | '/admin/orders'
-    | '/admin/products'
-    | '/admin/settings'
-    | '/admin/'
-    | '/api/public/stripe-webhook'
+    | "/"
+    | "/about"
+    | "/checkout"
+    | "/contact"
+    | "/login"
+    | "/offer"
+    | "/privacy"
+    | "/refund"
+    | "/sitemap.xml"
+    | "/terms"
+    | "/thank-you"
+    | "/admin/leads"
+    | "/admin/orders"
+    | "/admin/products"
+    | "/admin/settings"
+    | "/admin/"
+    | "/api/public/stripe-webhook"
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/'
-    | '/about'
-    | '/checkout'
-    | '/contact'
-    | '/login'
-    | '/offer'
-    | '/privacy'
-    | '/refund'
-    | '/sitemap.xml'
-    | '/terms'
-    | '/thank-you'
-    | '/admin/leads'
-    | '/admin/orders'
-    | '/admin/products'
-    | '/admin/settings'
-    | '/admin'
-    | '/api/public/stripe-webhook'
+    | "/"
+    | "/about"
+    | "/checkout"
+    | "/contact"
+    | "/login"
+    | "/offer"
+    | "/privacy"
+    | "/refund"
+    | "/sitemap.xml"
+    | "/terms"
+    | "/thank-you"
+    | "/admin/leads"
+    | "/admin/orders"
+    | "/admin/products"
+    | "/admin/settings"
+    | "/admin"
+    | "/api/public/stripe-webhook"
   id:
-    | '__root__'
-    | '/'
-    | '/about'
-    | '/checkout'
-    | '/contact'
-    | '/login'
-    | '/offer'
-    | '/privacy'
-    | '/refund'
-    | '/sitemap.xml'
-    | '/terms'
-    | '/thank-you'
-    | '/admin/leads'
-    | '/admin/orders'
-    | '/admin/products'
-    | '/admin/settings'
-    | '/admin/'
-    | '/api/public/stripe-webhook'
+    | "__root__"
+    | "/"
+    | "/about"
+    | "/checkout"
+    | "/contact"
+    | "/login"
+    | "/offer"
+    | "/privacy"
+    | "/refund"
+    | "/sitemap.xml"
+    | "/terms"
+    | "/thank-you"
+    | "/admin/leads"
+    | "/admin/orders"
+    | "/admin/products"
+    | "/admin/settings"
+    | "/admin/"
+    | "/api/public/stripe-webhook"
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -251,124 +251,124 @@ export interface RootRouteChildren {
   ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
 }
 
-declare module '@tanstack/react-router' {
+declare module "@tanstack/react-router" {
   interface FileRoutesByPath {
-    '/thank-you': {
-      id: '/thank-you'
-      path: '/thank-you'
-      fullPath: '/thank-you'
+    "/thank-you": {
+      id: "/thank-you"
+      path: "/thank-you"
+      fullPath: "/thank-you"
       preLoaderRoute: typeof ThankYouRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/terms': {
-      id: '/terms'
-      path: '/terms'
-      fullPath: '/terms'
+    "/terms": {
+      id: "/terms"
+      path: "/terms"
+      fullPath: "/terms"
       preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/sitemap.xml': {
-      id: '/sitemap.xml'
-      path: '/sitemap.xml'
-      fullPath: '/sitemap.xml'
+    "/sitemap.xml": {
+      id: "/sitemap.xml"
+      path: "/sitemap.xml"
+      fullPath: "/sitemap.xml"
       preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/refund': {
-      id: '/refund'
-      path: '/refund'
-      fullPath: '/refund'
+    "/refund": {
+      id: "/refund"
+      path: "/refund"
+      fullPath: "/refund"
       preLoaderRoute: typeof RefundRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/privacy': {
-      id: '/privacy'
-      path: '/privacy'
-      fullPath: '/privacy'
+    "/privacy": {
+      id: "/privacy"
+      path: "/privacy"
+      fullPath: "/privacy"
       preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/offer': {
-      id: '/offer'
-      path: '/offer'
-      fullPath: '/offer'
+    "/offer": {
+      id: "/offer"
+      path: "/offer"
+      fullPath: "/offer"
       preLoaderRoute: typeof OfferRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
+    "/login": {
+      id: "/login"
+      path: "/login"
+      fullPath: "/login"
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/contact': {
-      id: '/contact'
-      path: '/contact'
-      fullPath: '/contact'
+    "/contact": {
+      id: "/contact"
+      path: "/contact"
+      fullPath: "/contact"
       preLoaderRoute: typeof ContactRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/checkout': {
-      id: '/checkout'
-      path: '/checkout'
-      fullPath: '/checkout'
+    "/checkout": {
+      id: "/checkout"
+      path: "/checkout"
+      fullPath: "/checkout"
       preLoaderRoute: typeof CheckoutRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/about': {
-      id: '/about'
-      path: '/about'
-      fullPath: '/about'
+    "/about": {
+      id: "/about"
+      path: "/about"
+      fullPath: "/about"
       preLoaderRoute: typeof AboutRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
+    "/": {
+      id: "/"
+      path: "/"
+      fullPath: "/"
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/': {
-      id: '/admin/'
-      path: '/admin'
-      fullPath: '/admin/'
+    "/admin/": {
+      id: "/admin/"
+      path: "/admin"
+      fullPath: "/admin/"
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/settings': {
-      id: '/admin/settings'
-      path: '/admin/settings'
-      fullPath: '/admin/settings'
+    "/admin/settings": {
+      id: "/admin/settings"
+      path: "/admin/settings"
+      fullPath: "/admin/settings"
       preLoaderRoute: typeof AdminSettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/products': {
-      id: '/admin/products'
-      path: '/admin/products'
-      fullPath: '/admin/products'
+    "/admin/products": {
+      id: "/admin/products"
+      path: "/admin/products"
+      fullPath: "/admin/products"
       preLoaderRoute: typeof AdminProductsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/orders': {
-      id: '/admin/orders'
-      path: '/admin/orders'
-      fullPath: '/admin/orders'
+    "/admin/orders": {
+      id: "/admin/orders"
+      path: "/admin/orders"
+      fullPath: "/admin/orders"
       preLoaderRoute: typeof AdminOrdersRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/leads': {
-      id: '/admin/leads'
-      path: '/admin/leads'
-      fullPath: '/admin/leads'
+    "/admin/leads": {
+      id: "/admin/leads"
+      path: "/admin/leads"
+      fullPath: "/admin/leads"
       preLoaderRoute: typeof AdminLeadsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/stripe-webhook': {
-      id: '/api/public/stripe-webhook'
-      path: '/api/public/stripe-webhook'
-      fullPath: '/api/public/stripe-webhook'
+    "/api/public/stripe-webhook": {
+      id: "/api/public/stripe-webhook"
+      path: "/api/public/stripe-webhook"
+      fullPath: "/api/public/stripe-webhook"
       preLoaderRoute: typeof ApiPublicStripeWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
@@ -397,3 +397,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from "./router.tsx"
+import type { startInstance } from "./start.ts"
+declare module "@tanstack/react-start" {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

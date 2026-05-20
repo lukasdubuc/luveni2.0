@@ -112,6 +112,20 @@ function LoginPage() {
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Authorize with Google"}
         </button>
 
+        {/* Dev-only guest login: visible only on localhost or dev mode */}
+        {typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || import.meta.env.DEV) && (
+          <button
+            onClick={() => {
+              localStorage.setItem('dev_guest', '1');
+              navigate({ to: '/admin', replace: true });
+            }}
+            className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-none border border-white/10 bg-white/5 text-white text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-all"
+            title="Dev-only: bypass admin auth on localhost"
+          >
+            Dev Guest Login
+          </button>
+        )}
+
         <div className="my-8 flex items-center gap-4 text-[10px] font-black uppercase opacity-20">
           <div className="h-px flex-1 bg-current" />
           <span>OR</span>

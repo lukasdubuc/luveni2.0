@@ -1,20 +1,23 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { offer, site } from "@/config/site";
+import type { SiteConfig } from "@/lib/site-config";
 
-export function Hero() {
+export function Hero({ siteConfig }: { siteConfig?: SiteConfig }) {
+  const headline = siteConfig?.hero_headline ?? site.tagline;
+  const subheadline = siteConfig?.hero_subheadline ?? offer.shortPitch;
+  const cta = siteConfig?.hero_cta ?? `Get instant access — ${offer.price}`;
+
   return (
     <section
       className="relative overflow-hidden"
       style={{ backgroundImage: "var(--gradient-hero)" }}
     >
-      {/* Ambient orb */}
       <div
         aria-hidden
         className="pointer-events-none absolute -top-32 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full opacity-60 blur-3xl"
         style={{ background: "var(--gradient-accent)" }}
       />
-      {/* Grid texture */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-[0.07]"
@@ -34,12 +37,10 @@ export function Hero() {
             {offer.badge}
           </div>
           <h1 className="mt-8 text-5xl tracking-tight md:text-7xl">
-            A simple, modern way to{" "}
-            <span className="serif-italic text-accent">actually</span> get the
-            result you want.
+            {headline}
           </h1>
           <p className="mx-auto mt-6 max-w-xl text-base text-muted-foreground md:text-lg">
-            {offer.shortPitch} {site.tagline}
+            {subheadline}
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
@@ -50,7 +51,7 @@ export function Hero() {
                 boxShadow: "var(--shadow-glow)",
               }}
             >
-              Get instant access — {offer.price}
+              {cta}
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Link>
             <Link

@@ -1,7 +1,10 @@
 import { Star } from "lucide-react";
-import { testimonials } from "@/config/site";
+import { testimonials as defaultTestimonials } from "@/config/site";
+import type { TestimonialItem } from "@/lib/site-config";
 
-export function Testimonials() {
+export function Testimonials({ testimonials }: { testimonials?: TestimonialItem[] }) {
+  const items = testimonials ?? defaultTestimonials;
+
   return (
     <section className="border-t border-border bg-background">
       <div className="mx-auto max-w-6xl px-6 py-24 md:py-32">
@@ -14,9 +17,9 @@ export function Testimonials() {
           </h2>
         </div>
         <div className="mt-16 grid gap-6 md:grid-cols-3">
-          {testimonials.map((t) => (
+          {items.map((t, index) => (
             <figure
-              key={t.name}
+              key={`${t.name}-${index}`}
               className="flex h-full flex-col rounded-2xl border border-border p-8"
               style={{ backgroundImage: "var(--gradient-surface)" }}
             >

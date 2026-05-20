@@ -9,11 +9,12 @@ import {
   Link,
 } from "@tanstack/react-router";
 import { Toaster } from "sonner";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import appCss from "../styles.css?url";
 import { SiteShell } from "@/components/site/SiteShell";
 import { supabase } from "@/integrations/supabase/client";
+import { mergeSiteConfig, type SiteConfig } from "@/lib/site-config";
 
 function NotFoundComponent() {
   return (
@@ -105,6 +106,7 @@ function RootComponent() {
   const router = useRouter();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const isBare = path.startsWith("/admin") || path === "/login";
+  const [footerDescription, setFooterDescription] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
@@ -114,9 +116,31 @@ function RootComponent() {
     return () => subscription.unsubscribe();
   }, [router, queryClient]);
 
+  useEffect(() => {
+    if (isBare) return;
+
+    let canceled = false;
+    supabase
+      .from("site_config")
+      .select("*")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (canceled) return;
+        if (!error && data) {
+          setFooterDescription(mergeSiteConfig(data).metadata?.footer_description ?? "");
+        }
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, [isBare]);
+
   return (
     <QueryClientProvider client={queryClient}>
-      {isBare ? <Outlet /> : <SiteShell><Outlet /></SiteShell>}
+      {isBare ? <Outlet /> : <SiteShell footerDescription={footerDescription}><Outlet /></SiteShell>}
       <Toaster position="top-center" richColors />
     </QueryClientProvider>
   );

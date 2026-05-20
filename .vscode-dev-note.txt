@@ -1,0 +1,1 @@
+Dev guest login: sets localStorage.dev_guest=1. Admin beforeLoad bypasses auth only when running on localhost or import.meta.env.DEV. DB writes still require Supabase auth or SUPABASE_SERVICE_ROLE_KEY.

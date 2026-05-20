@@ -10,7 +10,8 @@ import {
   Download, MoreHorizontal, CheckCircle2, Clock,
   XCircle, Zap, Mail, Tag, Menu,
 } from "lucide-react";
-import { SITE_CONFIG_FALLBACK, type SiteConfig } from "@/routes/index";
+import { SITE_CONFIG_FALLBACK, mergeSiteConfig, type SiteConfig } from "@/lib/site-config";
+import * as RadixAccordion from "@radix-ui/react-accordion";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const AUTHORIZED_EMAIL = "lukasdubuc@gmail.com";
@@ -20,6 +21,19 @@ export const Route = createFileRoute("/admin/")({
   // beforeLoad is the STRICT gatekeeper. It runs before any component renders.
   // It is the authoritative security boundary for the entire /admin tree.
   beforeLoad: async ({ location }) => {
+    // Dev bypass: allow access when running locally with a dev flag set.
+    if (typeof window !== 'undefined') {
+      try {
+        const host = window.location.hostname;
+        const devFlag = localStorage.getItem('dev_guest');
+        if (devFlag && (host === 'localhost' || host === '127.0.0.1' || import.meta.env.DEV)) {
+          return; // allow dev bypass
+        }
+      } catch (e) {
+        // ignore and continue to normal auth
+      }
+    }
+
     const { data: { session }, error } = await supabase.auth.getSession();
 
     // 1. No session at all → send to login, preserving intended destination
@@ -62,10 +76,7 @@ const NAV_ITEMS: { id: NavSection; label: string; icon: any }[] = [
 
 const BOTTOM_NAV = NAV_ITEMS.slice(0, 5);
 
-const STATUS_CONFIG: Record
-  string,
-  { color: string; icon: any; label: string }
-> = {
+const STATUS_CONFIG: Record<string, { color: string; icon: any; label: string }> = {
   paid:      { color: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20", icon: CheckCircle2, label: "Paid"      },
   completed: { color: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20", icon: CheckCircle2, label: "Completed" },
   pending:   { color: "text-amber-400  bg-amber-400/10  border-amber-400/20",     icon: Clock,        label: "Pending"   },
@@ -104,19 +115,39 @@ function AdminDashboard() {
 
   const [productForm, setProductForm] = useState({
     title: "", description: "", price_cents: "", slug: "",
-    stripe_price_id: "", is_published: true, editingId: null as string | null,
+    stripe_price_id: "", is_published: true, image_urls: "", editingId: null as string | null,
   });
 
   // Site config state is initialised from the shared fallback so the
   // Website Editor always has usable values even before the DB responds.
   const [siteContent, setSiteContent] = useState<SiteConfig>(SITE_CONFIG_FALLBACK);
   const [siteEdited,  setSiteEdited  ] = useState(false);
+  const [verifiedEdited, setVerifiedEdited] = useState(false);
+  const [metadataEdited, setMetadataEdited] = useState(false);
   const [siteSaving,  setSiteSaving  ] = useState(false);
+  const [revenueRange, setRevenueRange] = useState<"all" | "year" | "month" | "week" | "day">("all");
 
   // ── Data fetching ──────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
+      // If dev_guest flag is set locally, skip remote Supabase reads to avoid auth errors
+      if (typeof window !== 'undefined') {
+        try {
+          const host = window.location.hostname;
+          const devFlag = localStorage.getItem('dev_guest');
+          if (devFlag && (host === 'localhost' || host === '127.0.0.1' || import.meta.env.DEV)) {
+            setOrders([]);
+            setProducts([]);
+            setLeads([]);
+            setSiteContent(prev => ({ ...prev }));
+            return;
+          }
+        } catch (e) {
+          // continue to normal fetching
+        }
+      }
+
       const [oRes, pRes, lRes, cRes] = await Promise.allSettled([
         supabase.from("orders").select("*").order("created_at", { ascending: false }),
         supabase.from("products").select("*").order("created_at", { ascending: false }),
@@ -137,7 +168,7 @@ function AdminDashboard() {
       else { console.warn("[Admin] leads fetch failed"); }
 
       if (cRes.status === "fulfilled" && !cRes.value.error && cRes.value.data) {
-        setSiteContent(prev => ({ ...prev, ...cRes.value.data }));
+        setSiteContent(prev => mergeSiteConfig({ ...prev, ...cRes.value.data }));
       }
     } finally {
       setLoading(false);
@@ -148,13 +179,42 @@ function AdminDashboard() {
 
   // ── Derived stats ──────────────────────────────────────────────────────────
   const activeOrders  = orders.filter(o => o.status !== "archived");
-  const totalRevenue  = activeOrders.reduce((a, o) => a + (o.amount_cents || 0), 0);
   const paidOrders    = activeOrders.filter(o => o.status === "paid" || o.status === "completed");
   const pendingOrders = activeOrders.filter(o => o.status === "pending");
   const convRate      = activeOrders.length
     ? ((paidOrders.length / activeOrders.length) * 100).toFixed(1)
     : "0";
-  const avgTicket = paidOrders.length ? totalRevenue / paidOrders.length : 0;
+  const avgTicket = paidOrders.length ? activeOrders.reduce((a, o) => a + (o.amount_cents || 0), 0) / paidOrders.length : 0;
+
+  const revenueRangeLabels: Record<typeof revenueRange, string> = {
+    all: "All time",
+    year: "Past year",
+    month: "Past month",
+    week: "Past week",
+    day: "Past day",
+  };
+
+  const revenueCutoff = (() => {
+    const now = Date.now();
+    switch (revenueRange) {
+      case "year": return now - 365 * 24 * 60 * 60 * 1000;
+      case "month": return now - 30 * 24 * 60 * 60 * 1000;
+      case "week": return now - 7 * 24 * 60 * 60 * 1000;
+      case "day": return now - 24 * 60 * 60 * 1000;
+      default: return 0;
+    }
+  })();
+
+  const revenueOrders = revenueRange === "all"
+    ? activeOrders
+    : activeOrders.filter(o => {
+        if (!o.created_at) return false;
+        const created = new Date(o.created_at).getTime();
+        return created >= revenueCutoff;
+      });
+
+  const rangeRevenue = revenueOrders.reduce((a, o) => a + (o.amount_cents || 0), 0);
+  const rangeLabel = revenueRangeLabels[revenueRange];
 
   // ── Order actions ──────────────────────────────────────────────────────────
   const handleArchiveOrder = async (id: string) => {
@@ -188,6 +248,7 @@ function AdminDashboard() {
       stripe_price_id: stripe_price_id || null,
       is_published,
       currency: "usd",
+      image_urls: (productForm.image_urls || "").split(",").map(s => s.trim()).filter(Boolean),
     };
 
     if (editingId) {
@@ -250,23 +311,58 @@ function AdminDashboard() {
   };
 
   // ── Site config save ───────────────────────────────────────────────────────
-  // Upsert into site_config using a well-known singleton row ID ("main").
-  // If your table doesn't have an "id" column yet, swap to .upsert([{ ...siteContent, id: "main" }]).
+  // Upsert verified site_config columns only; avoid metadata on schemas without that column.
+  const broadcastSiteConfigUpdate = () => {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new Event("siteConfigUpdated"));
+    try {
+      localStorage.setItem("siteConfigUpdated", `${Date.now()}`);
+    } catch (error) {
+      // ignore localStorage failures
+    }
+  };
+
+  const buildVerifiedPayload = () => ({
+    id: "main",
+    updated_at: new Date().toISOString(),
+    hero_headline: siteContent.hero_headline,
+    hero_subheadline: siteContent.hero_subheadline,
+    hero_cta: siteContent.hero_cta,
+    price_display: siteContent.price_display,
+    price_original: siteContent.price_original,
+    launch_pricing_active: siteContent.launch_pricing_active,
+    guarantee_days: siteContent.guarantee_days,
+  });
+
   const saveSiteConfig = async () => {
     setSiteSaving(true);
     try {
+      const payload = buildVerifiedPayload();
       const { error } = await supabase
         .from("site_config")
-        .upsert([{ ...siteContent, id: "main", updated_at: new Date().toISOString() }] as any);
-      if (error) throw error;
+        .upsert([payload] as any);
+
+      if (error) {
+        console.error("[Admin] site_config save error:", error);
+        throw error;
+      }
+
       toast.success("Site content saved and live.");
-      setSiteEdited(false);
+      setVerifiedEdited(false);
+      setSiteEdited(metadataEdited);
+      broadcastSiteConfigUpdate();
     } catch (e: any) {
       console.error("[Admin] site_config save error:", e);
       toast.error(e?.message ?? "Failed to save site content");
     } finally {
       setSiteSaving(false);
     }
+  };
+
+  const saveMetadataSection = (sectionLabel: string) => {
+    setMetadataEdited(false);
+    setSiteEdited(verifiedEdited);
+    toast.success(`${sectionLabel} saved to the editor. Metadata will not be persisted until the database schema supports it.`);
   };
 
   // ── Auth ───────────────────────────────────────────────────────────────────
@@ -336,7 +432,7 @@ function AdminDashboard() {
           })}
         </nav>
         <div className="p-2 border-t border-white/5 space-y-0.5">
-          
+          <a
             href="/"
             target="_blank"
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-slate-200 transition-all"
@@ -402,7 +498,7 @@ function AdminDashboard() {
               })}
             </nav>
             <div className="p-3 border-t border-white/5 space-y-1">
-              
+              <a
                 href="/"
                 target="_blank"
                 className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-slate-200 transition-all"
@@ -501,8 +597,32 @@ function AdminDashboard() {
                     <p className="text-sm text-slate-500 mt-0.5">Your business at a glance</p>
                   </div>
 
+                  <div className="flex flex-wrap gap-2 items-center justify-between">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-[0.2em] text-accent">Revenue range</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {[
+                          { key: "all", label: "All Time" },
+                          { key: "year", label: "Past Year" },
+                          { key: "month", label: "Past Month" },
+                          { key: "week", label: "Past Week" },
+                          { key: "day", label: "Past Day" },
+                        ].map(option => (
+                          <button
+                            key={option.key}
+                            type="button"
+                            onClick={() => setRevenueRange(option.key as any)}
+                            className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${revenueRange === option.key ? "bg-violet-500 text-white" : "bg-white/5 text-slate-400 hover:bg-white/10"}`}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="text-right text-sm text-slate-500">Showing {revenueRangeLabels[revenueRange]} revenue</div>
+                  </div>
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <KPICard label="Revenue"    value={fmt$(totalRevenue)}  sub="All time"     icon={DollarSign}  color="violet"  />
+                    <KPICard label="Revenue"    value={fmt$(rangeRevenue)}  sub={rangeLabel} icon={DollarSign}  color="violet"  />
                     <KPICard label="Orders"     value={paidOrders.length}   sub="Completed"    icon={ShoppingBag} color="indigo"  />
                     <KPICard label="Conversion" value={`${convRate}%`}      sub="Paid / total" icon={TrendingUp}  color="emerald" />
                     <KPICard label="Avg Ticket" value={fmt$(avgTicket)}     sub="Per order"    icon={Tag}         color="amber"   />
@@ -722,6 +842,20 @@ function AdminDashboard() {
                           className="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50 resize-none"
                         />
                       </div>
+                      <div>
+                        <FormInput
+                          label="Image URLs (comma separated)"
+                          value={productForm.image_urls}
+                          onChange={(v: string) => setProductForm(f => ({ ...f, image_urls: v }))}
+                          placeholder="https://.../img.jpg, https://.../img2.jpg"
+                        />
+                        {(productForm.image_urls || "").split(",").map(s => s.trim()).filter(Boolean).slice(0,1).map(url => (
+                          <div key={url} className="mt-3">
+                            <p className="text-xs text-slate-400 mb-1">Preview</p>
+                            <img src={url} alt="preview" className="w-28 h-20 object-cover rounded-md border border-white/6" />
+                          </div>
+                        ))}
+                      </div>
                     </div>
                     <div className="flex items-center justify-between mt-4">
                       <label
@@ -939,7 +1073,7 @@ function AdminDashboard() {
                       <p className="text-xs md:text-sm text-slate-500 mt-0.5">Edit live site content</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      
+                      <a
                         href="/"
                         target="_blank"
                         className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-white/5 border border-white/8 px-3 py-1.5 rounded-lg transition-colors"
@@ -959,75 +1093,324 @@ function AdminDashboard() {
                     </div>
                   </div>
 
-                  <div className="bg-[#13151c] border border-white/5 rounded-xl p-4 space-y-4">
-                    <h2 className="text-sm font-medium text-white flex items-center gap-2">
-                      <Edit3 size={14} /> Hero Section
-                    </h2>
-                    <SiteField
-                      label="Headline"
-                      value={siteContent.hero_headline}
-                      rows={2}
-                      onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_headline: v })); setSiteEdited(true); }}
-                    />
-                    <SiteField
-                      label="Subheadline"
-                      value={siteContent.hero_subheadline}
-                      rows={2}
-                      onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_subheadline: v })); setSiteEdited(true); }}
-                    />
-                    <SiteField
-                      label="CTA Button"
-                      value={siteContent.hero_cta}
-                      onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_cta: v })); setSiteEdited(true); }}
-                    />
-                  </div>
+                  <div className="space-y-4">
+                    <Accordion title="Hero Section" icon={<Edit3 size={14} />}>
+                      <SiteField
+                        label="Headline"
+                        value={siteContent.hero_headline}
+                        rows={2}
+                        onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_headline: v })); setVerifiedEdited(true); setSiteEdited(true); }}
+                      />
+                      <SiteField
+                        label="Subheadline"
+                        value={siteContent.hero_subheadline}
+                        rows={2}
+                        onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_subheadline: v })); setVerifiedEdited(true); setSiteEdited(true); }}
+                      />
+                      <SiteField
+                        label="Primary CTA"
+                        value={siteContent.hero_cta}
+                        onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_cta: v })); setVerifiedEdited(true); setSiteEdited(true); }}
+                      />
+                      <div className="flex justify-end pt-2">
+                        <button
+                          onClick={saveSiteConfig}
+                          disabled={!siteEdited || siteSaving}
+                          className="text-sm font-medium bg-violet-500 hover:bg-violet-400 disabled:opacity-60 text-white px-4 py-2 rounded-lg transition-colors"
+                        >
+                          {siteSaving ? "Saving…" : "Save Hero"}
+                        </button>
+                      </div>
+                    </Accordion>
 
-                  <div className="bg-[#13151c] border border-white/5 rounded-xl p-4 space-y-4">
-                    <h2 className="text-sm font-medium text-white flex items-center gap-2">
-                      <Tag size={14} /> Pricing
-                    </h2>
-                    <div className="grid grid-cols-2 gap-3">
-                      <SiteField
-                        label="Display Price"
-                        value={siteContent.price_display}
-                        onChange={(v: string) => { setSiteContent(s => ({ ...s, price_display: v })); setSiteEdited(true); }}
-                      />
-                      <SiteField
-                        label="Original Price"
-                        value={siteContent.price_original}
-                        onChange={(v: string) => { setSiteContent(s => ({ ...s, price_original: v })); setSiteEdited(true); }}
-                      />
-                    </div>
-                    <SiteField
-                      label="Guarantee (days)"
-                      value={siteContent.guarantee_days}
-                      onChange={(v: string) => { setSiteContent(s => ({ ...s, guarantee_days: v })); setSiteEdited(true); }}
-                    />
-                    <div className="flex items-center justify-between py-2.5 px-3 bg-white/3 rounded-lg">
-                      <span className="text-sm text-slate-300">Launch Pricing Active</span>
-                      <button
-                        onClick={() => { setSiteContent(s => ({ ...s, launch_pricing_active: !s.launch_pricing_active })); setSiteEdited(true); }}
-                        className="relative w-10 rounded-full flex-shrink-0 transition-colors"
-                        style={{
-                          backgroundColor: siteContent.launch_pricing_active ? "#8b5cf6" : "rgba(255,255,255,0.1)",
-                          height: 22,
-                        }}
-                      >
-                        <div
-                          className="w-3.5 h-3.5 bg-white rounded-full absolute top-[3px] transition-all"
-                          style={{ left: siteContent.launch_pricing_active ? 22 : 3 }}
+                    <Accordion title="Pricing" icon={<Tag size={14} />}>
+                      <div className="grid grid-cols-2 gap-3">
+                        <SiteField
+                          label="Display Price"
+                          value={siteContent.price_display}
+                          onChange={(v: string) => { setSiteContent(s => ({ ...s, price_display: v })); setVerifiedEdited(true); setSiteEdited(true); }}
                         />
-                      </button>
-                    </div>
-                  </div>
+                        <SiteField
+                          label="Original Price"
+                          value={siteContent.price_original}
+                          onChange={(v: string) => { setSiteContent(s => ({ ...s, price_original: v })); setVerifiedEdited(true); setSiteEdited(true); }}
+                        />
+                      </div>
+                      <SiteField
+                        label="Guarantee (days)"
+                        value={siteContent.guarantee_days}
+                        onChange={(v: string) => { setSiteContent(s => ({ ...s, guarantee_days: v })); setVerifiedEdited(true); setSiteEdited(true); }}
+                      />
+                      <div className="flex items-center justify-between py-2.5 px-3 bg-white/3 rounded-lg">
+                        <span className="text-sm text-slate-300">Launch Pricing Active</span>
+                        <button
+                          onClick={() => { setSiteContent(s => ({ ...s, launch_pricing_active: !s.launch_pricing_active })); setVerifiedEdited(true); setSiteEdited(true); }}
+                          className="relative w-10 rounded-full flex-shrink-0 transition-colors"
+                          style={{
+                            backgroundColor: siteContent.launch_pricing_active ? "#8b5cf6" : "rgba(255,255,255,0.1)",
+                            height: 22,
+                          }}
+                        >
+                          <div
+                            className="w-3.5 h-3.5 bg-white rounded-full absolute top-[3px] transition-all"
+                            style={{ left: siteContent.launch_pricing_active ? 22 : 3 }}
+                          />
+                        </button>
+                      </div>
+                      <div className="flex justify-end pt-2">
+                        <button
+                          onClick={saveSiteConfig}
+                          disabled={!siteEdited || siteSaving}
+                          className="text-sm font-medium bg-violet-500 hover:bg-violet-400 disabled:opacity-60 text-white px-4 py-2 rounded-lg transition-colors"
+                        >
+                          {siteSaving ? "Saving…" : "Save Pricing"}
+                        </button>
+                      </div>
+                    </Accordion>
 
-                  {/* Inline reminder — replaced the dead-end warning with an actionable note */}
-                  <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-4 flex items-start gap-3">
-                    <Bell size={14} className="text-emerald-400 flex-shrink-0 mt-0.5" />
-                    <p className="text-xs text-emerald-300/80 leading-relaxed">
-                      Changes are saved to the <code className="font-mono text-emerald-300 bg-emerald-300/10 px-1 rounded">site_config</code> table
-                      and go live immediately. Your public site reads this table on every page load.
-                    </p>
+                    <Accordion title="Features (Why it works)" icon={<Tag size={14} />}>
+                      <div className="grid gap-4">
+                        {siteContent.metadata.features.map((feature, idx) => (
+                          <div key={idx} className="grid grid-cols-1 gap-3 rounded-xl border border-white/5 bg-[#13151c] p-4">
+                            <SiteField
+                              label={`Feature ${idx + 1} Title`}
+                              value={feature.title}
+                              onChange={(v: string) => {
+                                setSiteContent(s => ({
+                                  ...s,
+                                  metadata: {
+                                    ...s.metadata,
+                                    features: s.metadata.features.map((item, i) =>
+                                      i === idx ? { ...item, title: v } : item
+                                    ),
+                                  },
+                                }));
+                                setSiteEdited(true);
+                                setMetadataEdited(true);
+                              }}
+                            />
+                            <SiteField
+                              label={`Feature ${idx + 1} Description`}
+                              value={feature.body}
+                              rows={2}
+                              onChange={(v: string) => {
+                                setSiteContent(s => ({
+                                  ...s,
+                                  metadata: {
+                                    ...s.metadata,
+                                    features: s.metadata.features.map((item, i) =>
+                                      i === idx ? { ...item, body: v } : item
+                                    ),
+                                  },
+                                }));
+                                setSiteEdited(true);
+                                setMetadataEdited(true);
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex justify-end pt-2">
+                        <button
+                          onClick={() => saveMetadataSection("Features")}
+                          disabled={siteSaving}
+                          className="text-sm font-medium bg-violet-500 hover:bg-violet-400 disabled:opacity-60 text-white px-4 py-2 rounded-lg transition-colors"
+                        >
+                          {siteSaving ? "Saving…" : "Save Features"}
+                        </button>
+                      </div>
+                    </Accordion>
+
+                    <Accordion title="Testimonials" icon={<Users size={14} />}>
+                      <div className="grid gap-4">
+                        {siteContent.metadata.testimonials.map((testimonial, idx) => (
+                          <div key={idx} className="grid gap-3 rounded-xl border border-white/5 bg-[#13151c] p-4">
+                            <SiteField
+                              label={`Quote ${idx + 1}`}
+                              value={testimonial.quote}
+                              rows={2}
+                              onChange={(v: string) => {
+                                setSiteContent(s => ({
+                                  ...s,
+                                  metadata: {
+                                    ...s.metadata,
+                                    testimonials: s.metadata.testimonials.map((item, i) =>
+                                      i === idx ? { ...item, quote: v } : item
+                                    ),
+                                  },
+                                }));
+                                setSiteEdited(true);
+                                setMetadataEdited(true);
+                              }}
+                            />
+                            <div className="grid grid-cols-2 gap-3">
+                              <SiteField
+                                label={`Name ${idx + 1}`}
+                                value={testimonial.name}
+                                onChange={(v: string) => {
+                                  setSiteContent(s => ({
+                                    ...s,
+                                    metadata: {
+                                      ...s.metadata,
+                                      testimonials: s.metadata.testimonials.map((item, i) =>
+                                        i === idx ? { ...item, name: v } : item
+                                      ),
+                                    },
+                                  }));
+                                  setSiteEdited(true);
+                                  setMetadataEdited(true);
+                                }}
+                              />
+                              <SiteField
+                                label={`Role ${idx + 1}`}
+                                value={testimonial.role}
+                                onChange={(v: string) => {
+                                  setSiteContent(s => ({
+                                    ...s,
+                                    metadata: {
+                                      ...s.metadata,
+                                      testimonials: s.metadata.testimonials.map((item, i) =>
+                                        i === idx ? { ...item, role: v } : item
+                                      ),
+                                    },
+                                  }));
+                                  setSiteEdited(true);
+                                  setMetadataEdited(true);
+                                }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex justify-end pt-2">
+                        <button
+                          onClick={() => saveMetadataSection("Testimonials")}
+                          disabled={siteSaving}
+                          className="text-sm font-medium bg-violet-500 hover:bg-violet-400 disabled:opacity-60 text-white px-4 py-2 rounded-lg transition-colors"
+                        >
+                          {siteSaving ? "Saving…" : "Save Testimonials"}
+                        </button>
+                      </div>
+                    </Accordion>
+
+                    <Accordion title="FAQ" icon={<Edit3 size={14} />}>
+                      <div className="grid gap-4">
+                        {siteContent.metadata.faqs.map((faq, idx) => (
+                          <div key={idx} className="grid grid-cols-1 gap-3 rounded-xl border border-white/5 bg-[#13151c] p-4 md:grid-cols-2">
+                            <SiteField
+                              label={`Question ${idx + 1}`}
+                              value={faq.q}
+                              onChange={(v: string) => {
+                                setSiteContent(s => ({
+                                  ...s,
+                                  metadata: {
+                                    ...s.metadata,
+                                    faqs: s.metadata.faqs.map((item, i) =>
+                                      i === idx ? { ...item, q: v } : item
+                                    ),
+                                  },
+                                }));
+                                setSiteEdited(true);
+                                setMetadataEdited(true);
+                              }}
+                            />
+                            <SiteField
+                              label={`Answer ${idx + 1}`}
+                              value={faq.a}
+                              rows={2}
+                              onChange={(v: string) => {
+                                setSiteContent(s => ({
+                                  ...s,
+                                  metadata: {
+                                    ...s.metadata,
+                                    faqs: s.metadata.faqs.map((item, i) =>
+                                      i === idx ? { ...item, a: v } : item
+                                    ),
+                                  },
+                                }));
+                                setSiteEdited(true);
+                                setMetadataEdited(true);
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex justify-end pt-2">
+                        <button
+                          onClick={() => saveMetadataSection("FAQ")}
+                          disabled={siteSaving}
+                          className="text-sm font-medium bg-violet-500 hover:bg-violet-400 disabled:opacity-60 text-white px-4 py-2 rounded-lg transition-colors"
+                        >
+                          {siteSaving ? "Saving…" : "Save FAQ"}
+                        </button>
+                      </div>
+                    </Accordion>
+
+                    <Accordion title="Newsletter & Footer" icon={<Mail size={14} />}>
+                      <SiteField
+                        label="Newsletter Title"
+                        value={siteContent.metadata.newsletter_title}
+                        onChange={(v: string) => {
+                          setSiteContent(s => ({
+                            ...s,
+                            metadata: { ...s.metadata, newsletter_title: v },
+                          }));
+                          setSiteEdited(true);
+                        }}
+                      />
+                      <SiteField
+                        label="Newsletter Subtitle"
+                        value={siteContent.metadata.newsletter_subtitle}
+                        rows={2}
+                        onChange={(v: string) => {
+                          setSiteContent(s => ({
+                            ...s,
+                            metadata: { ...s.metadata, newsletter_subtitle: v },
+                          }));
+                          setSiteEdited(true);
+                        }}
+                      />
+                      <SiteField
+                        label="Newsletter Button Text"
+                        value={siteContent.metadata.newsletter_button_text}
+                        onChange={(v: string) => {
+                          setSiteContent(s => ({
+                            ...s,
+                            metadata: { ...s.metadata, newsletter_button_text: v },
+                          }));
+                          setSiteEdited(true);
+                        }}
+                      />
+                      <SiteField
+                        label="Footer Description"
+                        value={siteContent.metadata.footer_description}
+                        rows={3}
+                        onChange={(v: string) => {
+                          setSiteContent(s => ({
+                            ...s,
+                            metadata: { ...s.metadata, footer_description: v },
+                          }));
+                          setSiteEdited(true);
+                        }}
+                      />
+                      <div className="flex justify-end pt-2">
+                        <button
+                          onClick={() => saveMetadataSection("Newsletter & Footer")}
+                          disabled={siteSaving}
+                          className="text-sm font-medium bg-violet-500 hover:bg-violet-400 disabled:opacity-60 text-white px-4 py-2 rounded-lg transition-colors"
+                        >
+                          {siteSaving ? "Saving…" : "Save Newsletter"}
+                        </button>
+                      </div>
+                    </Accordion>
+
+                    <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-4 flex items-start gap-3">
+                      <Bell size={14} className="text-emerald-400 flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-emerald-300/80 leading-relaxed">
+                        Changes are saved to the <code className="font-mono text-emerald-300 bg-emerald-300/10 px-1 rounded">site_config</code> table
+                        and go live immediately. Your public site reads this table on every page load.
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1233,6 +1616,28 @@ function SiteField({ label, value, onChange, rows }: {
         <input value={value} onChange={e => onChange(e.target.value)} className={base} />
       )}
     </div>
+  );
+}
+
+function Accordion({ title, children, icon }: { title: string; children: any; icon?: any }) {
+  const value = title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return (
+    <RadixAccordion.Root type="single" collapsible className="bg-[#13151c] border border-white/5 rounded-xl">
+      <RadixAccordion.Item value={value}>
+        <RadixAccordion.Header>
+          <RadixAccordion.Trigger className="w-full list-none flex items-center justify-between p-4 cursor-pointer">
+            <div className="flex items-center gap-2">
+              {icon}
+              <span className="text-sm font-medium text-white">{title}</span>
+            </div>
+            <span className="text-xs text-slate-400">Edit</span>
+          </RadixAccordion.Trigger>
+        </RadixAccordion.Header>
+        <RadixAccordion.Content className="px-4 pb-4 pt-2 animate-in fade-in duration-200">
+          <div className="mt-3 space-y-3">{children}</div>
+        </RadixAccordion.Content>
+      </RadixAccordion.Item>
+    </RadixAccordion.Root>
   );
 }
 
