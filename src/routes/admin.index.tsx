@@ -10,7 +10,9 @@ import {
   Download, MoreHorizontal, CheckCircle2, Clock,
   XCircle, Zap, Mail, Tag, Menu,
 } from "lucide-react";
-import { SITE_CONFIG_FALLBACK, type SiteConfig } from "@/routes/index";
+import { SITE_CONFIG_FALLBACK, type SiteConfig } from "@/lib/site-config";
+import * as RadixAccordion from "@radix-ui/react-accordion";
+import * as RadixAccordion from "@radix-ui/react-accordion";
 
 const AUTHORIZED_EMAIL = "lukasdubuc@gmail.com";
 
@@ -150,7 +152,7 @@ const [siteSaving, setSiteSaving] = useState(false);
   };
 
   const saveProduct = async () => {
-    const { title, description, price_cents, slug, image_url, source_url, fulfillment_notes, is_published, editingId } = productForm;
+    const { title, description, price_cents, slug, stripe_price_id, image_url, source_url, fulfillment_notes, is_published, editingId } = productForm;
     if (!title || !price_cents) return toast.error("Title and price required");
     const image_urls = image_url
       .split(",")
@@ -188,7 +190,7 @@ const [siteSaving, setSiteSaving] = useState(false);
 
   const resetProductForm = () => setProductForm({
     title: "", description: "", price_cents: "", slug: "",
-    image_url: "", source_url: "", fulfillment_notes: "",
+    stripe_price_id: "", image_url: "", source_url: "", fulfillment_notes: "",
     is_published: true, editingId: null,
   });
 
@@ -197,6 +199,7 @@ const [siteSaving, setSiteSaving] = useState(false);
       title: p.title, description: p.description || "",
       price_cents: (p.price_cents / 100).toString(),
       slug: p.slug,
+      stripe_price_id: p.stripe_price_id || "",
       image_url: Array.isArray(p.image_urls) ? p.image_urls.join(", ") : "",
       source_url: p.source_url || "",
       fulfillment_notes: p.fulfillment_notes || "",
