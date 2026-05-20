@@ -77,14 +77,14 @@ function AdminDashboard() {
     stripe_price_id: "", is_published: true, editingId: null as string | null,
   });
 
-  const [revenueRange, setRevenueRange] = useState<"day" | "week" | "month" | "year" | "all">("all");
+  // Keep only ONE of these declarations
+const [revenueRange, setRevenueRange] = useState<"day" | "week" | "month" | "year" | "all">("all");
 
-  const [siteContent, setSiteContent] = useState<SiteConfig>(SITE_CONFIG_FALLBACK);
-  const [siteEdited,  setSiteEdited  ] = useState(false);
-  const [verifiedEdited, setVerifiedEdited] = useState(false);
-  const [metadataEdited, setMetadataEdited] = useState(false);
-  const [siteSaving,  setSiteSaving  ] = useState(false);
-  const [revenueRange, setRevenueRange] = useState<"all" | "year" | "month" | "week" | "day">("all");
+const [siteContent, setSiteContent] = useState<SiteConfig>(SITE_CONFIG_FALLBACK);
+const [siteEdited, setSiteEdited] = useState(false);
+const [verifiedEdited, setVerifiedEdited] = useState(false);
+const [metadataEdited, setMetadataEdited] = useState(false);
+const [siteSaving, setSiteSaving] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
