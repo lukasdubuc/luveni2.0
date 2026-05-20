@@ -52,7 +52,10 @@ export const Route = createFileRoute("/")({
     if (configResult.status === "fulfilled") {
       const { data, error } = configResult.value;
       if (error) console.warn("[Northwind] site_config fetch error:", error.message);
-      else if (data) siteConfig = { ...SITE_CONFIG_FALLBACK, ...data };
+      else if (data) {
+        const clean = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== null));
+        siteConfig = { ...SITE_CONFIG_FALLBACK, ...clean } as SiteConfig;
+      }
     } else {
       console.warn("[Northwind] site_config fetch rejected:", configResult.reason);
     }
@@ -91,9 +94,9 @@ function Home() {
 
   return (
     <>
-      <Hero siteConfig={siteConfig} />
+      <Hero />
       <Benefits />
-      <OfferSection products={products} siteConfig={siteConfig} />
+      <OfferSection products={products} />
       <Testimonials />
 
       <section className="border-t border-border bg-background">
@@ -111,7 +114,7 @@ function Home() {
       </section>
 
       <FAQ />
-      <CTASection siteConfig={siteConfig} />
+      <CTASection />
     </>
   );
 }

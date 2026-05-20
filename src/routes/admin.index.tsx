@@ -98,8 +98,10 @@ function AdminDashboard() {
       if (lRes.status === "fulfilled" && !lRes.value.error) setLeads(lRes.value.data ?? []);
       else console.warn("[Admin] leads fetch failed");
 
-      if (cRes.status === "fulfilled" && !cRes.value.error && cRes.value.data)
-        setSiteContent(prev => ({ ...prev, ...cRes.value.data }));
+      if (cRes.status === "fulfilled" && !cRes.value.error && cRes.value.data) {
+        const clean = Object.fromEntries(Object.entries(cRes.value.data).filter(([, v]) => v !== null));
+        setSiteContent(prev => ({ ...prev, ...clean }) as any);
+      }
     } finally {
       setLoading(false);
     }
@@ -194,15 +196,6 @@ function AdminDashboard() {
     setSiteSaving(false);
   }
 };
-      if (error) throw error;
-      toast.success("Site content saved and live.");
-      setSiteEdited(false);
-    } catch (e: any) {
-      toast.error(e?.message ?? "Failed to save site content");
-    } finally {
-      setSiteSaving(false);
-    }
-  };
 
   const handleSignOut = async () => { await supabase.auth.signOut(); window.location.href = "/login"; };
   const navigateTo = (s: NavSection) => { setSection(s); setDrawerOpen(false); };
