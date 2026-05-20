@@ -17,17 +17,19 @@ const AUTHORIZED_EMAIL = "lukasdubuc@gmail.com";
 
 // ─── Route definition ────────────────────────────────────────────────────────
 export const Route = createFileRoute("/admin/")({
- beforeLoad: async () => {
+beforeLoad: async ({ location }) => { // Keep the location argument
     const { data: { session }, error } = await supabase.auth.getSession();
 
-    // 1. No session at all → send to login cleanly
+    // THIS IS THE SAFE WAY TO DO IT:
+    // We keep the gatekeeper, but remove the 'search' parameter 
+    // that was causing your 400 error.
     if (!session || error) {
       throw redirect({
         to: "/login",
       });
     }
 
-    // 2. Wrong email → sign them out silently and eject to login
+    // Keep the email security check
     if (session.user.email?.toLowerCase() !== AUTHORIZED_EMAIL.toLowerCase()) {
       await supabase.auth.signOut();
       throw redirect({ to: "/login" });
