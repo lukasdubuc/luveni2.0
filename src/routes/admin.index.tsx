@@ -74,7 +74,8 @@ function AdminDashboard() {
 
   const [productForm, setProductForm] = useState({
     title: "", description: "", price_cents: "", slug: "",
-    stripe_price_id: "", is_published: true, editingId: null as string | null,
+    stripe_price_id: "", image_url: "", source_url: "", fulfillment_notes: "",
+    is_published: true, editingId: null as string | null,
   });
 
   // Keep only ONE of these declarations
@@ -134,6 +135,7 @@ const [siteSaving, setSiteSaving] = useState(false);
 
   const activeOrders  = orders.filter(o => o.status !== "archived");
   const paidOrders    = activeOrders.filter(o => o.status === "paid" || o.status === "completed");
+  const totalRevenue  = paidOrders.reduce((sum, o) => sum + (o.amount_cents || 0), 0);
   const pendingOrders = activeOrders.filter(o => o.status === "pending");
   const convRate      = activeOrders.length
     ? ((paidOrders.length / activeOrders.length) * 100).toFixed(1)
@@ -761,7 +763,15 @@ const [siteSaving, setSiteSaving] = useState(false);
                 </div>
               )}
 
-            <div className="flex items-center gap-2">
+              {/* SITE */}
+              {section === "site" && (
+                <div className="space-y-4 animate-in fade-in duration-300">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h1 className="text-lg md:text-xl font-semibold text-white">Website</h1>
+                      <p className="text-xs md:text-sm text-slate-500 mt-0.5">Edit live site content</p>
+                    </div>
+                    <div className="flex items-center gap-2">
                     <a
                       href="/"
                       target="_blank"
@@ -778,6 +788,7 @@ const [siteSaving, setSiteSaving] = useState(false);
                         <Save size={12} /> {siteSaving ? "Saving…" : "Save & Publish"}
                       </button>
                     )}
+                  </div>
                   </div>
 
                   <div className="bg-[#13151c] border border-white/5 rounded-xl p-4 space-y-4">
@@ -850,6 +861,7 @@ const [siteSaving, setSiteSaving] = useState(false);
                       and go live immediately. Your public site reads this table on every page load.
                     </p>
                   </div>
+                </div>
                 </div>
               )}
 
