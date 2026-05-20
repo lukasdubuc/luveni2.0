@@ -1,1 +1,5 @@
-import { FileRoute } from '@tanstack/react-router'; export const routeTree = new FileRoute('/').addChildren([]);
+import { rootRoute } from './routes/__root'
+import { indexRoute } from './routes/index'
+
+const rootRouteChildren = [indexRoute]
+export const routeTree = rootRoute.addChildren(rootRouteChildren)
