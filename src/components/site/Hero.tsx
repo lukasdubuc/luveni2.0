@@ -1,8 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, Sparkles } from "lucide-react";
-import { offer, site } from "@/config/site";
+import { offer, SITE_CONFIG_FALLBACK, type SiteConfig } from "@/config/site";
 
-export function Hero() {
+export function Hero({ siteConfig }: { siteConfig?: SiteConfig }) {
+  const cfg = siteConfig ?? SITE_CONFIG_FALLBACK;
   return (
     <section
       className="relative overflow-hidden"
@@ -29,17 +30,17 @@ export function Hero() {
 
       <div className="relative mx-auto max-w-6xl px-6 pt-24 pb-28 md:pt-36 md:pb-40">
         <div className="mx-auto max-w-3xl text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
-            <Sparkles className="h-3.5 w-3.5 text-accent" />
-            {offer.badge}
-          </div>
+          {cfg.launch_pricing_active && (
+            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
+              <Sparkles className="h-3.5 w-3.5 text-accent" />
+              {offer.badge}
+            </div>
+          )}
           <h1 className="mt-8 text-5xl tracking-tight md:text-7xl">
-            A simple, modern way to{" "}
-            <span className="serif-italic text-accent">actually</span> get the
-            result you want.
+            {cfg.hero_headline}
           </h1>
           <p className="mx-auto mt-6 max-w-xl text-base text-muted-foreground md:text-lg">
-            {offer.shortPitch} {site.tagline}
+            {cfg.hero_subheadline}
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
@@ -50,7 +51,7 @@ export function Hero() {
                 boxShadow: "var(--shadow-glow)",
               }}
             >
-              Get instant access — {offer.price}
+              {cfg.hero_cta}
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Link>
             <Link
@@ -61,7 +62,7 @@ export function Hero() {
             </Link>
           </div>
           <p className="mt-5 text-xs text-muted-foreground">
-            {offer.guarantee}
+            {cfg.guarantee_days}-day money-back guarantee. No questions asked.
           </p>
         </div>
       </div>

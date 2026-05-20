@@ -72,8 +72,11 @@ function AdminDashboard() {
 
   const [productForm, setProductForm] = useState({
     title: "", description: "", price_cents: "", slug: "",
-    stripe_price_id: "", is_published: true, editingId: null as string | null,
+    image_url: "", source_url: "", fulfillment_notes: "",
+    is_published: true, editingId: null as string | null,
   });
+
+  const [revenueRange, setRevenueRange] = useState<"day" | "week" | "month" | "year" | "all">("all");
 
   const [siteContent, setSiteContent] = useState<SiteConfig>(SITE_CONFIG_FALLBACK);
   const [siteEdited,  setSiteEdited  ] = useState(false);
@@ -110,11 +113,26 @@ function AdminDashboard() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const activeOrders  = orders.filter(o => o.status !== "archived");
-  const totalRevenue  = activeOrders.reduce((a, o) => a + (o.amount_cents || 0), 0);
   const paidOrders    = activeOrders.filter(o => o.status === "paid" || o.status === "completed");
   const pendingOrders = activeOrders.filter(o => o.status === "pending");
+
+  // Revenue filtered by selected timeframe (based on order created_at)
+  const rangeStart = (() => {
+    if (revenueRange === "all") return null;
+    const d = new Date();
+    if (revenueRange === "day")   d.setHours(0, 0, 0, 0);
+    if (revenueRange === "week")  d.setDate(d.getDate() - 7);
+    if (revenueRange === "month") d.setMonth(d.getMonth() - 1);
+    if (revenueRange === "year")  d.setFullYear(d.getFullYear() - 1);
+    return d;
+  })();
+  const rangePaidOrders = rangeStart
+    ? paidOrders.filter(o => new Date(o.created_at) >= rangeStart)
+    : paidOrders;
+  const totalRevenue  = rangePaidOrders.reduce((a, o) => a + (o.amount_cents || 0), 0);
   const convRate      = activeOrders.length ? ((paidOrders.length / activeOrders.length) * 100).toFixed(1) : "0";
-  const avgTicket     = paidOrders.length ? totalRevenue / paidOrders.length : 0;
+  const avgTicket     = rangePaidOrders.length ? totalRevenue / rangePaidOrders.length : 0;
+  const rangeLabel    = { day: "Today", week: "Last 7 days", month: "Last 30 days", year: "Last 12 months", all: "All time" }[revenueRange];
 
   const handleArchiveOrder = async (id: string) => {
     const { error } = await supabase.from("orders").update({ status: "archived" } as any).eq("id", id);
@@ -123,23 +141,29 @@ function AdminDashboard() {
   };
 
   const saveProduct = async () => {
-    const { title, description, price_cents, slug, stripe_price_id, is_published, editingId } = productForm;
+    const { title, description, price_cents, slug, image_url, source_url, fulfillment_notes, is_published, editingId } = productForm;
     if (!title || !price_cents) return toast.error("Title and price required");
+    const image_urls = image_url
+      .split(",")
+      .map(u => u.trim())
+      .filter(Boolean);
     const payload = {
       title, description: description || null,
       price_cents: Math.round(parseFloat(price_cents) * 100),
       slug: slug || title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-      stripe_price_id: stripe_price_id || null,
+      image_urls,
+      source_url: source_url || null,
+      fulfillment_notes: fulfillment_notes || null,
       is_published, currency: "usd",
     };
     if (editingId) {
       const { error } = await supabase.from("products").update(payload as any).eq("id", editingId);
       if (!error) { fetchData(); resetProductForm(); toast.success("Product updated"); }
-      else toast.error("Update failed");
+      else toast.error(error.message || "Update failed");
     } else {
       const { error } = await supabase.from("products").insert([payload as any]);
       if (!error) { fetchData(); resetProductForm(); toast.success("Product created"); }
-      else toast.error("Create failed");
+      else toast.error(error.message || "Create failed");
     }
   };
 
@@ -156,14 +180,18 @@ function AdminDashboard() {
 
   const resetProductForm = () => setProductForm({
     title: "", description: "", price_cents: "", slug: "",
-    stripe_price_id: "", is_published: true, editingId: null,
+    image_url: "", source_url: "", fulfillment_notes: "",
+    is_published: true, editingId: null,
   });
 
   const startEditProduct = (p: any) => {
     setProductForm({
       title: p.title, description: p.description || "",
       price_cents: (p.price_cents / 100).toString(),
-      slug: p.slug, stripe_price_id: p.stripe_price_id || "",
+      slug: p.slug,
+      image_url: Array.isArray(p.image_urls) ? p.image_urls.join(", ") : "",
+      source_url: p.source_url || "",
+      fulfillment_notes: p.fulfillment_notes || "",
       is_published: p.is_published, editingId: p.id,
     });
     setSection("products");
@@ -173,23 +201,22 @@ function AdminDashboard() {
  const saveSiteConfig = async () => {
   setSiteSaving(true);
   try {
-    // 1. First, check what row ID your database is actually using
     const { data: activeRow } = await supabase.from("site_config").select("id").limit(1).maybeSingle();
-    
-    // 2. Use that existing ID so we don't accidentally create a mismatch row
     const targetId = activeRow?.id || "main";
 
     const { error } = await supabase
       .from("site_config")
-      .upsert([{ 
-        ...siteContent, 
-        id: targetId, 
-        updated_at: new Date().toISOString() 
-      }] as any);
+      .upsert([{
+        ...siteContent,
+        id: targetId,
+        updated_at: new Date().toISOString()
+      }] as any, { onConflict: "id" });
 
     if (error) throw error;
     toast.success("Site content saved and live.");
     setSiteEdited(false);
+    // refetch to confirm DB state matches UI
+    fetchData();
   } catch (e: any) {
     toast.error(e?.message ?? "Failed to save site content");
   } finally {
@@ -361,13 +388,29 @@ function AdminDashboard() {
               {/* OVERVIEW */}
               {section === "overview" && (
                 <div className="space-y-4 animate-in fade-in duration-300">
-                  <div className="hidden md:block">
-                    <h1 className="text-xl font-semibold text-white">Overview</h1>
-                    <p className="text-sm text-slate-500 mt-0.5">Your business at a glance</p>
+                  <div className="flex items-end justify-between gap-3 flex-wrap">
+                    <div className="hidden md:block">
+                      <h1 className="text-xl font-semibold text-white">Overview</h1>
+                      <p className="text-sm text-slate-500 mt-0.5">Your business at a glance</p>
+                    </div>
+                    <div className="flex items-center gap-2 ml-auto">
+                      <label className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Revenue range</label>
+                      <select
+                        value={revenueRange}
+                        onChange={e => setRevenueRange(e.target.value as any)}
+                        className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-violet-500/50 cursor-pointer"
+                      >
+                        <option value="day"   className="bg-[#13151c]">Today</option>
+                        <option value="week"  className="bg-[#13151c]">Last 7 days</option>
+                        <option value="month" className="bg-[#13151c]">Last 30 days</option>
+                        <option value="year"  className="bg-[#13151c]">Last 12 months</option>
+                        <option value="all"   className="bg-[#13151c]">All time</option>
+                      </select>
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <KPICard label="Revenue"    value={fmt$(totalRevenue)} sub="All time"     icon={DollarSign}  color="violet"  />
-                    <KPICard label="Orders"     value={paidOrders.length}  sub="Completed"    icon={ShoppingBag} color="indigo"  />
+                    <KPICard label="Revenue"    value={fmt$(totalRevenue)} sub={rangeLabel}    icon={DollarSign}  color="violet"  />
+                    <KPICard label="Orders"     value={rangePaidOrders.length}  sub="Completed"    icon={ShoppingBag} color="indigo"  />
                     <KPICard label="Conversion" value={`${convRate}%`}     sub="Paid / total" icon={TrendingUp}  color="emerald" />
                     <KPICard label="Avg Ticket" value={fmt$(avgTicket)}    sub="Per order"    icon={Tag}         color="amber"   />
                   </div>
@@ -540,9 +583,10 @@ function AdminDashboard() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <FormInput label="Title"           value={productForm.title}           onChange={(v: string) => setProductForm(f => ({ ...f, title: v }))}           placeholder="Starter Package" />
                         <FormInput label="Price (USD)"     value={productForm.price_cents}     onChange={(v: string) => setProductForm(f => ({ ...f, price_cents: v }))}     placeholder="49.00" type="number" />
-                        <FormInput label="Stripe Price ID" value={productForm.stripe_price_id} onChange={(v: string) => setProductForm(f => ({ ...f, stripe_price_id: v }))} placeholder="price_xxxx" />
                         <FormInput label="Slug"            value={productForm.slug}            onChange={(v: string) => setProductForm(f => ({ ...f, slug: v }))}            placeholder="starter-package" />
+                        <FormInput label="Source URL"      value={productForm.source_url}      onChange={(v: string) => setProductForm(f => ({ ...f, source_url: v }))}      placeholder="https://…" />
                       </div>
+                      <FormInput label="Image URL(s) — comma-separated" value={productForm.image_url} onChange={(v: string) => setProductForm(f => ({ ...f, image_url: v }))} placeholder="https://cdn.example.com/photo.jpg" />
                       <div>
                         <label className="block text-xs text-slate-500 mb-1.5 font-medium">Description</label>
                         <textarea value={productForm.description}
@@ -550,6 +594,20 @@ function AdminDashboard() {
                           placeholder="What's included…" rows={2}
                           className="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50 resize-none" />
                       </div>
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1.5 font-medium">Fulfillment Notes</label>
+                        <textarea value={productForm.fulfillment_notes}
+                          onChange={e => setProductForm(f => ({ ...f, fulfillment_notes: e.target.value }))}
+                          placeholder="Internal notes (not shown publicly)…" rows={2}
+                          className="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50 resize-none" />
+                      </div>
+                      {productForm.image_url && (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {productForm.image_url.split(",").map(u => u.trim()).filter(Boolean).map((u, i) => (
+                            <img key={i} src={u} alt="" className="h-16 w-16 object-cover rounded-md border border-white/10" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center justify-between mt-4">
                       <label className="flex items-center gap-2 cursor-pointer"
@@ -606,7 +664,7 @@ function AdminDashboard() {
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-white/5">
-                          {["Product", "Price", "Status", "Stripe ID", "Created", ""].map(h => (
+                          {["Product", "Price", "Status", "Image", "Created", ""].map(h => (
                             <th key={h} className="text-left px-5 py-3 text-[11px] font-medium text-slate-500 uppercase tracking-wider">{h}</th>
                           ))}
                         </tr>
@@ -628,7 +686,7 @@ function AdminDashboard() {
                                 {p.is_published ? "Live" : "Draft"}
                               </button>
                             </td>
-                            <td className="px-5 py-4 font-mono text-xs text-slate-500">{p.stripe_price_id || "—"}</td>
+                            <td className="px-5 py-4">{Array.isArray(p.image_urls) && p.image_urls[0] ? <img src={p.image_urls[0]} alt="" className="h-9 w-9 object-cover rounded border border-white/10" /> : <span className="text-xs text-slate-600">—</span>}</td>
                             <td className="px-5 py-4 text-sm text-slate-500">{fmtDate(p.created_at)}</td>
                             <td className="px-5 py-4">
                               <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all">
@@ -856,7 +914,7 @@ function AdminDashboard() {
                   <DetailRow label="Slug"      value={selectedRow.slug}                        mono   />
                   <DetailRow label="Price"     value={fmt$(selectedRow.price_cents)}           mono   />
                   <DetailRow label="Published" value={selectedRow.is_published ? "Yes" : "No"}        />
-                  <DetailRow label="Stripe ID" value={selectedRow.stripe_price_id || "—"}      mono   />
+                  <DetailRow label="Image"     value={(selectedRow.image_urls && selectedRow.image_urls[0]) || "—"}      mono   />
                 </>
               )}
             </div>
