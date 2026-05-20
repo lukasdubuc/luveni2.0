@@ -579,7 +579,6 @@ function AdminDashboard() {
                         </div>
                       )}
                     </div>
-                    </div>
                     <div className="flex items-center justify-between mt-4">
                       <label className="flex items-center gap-2 cursor-pointer"
                         onClick={() => setProductForm(f => ({ ...f, is_published: !f.is_published }))}>
