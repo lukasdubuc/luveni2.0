@@ -97,6 +97,9 @@ export type Database = {
           currency: string
           description: string | null
           fulfillment_notes: string | null
+          bullet_points: string[]
+          fulfillment_provider: string | null
+          external_sku: string | null
           id: string
           image_urls: string[]
           is_published: boolean
@@ -111,6 +114,9 @@ export type Database = {
           currency?: string
           description?: string | null
           fulfillment_notes?: string | null
+          bullet_points?: string[]
+          fulfillment_provider?: string | null
+          external_sku?: string | null
           id?: string
           image_urls?: string[]
           is_published?: boolean
@@ -125,6 +131,9 @@ export type Database = {
           currency?: string
           description?: string | null
           fulfillment_notes?: string | null
+          bullet_points?: string[]
+          fulfillment_provider?: string | null
+          external_sku?: string | null
           id?: string
           image_urls?: string[]
           is_published?: boolean

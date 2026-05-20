@@ -6,7 +6,9 @@ export function OfferSection({ products, siteConfig }: { products?: any[]; siteC
   const cfg = siteConfig ?? SITE_CONFIG_FALLBACK;
   const activeOffer = products && products.length > 0 ? products[0] : null;
   const description = activeOffer?.description ?? offer.shortPitch;
-  const bullets = activeOffer?.description
+  const bullets = activeOffer?.bullet_points?.length
+    ? activeOffer.bullet_points
+    : activeOffer?.description
     ? activeOffer.description.split('\n').map((line: string) => line.trim()).filter(Boolean)
     : offer.bullets;
 
@@ -65,7 +67,7 @@ export function OfferSection({ products, siteConfig }: { products?: any[]; siteC
               </p>
 
               <Link
-                to="/checkout"
+                to={activeOffer ? `/checkout?productId=${encodeURIComponent(activeOffer.id)}` : "/checkout"}
                 className="group mt-8 inline-flex w-full items-center justify-center gap-2 rounded-md px-6 py-3.5 text-sm font-medium text-accent-foreground transition-transform hover:-translate-y-0.5"
                 style={{
                   backgroundImage: "var(--gradient-accent)",

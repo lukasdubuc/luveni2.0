@@ -9,7 +9,22 @@ import { supabase } from "@/integrations/supabase/client";
 import { createCheckout } from "@/lib/checkout.functions";
 
 export const Route = createFileRoute("/checkout")({
-  loader: async () => {
+  loader: async ({ location }) => {
+    const productId = new URLSearchParams(location.searchStr ?? "").get("productId");
+
+    if (productId) {
+      const { data: product } = await supabase
+        .from("products")
+        .select("*")
+        .eq("id", productId)
+        .eq("is_published", true)
+        .maybeSingle();
+
+      if (product) {
+        return { product };
+      }
+    }
+
     const { data: products } = await supabase
       .from("products")
       .select("*")
@@ -44,7 +59,9 @@ function Checkout() {
   const displayName = product?.title ?? offer.name;
   const displayPrice = product ? `$${(product.price_cents / 100).toFixed(0)}` : offer.price;
   const displayOriginal = offer.originalPrice;
-  const displayBullets: string[] = product?.description
+  const displayBullets: string[] = product?.bullet_points?.length
+    ? product.bullet_points
+    : product?.description
     ? product.description.split("\n").map((b: string) => b.trim()).filter(Boolean)
     : offer.bullets;
 

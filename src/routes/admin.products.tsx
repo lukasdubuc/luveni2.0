@@ -62,7 +62,18 @@ function ProductsPage() {
           <p className="text-[9px] font-mono font-bold uppercase tracking-[0.4em] opacity-30 mt-3">services2day // stock_unit</p>
         </div>
         <button 
-          onClick={() => setEditing({ title: "", price_cents: 0, currency: "usd", is_published: false })}
+          onClick={() => setEditing({
+            title: "",
+            description: "",
+            price_cents: 0,
+            currency: "usd",
+            slug: "",
+            source_url: "",
+            fulfillment_provider: "",
+            external_sku: "",
+            bullet_points: [],
+            is_published: false,
+          })}
           className="text-[10px] font-bold border border-black px-6 py-2 uppercase hover:bg-black hover:text-white transition-all"
         >
           Add_New_Item
@@ -79,18 +90,31 @@ function ProductsPage() {
                 <div>
                   <h3 className="font-bold uppercase tracking-tight text-lg">{p.title}</h3>
                   <p className="text-[9px] font-mono opacity-30 uppercase">/{p.slug}</p>
+                  <p className="mt-2 text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                    {p.fulfillment_provider || "No provider"}
+                    {p.external_sku ? ` · SKU: ${p.external_sku}` : ""}
+                  </p>
                 </div>
                 <span className={`text-[8px] font-bold px-2 py-1 uppercase border ${p.is_published ? 'bg-black text-white' : 'text-black/30 border-black/10'}`}>
                   {p.is_published ? 'Live' : 'Draft'}
                 </span>
               </div>
-              
+              <p className="text-sm text-muted-foreground mb-4">
+                {p.bullet_points?.length ? `${p.bullet_points.length} bullet points` : "No bullet points yet"}
+              </p>
               <div className="text-3xl font-light italic mb-6 tracking-tighter">
                 ${(p.price_cents / 100).toFixed(2)}
               </div>
 
               <div className="flex gap-4 border-t border-black/5 pt-4">
-                <button onClick={() => setEditing(p)} className="text-[10px] font-bold uppercase opacity-40 hover:opacity-100 flex items-center gap-1">
+                <button onClick={() => setEditing({
+                  ...p,
+                  description: p.description ?? "",
+                  source_url: p.source_url ?? "",
+                  fulfillment_provider: p.fulfillment_provider ?? "",
+                  external_sku: p.external_sku ?? "",
+                  bullet_points: p.bullet_points ?? [],
+                })} className="text-[10px] font-bold uppercase opacity-40 hover:opacity-100 flex items-center gap-1">
                   <Pencil size={12} /> Edit
                 </button>
                 <button onClick={() => toggleStatus(p.id, p.is_published)} className="text-[10px] font-bold uppercase opacity-40 hover:opacity-100 flex items-center gap-1">
@@ -126,7 +150,7 @@ function ProductsPage() {
                   type="number" 
                   className="w-full border-b border-black outline-none py-2 font-mono font-bold" 
                   value={editing.price_cents} 
-                  onChange={e => setEditing({...editing, price_cents: e.target.value})}
+                  onChange={e => setEditing({...editing, price_cents: Number(e.target.value)})}
                   required 
                 />
               </div>
@@ -137,6 +161,54 @@ function ProductsPage() {
                   value={editing.slug} 
                   onChange={e => setEditing({...editing, slug: e.target.value})}
                   required 
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Description</label>
+                <textarea
+                  rows={4}
+                  className="w-full border border-black/10 bg-white p-3 text-sm outline-none"
+                  value={editing.description ?? ""}
+                  onChange={e => setEditing({...editing, description: e.target.value})}
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Bullet Points</label>
+                <textarea
+                  rows={4}
+                  className="w-full border border-black/10 bg-white p-3 text-sm outline-none"
+                  value={Array.isArray(editing.bullet_points) ? editing.bullet_points.join("\n") : ""}
+                  onChange={e => setEditing({
+                    ...editing,
+                    bullet_points: e.target.value
+                      .split("\n")
+                      .map((line) => line.trim())
+                      .filter(Boolean),
+                  })}
+                />
+              </div>
+              <div>
+                <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Fulfillment Provider</label>
+                <input
+                  className="w-full border-b border-black outline-none py-2 text-sm"
+                  value={editing.fulfillment_provider ?? ""}
+                  onChange={e => setEditing({...editing, fulfillment_provider: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">External SKU</label>
+                <input
+                  className="w-full border-b border-black outline-none py-2 text-sm"
+                  value={editing.external_sku ?? ""}
+                  onChange={e => setEditing({...editing, external_sku: e.target.value})}
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Source URL</label>
+                <input 
+                  className="w-full border-b border-black outline-none py-2 text-sm italic" 
+                  value={editing.source_url ?? ""} 
+                  onChange={e => setEditing({...editing, source_url: e.target.value})}
                 />
               </div>
             </div>
