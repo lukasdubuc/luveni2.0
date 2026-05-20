@@ -136,6 +136,42 @@ export type Database = {
         }
         Relationships: []
       }
+      site_config: {
+        Row: {
+          guarantee_days: string | null
+          hero_cta: string | null
+          hero_headline: string | null
+          hero_subheadline: string | null
+          id: string
+          launch_pricing_active: boolean | null
+          price_display: string | null
+          price_original: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          guarantee_days?: string | null
+          hero_cta?: string | null
+          hero_headline?: string | null
+          hero_subheadline?: string | null
+          id: string
+          launch_pricing_active?: boolean | null
+          price_display?: string | null
+          price_original?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          guarantee_days?: string | null
+          hero_cta?: string | null
+          hero_headline?: string | null
+          hero_subheadline?: string | null
+          id?: string
+          launch_pricing_active?: boolean | null
+          price_display?: string | null
+          price_original?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
