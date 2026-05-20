@@ -409,6 +409,15 @@ const [siteSaving, setSiteSaving] = useState(false);
                     <p className="text-sm text-slate-500 mt-0.5">Your business at a glance</p>
                   </div>
 
+                  <div className="flex gap-1 bg-white/5 border border-white/8 rounded-lg p-1 w-fit">
+                    {(["day","week","month","year","all"] as const).map(r => (
+                      <button key={r} onClick={() => setRevenueRange(r)}
+                        className={"px-2.5 py-1 rounded text-xs font-medium transition-colors " + (revenueRange === r ? "bg-violet-500 text-white" : "text-slate-400 hover:text-white")}>
+                        {r === "all" ? "All" : r.charAt(0).toUpperCase() + r.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                     <KPICard label="Revenue"    value={fmt$(totalRevenue)}  sub="All time"     icon={DollarSign}  color="violet"  />
                     <KPICard label="Orders"     value={paidOrders.length}   sub="Completed"    icon={ShoppingBag} color="indigo"  />
@@ -793,10 +802,7 @@ const [siteSaving, setSiteSaving] = useState(false);
                   </div>
                   </div>
 
-                  <div className="bg-[#13151c] border border-white/5 rounded-xl p-4 space-y-4">
-                    <h2 className="text-sm font-medium text-white flex items-center gap-2">
-                      <Edit3 size={14} /> Hero Section
-                    </h2>
+                  <Accordion title="Hero Section" icon={<Edit3 size={14} />}>
                     <SiteField
                       label="Headline"
                       value={siteContent.hero_headline}
@@ -814,12 +820,9 @@ const [siteSaving, setSiteSaving] = useState(false);
                       value={siteContent.hero_cta}
                       onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_cta: v })); setSiteEdited(true); }}
                     />
-                  </div>
+                  </Accordion>
 
-                  <div className="bg-[#13151c] border border-white/5 rounded-xl p-4 space-y-4">
-                    <h2 className="text-sm font-medium text-white flex items-center gap-2">
-                      <Tag size={14} /> Pricing
-                    </h2>
+                  <Accordion title="Pricing" icon={<Tag size={14} />}>
                     <div className="grid grid-cols-2 gap-3">
                       <SiteField
                         label="Display Price"
@@ -853,7 +856,7 @@ const [siteSaving, setSiteSaving] = useState(false);
                         />
                       </button>
                     </div>
-                  </div>
+                  </Accordion>
 
                   {/* Inline reminder — replaced the dead-end warning with an actionable note */}
                   <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-4 flex items-start gap-3">
