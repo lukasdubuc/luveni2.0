@@ -1,8 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { Check, ArrowRight } from "lucide-react";
-import { offer } from "@/config/site";
+import { offer, SITE_CONFIG_FALLBACK, type SiteConfig } from "@/config/site";
 
-export function OfferSection({ products }: { products?: any[] }) {
+export function OfferSection({ products, siteConfig }: { products?: any[]; siteConfig?: SiteConfig }) {
+  const cfg = siteConfig ?? SITE_CONFIG_FALLBACK;
   const activeOffer = products && products.length > 0 ? products[0] : null;
 
   return (
