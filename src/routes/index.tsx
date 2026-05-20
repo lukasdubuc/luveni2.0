@@ -94,9 +94,9 @@ function Home() {
 
   return (
     <>
-      <Hero siteConfig={siteConfig} />
+      <Hero />
       <Benefits />
-      <OfferSection products={products} siteConfig={siteConfig} />
+      <OfferSection products={products} />
       <Testimonials />
 
       <section className="border-t border-border bg-background">
@@ -114,7 +114,7 @@ function Home() {
       </section>
 
       <FAQ />
-      <CTASection siteConfig={siteConfig} />
+      <CTASection />
     </>
   );
 }
