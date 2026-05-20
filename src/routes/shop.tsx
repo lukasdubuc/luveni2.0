@@ -1,14 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { supabase } from "@/integrations/supabase/client";
+import { fetchProducts, useProducts } from "@/lib/useProducts";
 
 export const Route = createFileRoute("/shop")({
   loader: async () => {
-    const { data: products } = await supabase
-      .from("products")
-      .select("*")
-      .eq("is_published", true)
-      .order("created_at", { ascending: false });
-
+    const products = await fetchProducts({ onlyPublished: true });
     return { products: products ?? [] };
   },
   head: () => ({
@@ -21,7 +16,11 @@ export const Route = createFileRoute("/shop")({
 });
 
 function ShopPage() {
-  const { products } = Route.useLoaderData();
+  // Use server-side loader data initially, but prefer the shared hook for
+  // client-driven refreshes so both Shop and OfferSection use the same logic.
+  const loader = Route.useLoaderData();
+  const { products: clientProducts, loading } = useProducts({ onlyPublished: true });
+  const products = (clientProducts && clientProducts.length > 0) ? clientProducts : (loader?.products ?? []);
 
   return (
     <section className="bg-background min-h-screen py-16">

@@ -44,7 +44,11 @@ function ProductsPage() {
     } else {
       toast.success("VAULT_UPDATED");
       setEditing(null);
-      fetchProducts();
+      // Notify other parts of the app and perform a hard refresh to ensure
+      // storefronts and caches see the updated data immediately.
+      window.dispatchEvent(new Event("productsUpdated"));
+      // Hard refresh
+      window.location.reload();
     }
   };
 
@@ -54,13 +58,15 @@ function ProductsPage() {
     if (error) toast.error("PURGE_FAILED");
     else {
       toast.error("PRODUCT_REMOVED");
-      fetchProducts();
+      window.dispatchEvent(new Event("productsUpdated"));
+      window.location.reload();
     }
   };
 
   const toggleStatus = async (id: string, current: boolean) => {
     await supabase.from("products").update({ is_published: !current }).eq("id", id);
-    fetchProducts();
+    window.dispatchEvent(new Event("productsUpdated"));
+    window.location.reload();
   };
 
   useEffect(() => { fetchProducts(); }, []);
@@ -84,6 +90,7 @@ function ProductsPage() {
             external_sku: "",
             bullet_points: [],
             variantsText: "[]",
+            is_featured: false,
             is_published: false,
           })}
           className="text-[10px] font-bold border border-black px-6 py-2 uppercase hover:bg-black hover:text-white transition-all"
@@ -107,9 +114,14 @@ function ProductsPage() {
                     {p.external_sku ? ` · SKU: ${p.external_sku}` : ""}
                   </p>
                 </div>
-                <span className={`text-[8px] font-bold px-2 py-1 uppercase border ${p.is_published ? 'bg-black text-white' : 'text-black/30 border-black/10'}`}>
-                  {p.is_published ? 'Live' : 'Draft'}
-                </span>
+                <div className="flex gap-2 items-center">
+                  {p.is_featured && (
+                    <span className="text-[9px] font-bold px-2 py-1 uppercase bg-yellow-100 text-yellow-800 rounded">Featured</span>
+                  )}
+                  <span className={`text-[8px] font-bold px-2 py-1 uppercase border ${p.is_published ? 'bg-black text-white' : 'text-black/30 border-black/10'}`}>
+                    {p.is_published ? 'Live' : 'Draft'}
+                  </span>
+                </div>
               </div>
 <p className="text-sm text-muted-foreground mb-1">
                     {p.bullet_points?.length ? `${p.bullet_points.length} bullet points` : "No bullet points yet"}
@@ -132,6 +144,13 @@ function ProductsPage() {
                   variantsText: JSON.stringify(p.variants ?? [], null, 2),
                 })} className="text-[10px] font-bold uppercase opacity-40 hover:opacity-100 flex items-center gap-1">
                   <Pencil size={12} /> Edit
+                </button>
+                <button onClick={async () => {
+                  await supabase.from('products').update({ is_featured: !p.is_featured }).eq('id', p.id);
+                  window.dispatchEvent(new Event('productsUpdated'));
+                  window.location.reload();
+                }} className="text-[10px] font-bold uppercase opacity-40 hover:opacity-100 flex items-center gap-1">
+                  {p.is_featured ? 'Unfeature' : 'Feature'}
                 </button>
                 <button onClick={() => toggleStatus(p.id, p.is_published)} className="text-[10px] font-bold uppercase opacity-40 hover:opacity-100 flex items-center gap-1">
                    {p.is_published ? <X size={12} /> : <Check size={12} />} {p.is_published ? 'Unpublish' : 'Publish'}
@@ -177,6 +196,15 @@ function ProductsPage() {
                   value={editing.slug} 
                   onChange={e => setEditing({...editing, slug: e.target.value})}
                   required 
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Is Featured</label>
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={!!editing.is_featured}
+                  onChange={e => setEditing({...editing, is_featured: e.target.checked})}
                 />
               </div>
               <div className="col-span-2">

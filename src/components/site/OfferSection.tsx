@@ -1,10 +1,14 @@
 import { Link } from "@tanstack/react-router";
 import { Check, ArrowRight } from "lucide-react";
 import { offer, SITE_CONFIG_FALLBACK, type SiteConfig } from "@/config/site";
+import { useProducts } from "@/lib/useProducts";
 
 export function OfferSection({ products, siteConfig, checkoutHref, checkoutDisabled }: { products?: any[]; siteConfig?: SiteConfig; checkoutHref?: string; checkoutDisabled?: boolean }) {
   const cfg = siteConfig ?? SITE_CONFIG_FALLBACK;
-  const activeOffer = products && products.length > 0 ? products[0] : null;
+  // Prefer passed-in products (from Home loader). If not provided, use shared hook so
+  // OfferSection and Shop share the same product-fetching logic.
+  const { products: clientProducts } = useProducts({ onlyPublished: true });
+  const activeOffer = (products && products.length > 0) ? products[0] : (clientProducts && clientProducts.length > 0 ? clientProducts[0] : null);
   const description = activeOffer?.description ?? offer.shortPitch;
   const bullets = activeOffer?.bullet_points?.length
     ? activeOffer.bullet_points
