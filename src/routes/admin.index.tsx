@@ -10,7 +10,7 @@ import {
   Download, MoreHorizontal, CheckCircle2, Clock,
   XCircle, Zap, Mail, Tag, Menu,
 } from "lucide-react";
-import { SITE_CONFIG_FALLBACK, type SiteConfig } from "@/routes/index";
+import { SITE_CONFIG_FALLBACK, type SiteConfig } from "@/config/site";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const AUTHORIZED_EMAIL = "lukasdubuc@gmail.com";
