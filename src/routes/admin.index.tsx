@@ -12,90 +12,53 @@ import {
 } from "lucide-react";
 import { SITE_CONFIG_FALLBACK, type SiteConfig } from "@/config/site";
 
-// ─── Constants ───────────────────────────────────────────────────────────────
 const AUTHORIZED_EMAIL = "lukasdubuc@gmail.com";
 
-// ─── Route definition ────────────────────────────────────────────────────────
 export const Route = createFileRoute("/admin/")({
-beforeLoad: async ({ location }) => { // Keep the location argument
+  beforeLoad: async () => {
     const { data: { session }, error } = await supabase.auth.getSession();
-
-    // THIS IS THE SAFE WAY TO DO IT:
-    // We keep the gatekeeper, but remove the 'search' parameter 
-    // that was causing your 400 error.
     if (!session || error) {
-      throw redirect({
-        to: "/login",
-      });
+      throw redirect({ to: "/login" });
     }
-
-    // Keep the email security check
     if (session.user.email?.toLowerCase() !== AUTHORIZED_EMAIL.toLowerCase()) {
       await supabase.auth.signOut();
       throw redirect({ to: "/login" });
     }
   },
-    // 2. Wrong email → sign them out silently and eject to login
-    //    We sign out here so stale tokens from a different Google account
-    //    can never be replayed to gain access.
-    if (session.user.email?.toLowerCase() !== AUTHORIZED_EMAIL.toLowerCase()) {
-      await supabase.auth.signOut();
-      throw redirect({ to: "/login" });
-    }
-  },
-
   component: AdminDashboard,
 });
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-type NavSection =
-  | "overview"
-  | "orders"
-  | "products"
-  | "leads"
-  | "site"
-  | "settings";
+type NavSection = "overview" | "orders" | "products" | "leads" | "site" | "settings";
 
 const NAV_ITEMS: { id: NavSection; label: string; icon: any }[] = [
-  { id: "overview",  label: "Overview",  icon: LayoutDashboard },
-  { id: "orders",    label: "Orders",    icon: ShoppingBag     },
-  { id: "products",  label: "Products",  icon: Package         },
-  { id: "leads",     label: "Leads",     icon: Users           },
-  { id: "site",      label: "Website",   icon: Globe           },
-  { id: "settings",  label: "Settings",  icon: Settings        },
+  { id: "overview", label: "Overview", icon: LayoutDashboard },
+  { id: "orders",   label: "Orders",   icon: ShoppingBag     },
+  { id: "products", label: "Products", icon: Package         },
+  { id: "leads",    label: "Leads",    icon: Users           },
+  { id: "site",     label: "Website",  icon: Globe           },
+  { id: "settings", label: "Settings", icon: Settings        },
 ];
 
 const BOTTOM_NAV = NAV_ITEMS.slice(0, 5);
 
-const STATUS_CONFIG: Record<
-  string,
-  { color: string; icon: any; label: string }
-> = {
+const STATUS_CONFIG: Record<string, { color: string; icon: any; label: string }> = {
   paid:      { color: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20", icon: CheckCircle2, label: "Paid"      },
   completed: { color: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20", icon: CheckCircle2, label: "Completed" },
-  pending:   { color: "text-amber-400  bg-amber-400/10  border-amber-400/20",     icon: Clock,        label: "Pending"   },
-  failed:    { color: "text-red-400    bg-red-400/10    border-red-400/20",        icon: XCircle,      label: "Failed"    },
-  archived:  { color: "text-slate-400  bg-slate-400/10  border-slate-400/20",     icon: Archive,      label: "Archived"  },
+  pending:   { color: "text-amber-400 bg-amber-400/10 border-amber-400/20",       icon: Clock,        label: "Pending"   },
+  failed:    { color: "text-red-400 bg-red-400/10 border-red-400/20",             icon: XCircle,      label: "Failed"    },
+  archived:  { color: "text-slate-400 bg-slate-400/10 border-slate-400/20",       icon: Archive,      label: "Archived"  },
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 function fmt$(cents: number) {
-  return `$${(cents / 100).toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-  })}`;
+  return `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
 }
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short", day: "numeric", year: "numeric",
-  });
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 function fmtDateShort(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short", day: "numeric",
-  });
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-// ─── Admin Dashboard ─────────────────────────────────────────────────────────
 function AdminDashboard() {
   const [section,      setSection    ] = useState<NavSection>("overview");
   const [orders,       setOrders     ] = useState<any[]>([]);
@@ -112,13 +75,10 @@ function AdminDashboard() {
     stripe_price_id: "", is_published: true, editingId: null as string | null,
   });
 
-  // Site config state is initialised from the shared fallback so the
-  // Website Editor always has usable values even before the DB responds.
   const [siteContent, setSiteContent] = useState<SiteConfig>(SITE_CONFIG_FALLBACK);
   const [siteEdited,  setSiteEdited  ] = useState(false);
   const [siteSaving,  setSiteSaving  ] = useState(false);
 
-  // ── Data fetching ──────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -130,20 +90,16 @@ function AdminDashboard() {
       ]);
 
       if (oRes.status === "fulfilled" && !oRes.value.error) setOrders(oRes.value.data ?? []);
-      else if (oRes.status === "rejected" || oRes.value.error) {
-        console.warn("[Admin] orders fetch failed");
-        toast.error("Could not load orders — showing cached data");
-      }
+      else console.warn("[Admin] orders fetch failed");
 
       if (pRes.status === "fulfilled" && !pRes.value.error) setProducts(pRes.value.data ?? []);
-      else { console.warn("[Admin] products fetch failed"); }
+      else console.warn("[Admin] products fetch failed");
 
       if (lRes.status === "fulfilled" && !lRes.value.error) setLeads(lRes.value.data ?? []);
-      else { console.warn("[Admin] leads fetch failed"); }
+      else console.warn("[Admin] leads fetch failed");
 
-      if (cRes.status === "fulfilled" && !cRes.value.error && cRes.value.data) {
+      if (cRes.status === "fulfilled" && !cRes.value.error && cRes.value.data)
         setSiteContent(prev => ({ ...prev, ...cRes.value.data }));
-      }
     } finally {
       setLoading(false);
     }
@@ -151,110 +107,67 @@ function AdminDashboard() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // ── Derived stats ──────────────────────────────────────────────────────────
   const activeOrders  = orders.filter(o => o.status !== "archived");
   const totalRevenue  = activeOrders.reduce((a, o) => a + (o.amount_cents || 0), 0);
   const paidOrders    = activeOrders.filter(o => o.status === "paid" || o.status === "completed");
   const pendingOrders = activeOrders.filter(o => o.status === "pending");
-  const convRate      = activeOrders.length
-    ? ((paidOrders.length / activeOrders.length) * 100).toFixed(1)
-    : "0";
-  const avgTicket = paidOrders.length ? totalRevenue / paidOrders.length : 0;
+  const convRate      = activeOrders.length ? ((paidOrders.length / activeOrders.length) * 100).toFixed(1) : "0";
+  const avgTicket     = paidOrders.length ? totalRevenue / paidOrders.length : 0;
 
-  // ── Order actions ──────────────────────────────────────────────────────────
   const handleArchiveOrder = async (id: string) => {
-    const { error } = await supabase
-      .from("orders")
-      .update({ status: "archived" } as any)
-      .eq("id", id);
-    if (!error) {
-      setOrders(prev => prev.filter(o => o.id !== id));
-      setSelectedRow(null);
-      toast.success("Order archived");
-    } else {
-      toast.error("Failed to archive order");
-    }
+    const { error } = await supabase.from("orders").update({ status: "archived" } as any).eq("id", id);
+    if (!error) { setOrders(prev => prev.filter(o => o.id !== id)); setSelectedRow(null); toast.success("Order archived"); }
+    else toast.error("Failed to archive order");
   };
 
-  // ── Product actions ────────────────────────────────────────────────────────
   const saveProduct = async () => {
-    const {
-      title, description, price_cents, slug,
-      stripe_price_id, is_published, editingId,
-    } = productForm;
-
+    const { title, description, price_cents, slug, stripe_price_id, is_published, editingId } = productForm;
     if (!title || !price_cents) return toast.error("Title and price required");
-
     const payload = {
-      title,
-      description: description || null,
+      title, description: description || null,
       price_cents: Math.round(parseFloat(price_cents) * 100),
       slug: slug || title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
       stripe_price_id: stripe_price_id || null,
-      is_published,
-      currency: "usd",
+      is_published, currency: "usd",
     };
-
     if (editingId) {
-      const { error } = await supabase
-        .from("products")
-        .update(payload as any)
-        .eq("id", editingId);
+      const { error } = await supabase.from("products").update(payload as any).eq("id", editingId);
       if (!error) { fetchData(); resetProductForm(); toast.success("Product updated"); }
       else toast.error("Update failed");
     } else {
-      const { error } = await supabase
-        .from("products")
-        .insert([payload as any]);
+      const { error } = await supabase.from("products").insert([payload as any]);
       if (!error) { fetchData(); resetProductForm(); toast.success("Product created"); }
       else toast.error("Create failed");
     }
   };
 
   const togglePublished = async (id: string, current: boolean) => {
-    const { error } = await supabase
-      .from("products")
-      .update({ is_published: !current } as any)
-      .eq("id", id);
-    if (!error) {
-      setProducts(prev =>
-        prev.map(p => (p.id === id ? { ...p, is_published: !current } : p))
-      );
-    }
+    const { error } = await supabase.from("products").update({ is_published: !current } as any).eq("id", id);
+    if (!error) setProducts(prev => prev.map(p => p.id === id ? { ...p, is_published: !current } : p));
   };
 
   const archiveProduct = async (id: string) => {
     const { error } = await supabase.from("products").delete().eq("id", id);
-    if (!error) {
-      setProducts(prev => prev.filter(p => p.id !== id));
-      setSelectedRow(null);
-      toast.success("Product deleted");
-    } else {
-      toast.error("Failed to delete product");
-    }
+    if (!error) { setProducts(prev => prev.filter(p => p.id !== id)); setSelectedRow(null); toast.success("Product deleted"); }
+    else toast.error("Failed to delete product");
   };
 
-  const resetProductForm = () =>
-    setProductForm({
-      title: "", description: "", price_cents: "", slug: "",
-      stripe_price_id: "", is_published: true, editingId: null,
-    });
+  const resetProductForm = () => setProductForm({
+    title: "", description: "", price_cents: "", slug: "",
+    stripe_price_id: "", is_published: true, editingId: null,
+  });
 
   const startEditProduct = (p: any) => {
     setProductForm({
-      title: p.title,
-      description: p.description || "",
+      title: p.title, description: p.description || "",
       price_cents: (p.price_cents / 100).toString(),
-      slug: p.slug,
-      stripe_price_id: p.stripe_price_id || "",
-      is_published: p.is_published,
-      editingId: p.id,
+      slug: p.slug, stripe_price_id: p.stripe_price_id || "",
+      is_published: p.is_published, editingId: p.id,
     });
     setSection("products");
     setDrawerOpen(false);
   };
 
-  // ── Site config save ───────────────────────────────────────────────────────
   const saveSiteConfig = async () => {
     setSiteSaving(true);
     try {
@@ -265,47 +178,31 @@ function AdminDashboard() {
       toast.success("Site content saved and live.");
       setSiteEdited(false);
     } catch (e: any) {
-      console.error("[Admin] site_config save error:", e);
       toast.error(e?.message ?? "Failed to save site content");
     } finally {
       setSiteSaving(false);
     }
   };
 
-  // ── Auth ───────────────────────────────────────────────────────────────────
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    window.location.href = "/login";
-  };
+  const handleSignOut = async () => { await supabase.auth.signOut(); window.location.href = "/login"; };
+  const navigateTo = (s: NavSection) => { setSection(s); setDrawerOpen(false); };
 
-  // ── Navigation helpers ─────────────────────────────────────────────────────
-  const navigateTo = (s: NavSection) => {
-    setSection(s);
-    setDrawerOpen(false);
-  };
-
-  // ── Filtered lists ─────────────────────────────────────────────────────────
-  const filteredOrders = activeOrders.filter(
-    o =>
-      !searchQuery ||
-      o.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      o.name?.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredOrders = activeOrders.filter(o =>
+    !searchQuery ||
+    o.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    o.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
-  const filteredLeads = leads.filter(
-    l =>
-      !searchQuery ||
-      l.email?.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredLeads = leads.filter(l =>
+    !searchQuery || l.email?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const pageTitle = NAV_ITEMS.find(n => n.id === section)?.label ?? "Dashboard";
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div
-      className="min-h-screen bg-[#0f1117] text-slate-100 flex font-sans antialiased"
-      style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}
-    >
-      {/* ══ DESKTOP SIDEBAR ══════════════════════════════════════════════ */}
+    <div className="min-h-screen bg-[#0f1117] text-slate-100 flex font-sans antialiased"
+      style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
+
+      {/* DESKTOP SIDEBAR */}
       <aside className="hidden md:flex w-56 flex-shrink-0 bg-[#13151c] border-r border-white/5 flex-col">
         <div className="p-4 flex items-center gap-3 border-b border-white/5">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center flex-shrink-0">
@@ -315,18 +212,13 @@ function AdminDashboard() {
         </div>
         <nav className="flex-1 p-2 space-y-0.5">
           {NAV_ITEMS.map(item => {
-            const Icon   = item.icon;
+            const Icon = item.icon;
             const active = section === item.id;
             return (
-              <button
-                key={item.id}
-                onClick={() => navigateTo(item.id)}
+              <button key={item.id} onClick={() => navigateTo(item.id)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
-                  active
-                    ? "bg-violet-500/15 text-violet-300 font-medium"
-                    : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
-                }`}
-              >
+                  active ? "bg-violet-500/15 text-violet-300 font-medium" : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                }`}>
                 <Icon size={16} className="flex-shrink-0" />
                 <span>{item.label}</span>
                 {item.id === "orders" && pendingOrders.length > 0 && (
@@ -339,31 +231,21 @@ function AdminDashboard() {
           })}
         </nav>
         <div className="p-2 border-t border-white/5 space-y-0.5">
-          <a
-            href="/"
-            target="_blank"
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-slate-200 transition-all"
-          >
-            <ExternalLink size={16} className="flex-shrink-0" />
-            <span>View Site</span>
+          <a href="/" target="_blank"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-slate-200 transition-all">
+            <ExternalLink size={16} className="flex-shrink-0" /><span>View Site</span>
           </a>
-          <button
-            onClick={handleSignOut}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-all"
-          >
-            <LogOut size={16} className="flex-shrink-0" />
-            <span>Sign Out</span>
+          <button onClick={handleSignOut}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-all">
+            <LogOut size={16} className="flex-shrink-0" /><span>Sign Out</span>
           </button>
         </div>
       </aside>
 
-      {/* ══ MOBILE DRAWER ════════════════════════════════════════════════ */}
+      {/* MOBILE DRAWER */}
       {drawerOpen && (
         <div className="md:hidden fixed inset-0 z-40 flex">
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setDrawerOpen(false)}
-          />
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDrawerOpen(false)} />
           <div className="relative w-64 bg-[#13151c] flex flex-col h-full shadow-2xl animate-in slide-in-from-left duration-200">
             <div className="p-4 flex items-center justify-between border-b border-white/5">
               <div className="flex items-center gap-3">
@@ -372,27 +254,19 @@ function AdminDashboard() {
                 </div>
                 <span className="font-semibold text-sm">Northwind HQ</span>
               </div>
-              <button
-                onClick={() => setDrawerOpen(false)}
-                className="text-slate-500 hover:text-white p-1 rounded transition-colors"
-              >
+              <button onClick={() => setDrawerOpen(false)} className="text-slate-500 hover:text-white p-1 rounded transition-colors">
                 <X size={16} />
               </button>
             </div>
             <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
               {NAV_ITEMS.map(item => {
-                const Icon   = item.icon;
+                const Icon = item.icon;
                 const active = section === item.id;
                 return (
-                  <button
-                    key={item.id}
-                    onClick={() => navigateTo(item.id)}
+                  <button key={item.id} onClick={() => navigateTo(item.id)}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all ${
-                      active
-                        ? "bg-violet-500/15 text-violet-300 font-medium"
-                        : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
-                    }`}
-                  >
+                      active ? "bg-violet-500/15 text-violet-300 font-medium" : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                    }`}>
                     <Icon size={17} className="flex-shrink-0" />
                     <span>{item.label}</span>
                     {item.id === "orders" && pendingOrders.length > 0 && (
@@ -405,17 +279,12 @@ function AdminDashboard() {
               })}
             </nav>
             <div className="p-3 border-t border-white/5 space-y-1">
-              <a
-                href="/"
-                target="_blank"
-                className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-slate-200 transition-all"
-              >
+              <a href="/" target="_blank"
+                className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-slate-200 transition-all">
                 <ExternalLink size={16} /> View Site
               </a>
-              <button
-                onClick={handleSignOut}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-red-400 hover:bg-red-500/10 transition-all"
-              >
+              <button onClick={handleSignOut}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-red-400 hover:bg-red-500/10 transition-all">
                 <LogOut size={16} /> Sign Out
               </button>
             </div>
@@ -423,69 +292,49 @@ function AdminDashboard() {
         </div>
       )}
 
-      {/* ══ MAIN ═════════════════════════════════════════════════════════ */}
+      {/* MAIN */}
       <div className="flex-1 flex flex-col min-w-0">
-
-        {/* Topbar */}
         <header className="h-14 flex items-center justify-between px-4 md:px-6 border-b border-white/5 bg-[#0f1117]/90 backdrop-blur sticky top-0 z-10">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setDrawerOpen(true)}
-              className="md:hidden text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors"
-            >
+            <button onClick={() => setDrawerOpen(true)}
+              className="md:hidden text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors">
               <Menu size={18} />
             </button>
-            <button
-              onClick={fetchData}
-              className="hidden md:flex text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors"
-              title="Refresh data"
-            >
+            <button onClick={fetchData}
+              className="hidden md:flex text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors" title="Refresh data">
               <RefreshCw size={14} />
             </button>
             <h1 className="font-semibold text-sm text-white md:hidden">{pageTitle}</h1>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setSearchOpen(v => !v)}
-              className="md:hidden text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors"
-            >
+            <button onClick={() => setSearchOpen(v => !v)}
+              className="md:hidden text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors">
               <Search size={16} />
             </button>
             <div className="relative hidden md:block">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <input
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
+              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Search…"
-                className="bg-white/5 border border-white/8 rounded-lg pl-9 pr-4 py-1.5 text-sm text-slate-300 placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50 w-48 transition-all"
-              />
+                className="bg-white/5 border border-white/8 rounded-lg pl-9 pr-4 py-1.5 text-sm text-slate-300 placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50 w-48 transition-all" />
             </div>
             <div className="flex items-center gap-2 bg-white/5 border border-white/8 rounded-lg px-2.5 py-1.5">
-              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-violet-400 to-indigo-500 text-[9px] font-bold flex items-center justify-center text-white flex-shrink-0">
-                L
-              </div>
+              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-violet-400 to-indigo-500 text-[9px] font-bold flex items-center justify-center text-white flex-shrink-0">L</div>
               <span className="text-sm text-slate-300 font-medium hidden sm:block">Lukas</span>
             </div>
           </div>
         </header>
 
-        {/* Mobile expandable search */}
         {searchOpen && (
           <div className="md:hidden px-4 py-2 bg-[#0f1117] border-b border-white/5">
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <input
-                autoFocus
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
+              <input autoFocus value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Search orders, leads…"
-                className="w-full bg-white/5 border border-white/8 rounded-lg pl-9 pr-4 py-2 text-sm text-slate-300 placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50"
-              />
+                className="w-full bg-white/5 border border-white/8 rounded-lg pl-9 pr-4 py-2 text-sm text-slate-300 placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50" />
             </div>
           </div>
         )}
 
-        {/* Content */}
         <main className="flex-1 overflow-auto p-4 md:p-6 pb-24 md:pb-6">
           {loading ? (
             <div className="flex items-center justify-center h-64">
@@ -496,70 +345,55 @@ function AdminDashboard() {
             </div>
           ) : (
             <>
-              {/* ── OVERVIEW ──────────────────────────────────────────── */}
+              {/* OVERVIEW */}
               {section === "overview" && (
                 <div className="space-y-4 animate-in fade-in duration-300">
                   <div className="hidden md:block">
                     <h1 className="text-xl font-semibold text-white">Overview</h1>
                     <p className="text-sm text-slate-500 mt-0.5">Your business at a glance</p>
                   </div>
-
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <KPICard label="Revenue"    value={fmt$(totalRevenue)}  sub="All time"     icon={DollarSign}  color="violet"  />
-                    <KPICard label="Orders"     value={paidOrders.length}   sub="Completed"    icon={ShoppingBag} color="indigo"  />
-                    <KPICard label="Conversion" value={`${convRate}%`}      sub="Paid / total" icon={TrendingUp}  color="emerald" />
-                    <KPICard label="Avg Ticket" value={fmt$(avgTicket)}     sub="Per order"    icon={Tag}         color="amber"   />
+                    <KPICard label="Revenue"    value={fmt$(totalRevenue)} sub="All time"     icon={DollarSign}  color="violet"  />
+                    <KPICard label="Orders"     value={paidOrders.length}  sub="Completed"    icon={ShoppingBag} color="indigo"  />
+                    <KPICard label="Conversion" value={`${convRate}%`}     sub="Paid / total" icon={TrendingUp}  color="emerald" />
+                    <KPICard label="Avg Ticket" value={fmt$(avgTicket)}    sub="Per order"    icon={Tag}         color="amber"   />
                   </div>
-
                   <div className="bg-[#13151c] border border-white/5 rounded-xl overflow-hidden">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
                       <h2 className="font-medium text-sm text-white">Recent Orders</h2>
-                      <button
-                        onClick={() => setSection("orders")}
-                        className="text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1"
-                      >
+                      <button onClick={() => setSection("orders")} className="text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1">
                         View all <ArrowUpRight size={11} />
                       </button>
                     </div>
                     <div className="divide-y divide-white/5">
                       {activeOrders.length === 0 ? (
                         <p className="text-sm text-slate-500 text-center py-10">No orders yet</p>
-                      ) : (
-                        activeOrders.slice(0, 5).map(o => {
-                          const cfg  = STATUS_CONFIG[o.status] ?? STATUS_CONFIG.pending;
-                          const Icon = cfg.icon;
-                          return (
-                            <div
-                              key={o.id}
-                              onClick={() => setSelectedRow({ ...o, _type: "order" })}
-                              className="flex items-center justify-between px-4 py-3 hover:bg-white/3 active:bg-white/5 cursor-pointer transition-colors"
-                            >
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div className="w-8 h-8 rounded-full bg-white/8 flex items-center justify-center text-[11px] font-bold text-slate-400 uppercase flex-shrink-0">
-                                  {(o.name || o.email || "?")[0]}
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="text-sm font-medium text-slate-200 truncate">
-                                    {o.name || o.email}
-                                  </p>
-                                  <p className="text-xs text-slate-500">{fmtDateShort(o.created_at)}</p>
-                                </div>
+                      ) : activeOrders.slice(0, 5).map(o => {
+                        const cfg = STATUS_CONFIG[o.status] ?? STATUS_CONFIG.pending;
+                        const Icon = cfg.icon;
+                        return (
+                          <div key={o.id} onClick={() => setSelectedRow({ ...o, _type: "order" })}
+                            className="flex items-center justify-between px-4 py-3 hover:bg-white/3 active:bg-white/5 cursor-pointer transition-colors">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-8 h-8 rounded-full bg-white/8 flex items-center justify-center text-[11px] font-bold text-slate-400 uppercase flex-shrink-0">
+                                {(o.name || o.email || "?")[0]}
                               </div>
-                              <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                                <span className={`hidden sm:flex text-[10px] px-2 py-0.5 rounded-full border items-center gap-1 ${cfg.color}`}>
-                                  <Icon size={9} /> {cfg.label}
-                                </span>
-                                <span className="font-mono text-sm font-semibold text-slate-100">
-                                  {fmt$(o.amount_cents)}
-                                </span>
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-slate-200 truncate">{o.name || o.email}</p>
+                                <p className="text-xs text-slate-500">{fmtDateShort(o.created_at)}</p>
                               </div>
                             </div>
-                          );
-                        })
-                      )}
+                            <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                              <span className={`hidden sm:flex text-[10px] px-2 py-0.5 rounded-full border items-center gap-1 ${cfg.color}`}>
+                                <Icon size={9} /> {cfg.label}
+                              </span>
+                              <span className="font-mono text-sm font-semibold text-slate-100">{fmt$(o.amount_cents)}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-
                   <div className="grid grid-cols-2 gap-3">
                     <div className="bg-[#13151c] border border-white/5 rounded-xl p-4">
                       <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider mb-2">Products</p>
@@ -581,60 +415,49 @@ function AdminDashboard() {
                 </div>
               )}
 
-              {/* ── ORDERS ────────────────────────────────────────────── */}
+              {/* ORDERS */}
               {section === "orders" && (
                 <div className="space-y-4 animate-in fade-in duration-300">
                   <div className="flex items-center justify-between">
                     <div>
                       <h1 className="text-lg md:text-xl font-semibold text-white">Orders</h1>
-                      <p className="text-xs md:text-sm text-slate-500 mt-0.5">
-                        {activeOrders.length} active · {paidOrders.length} paid
-                      </p>
+                      <p className="text-xs md:text-sm text-slate-500 mt-0.5">{activeOrders.length} active · {paidOrders.length} paid</p>
                     </div>
                     <button className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-white/5 border border-white/8 px-3 py-1.5 rounded-lg transition-colors">
                       <Download size={12} /> Export
                     </button>
                   </div>
-
-                  {/* Mobile cards */}
                   <div className="md:hidden space-y-2">
                     {filteredOrders.length === 0 ? (
                       <div className="text-center py-16 text-slate-500">
                         <ShoppingBag size={28} className="mx-auto mb-3 opacity-30" />
                         <p className="text-sm">No orders</p>
                       </div>
-                    ) : (
-                      filteredOrders.map(o => {
-                        const cfg  = STATUS_CONFIG[o.status] ?? STATUS_CONFIG.pending;
-                        const Icon = cfg.icon;
-                        return (
-                          <div
-                            key={o.id}
-                            onClick={() => setSelectedRow({ ...o, _type: "order" })}
-                            className="bg-[#13151c] border border-white/5 rounded-xl px-4 py-3.5 flex items-center justify-between active:bg-white/5 transition-colors cursor-pointer"
-                          >
-                            <div className="flex items-center gap-3 min-w-0">
-                              <div className="w-9 h-9 rounded-full bg-white/8 flex items-center justify-center text-[12px] font-bold text-slate-400 uppercase flex-shrink-0">
-                                {(o.name || o.email || "?")[0]}
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-sm font-medium text-slate-200 truncate">{o.name || o.email}</p>
-                                <p className="text-xs text-slate-500 truncate">{o.name ? o.email : fmtDateShort(o.created_at)}</p>
-                              </div>
+                    ) : filteredOrders.map(o => {
+                      const cfg = STATUS_CONFIG[o.status] ?? STATUS_CONFIG.pending;
+                      const Icon = cfg.icon;
+                      return (
+                        <div key={o.id} onClick={() => setSelectedRow({ ...o, _type: "order" })}
+                          className="bg-[#13151c] border border-white/5 rounded-xl px-4 py-3.5 flex items-center justify-between active:bg-white/5 transition-colors cursor-pointer">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-9 h-9 rounded-full bg-white/8 flex items-center justify-center text-[12px] font-bold text-slate-400 uppercase flex-shrink-0">
+                              {(o.name || o.email || "?")[0]}
                             </div>
-                            <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-2">
-                              <span className="font-mono text-sm font-semibold text-slate-100">{fmt$(o.amount_cents || 0)}</span>
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-1 ${cfg.color}`}>
-                                <Icon size={8} /> {cfg.label}
-                              </span>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-slate-200 truncate">{o.name || o.email}</p>
+                              <p className="text-xs text-slate-500 truncate">{o.name ? o.email : fmtDateShort(o.created_at)}</p>
                             </div>
                           </div>
-                        );
-                      })
-                    )}
+                          <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-2">
+                            <span className="font-mono text-sm font-semibold text-slate-100">{fmt$(o.amount_cents || 0)}</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-1 ${cfg.color}`}>
+                              <Icon size={8} /> {cfg.label}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-
-                  {/* Desktop table */}
                   <div className="hidden md:block bg-[#13151c] border border-white/5 rounded-xl overflow-hidden">
                     <table className="w-full">
                       <thead>
@@ -646,7 +469,7 @@ function AdminDashboard() {
                       </thead>
                       <tbody className="divide-y divide-white/3">
                         {filteredOrders.map(o => {
-                          const cfg  = STATUS_CONFIG[o.status] ?? STATUS_CONFIG.pending;
+                          const cfg = STATUS_CONFIG[o.status] ?? STATUS_CONFIG.pending;
                           const Icon = cfg.icon;
                           return (
                             <tr key={o.id} className="hover:bg-white/2 transition-colors group">
@@ -669,10 +492,8 @@ function AdminDashboard() {
                               </td>
                               <td className="px-5 py-4 text-sm text-slate-500">{fmtDate(o.created_at)}</td>
                               <td className="px-5 py-4">
-                                <button
-                                  onClick={() => setSelectedRow({ ...o, _type: "order" })}
-                                  className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-white p-1 rounded transition-all"
-                                >
+                                <button onClick={() => setSelectedRow({ ...o, _type: "order" })}
+                                  className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-white p-1 rounded transition-all">
                                   <MoreHorizontal size={14} />
                                 </button>
                               </td>
@@ -691,22 +512,16 @@ function AdminDashboard() {
                 </div>
               )}
 
-              {/* ── PRODUCTS ──────────────────────────────────────────── */}
+              {/* PRODUCTS */}
               {section === "products" && (
                 <div className="space-y-4 animate-in fade-in duration-300">
                   <div>
                     <h1 className="text-lg md:text-xl font-semibold text-white">Products</h1>
-                    <p className="text-xs md:text-sm text-slate-500 mt-0.5">
-                      {products.length} total · {products.filter(p => p.is_published).length} live
-                    </p>
+                    <p className="text-xs md:text-sm text-slate-500 mt-0.5">{products.length} total · {products.filter(p => p.is_published).length} live</p>
                   </div>
-
-                  {/* Form */}
                   <div className="bg-[#13151c] border border-white/5 rounded-xl p-4 md:p-5">
                     <h2 className="text-sm font-medium text-white mb-4 flex items-center gap-2">
-                      {productForm.editingId
-                        ? <><Edit3 size={14} /> Edit Product</>
-                        : <><Plus size={14} /> New Product</>}
+                      {productForm.editingId ? <><Edit3 size={14} /> Edit Product</> : <><Plus size={14} /> New Product</>}
                     </h2>
                     <div className="space-y-3">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -717,94 +532,63 @@ function AdminDashboard() {
                       </div>
                       <div>
                         <label className="block text-xs text-slate-500 mb-1.5 font-medium">Description</label>
-                        <textarea
-                          value={productForm.description}
+                        <textarea value={productForm.description}
                           onChange={e => setProductForm(f => ({ ...f, description: e.target.value }))}
-                          placeholder="What's included…"
-                          rows={2}
-                          className="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50 resize-none"
-                        />
+                          placeholder="What's included…" rows={2}
+                          className="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50 resize-none" />
                       </div>
                     </div>
                     <div className="flex items-center justify-between mt-4">
-                      <label
-                        className="flex items-center gap-2 cursor-pointer"
-                        onClick={() => setProductForm(f => ({ ...f, is_published: !f.is_published }))}
-                      >
-                        <div
-                          className="relative w-9 rounded-full transition-colors"
-                          style={{
-                            backgroundColor: productForm.is_published ? "#8b5cf6" : "rgba(255,255,255,0.1)",
-                            height: 20,
-                          }}
-                        >
-                          <div
-                            className="w-3.5 h-3.5 bg-white rounded-full absolute top-[2px] transition-all"
-                            style={{ left: productForm.is_published ? 18 : 2 }}
-                          />
+                      <label className="flex items-center gap-2 cursor-pointer"
+                        onClick={() => setProductForm(f => ({ ...f, is_published: !f.is_published }))}>
+                        <div className="relative w-9 rounded-full transition-colors"
+                          style={{ backgroundColor: productForm.is_published ? "#8b5cf6" : "rgba(255,255,255,0.1)", height: 20 }}>
+                          <div className="w-3.5 h-3.5 bg-white rounded-full absolute top-[2px] transition-all"
+                            style={{ left: productForm.is_published ? 18 : 2 }} />
                         </div>
                         <span className="text-sm text-slate-400">Published</span>
                       </label>
                       <div className="flex gap-2">
                         {productForm.editingId && (
-                          <button
-                            onClick={resetProductForm}
-                            className="text-sm text-slate-400 px-3 py-2 rounded-lg border border-white/8 hover:bg-white/5 transition-all"
-                          >
-                            Cancel
-                          </button>
+                          <button onClick={resetProductForm} className="text-sm text-slate-400 px-3 py-2 rounded-lg border border-white/8 hover:bg-white/5 transition-all">Cancel</button>
                         )}
-                        <button
-                          onClick={saveProduct}
-                          className="flex items-center gap-1.5 text-sm font-medium bg-violet-500 hover:bg-violet-400 text-white px-4 py-2 rounded-lg transition-colors"
-                        >
+                        <button onClick={saveProduct}
+                          className="flex items-center gap-1.5 text-sm font-medium bg-violet-500 hover:bg-violet-400 text-white px-4 py-2 rounded-lg transition-colors">
                           <Save size={13} /> {productForm.editingId ? "Save" : "Create"}
                         </button>
                       </div>
                     </div>
                   </div>
-
-                  {/* Mobile cards */}
                   <div className="md:hidden space-y-2">
                     {products.length === 0 ? (
                       <div className="text-center py-12 text-slate-500">
                         <Package size={28} className="mx-auto mb-3 opacity-30" />
                         <p className="text-sm">No products yet</p>
                       </div>
-                    ) : (
-                      products.map(p => (
-                        <div key={p.id} className="bg-[#13151c] border border-white/5 rounded-xl px-4 py-3.5">
-                          <div className="flex items-center justify-between">
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium text-slate-200 truncate">{p.title}</p>
-                              <p className="text-xs text-slate-500 font-mono mt-0.5">{fmt$(p.price_cents)}</p>
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-                              <button
-                                onClick={() => togglePublished(p.id, p.is_published)}
-                                className={`text-[10px] px-2 py-1 rounded-full border flex items-center gap-1 ${
-                                  p.is_published
-                                    ? "text-emerald-400 bg-emerald-400/10 border-emerald-400/20"
-                                    : "text-slate-400 bg-slate-400/10 border-slate-400/20"
-                                }`}
-                              >
-                                {p.is_published ? <Eye size={9} /> : <EyeOff size={9} />}
-                                {p.is_published ? "Live" : "Draft"}
-                              </button>
-                              <button
-                                onClick={() => setSelectedRow({ ...p, _type: "product" })}
-                                className="text-slate-500 hover:text-white p-1 rounded transition-colors"
-                              >
-                                <MoreHorizontal size={15} />
-                              </button>
-                            </div>
+                    ) : products.map(p => (
+                      <div key={p.id} className="bg-[#13151c] border border-white/5 rounded-xl px-4 py-3.5">
+                        <div className="flex items-center justify-between">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-slate-200 truncate">{p.title}</p>
+                            <p className="text-xs text-slate-500 font-mono mt-0.5">{fmt$(p.price_cents)}</p>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                            <button onClick={() => togglePublished(p.id, p.is_published)}
+                              className={`text-[10px] px-2 py-1 rounded-full border flex items-center gap-1 ${
+                                p.is_published ? "text-emerald-400 bg-emerald-400/10 border-emerald-400/20" : "text-slate-400 bg-slate-400/10 border-slate-400/20"
+                              }`}>
+                              {p.is_published ? <Eye size={9} /> : <EyeOff size={9} />}
+                              {p.is_published ? "Live" : "Draft"}
+                            </button>
+                            <button onClick={() => setSelectedRow({ ...p, _type: "product" })}
+                              className="text-slate-500 hover:text-white p-1 rounded transition-colors">
+                              <MoreHorizontal size={15} />
+                            </button>
                           </div>
                         </div>
-                      ))
-                    )}
+                      </div>
+                    ))}
                   </div>
-
-                  {/* Desktop table */}
                   <div className="hidden md:block bg-[#13151c] border border-white/5 rounded-xl overflow-hidden">
                     <table className="w-full">
                       <thead>
@@ -823,14 +607,10 @@ function AdminDashboard() {
                             </td>
                             <td className="px-5 py-4 font-mono text-sm text-slate-200">{fmt$(p.price_cents)}</td>
                             <td className="px-5 py-4">
-                              <button
-                                onClick={() => togglePublished(p.id, p.is_published)}
+                              <button onClick={() => togglePublished(p.id, p.is_published)}
                                 className={`text-[10px] px-2 py-1 rounded-full border flex items-center gap-1.5 w-fit transition-colors ${
-                                  p.is_published
-                                    ? "text-emerald-400 bg-emerald-400/10 border-emerald-400/20"
-                                    : "text-slate-400 bg-slate-400/10 border-slate-400/20"
-                                }`}
-                              >
+                                  p.is_published ? "text-emerald-400 bg-emerald-400/10 border-emerald-400/20" : "text-slate-400 bg-slate-400/10 border-slate-400/20"
+                                }`}>
                                 {p.is_published ? <Eye size={9} /> : <EyeOff size={9} />}
                                 {p.is_published ? "Live" : "Draft"}
                               </button>
@@ -857,7 +637,7 @@ function AdminDashboard() {
                 </div>
               )}
 
-              {/* ── LEADS ─────────────────────────────────────────────── */}
+              {/* LEADS */}
               {section === "leads" && (
                 <div className="space-y-4 animate-in fade-in duration-300">
                   <div className="flex items-center justify-between">
@@ -869,33 +649,27 @@ function AdminDashboard() {
                       <Download size={12} /> Export
                     </button>
                   </div>
-
-                  {/* Mobile cards */}
                   <div className="md:hidden space-y-2">
                     {filteredLeads.length === 0 ? (
                       <div className="text-center py-16 text-slate-500">
                         <Users size={28} className="mx-auto mb-3 opacity-30" />
                         <p className="text-sm">No leads yet</p>
                       </div>
-                    ) : (
-                      filteredLeads.map(l => (
-                        <div key={l.id} className="bg-[#13151c] border border-white/5 rounded-xl px-4 py-3.5 flex items-center justify-between">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-8 h-8 rounded-full bg-white/8 flex items-center justify-center flex-shrink-0">
-                              <Mail size={13} className="text-slate-400" />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-sm text-slate-200 truncate">{l.email}</p>
-                              <p className="text-xs text-slate-500 capitalize">{l.source || "homepage"}</p>
-                            </div>
+                    ) : filteredLeads.map(l => (
+                      <div key={l.id} className="bg-[#13151c] border border-white/5 rounded-xl px-4 py-3.5 flex items-center justify-between">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 rounded-full bg-white/8 flex items-center justify-center flex-shrink-0">
+                            <Mail size={13} className="text-slate-400" />
                           </div>
-                          <span className="text-xs text-slate-500 flex-shrink-0 ml-2">{fmtDateShort(l.created_at)}</span>
+                          <div className="min-w-0">
+                            <p className="text-sm text-slate-200 truncate">{l.email}</p>
+                            <p className="text-xs text-slate-500 capitalize">{l.source || "homepage"}</p>
+                          </div>
                         </div>
-                      ))
-                    )}
+                        <span className="text-xs text-slate-500 flex-shrink-0 ml-2">{fmtDateShort(l.created_at)}</span>
+                      </div>
+                    ))}
                   </div>
-
-                  {/* Desktop table */}
                   <div className="hidden md:block bg-[#13151c] border border-white/5 rounded-xl overflow-hidden">
                     <table className="w-full">
                       <thead>
@@ -933,7 +707,7 @@ function AdminDashboard() {
                 </div>
               )}
 
-              {/* ── SITE EDITOR ───────────────────────────────────────── */}
+              {/* SITE EDITOR */}
               {section === "site" && (
                 <div className="space-y-4 animate-in fade-in duration-300">
                   <div className="flex items-center justify-between">
@@ -942,100 +716,52 @@ function AdminDashboard() {
                       <p className="text-xs md:text-sm text-slate-500 mt-0.5">Edit live site content</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <a
-                        href="/"
-                        target="_blank"
-                        className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-white/5 border border-white/8 px-3 py-1.5 rounded-lg transition-colors"
-                      >
+                      <a href="/" target="_blank"
+                        className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-white/5 border border-white/8 px-3 py-1.5 rounded-lg transition-colors">
                         <ExternalLink size={12} /> Preview
                       </a>
                       {siteEdited && (
-                        <button
-                          onClick={saveSiteConfig}
-                          disabled={siteSaving}
-                          className="flex items-center gap-1.5 text-xs font-medium bg-violet-500 hover:bg-violet-400 disabled:opacity-60 text-white px-3 py-1.5 rounded-lg transition-colors"
-                        >
-                          <Save size={12} />
-                          {siteSaving ? "Saving…" : "Save & Publish"}
+                        <button onClick={saveSiteConfig} disabled={siteSaving}
+                          className="flex items-center gap-1.5 text-xs font-medium bg-violet-500 hover:bg-violet-400 disabled:opacity-60 text-white px-3 py-1.5 rounded-lg transition-colors">
+                          <Save size={12} /> {siteSaving ? "Saving…" : "Save & Publish"}
                         </button>
                       )}
                     </div>
                   </div>
-
                   <div className="bg-[#13151c] border border-white/5 rounded-xl p-4 space-y-4">
-                    <h2 className="text-sm font-medium text-white flex items-center gap-2">
-                      <Edit3 size={14} /> Hero Section
-                    </h2>
-                    <SiteField
-                      label="Headline"
-                      value={siteContent.hero_headline}
-                      rows={2}
-                      onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_headline: v })); setSiteEdited(true); }}
-                    />
-                    <SiteField
-                      label="Subheadline"
-                      value={siteContent.hero_subheadline}
-                      rows={2}
-                      onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_subheadline: v })); setSiteEdited(true); }}
-                    />
-                    <SiteField
-                      label="CTA Button"
-                      value={siteContent.hero_cta}
-                      onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_cta: v })); setSiteEdited(true); }}
-                    />
+                    <h2 className="text-sm font-medium text-white flex items-center gap-2"><Edit3 size={14} /> Hero Section</h2>
+                    <SiteField label="Headline"    value={siteContent.hero_headline}    rows={2} onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_headline: v }));    setSiteEdited(true); }} />
+                    <SiteField label="Subheadline" value={siteContent.hero_subheadline} rows={2} onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_subheadline: v })); setSiteEdited(true); }} />
+                    <SiteField label="CTA Button"  value={siteContent.hero_cta}                  onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_cta: v }));          setSiteEdited(true); }} />
                   </div>
-
                   <div className="bg-[#13151c] border border-white/5 rounded-xl p-4 space-y-4">
-                    <h2 className="text-sm font-medium text-white flex items-center gap-2">
-                      <Tag size={14} /> Pricing
-                    </h2>
+                    <h2 className="text-sm font-medium text-white flex items-center gap-2"><Tag size={14} /> Pricing</h2>
                     <div className="grid grid-cols-2 gap-3">
-                      <SiteField
-                        label="Display Price"
-                        value={siteContent.price_display}
-                        onChange={(v: string) => { setSiteContent(s => ({ ...s, price_display: v })); setSiteEdited(true); }}
-                      />
-                      <SiteField
-                        label="Original Price"
-                        value={siteContent.price_original}
-                        onChange={(v: string) => { setSiteContent(s => ({ ...s, price_original: v })); setSiteEdited(true); }}
-                      />
+                      <SiteField label="Display Price"  value={siteContent.price_display}  onChange={(v: string) => { setSiteContent(s => ({ ...s, price_display: v }));  setSiteEdited(true); }} />
+                      <SiteField label="Original Price" value={siteContent.price_original} onChange={(v: string) => { setSiteContent(s => ({ ...s, price_original: v })); setSiteEdited(true); }} />
                     </div>
-                    <SiteField
-                      label="Guarantee (days)"
-                      value={siteContent.guarantee_days}
-                      onChange={(v: string) => { setSiteContent(s => ({ ...s, guarantee_days: v })); setSiteEdited(true); }}
-                    />
+                    <SiteField label="Guarantee (days)" value={siteContent.guarantee_days} onChange={(v: string) => { setSiteContent(s => ({ ...s, guarantee_days: v })); setSiteEdited(true); }} />
                     <div className="flex items-center justify-between py-2.5 px-3 bg-white/3 rounded-lg">
                       <span className="text-sm text-slate-300">Launch Pricing Active</span>
                       <button
                         onClick={() => { setSiteContent(s => ({ ...s, launch_pricing_active: !s.launch_pricing_active })); setSiteEdited(true); }}
                         className="relative w-10 rounded-full flex-shrink-0 transition-colors"
-                        style={{
-                          backgroundColor: siteContent.launch_pricing_active ? "#8b5cf6" : "rgba(255,255,255,0.1)",
-                          height: 22,
-                        }}
-                      >
-                        <div
-                          className="w-3.5 h-3.5 bg-white rounded-full absolute top-[3px] transition-all"
-                          style={{ left: siteContent.launch_pricing_active ? 22 : 3 }}
-                        />
+                        style={{ backgroundColor: siteContent.launch_pricing_active ? "#8b5cf6" : "rgba(255,255,255,0.1)", height: 22 }}>
+                        <div className="w-3.5 h-3.5 bg-white rounded-full absolute top-[3px] transition-all"
+                          style={{ left: siteContent.launch_pricing_active ? 22 : 3 }} />
                       </button>
                     </div>
                   </div>
-
-                  {/* Inline reminder */}
                   <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-4 flex items-start gap-3">
                     <Bell size={14} className="text-emerald-400 flex-shrink-0 mt-0.5" />
                     <p className="text-xs text-emerald-300/80 leading-relaxed">
-                      Changes are saved to the <code className="font-mono text-emerald-300 bg-emerald-300/10 px-1 rounded">site_config</code> table
-                      and go live immediately. Your public site reads this table on every page load.
+                      Changes are saved to the <code className="font-mono text-emerald-300 bg-emerald-300/10 px-1 rounded">site_config</code> table and go live immediately on the public site.
                     </p>
                   </div>
                 </div>
               )}
 
-              {/* ── SETTINGS ──────────────────────────────────────────── */}
+              {/* SETTINGS */}
               {section === "settings" && (
                 <div className="space-y-4 animate-in fade-in duration-300">
                   <div>
@@ -1043,18 +769,16 @@ function AdminDashboard() {
                     <p className="text-xs md:text-sm text-slate-500 mt-0.5">Account & application</p>
                   </div>
                   <div className="bg-[#13151c] border border-white/5 rounded-xl divide-y divide-white/5">
-                    <SettingsRow label="Admin Email" value={AUTHORIZED_EMAIL}             />
-                    <SettingsRow label="Auth"        value="Google OAuth + Email"          />
-                    <SettingsRow label="Database"    value="Supabase (PostgreSQL)"         />
-                    <SettingsRow label="Payments"    value="Stripe"                        />
-                    <SettingsRow label="Deployment"  value="Cloudflare Workers"            />
+                    <SettingsRow label="Admin Email" value={AUTHORIZED_EMAIL}      />
+                    <SettingsRow label="Auth"        value="Google OAuth + Email"  />
+                    <SettingsRow label="Database"    value="Supabase (PostgreSQL)" />
+                    <SettingsRow label="Payments"    value="Stripe"                />
+                    <SettingsRow label="Deployment"  value="Cloudflare Workers"    />
                   </div>
                   <div className="bg-[#13151c] border border-white/5 rounded-xl p-4">
                     <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-3">Danger Zone</p>
-                    <button
-                      onClick={handleSignOut}
-                      className="flex items-center justify-center gap-2 text-sm text-red-400 border border-red-400/20 bg-red-400/5 hover:bg-red-400/10 px-4 py-2.5 rounded-lg transition-colors w-full"
-                    >
+                    <button onClick={handleSignOut}
+                      className="flex items-center justify-center gap-2 text-sm text-red-400 border border-red-400/20 bg-red-400/5 hover:bg-red-400/10 px-4 py-2.5 rounded-lg transition-colors w-full">
                       <LogOut size={13} /> Sign Out
                     </button>
                   </div>
@@ -1064,25 +788,18 @@ function AdminDashboard() {
           )}
         </main>
 
-        {/* ══ MOBILE BOTTOM NAV ════════════════════════════════════════ */}
-        <nav
-          className="md:hidden fixed bottom-0 left-0 right-0 z-20 bg-[#13151c]/95 backdrop-blur border-t border-white/8 flex items-stretch"
-          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
-        >
+        {/* MOBILE BOTTOM NAV */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-20 bg-[#13151c]/95 backdrop-blur border-t border-white/8 flex items-stretch"
+          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
           {BOTTOM_NAV.map(item => {
-            const Icon   = item.icon;
+            const Icon = item.icon;
             const active = section === item.id;
             return (
-              <button
-                key={item.id}
-                onClick={() => setSection(item.id)}
+              <button key={item.id} onClick={() => setSection(item.id)}
                 className={`flex flex-col items-center justify-center gap-1 py-2.5 flex-1 relative transition-colors min-w-0 ${
                   active ? "text-violet-400" : "text-slate-500"
-                }`}
-              >
-                {active && (
-                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-violet-400 rounded-full" />
-                )}
+                }`}>
+                {active && <div className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-violet-400 rounded-full" />}
                 <div className="relative">
                   <Icon size={19} />
                   {item.id === "orders" && pendingOrders.length > 0 && (
@@ -1091,36 +808,23 @@ function AdminDashboard() {
                     </span>
                   )}
                 </div>
-                <span className="text-[10px] font-medium leading-none truncate w-full text-center px-1">
-                  {item.label}
-                </span>
+                <span className="text-[10px] font-medium leading-none truncate w-full text-center px-1">{item.label}</span>
               </button>
             );
           })}
         </nav>
       </div>
 
-      {/* ══ DETAIL MODAL — bottom sheet on mobile ════════════════════ */}
+      {/* DETAIL MODAL */}
       {selectedRow && (
-        <div
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-6 animate-in fade-in duration-150"
-          onClick={() => setSelectedRow(null)}
-        >
-          <div
-            className="bg-[#13151c] border border-white/10 rounded-t-2xl sm:rounded-2xl p-5 w-full sm:max-w-md shadow-2xl animate-in slide-in-from-bottom duration-200"
-            onClick={e => e.stopPropagation()}
-          >
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-6 animate-in fade-in duration-150"
+          onClick={() => setSelectedRow(null)}>
+          <div className="bg-[#13151c] border border-white/10 rounded-t-2xl sm:rounded-2xl p-5 w-full sm:max-w-md shadow-2xl animate-in slide-in-from-bottom duration-200"
+            onClick={e => e.stopPropagation()}>
             <div className="w-10 h-1 bg-white/15 rounded-full mx-auto mb-5 sm:hidden" />
             <div className="flex items-center justify-between mb-5">
-              <h3 className="font-semibold text-white">
-                {selectedRow._type === "order" ? "Order Details" : "Product Details"}
-              </h3>
-              <button
-                onClick={() => setSelectedRow(null)}
-                className="text-slate-500 hover:text-white p-1 rounded transition-colors"
-              >
-                <X size={16} />
-              </button>
+              <h3 className="font-semibold text-white">{selectedRow._type === "order" ? "Order Details" : "Product Details"}</h3>
+              <button onClick={() => setSelectedRow(null)} className="text-slate-500 hover:text-white p-1 rounded transition-colors"><X size={16} /></button>
             </div>
             <div className="space-y-2.5 mb-6">
               {selectedRow._type === "order" ? (
@@ -1135,34 +839,28 @@ function AdminDashboard() {
                 </>
               ) : (
                 <>
-                  <DetailRow label="Title"     value={selectedRow.title}                               />
-                  <DetailRow label="Slug"      value={selectedRow.slug}                         mono   />
-                  <DetailRow label="Price"     value={fmt$(selectedRow.price_cents)}            mono   />
-                  <DetailRow label="Published" value={selectedRow.is_published ? "Yes" : "No"}         />
-                  <DetailRow label="Stripe ID" value={selectedRow.stripe_price_id || "—"}       mono   />
+                  <DetailRow label="Title"     value={selectedRow.title}                              />
+                  <DetailRow label="Slug"      value={selectedRow.slug}                        mono   />
+                  <DetailRow label="Price"     value={fmt$(selectedRow.price_cents)}           mono   />
+                  <DetailRow label="Published" value={selectedRow.is_published ? "Yes" : "No"}        />
+                  <DetailRow label="Stripe ID" value={selectedRow.stripe_price_id || "—"}      mono   />
                 </>
               )}
             </div>
             <div className="flex gap-2">
               {selectedRow._type === "order" ? (
-                <button
-                  onClick={() => handleArchiveOrder(selectedRow.id)}
-                  className="flex-1 flex items-center justify-center gap-2 text-sm font-medium text-red-400 border border-red-400/20 bg-red-400/5 hover:bg-red-400/10 py-3 rounded-xl transition-colors"
-                >
+                <button onClick={() => handleArchiveOrder(selectedRow.id)}
+                  className="flex-1 flex items-center justify-center gap-2 text-sm font-medium text-red-400 border border-red-400/20 bg-red-400/5 hover:bg-red-400/10 py-3 rounded-xl transition-colors">
                   <Archive size={13} /> Archive Order
                 </button>
               ) : (
                 <>
-                  <button
-                    onClick={() => { startEditProduct(selectedRow); setSelectedRow(null); }}
-                    className="flex-1 flex items-center justify-center gap-2 text-sm font-medium text-violet-400 border border-violet-400/20 bg-violet-400/5 hover:bg-violet-400/10 py-3 rounded-xl transition-colors"
-                  >
+                  <button onClick={() => { startEditProduct(selectedRow); setSelectedRow(null); }}
+                    className="flex-1 flex items-center justify-center gap-2 text-sm font-medium text-violet-400 border border-violet-400/20 bg-violet-400/5 hover:bg-violet-400/10 py-3 rounded-xl transition-colors">
                     <Edit3 size={13} /> Edit
                   </button>
-                  <button
-                    onClick={() => archiveProduct(selectedRow.id)}
-                    className="flex-1 flex items-center justify-center gap-2 text-sm font-medium text-red-400 border border-red-400/20 bg-red-400/5 hover:bg-red-400/10 py-3 rounded-xl transition-colors"
-                  >
+                  <button onClick={() => archiveProduct(selectedRow.id)}
+                    className="flex-1 flex items-center justify-center gap-2 text-sm font-medium text-red-400 border border-red-400/20 bg-red-400/5 hover:bg-red-400/10 py-3 rounded-xl transition-colors">
                     <Archive size={13} /> Delete
                   </button>
                 </>
@@ -1175,7 +873,7 @@ function AdminDashboard() {
   );
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// SUB-COMPONENTS
 
 function KPICard({ label, value, sub, icon: Icon, color }: {
   label: string; value: string | number; sub: string; icon: any; color: string;
@@ -1201,19 +899,13 @@ function KPICard({ label, value, sub, icon: Icon, color }: {
 }
 
 function FormInput({ label, value, onChange, placeholder, type = "text" }: {
-  label: string; value: string; onChange: (v: string) => void;
-  placeholder: string; type?: string;
+  label: string; value: string; onChange: (v: string) => void; placeholder: string; type?: string;
 }) {
   return (
     <div>
       <label className="block text-xs text-slate-500 mb-1.5 font-medium">{label}</label>
-      <input
-        type={type}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50 transition-colors"
-      />
+      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+        className="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50 transition-colors" />
     </div>
   );
 }
@@ -1225,23 +917,15 @@ function SiteField({ label, value, onChange, rows }: {
   return (
     <div>
       <label className="block text-xs text-slate-500 mb-1.5 font-medium">{label}</label>
-      {rows ? (
-        <textarea
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          rows={rows}
-          className={`${base} resize-none`}
-        />
-      ) : (
-        <input value={value} onChange={e => onChange(e.target.value)} className={base} />
-      )}
+      {rows
+        ? <textarea value={value} onChange={e => onChange(e.target.value)} rows={rows} className={`${base} resize-none`} />
+        : <input value={value} onChange={e => onChange(e.target.value)} className={base} />
+      }
     </div>
   );
 }
 
-function DetailRow({ label, value, mono }: {
-  label: string; value: string; mono?: boolean;
-}) {
+function DetailRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex items-start justify-between gap-4">
       <span className="text-xs text-slate-500 font-medium flex-shrink-0 w-20 pt-0.5">{label}</span>
