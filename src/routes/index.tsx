@@ -8,7 +8,7 @@ import { Testimonials } from "@/components/site/Testimonials";
 import { FAQ } from "@/components/site/FAQ";
 import { CTASection } from "@/components/site/CTASection";
 import { LeadCaptureForm } from "@/components/site/LeadCaptureForm";
-import { SITE_CONFIG_FALLBACK, type SiteConfig } from "@/lib/site-config";
+import { SITE_CONFIG_FALLBACK, type SiteConfig } from "@/config/site"; // 💡 Fixed import path here
 
 export const Route = createFileRoute("/")({
   head: () => ({
