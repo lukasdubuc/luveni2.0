@@ -388,13 +388,29 @@ function AdminDashboard() {
               {/* OVERVIEW */}
               {section === "overview" && (
                 <div className="space-y-4 animate-in fade-in duration-300">
-                  <div className="hidden md:block">
-                    <h1 className="text-xl font-semibold text-white">Overview</h1>
-                    <p className="text-sm text-slate-500 mt-0.5">Your business at a glance</p>
+                  <div className="flex items-end justify-between gap-3 flex-wrap">
+                    <div className="hidden md:block">
+                      <h1 className="text-xl font-semibold text-white">Overview</h1>
+                      <p className="text-sm text-slate-500 mt-0.5">Your business at a glance</p>
+                    </div>
+                    <div className="flex items-center gap-2 ml-auto">
+                      <label className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Revenue range</label>
+                      <select
+                        value={revenueRange}
+                        onChange={e => setRevenueRange(e.target.value as any)}
+                        className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-violet-500/50 cursor-pointer"
+                      >
+                        <option value="day"   className="bg-[#13151c]">Today</option>
+                        <option value="week"  className="bg-[#13151c]">Last 7 days</option>
+                        <option value="month" className="bg-[#13151c]">Last 30 days</option>
+                        <option value="year"  className="bg-[#13151c]">Last 12 months</option>
+                        <option value="all"   className="bg-[#13151c]">All time</option>
+                      </select>
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <KPICard label="Revenue"    value={fmt$(totalRevenue)} sub="All time"     icon={DollarSign}  color="violet"  />
-                    <KPICard label="Orders"     value={paidOrders.length}  sub="Completed"    icon={ShoppingBag} color="indigo"  />
+                    <KPICard label="Revenue"    value={fmt$(totalRevenue)} sub={rangeLabel}    icon={DollarSign}  color="violet"  />
+                    <KPICard label="Orders"     value={rangePaidOrders.length}  sub="Completed"    icon={ShoppingBag} color="indigo"  />
                     <KPICard label="Conversion" value={`${convRate}%`}     sub="Paid / total" icon={TrendingUp}  color="emerald" />
                     <KPICard label="Avg Ticket" value={fmt$(avgTicket)}    sub="Per order"    icon={Tag}         color="amber"   />
                   </div>
