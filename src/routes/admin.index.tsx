@@ -19,18 +19,14 @@ const AUTHORIZED_EMAIL = "lukasdubuc@gmail.com";
 export const Route = createFileRoute("/admin/")({
   // beforeLoad is the STRICT gatekeeper. It runs before any component renders.
   // It is the authoritative security boundary for the entire /admin tree.
- // Find this block (around line 24-27):
-    if (!session || error) {
-      throw redirect({
-        to: "/login",
-        search: { redirect: location.href }, // <--- REMOVE THIS LINE
-      });
-    }
+  beforeLoad: async ({ location }) => {
+    const { data: { session }, error } = await supabase.auth.getSession();
 
-// Change it to this:
+    // 1. No session at all → send to login, preserving intended destination
     if (!session || error) {
       throw redirect({
         to: "/login",
+        search: { redirect: location.href },
       });
     }
 
