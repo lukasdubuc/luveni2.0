@@ -72,8 +72,11 @@ function AdminDashboard() {
 
   const [productForm, setProductForm] = useState({
     title: "", description: "", price_cents: "", slug: "",
-    stripe_price_id: "", is_published: true, editingId: null as string | null,
+    image_url: "", source_url: "", fulfillment_notes: "",
+    is_published: true, editingId: null as string | null,
   });
+
+  const [revenueRange, setRevenueRange] = useState<"day" | "week" | "month" | "year" | "all">("all");
 
   const [siteContent, setSiteContent] = useState<SiteConfig>(SITE_CONFIG_FALLBACK);
   const [siteEdited,  setSiteEdited  ] = useState(false);
