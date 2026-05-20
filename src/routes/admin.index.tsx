@@ -168,12 +168,32 @@ function AdminDashboard() {
     setDrawerOpen(false);
   };
 
-  const saveSiteConfig = async () => {
-    setSiteSaving(true);
-    try {
-      const { error } = await supabase
-        .from("site_config")
-        .upsert([{ ...siteContent, id: "main", updated_at: new Date().toISOString() }] as any);
+ const saveSiteConfig = async () => {
+  setSiteSaving(true);
+  try {
+    // 1. First, check what row ID your database is actually using
+    const { data: activeRow } = await supabase.from("site_config").select("id").limit(1).maybeSingle();
+    
+    // 2. Use that existing ID so we don't accidentally create a mismatch row
+    const targetId = activeRow?.id || "main";
+
+    const { error } = await supabase
+      .from("site_config")
+      .upsert([{ 
+        ...siteContent, 
+        id: targetId, 
+        updated_at: new Date().toISOString() 
+      }] as any);
+
+    if (error) throw error;
+    toast.success("Site content saved and live.");
+    setSiteEdited(false);
+  } catch (e: any) {
+    toast.error(e?.message ?? "Failed to save site content");
+  } finally {
+    setSiteSaving(false);
+  }
+};
       if (error) throw error;
       toast.success("Site content saved and live.");
       setSiteEdited(false);
