@@ -194,15 +194,6 @@ function AdminDashboard() {
     setSiteSaving(false);
   }
 };
-      if (error) throw error;
-      toast.success("Site content saved and live.");
-      setSiteEdited(false);
-    } catch (e: any) {
-      toast.error(e?.message ?? "Failed to save site content");
-    } finally {
-      setSiteSaving(false);
-    }
-  };
 
   const handleSignOut = async () => { await supabase.auth.signOut(); window.location.href = "/login"; };
   const navigateTo = (s: NavSection) => { setSection(s); setDrawerOpen(false); };
