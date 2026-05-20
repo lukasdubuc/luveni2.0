@@ -6,6 +6,7 @@ INSERT INTO public.products (
   slug,
   description,
   bullet_points,
+  variants,
   price_cents,
   currency,
   image_urls,
@@ -24,6 +25,11 @@ INSERT INTO public.products (
     'Lifetime updates included with your purchase',
     'Friendly human support, usually replies within 24 hours'
   ],
+  '[
+    {"sku": "starter-black-s", "stock": 12, "price_cents": 4900, "attributes": {"color": "Black", "size": "S"}},
+    {"sku": "starter-black-m", "stock": 8, "price_cents": 4900, "attributes": {"color": "Black", "size": "M"}},
+    {"sku": "starter-white-m", "stock": 0, "price_cents": 4900, "attributes": {"color": "White", "size": "M"}}
+  ]'::jsonb,
   4900,
   'usd',
   ARRAY['https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=80'],

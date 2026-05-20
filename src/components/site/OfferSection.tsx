@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Check, ArrowRight } from "lucide-react";
 import { offer, SITE_CONFIG_FALLBACK, type SiteConfig } from "@/config/site";
 
-export function OfferSection({ products, siteConfig }: { products?: any[]; siteConfig?: SiteConfig }) {
+export function OfferSection({ products, siteConfig, checkoutHref, checkoutDisabled }: { products?: any[]; siteConfig?: SiteConfig; checkoutHref?: string; checkoutDisabled?: boolean }) {
   const cfg = siteConfig ?? SITE_CONFIG_FALLBACK;
   const activeOffer = products && products.length > 0 ? products[0] : null;
   const description = activeOffer?.description ?? offer.shortPitch;
@@ -11,6 +11,7 @@ export function OfferSection({ products, siteConfig }: { products?: any[]; siteC
     : activeOffer?.description
     ? activeOffer.description.split('\n').map((line: string) => line.trim()).filter(Boolean)
     : offer.bullets;
+  const checkoutPath = checkoutHref ?? (activeOffer ? `/checkout?productId=${encodeURIComponent(activeOffer.id)}` : "/checkout");
 
   return (
     <section
@@ -67,12 +68,13 @@ export function OfferSection({ products, siteConfig }: { products?: any[]; siteC
               </p>
 
               <Link
-                to={activeOffer ? `/checkout?productId=${encodeURIComponent(activeOffer.id)}` : "/checkout"}
-                className="group mt-8 inline-flex w-full items-center justify-center gap-2 rounded-md px-6 py-3.5 text-sm font-medium text-accent-foreground transition-transform hover:-translate-y-0.5"
+                to={checkoutPath}
+                className={`group mt-8 inline-flex w-full items-center justify-center gap-2 rounded-md px-6 py-3.5 text-sm font-medium text-accent-foreground transition-transform hover:-translate-y-0.5 ${checkoutDisabled ? "pointer-events-none opacity-60" : ""}`}
                 style={{
                   backgroundImage: "var(--gradient-accent)",
                   boxShadow: "var(--shadow-glow)",
                 }}
+                aria-disabled={checkoutDisabled}
               >
                 Get started now
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />

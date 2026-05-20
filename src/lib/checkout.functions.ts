@@ -6,6 +6,7 @@ const Schema = z.object({
   email: z.string().trim().email().max(255),
   name: z.string().trim().min(1).max(120),
   productId: z.string().uuid().optional(),
+  variantSku: z.string().optional(),
 });
 
 export const createCheckout = createServerFn({ method: "POST" })
@@ -27,15 +28,27 @@ export const createCheckout = createServerFn({ method: "POST" })
     if (data.productId) {
       const { data: product } = await supabaseAdmin
         .from("products")
-        .select("id,title,price_cents,currency,is_published")
+        .select("id,title,price_cents,currency,is_published,variants")
         .eq("id", data.productId)
         .maybeSingle();
       if (!product || !product.is_published) {
         return { ok: false as const, error: "Product unavailable." };
       }
-      amountCents = product.price_cents;
+
+      let selectedVariant: any | undefined;
+      if (data.variantSku && Array.isArray(product.variants)) {
+        selectedVariant = product.variants.find((variant: any) => variant.sku === data.variantSku);
+      }
+
+      amountCents = selectedVariant?.price_cents ?? product.price_cents;
       currency = product.currency.toLowerCase();
-      productName = product.title;
+      productName = selectedVariant
+        ? `${product.title} (${selectedVariant.sku})`
+        : product.title;
+
+      if (selectedVariant?.stock != null && selectedVariant.stock <= 0) {
+        return { ok: false as const, error: "Selected variant is sold out." };
+      }
     } else {
       amountCents = offer.priceCents;
       currency = offer.currency.toLowerCase();
@@ -57,7 +70,10 @@ export const createCheckout = createServerFn({ method: "POST" })
         status: "pending",
         provider: "stripe",
         product_id: data.productId ?? null,
-        metadata: { productName },
+        metadata: {
+          productName,
+          variantSku: data.variantSku ?? null,
+        },
       })
       .select("id")
       .single();

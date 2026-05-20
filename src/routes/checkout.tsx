@@ -10,7 +10,9 @@ import { createCheckout } from "@/lib/checkout.functions";
 
 export const Route = createFileRoute("/checkout")({
   loader: async ({ location }) => {
-    const productId = new URLSearchParams(location.searchStr ?? "").get("productId");
+    const params = new URLSearchParams(location.searchStr ?? "");
+    const productId = params.get("productId");
+    const variantSku = params.get("variantSku");
 
     if (productId) {
       const { data: product } = await supabase
@@ -21,7 +23,7 @@ export const Route = createFileRoute("/checkout")({
         .maybeSingle();
 
       if (product) {
-        return { product };
+        return { product, variantSku };
       }
     }
 
@@ -31,7 +33,7 @@ export const Route = createFileRoute("/checkout")({
       .eq("is_published", true)
       .order("created_at", { ascending: false })
       .limit(1);
-    return { product: products?.[0] ?? null };
+    return { product: products?.[0] ?? null, variantSku: null };
   },
   head: () => ({
     meta: [
@@ -51,15 +53,20 @@ const FormSchema = z.object({
 function Checkout() {
   const navigate = useNavigate();
   const submit = useServerFn(createCheckout);
-  const { product } = Route.useLoaderData();
+  const { product, variantSku } = Route.useLoaderData();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const displayName = product?.title ?? offer.name;
-  const displayPrice = product ? `$${(product.price_cents / 100).toFixed(0)}` : offer.price;
+  const selectedVariant = product?.variants?.find((variant: any) => variant.sku === variantSku);
+  const displayName = selectedVariant?.sku ? `${product?.title} (${selectedVariant.sku})` : product?.title ?? offer.name;
+  const displayPrice = product
+    ? `$${((selectedVariant?.price_cents ?? product.price_cents) / 100).toFixed(0)}`
+    : offer.price;
   const displayOriginal = offer.originalPrice;
-  const displayBullets: string[] = product?.bullet_points?.length
+  const displayBullets: string[] = selectedVariant?.bullet_points?.length
+    ? selectedVariant.bullet_points
+    : product?.bullet_points?.length
     ? product.bullet_points
     : product?.description
     ? product.description.split("\n").map((b: string) => b.trim()).filter(Boolean)
@@ -79,6 +86,7 @@ function Checkout() {
           name: parsed.data.name,
           email: parsed.data.email,
           productId: product?.id,
+          variantSku: selectedVariant?.sku,
         },
       });
       if (!res?.ok) {

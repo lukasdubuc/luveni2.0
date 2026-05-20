@@ -5,6 +5,7 @@ import { site } from "@/config/site";
 
 const navLinks = [
   { to: "/", label: "Home" },
+  { to: "/shop", label: "Shop" },
   { to: "/offer", label: "Offer" },
   { to: "/about", label: "About" },
   { to: "/contact", label: "Contact" },

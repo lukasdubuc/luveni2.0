@@ -98,6 +98,7 @@ export type Database = {
           description: string | null
           fulfillment_notes: string | null
           bullet_points: string[]
+          variants: Json | null
           fulfillment_provider: string | null
           external_sku: string | null
           id: string
@@ -115,6 +116,7 @@ export type Database = {
           description?: string | null
           fulfillment_notes?: string | null
           bullet_points?: string[]
+          variants?: Json | null
           fulfillment_provider?: string | null
           external_sku?: string | null
           id?: string
@@ -132,6 +134,7 @@ export type Database = {
           description?: string | null
           fulfillment_notes?: string | null
           bullet_points?: string[]
+          variants?: Json | null
           fulfillment_provider?: string | null
           external_sku?: string | null
           id?: string

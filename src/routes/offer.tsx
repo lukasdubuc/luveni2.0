@@ -1,10 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { OfferSection } from "@/components/site/OfferSection";
 import { Testimonials } from "@/components/site/Testimonials";
 import { FAQ } from "@/components/site/FAQ";
 import { CTASection } from "@/components/site/CTASection";
 import { supabase } from "@/integrations/supabase/client";
 import { offer } from "@/config/site";
+
+type ProductVariant = {
+  sku: string;
+  stock?: number;
+  price_cents?: number;
+  external_sku?: string;
+  fulfillment_provider?: string;
+  attributes?: Record<string, string>;
+};
 
 export const Route = createFileRoute("/offer")({
   loader: async ({ params: { slug } }) => {
@@ -47,6 +57,67 @@ export const Route = createFileRoute("/offer")({
 function OfferPage() {
   const { product } = Route.useLoaderData();
   const products = product ? [product] : [];
+  const variants = Array.isArray(product?.variants) ? (product.variants as ProductVariant[]) : [];
+  const optionKeys = useMemo(
+    () => Array.from(new Set(variants.flatMap((variant) => Object.keys(variant.attributes ?? {})))),
+    [variants],
+  );
+
+  const [selection, setSelection] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!product) {
+      setSelection({});
+      return;
+    }
+
+    if (variants.length === 0) {
+      setSelection({});
+      return;
+    }
+
+    const defaultSelection: Record<string, string> = {};
+    optionKeys.forEach((key) => {
+      const values = Array.from(
+        new Set(variants.map((variant) => variant.attributes?.[key]).filter(Boolean)),
+      ) as string[];
+      if (values.length > 0) defaultSelection[key] = values[0];
+    });
+
+    setSelection((current) => (Object.keys(current).length ? current : defaultSelection));
+  }, [product?.id, optionKeys.join("|"), variants]);
+
+  const selectedVariant = useMemo(() => {
+    if (variants.length === 0) return undefined;
+    return variants.find((variant) =>
+      optionKeys.every((key) => variant.attributes?.[key] === selection[key]),
+    );
+  }, [variants, optionKeys, selection]);
+
+  const buildOptionAvailability = (option: string, value: string) => {
+    if (variants.length === 0) return false;
+    return variants.some((variant) => {
+      if (variant.attributes?.[option] !== value) return false;
+      if ((variant.stock ?? 0) <= 0) return false;
+      return optionKeys.every((key) => {
+        if (key === option) return true;
+        return !selection[key] || variant.attributes?.[key] === selection[key];
+      });
+    });
+  };
+
+  const selectedPrice = selectedVariant?.price_cents ?? product?.price_cents;
+  const checkoutHref = product
+    ? `/checkout?productId=${encodeURIComponent(product.id)}${selectedVariant?.sku ? `&variantSku=${encodeURIComponent(selectedVariant.sku)}` : ""}`
+    : "/checkout";
+  const checkoutDisabled = variants.length > 0 && !selectedVariant;
+  const stockMessage = selectedVariant
+    ? (selectedVariant.stock ?? 0) > 0
+      ? `In stock · ${selectedVariant.stock} available`
+      : "Sold out"
+    : variants.length > 0
+      ? "Select your variant"
+      : "In stock";
 
   return (
     <>
@@ -61,7 +132,82 @@ function OfferPage() {
           </p>
         </div>
       </section>
-      <OfferSection products={products} />
+
+      {product && variants.length > 0 && (
+        <section className="bg-background py-10">
+          <div className="mx-auto max-w-5xl px-4">
+            <div className="rounded-3xl border border-border bg-white p-6 shadow-sm">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.3em] text-accent">Product variants</p>
+                  <p className="mt-2 text-sm text-muted-foreground">Choose from the supplier’s available options.</p>
+                </div>
+                <div className="text-right text-sm font-medium text-foreground">
+                  {selectedPrice != null ? `$${(selectedPrice / 100).toFixed(2)}` : "Price pending"}
+                  <div className="text-xs text-muted-foreground">{stockMessage}</div>
+                </div>
+              </div>
+
+              <div className="mt-8 space-y-6">
+                {optionKeys.map((option) => {
+                  const values = Array.from(
+                    new Set(variants.map((variant) => variant.attributes?.[option]).filter(Boolean)),
+                  ) as string[];
+                  return (
+                    <div key={option} className="space-y-3">
+                      <div className="flex items-center justify-between text-sm font-semibold text-foreground uppercase tracking-[0.2em]">
+                        <span>{option}</span>
+                        <span className="text-xs text-muted-foreground">{selection[option] || "Choose"}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-3">
+                        {values.map((value) => {
+                          const isSelected = selection[option] === value;
+                          const available = buildOptionAvailability(option, value);
+                          return (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() => setSelection((current) => ({ ...current, [option]: value }))}
+                              disabled={!available}
+                              className={`rounded-full border px-4 py-2 text-sm transition ${isSelected ? "border-black bg-black text-white" : "border-border bg-white text-foreground hover:border-black"} ${!available ? "cursor-not-allowed opacity-50" : ""}`}
+                            >
+                              {value}
+                              {!available && " · Sold out"}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-muted-foreground">
+                  {selectedVariant?.fulfillment_provider
+                    ? `Fulfilled by ${selectedVariant.fulfillment_provider}`
+                    : product.fulfillment_provider
+                      ? `Fulfilled by ${product.fulfillment_provider}`
+                      : "Fulfillment provider not set"}
+                </p>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <a
+                    href={checkoutHref}
+                    className={`inline-flex items-center justify-center rounded-full bg-black px-6 py-3 text-sm font-semibold text-white transition ${checkoutDisabled ? "pointer-events-none opacity-50" : "hover:-translate-y-0.5"}`}
+                  >
+                    {checkoutDisabled ? "Select a variant" : selectedVariant ? "Checkout this variant" : "Checkout"}
+                  </a>
+                  {selectedVariant?.sku && (
+                    <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground">SKU: {selectedVariant.sku}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <OfferSection products={products} checkoutHref={checkoutHref} checkoutDisabled={checkoutDisabled} />
       <Testimonials />
       <FAQ />
       <CTASection />

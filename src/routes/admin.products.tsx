@@ -22,11 +22,22 @@ function ProductsPage() {
 
   const saveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { id, ...payload } = editing;
-    
+    const { id, variantsText, ...payload } = editing;
+    let variants = [];
+
+    if (typeof variantsText === "string" && variantsText.trim()) {
+      try {
+        variants = JSON.parse(variantsText);
+      } catch {
+        toast.error("Invalid variant JSON");
+        return;
+      }
+    }
+
+    const payloadWithVariants = { ...payload, variants };
     const { error } = id 
-      ? await supabase.from("products").update(payload).eq("id", id)
-      : await supabase.from("products").insert([payload]);
+      ? await supabase.from("products").update(payloadWithVariants).eq("id", id)
+      : await supabase.from("products").insert([payloadWithVariants]);
 
     if (error) {
       toast.error("DATA_SYNC_FAILURE");
@@ -72,6 +83,7 @@ function ProductsPage() {
             fulfillment_provider: "",
             external_sku: "",
             bullet_points: [],
+            variantsText: "[]",
             is_published: false,
           })}
           className="text-[10px] font-bold border border-black px-6 py-2 uppercase hover:bg-black hover:text-white transition-all"
@@ -99,12 +111,15 @@ function ProductsPage() {
                   {p.is_published ? 'Live' : 'Draft'}
                 </span>
               </div>
-              <p className="text-sm text-muted-foreground mb-4">
-                {p.bullet_points?.length ? `${p.bullet_points.length} bullet points` : "No bullet points yet"}
-              </p>
-              <div className="text-3xl font-light italic mb-6 tracking-tighter">
-                ${(p.price_cents / 100).toFixed(2)}
-              </div>
+<p className="text-sm text-muted-foreground mb-1">
+                    {p.bullet_points?.length ? `${p.bullet_points.length} bullet points` : "No bullet points yet"}
+                  </p>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    {p.variants?.length ? `${p.variants.length} variants available` : "No variants defined"}
+                  </p>
+                  <div className="text-3xl font-light italic mb-6 tracking-tighter">
+                    ${(p.price_cents / 100).toFixed(2)}
+                  </div>
 
               <div className="flex gap-4 border-t border-black/5 pt-4">
                 <button onClick={() => setEditing({
@@ -114,6 +129,7 @@ function ProductsPage() {
                   fulfillment_provider: p.fulfillment_provider ?? "",
                   external_sku: p.external_sku ?? "",
                   bullet_points: p.bullet_points ?? [],
+                  variantsText: JSON.stringify(p.variants ?? [], null, 2),
                 })} className="text-[10px] font-bold uppercase opacity-40 hover:opacity-100 flex items-center gap-1">
                   <Pencil size={12} /> Edit
                 </button>
@@ -186,6 +202,18 @@ function ProductsPage() {
                       .filter(Boolean),
                   })}
                 />
+              </div>
+              <div className="col-span-2">
+                <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Variants JSON</label>
+                <textarea
+                  rows={6}
+                  className="w-full border border-black/10 bg-white p-3 text-sm outline-none font-mono"
+                  value={editing.variantsText ?? "[]"}
+                  onChange={e => setEditing({ ...editing, variantsText: e.target.value })}
+                />
+                <p className="mt-2 text-[10px] text-muted-foreground">
+                  Provide a JSON array of variants, for example: <span className="font-mono">{"[{ \"sku\":\"black-s\",\"stock\":10,\"price_cents\":4900,\"attributes\":{\"color\":\"Black\",\"size\":\"S\"}}]"}</span>
+                </p>
               </div>
               <div>
                 <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Fulfillment Provider</label>
