@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Hero } from "@/components/site/Hero";
 import { Benefits } from "@/components/site/Benefits";
@@ -65,7 +65,6 @@ function Home() {
   const { products, siteConfig } = Route.useLoaderData();
   const navigate = useNavigate();
   const router = useRouter();
-  const [range, setRange] = useState<"year" | "month" | "week" | "day">("year");
 
   useEffect(() => {
     const refresh = () => router.invalidate();
@@ -80,20 +79,6 @@ function Home() {
     };
   }, [router]);
 
-  const rangeCounts = useMemo(() => {
-    const days = { year: 365, month: 30, week: 7, day: 1 };
-    const cutoff = new Date(Date.now() - days[range] * 24 * 60 * 60 * 1000);
-    const recentProducts = products.filter((product: any) => {
-      if (!product?.created_at) return false;
-      const created = new Date(product.created_at);
-      return created >= cutoff;
-    });
-    return {
-      recentProducts: recentProducts.length,
-      totalPublished: products.filter((product: any) => product?.is_published).length,
-      latestProduct: products[0]?.title || "No products yet",
-    };
-  }, [products, range]);
 
   useEffect(() => {
     const intent = sessionStorage.getItem("active_login_intent");
