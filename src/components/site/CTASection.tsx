@@ -1,8 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
-import { offer } from "@/config/site";
+import { SITE_CONFIG_FALLBACK, type SiteConfig } from "@/config/site";
 
-export function CTASection() {
+export function CTASection({ siteConfig }: { siteConfig?: SiteConfig }) {
+  const cfg = siteConfig ?? SITE_CONFIG_FALLBACK;
   return (
     <section className="border-t border-border bg-background">
       <div className="mx-auto max-w-6xl px-6 py-24 md:py-32">
@@ -20,7 +21,7 @@ export function CTASection() {
               Ready when <span className="serif-italic text-accent">you</span> are.
             </h2>
             <p className="mx-auto mt-5 max-w-xl text-sm text-muted-foreground md:text-base">
-              One small decision today. {offer.guarantee}
+              One small decision today. {cfg.guarantee_days}-day money-back guarantee.
             </p>
             <Link
               to="/checkout"
@@ -30,7 +31,7 @@ export function CTASection() {
                 boxShadow: "var(--shadow-glow)",
               }}
             >
-              Get instant access — {offer.price}
+              {cfg.hero_cta}
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
