@@ -553,9 +553,10 @@ function AdminDashboard() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <FormInput label="Title"           value={productForm.title}           onChange={(v: string) => setProductForm(f => ({ ...f, title: v }))}           placeholder="Starter Package" />
                         <FormInput label="Price (USD)"     value={productForm.price_cents}     onChange={(v: string) => setProductForm(f => ({ ...f, price_cents: v }))}     placeholder="49.00" type="number" />
-                        <FormInput label="Stripe Price ID" value={productForm.stripe_price_id} onChange={(v: string) => setProductForm(f => ({ ...f, stripe_price_id: v }))} placeholder="price_xxxx" />
                         <FormInput label="Slug"            value={productForm.slug}            onChange={(v: string) => setProductForm(f => ({ ...f, slug: v }))}            placeholder="starter-package" />
+                        <FormInput label="Source URL"      value={productForm.source_url}      onChange={(v: string) => setProductForm(f => ({ ...f, source_url: v }))}      placeholder="https://…" />
                       </div>
+                      <FormInput label="Image URL(s) — comma-separated" value={productForm.image_url} onChange={(v: string) => setProductForm(f => ({ ...f, image_url: v }))} placeholder="https://cdn.example.com/photo.jpg" />
                       <div>
                         <label className="block text-xs text-slate-500 mb-1.5 font-medium">Description</label>
                         <textarea value={productForm.description}
@@ -563,6 +564,21 @@ function AdminDashboard() {
                           placeholder="What's included…" rows={2}
                           className="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50 resize-none" />
                       </div>
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1.5 font-medium">Fulfillment Notes</label>
+                        <textarea value={productForm.fulfillment_notes}
+                          onChange={e => setProductForm(f => ({ ...f, fulfillment_notes: e.target.value }))}
+                          placeholder="Internal notes (not shown publicly)…" rows={2}
+                          className="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50 resize-none" />
+                      </div>
+                      {productForm.image_url && (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {productForm.image_url.split(",").map(u => u.trim()).filter(Boolean).map((u, i) => (
+                            <img key={i} src={u} alt="" className="h-16 w-16 object-cover rounded-md border border-white/10" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     </div>
                     <div className="flex items-center justify-between mt-4">
                       <label className="flex items-center gap-2 cursor-pointer"
