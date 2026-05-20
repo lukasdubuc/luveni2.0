@@ -656,7 +656,7 @@ function AdminDashboard() {
                                 {p.is_published ? "Live" : "Draft"}
                               </button>
                             </td>
-                            <td className="px-5 py-4 font-mono text-xs text-slate-500">{p.stripe_price_id || "—"}</td>
+                            <td className="px-5 py-4">{Array.isArray(p.image_urls) && p.image_urls[0] ? <img src={p.image_urls[0]} alt="" className="h-9 w-9 object-cover rounded border border-white/10" /> : <span className="text-xs text-slate-600">—</span>}</td>
                             <td className="px-5 py-4 text-sm text-slate-500">{fmtDate(p.created_at)}</td>
                             <td className="px-5 py-4">
                               <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all">
