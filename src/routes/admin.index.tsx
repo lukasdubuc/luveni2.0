@@ -226,7 +226,17 @@ const [siteSaving, setSiteSaving] = useState(false);
     try {
       const { error } = await supabase
         .from("site_config")
-        .upsert([{ ...siteContent, id: "main", updated_at: new Date().toISOString() }] as any);
+          .upsert([{
+          hero_headline: siteContent.hero_headline,
+          hero_subheadline: siteContent.hero_subheadline,
+          hero_cta: siteContent.hero_cta,
+          price_display: siteContent.price_display,
+          price_original: siteContent.price_original,
+          launch_pricing_active: siteContent.launch_pricing_active,
+          guarantee_days: siteContent.guarantee_days,
+          id: "main",
+          updated_at: new Date().toISOString(),
+        }] as any);
       if (error) throw error;
       toast.success("Site content saved and live.");
       setSiteEdited(false);
