@@ -48,11 +48,13 @@ export function OfferSection({ products, siteConfig }: { products?: any[]; siteC
               </p>
               <div className="mt-6 flex items-baseline gap-3">
                 <span className="font-display text-7xl tracking-tight">
-                  ${activeOffer ? (activeOffer.price_cents / 100).toFixed(0) : offer.price.replace("$", "")}
+                  {activeOffer ? `$${(activeOffer.price_cents / 100).toFixed(0)}` : cfg.price_display}
                 </span>
-                <span className="text-sm text-muted-foreground line-through">
-                  {offer.originalPrice}
-                </span>
+                {cfg.launch_pricing_active && cfg.price_original && (
+                  <span className="text-sm text-muted-foreground line-through">
+                    {cfg.price_original}
+                  </span>
+                )}
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
                 One-time. Lifetime updates included.
