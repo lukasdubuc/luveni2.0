@@ -634,7 +634,7 @@ function AdminDashboard() {
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-white/5">
-                          {["Product", "Price", "Status", "Stripe ID", "Created", ""].map(h => (
+                          {["Product", "Price", "Status", "Image", "Created", ""].map(h => (
                             <th key={h} className="text-left px-5 py-3 text-[11px] font-medium text-slate-500 uppercase tracking-wider">{h}</th>
                           ))}
                         </tr>
