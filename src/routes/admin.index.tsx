@@ -17,19 +17,22 @@ const AUTHORIZED_EMAIL = "lukasdubuc@gmail.com";
 
 // ─── Route definition ────────────────────────────────────────────────────────
 export const Route = createFileRoute("/admin/")({
-  // beforeLoad is the STRICT gatekeeper. It runs before any component renders.
-  // It is the authoritative security boundary for the entire /admin tree.
-  beforeLoad: async ({ location }) => {
+ beforeLoad: async () => {
     const { data: { session }, error } = await supabase.auth.getSession();
 
-    // 1. No session at all → send to login, preserving intended destination
+    // 1. No session at all → send to login cleanly
     if (!session || error) {
       throw redirect({
         to: "/login",
-        search: { redirect: location.href },
       });
     }
 
+    // 2. Wrong email → sign them out silently and eject to login
+    if (session.user.email?.toLowerCase() !== AUTHORIZED_EMAIL.toLowerCase()) {
+      await supabase.auth.signOut();
+      throw redirect({ to: "/login" });
+    }
+  },
     // 2. Wrong email → sign them out silently and eject to login
     //    We sign out here so stale tokens from a different Google account
     //    can never be replayed to gain access.
