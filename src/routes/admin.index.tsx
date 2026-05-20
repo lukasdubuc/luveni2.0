@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { SITE_CONFIG_FALLBACK, type SiteConfig } from "@/lib/site-config";
 import * as RadixAccordion from "@radix-ui/react-accordion";
-import * as RadixAccordion from "@radix-ui/react-accordion";
 
 const AUTHORIZED_EMAIL = "lukasdubuc@gmail.com";
 
@@ -126,7 +125,7 @@ const [siteSaving, setSiteSaving] = useState(false);
       else console.warn("[Admin] leads fetch failed");
 
       if (cRes.status === "fulfilled" && !cRes.value.error && cRes.value.data) {
-        setSiteContent(prev => ({ ...prev, ...cRes.value.data }));
+        setSiteContent(prev => ({ ...prev, ...Object.fromEntries(Object.entries(cRes.value.data).filter(([_, v]) => v !== null)) }));
       }
     } finally {
       setLoading(false);
