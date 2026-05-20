@@ -62,7 +62,7 @@ const NAV_ITEMS: { id: NavSection; label: string; icon: any }[] = [
 
 const BOTTOM_NAV = NAV_ITEMS.slice(0, 5);
 
-const STATUS_CONFIG: Record
+const STATUS_CONFIG: Record<
   string,
   { color: string; icon: any; label: string }
 > = {
@@ -250,8 +250,6 @@ function AdminDashboard() {
   };
 
   // ── Site config save ───────────────────────────────────────────────────────
-  // Upsert into site_config using a well-known singleton row ID ("main").
-  // If your table doesn't have an "id" column yet, swap to .upsert([{ ...siteContent, id: "main" }]).
   const saveSiteConfig = async () => {
     setSiteSaving(true);
     try {
@@ -336,7 +334,7 @@ function AdminDashboard() {
           })}
         </nav>
         <div className="p-2 border-t border-white/5 space-y-0.5">
-          
+          <a
             href="/"
             target="_blank"
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-slate-200 transition-all"
@@ -402,7 +400,7 @@ function AdminDashboard() {
               })}
             </nav>
             <div className="p-3 border-t border-white/5 space-y-1">
-              
+              <a
                 href="/"
                 target="_blank"
                 className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-slate-200 transition-all"
@@ -939,7 +937,7 @@ function AdminDashboard() {
                       <p className="text-xs md:text-sm text-slate-500 mt-0.5">Edit live site content</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      
+                      <a
                         href="/"
                         target="_blank"
                         className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-white/5 border border-white/8 px-3 py-1.5 rounded-lg transition-colors"
@@ -1021,7 +1019,7 @@ function AdminDashboard() {
                     </div>
                   </div>
 
-                  {/* Inline reminder — replaced the dead-end warning with an actionable note */}
+                  {/* Inline reminder */}
                   <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-4 flex items-start gap-3">
                     <Bell size={14} className="text-emerald-400 flex-shrink-0 mt-0.5" />
                     <p className="text-xs text-emerald-300/80 leading-relaxed">
