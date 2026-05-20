@@ -5,6 +5,10 @@ import { offer, SITE_CONFIG_FALLBACK, type SiteConfig } from "@/config/site";
 export function OfferSection({ products, siteConfig }: { products?: any[]; siteConfig?: SiteConfig }) {
   const cfg = siteConfig ?? SITE_CONFIG_FALLBACK;
   const activeOffer = products && products.length > 0 ? products[0] : null;
+  const description = activeOffer?.description ?? offer.shortPitch;
+  const bullets = activeOffer?.description
+    ? activeOffer.description.split('\n').map((line: string) => line.trim()).filter(Boolean)
+    : offer.bullets;
 
   return (
     <section
@@ -20,9 +24,9 @@ export function OfferSection({ products, siteConfig }: { products?: any[]; siteC
             <h2 className="mt-4 text-4xl tracking-tight md:text-5xl">
               {activeOffer?.title || offer.name}
             </h2>
-            <p className="mt-5 max-w-md text-muted-foreground">{offer.shortPitch}</p>
+            <p className="mt-5 max-w-md text-muted-foreground">{description}</p>
             <ul className="mt-8 space-y-4">
-              {offer.bullets.map((b) => (
+              {bullets.map((b: string) => (
                 <li key={b} className="flex items-start gap-3 text-sm">
                   <span className="mt-0.5 grid h-5 w-5 flex-none place-items-center rounded-full bg-accent/15 text-accent">
                     <Check className="h-3 w-3" />
