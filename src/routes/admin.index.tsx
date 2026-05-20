@@ -761,29 +761,23 @@ const [siteSaving, setSiteSaving] = useState(false);
                 </div>
               )}
 
-              {/* SITE EDITOR */}
-              {section === "site" && (
-                <div className="space-y-4 animate-in fade-in duration-300">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h1 className="text-lg md:text-xl font-semibold text-white">Website Editor</h1>
-                      <p className="text-xs md:text-sm text-slate-500 mt-0.5">Edit live site content</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      
-                        href="/"
-                        target="_blank"
-                        className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-white/5 border border-white/8 px-3 py-1.5 rounded-lg transition-colors"
+            <div className="flex items-center gap-2">
+                    <a
+                      href="/"
+                      target="_blank"
+                      className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-white/5 border border-white/8 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      <ExternalLink size={12} /> Preview
+                    </a>
+                    {siteEdited && (
+                      <button 
+                        onClick={saveSiteConfig} 
+                        disabled={siteSaving}
+                        className="flex items-center gap-1.5 text-xs font-medium bg-violet-500 hover:bg-violet-400 disabled:opacity-60 text-white px-3 py-1.5 rounded-lg transition-colors"
                       >
-                        <ExternalLink size={12} /> Preview
-                      </a>
-                      {siteEdited && (
-                        <button onClick={saveSiteConfig} disabled={siteSaving}
-                          className="flex items-center gap-1.5 text-xs font-medium bg-violet-500 hover:bg-violet-400 disabled:opacity-60 text-white px-3 py-1.5 rounded-lg transition-colors">
-                          <Save size={12} /> {siteSaving ? "Saving…" : "Save & Publish"}
-                        </button>
-                      )}
-                    </div>
+                        <Save size={12} /> {siteSaving ? "Saving…" : "Save & Publish"}
+                      </button>
+                    )}
                   </div>
 
                   <div className="bg-[#13151c] border border-white/5 rounded-xl p-4 space-y-4">
