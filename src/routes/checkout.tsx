@@ -5,9 +5,19 @@ import { Loader2, Lock, Check } from "lucide-react";
 import { z } from "zod";
 import { toast } from "sonner";
 import { offer } from "@/config/site";
+import { supabase } from "@/integrations/supabase/client";
 import { createCheckout } from "@/lib/checkout.functions";
 
 export const Route = createFileRoute("/checkout")({
+  loader: async () => {
+    const { data: products } = await supabase
+      .from("products")
+      .select("*")
+      .eq("is_published", true)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    return { product: products?.[0] ?? null };
+  },
   head: () => ({
     meta: [
       { title: `Checkout — ${offer.name}` },
@@ -26,9 +36,17 @@ const FormSchema = z.object({
 function Checkout() {
   const navigate = useNavigate();
   const submit = useServerFn(createCheckout);
+  const { product } = Route.useLoaderData();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const displayName = product?.title ?? offer.name;
+  const displayPrice = product ? `$${(product.price_cents / 100).toFixed(0)}` : offer.price;
+  const displayOriginal = offer.originalPrice;
+  const displayBullets: string[] = product?.description
+    ? product.description.split("\n").map((b: string) => b.trim()).filter(Boolean)
+    : offer.bullets;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -43,6 +61,7 @@ function Checkout() {
         data: {
           name: parsed.data.name,
           email: parsed.data.email,
+          productId: product?.id,
         },
       });
       if (!res?.ok) {
@@ -64,53 +83,31 @@ function Checkout() {
   return (
     <section className="bg-muted/40">
       <div className="mx-auto grid max-w-5xl gap-8 px-4 py-12 md:grid-cols-5 md:py-20">
-        {/* Form */}
         <div className="md:col-span-3">
           <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Checkout</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Complete your details to get instant access.
           </p>
-
           <form onSubmit={onSubmit} className="mt-8 space-y-5 rounded-2xl border border-border bg-card p-6 shadow-soft">
             <div className="space-y-2">
               <label htmlFor="name" className="text-sm font-medium">Full name</label>
-              <input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                maxLength={120}
-                placeholder="Alex Rivera"
-                className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none ring-ring focus:ring-2"
-              />
+              <input id="name" value={name} onChange={(e) => setName(e.target.value)}
+                required maxLength={120} placeholder="Alex Rivera"
+                className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none ring-ring focus:ring-2" />
             </div>
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium">Email address</label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                maxLength={255}
-                placeholder="you@email.com"
-                className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none ring-ring focus:ring-2"
-              />
-              <p className="text-xs text-muted-foreground">
-                We'll send your access link to this address.
-              </p>
+              <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                required maxLength={255} placeholder="you@email.com"
+                className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none ring-ring focus:ring-2" />
+              <p className="text-xs text-muted-foreground">We'll send your access link to this address.</p>
             </div>
-
-            <button
-              type="submit"
-              disabled={loading}
+            <button type="submit" disabled={loading}
               className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-md text-base font-medium text-accent-foreground shadow-soft transition-transform hover:-translate-y-0.5 disabled:opacity-60"
-              style={{ backgroundImage: "var(--gradient-accent)" }}
-            >
+              style={{ backgroundImage: "var(--gradient-accent)" }}>
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-              <Lock className="h-4 w-4" /> Pay {offer.price} securely
+              <Lock className="h-4 w-4" /> Pay {displayPrice} securely
             </button>
-
             <p className="text-center text-xs text-muted-foreground">
               By completing this purchase you agree to our{" "}
               <a href="/terms" className="underline hover:text-foreground">Terms</a> and{" "}
@@ -118,26 +115,22 @@ function Checkout() {
             </p>
           </form>
         </div>
-
-        {/* Order summary */}
         <aside className="md:col-span-2">
           <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              Order summary
-            </h2>
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Order summary</h2>
             <div className="mt-4 flex items-start justify-between gap-4">
               <div>
-                <p className="font-medium">{offer.name}</p>
+                <p className="font-medium">{displayName}</p>
                 <p className="text-sm text-muted-foreground">One-time payment</p>
               </div>
               <div className="text-right">
-                <p className="text-lg font-semibold">{offer.price}</p>
-                <p className="text-xs text-muted-foreground line-through">{offer.originalPrice}</p>
+                <p className="text-lg font-semibold">{displayPrice}</p>
+                <p className="text-xs text-muted-foreground line-through">{displayOriginal}</p>
               </div>
             </div>
             <div className="my-5 h-px bg-border" />
             <ul className="space-y-2 text-sm">
-              {offer.bullets.map((b) => (
+              {displayBullets.map((b: string) => (
                 <li key={b} className="flex items-start gap-2">
                   <Check className="mt-0.5 h-4 w-4 flex-none text-success" />
                   <span className="text-muted-foreground">{b}</span>
@@ -147,7 +140,7 @@ function Checkout() {
             <div className="my-5 h-px bg-border" />
             <div className="flex items-center justify-between text-base font-semibold">
               <span>Total</span>
-              <span>{offer.price}</span>
+              <span>{displayPrice}</span>
             </div>
             <p className="mt-4 text-xs text-muted-foreground">{offer.guarantee}</p>
           </div>
