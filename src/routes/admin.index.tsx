@@ -113,11 +113,26 @@ function AdminDashboard() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const activeOrders  = orders.filter(o => o.status !== "archived");
-  const totalRevenue  = activeOrders.reduce((a, o) => a + (o.amount_cents || 0), 0);
   const paidOrders    = activeOrders.filter(o => o.status === "paid" || o.status === "completed");
   const pendingOrders = activeOrders.filter(o => o.status === "pending");
+
+  // Revenue filtered by selected timeframe (based on order created_at)
+  const rangeStart = (() => {
+    if (revenueRange === "all") return null;
+    const d = new Date();
+    if (revenueRange === "day")   d.setHours(0, 0, 0, 0);
+    if (revenueRange === "week")  d.setDate(d.getDate() - 7);
+    if (revenueRange === "month") d.setMonth(d.getMonth() - 1);
+    if (revenueRange === "year")  d.setFullYear(d.getFullYear() - 1);
+    return d;
+  })();
+  const rangePaidOrders = rangeStart
+    ? paidOrders.filter(o => new Date(o.created_at) >= rangeStart)
+    : paidOrders;
+  const totalRevenue  = rangePaidOrders.reduce((a, o) => a + (o.amount_cents || 0), 0);
   const convRate      = activeOrders.length ? ((paidOrders.length / activeOrders.length) * 100).toFixed(1) : "0";
-  const avgTicket     = paidOrders.length ? totalRevenue / paidOrders.length : 0;
+  const avgTicket     = rangePaidOrders.length ? totalRevenue / rangePaidOrders.length : 0;
+  const rangeLabel    = { day: "Today", week: "Last 7 days", month: "Last 30 days", year: "Last 12 months", all: "All time" }[revenueRange];
 
   const handleArchiveOrder = async (id: string) => {
     const { error } = await supabase.from("orders").update({ status: "archived" } as any).eq("id", id);
