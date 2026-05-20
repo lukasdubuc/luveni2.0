@@ -884,7 +884,7 @@ function AdminDashboard() {
                   <DetailRow label="Slug"      value={selectedRow.slug}                        mono   />
                   <DetailRow label="Price"     value={fmt$(selectedRow.price_cents)}           mono   />
                   <DetailRow label="Published" value={selectedRow.is_published ? "Yes" : "No"}        />
-                  <DetailRow label="Stripe ID" value={selectedRow.stripe_price_id || "—"}      mono   />
+                  <DetailRow label="Image"     value={(selectedRow.image_urls && selectedRow.image_urls[0]) || "—"}      mono   />
                 </>
               )}
             </div>
