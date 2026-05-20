@@ -80,7 +80,7 @@ function AdminDashboard() {
   });
 
   // Keep only ONE of these declarations
-const [revenueRange, setRevenueRange] = useState<"day" | "week" | "month" | "year" | "all">("all");
+const [revenueRange, setRevenueRange] = useState<"day" | "week" | "month" | "year" | "all">("day");
 
 const [siteContent, setSiteContent] = useState<SiteConfig>(SITE_CONFIG_FALLBACK);
 const [siteEdited, setSiteEdited] = useState(false);
@@ -134,8 +134,18 @@ const [siteSaving, setSiteSaving] = useState(false);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  const rangeStart = (() => {
+    const now = new Date();
+    if (revenueRange === "day")   { const d = new Date(now); d.setHours(0,0,0,0); return d; }
+    if (revenueRange === "week")  { const d = new Date(now); d.setDate(d.getDate() - 7); return d; }
+    if (revenueRange === "month") { const d = new Date(now); d.setMonth(d.getMonth() - 1); return d; }
+    if (revenueRange === "year")  { const d = new Date(now); d.setFullYear(d.getFullYear() - 1); return d; }
+    return null;
+  })();
   const activeOrders  = orders.filter(o => o.status !== "archived");
   const paidOrders    = activeOrders.filter(o => o.status === "paid" || o.status === "completed");
+  const filteredPaid  = rangeStart ? paidOrders.filter(o => new Date(o.created_at) >= rangeStart) : paidOrders;
+  const filteredRevenue = filteredPaid.reduce((sum, o) => sum + (o.amount_cents || 0), 0);
   const totalRevenue  = paidOrders.reduce((sum, o) => sum + (o.amount_cents || 0), 0);
   const pendingOrders = activeOrders.filter(o => o.status === "pending");
   const convRate      = activeOrders.length
@@ -419,7 +429,7 @@ const [siteSaving, setSiteSaving] = useState(false);
                   </div>
 
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <KPICard label="Revenue"    value={fmt$(totalRevenue)}  sub="All time"     icon={DollarSign}  color="violet"  />
+                    <KPICard label="Revenue"    value={fmt$(filteredRevenue)}  sub={revenueRange === "all" ? "All time" : `This ${revenueRange}`}     icon={DollarSign}  color="violet"  />
                     <KPICard label="Orders"     value={paidOrders.length}   sub="Completed"    icon={ShoppingBag} color="indigo"  />
                     <KPICard label="Conversion" value={`${convRate}%`}      sub="Paid / total" icon={TrendingUp}  color="emerald" />
                     <KPICard label="Avg Ticket" value={fmt$(avgTicket)}     sub="Per order"    icon={Tag}         color="amber"   />
@@ -856,6 +866,34 @@ const [siteSaving, setSiteSaving] = useState(false);
                         />
                       </button>
                     </div>
+                  </Accordion>
+
+                  <Accordion title="Newsletter" icon={<Mail size={14} />}>
+                    <SiteField
+                      label="Title"
+                      value={siteContent.metadata?.newsletter_title ?? ""}
+                      onChange={(v: string) => { setSiteContent(s => ({ ...s, metadata: { ...s.metadata, newsletter_title: v } })); setSiteEdited(true); }}
+                    />
+                    <SiteField
+                      label="Subtitle"
+                      value={siteContent.metadata?.newsletter_subtitle ?? ""}
+                      rows={2}
+                      onChange={(v: string) => { setSiteContent(s => ({ ...s, metadata: { ...s.metadata, newsletter_subtitle: v } })); setSiteEdited(true); }}
+                    />
+                    <SiteField
+                      label="Button Text"
+                      value={siteContent.metadata?.newsletter_button_text ?? ""}
+                      onChange={(v: string) => { setSiteContent(s => ({ ...s, metadata: { ...s.metadata, newsletter_button_text: v } })); setSiteEdited(true); }}
+                    />
+                  </Accordion>
+
+                  <Accordion title="Footer" icon={<Settings size={14} />}>
+                    <SiteField
+                      label="Footer Description"
+                      value={siteContent.metadata?.footer_description ?? ""}
+                      rows={2}
+                      onChange={(v: string) => { setSiteContent(s => ({ ...s, metadata: { ...s.metadata, footer_description: v } })); setSiteEdited(true); }}
+                    />
                   </Accordion>
 
                   {/* Inline reminder — replaced the dead-end warning with an actionable note */}
