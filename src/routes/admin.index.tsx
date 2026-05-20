@@ -324,17 +324,19 @@ const [siteSaving, setSiteSaving] = useState(false);
                   </button>
                 );
               })}
-            </nav>
+          </nav>
             <div className="p-3 border-t border-white/5 space-y-1">
-              
+              <a
                 href="/"
                 target="_blank"
                 className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-slate-200 transition-all"
               >
                 <ExternalLink size={16} /> View Site
               </a>
-              <button onClick={handleSignOut}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-red-400 hover:bg-red-500/10 transition-all">
+              <button 
+                onClick={handleSignOut}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-red-400 hover:bg-red-500/10 transition-all"
+              >
                 <LogOut size={16} /> Sign Out
               </button>
             </div>
