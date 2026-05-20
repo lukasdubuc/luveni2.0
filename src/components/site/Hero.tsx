@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, Sparkles } from "lucide-react";
-import { offer, SITE_CONFIG_FALLBACK, type SiteConfig } from "@/config/site";
+import { offer } from "@/config/site";
+import { SITE_CONFIG_FALLBACK, type SiteConfig } from "@/lib/site-config";
 
 export function Hero({ siteConfig }: { siteConfig?: SiteConfig }) {
   const cfg = siteConfig ?? SITE_CONFIG_FALLBACK;
