@@ -126,23 +126,29 @@ function AdminDashboard() {
   };
 
   const saveProduct = async () => {
-    const { title, description, price_cents, slug, stripe_price_id, is_published, editingId } = productForm;
+    const { title, description, price_cents, slug, image_url, source_url, fulfillment_notes, is_published, editingId } = productForm;
     if (!title || !price_cents) return toast.error("Title and price required");
+    const image_urls = image_url
+      .split(",")
+      .map(u => u.trim())
+      .filter(Boolean);
     const payload = {
       title, description: description || null,
       price_cents: Math.round(parseFloat(price_cents) * 100),
       slug: slug || title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-      stripe_price_id: stripe_price_id || null,
+      image_urls,
+      source_url: source_url || null,
+      fulfillment_notes: fulfillment_notes || null,
       is_published, currency: "usd",
     };
     if (editingId) {
       const { error } = await supabase.from("products").update(payload as any).eq("id", editingId);
       if (!error) { fetchData(); resetProductForm(); toast.success("Product updated"); }
-      else toast.error("Update failed");
+      else toast.error(error.message || "Update failed");
     } else {
       const { error } = await supabase.from("products").insert([payload as any]);
       if (!error) { fetchData(); resetProductForm(); toast.success("Product created"); }
-      else toast.error("Create failed");
+      else toast.error(error.message || "Create failed");
     }
   };
 
