@@ -1,9 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { Check, ArrowRight } from "lucide-react";
-import { offer } from "@/config/site";
-import type { SiteConfig } from "@/lib/site-config";
+import { offer, SITE_CONFIG_FALLBACK, type SiteConfig } from "@/config/site";
 
 export function OfferSection({ products, siteConfig }: { products?: any[]; siteConfig?: SiteConfig }) {
+  const cfg = siteConfig ?? SITE_CONFIG_FALLBACK;
   const activeOffer = products && products.length > 0 ? products[0] : null;
 
   return (
@@ -20,11 +20,9 @@ export function OfferSection({ products, siteConfig }: { products?: any[]; siteC
             <h2 className="mt-4 text-4xl tracking-tight md:text-5xl">
               {activeOffer?.title || offer.name}
             </h2>
-            <p className="mt-5 max-w-md text-muted-foreground">
-              {activeOffer?.description || siteConfig?.hero_subheadline || offer.shortPitch}
-            </p>
+            <p className="mt-5 max-w-md text-muted-foreground">{offer.shortPitch}</p>
             <ul className="mt-8 space-y-4">
-              {(activeOffer?.fulfillment_notes ? activeOffer.fulfillment_notes.split("\n") : offer.bullets).map((b: string) => (
+              {offer.bullets.map((b) => (
                 <li key={b} className="flex items-start gap-3 text-sm">
                   <span className="mt-0.5 grid h-5 w-5 flex-none place-items-center rounded-full bg-accent/15 text-accent">
                     <Check className="h-3 w-3" />
@@ -50,11 +48,13 @@ export function OfferSection({ products, siteConfig }: { products?: any[]; siteC
               </p>
               <div className="mt-6 flex items-baseline gap-3">
                 <span className="font-display text-7xl tracking-tight">
-                  ${activeOffer ? (activeOffer.price_cents / 100).toFixed(0) : offer.price.replace("$", "")}
+                  {activeOffer ? `$${(activeOffer.price_cents / 100).toFixed(0)}` : cfg.price_display}
                 </span>
-                <span className="text-sm text-muted-foreground line-through">
-                  {activeOffer?.price_original || siteConfig?.price_original || offer.originalPrice}
-                </span>
+                {cfg.launch_pricing_active && cfg.price_original && (
+                  <span className="text-sm text-muted-foreground line-through">
+                    {cfg.price_original}
+                  </span>
+                )}
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
                 One-time. Lifetime updates included.
@@ -68,11 +68,11 @@ export function OfferSection({ products, siteConfig }: { products?: any[]; siteC
                   boxShadow: "var(--shadow-glow)",
                 }}
               >
-                {siteConfig?.metadata?.newsletter_button_text || "Get started now"}
+                Get started now
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
               </Link>
               <p className="mt-5 text-center text-xs text-muted-foreground">
-                {activeOffer?.guarantee || offer.guarantee}
+                {offer.guarantee}
               </p>
             </div>
           </div>

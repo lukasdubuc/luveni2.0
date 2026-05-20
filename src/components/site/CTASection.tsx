@@ -1,13 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
-import { offer } from "@/config/site";
-import type { SiteConfig } from "@/lib/site-config";
+import { SITE_CONFIG_FALLBACK, type SiteConfig } from "@/config/site";
 
 export function CTASection({ siteConfig }: { siteConfig?: SiteConfig }) {
-  const title = siteConfig?.metadata?.newsletter_title ?? "Ready when you are.";
-  const subtitle = siteConfig?.metadata?.newsletter_subtitle ?? `One small decision today. ${offer.guarantee}`;
-  const buttonText = siteConfig?.metadata?.newsletter_button_text ?? `Get instant access — ${offer.price}`;
-
+  const cfg = siteConfig ?? SITE_CONFIG_FALLBACK;
   return (
     <section className="border-t border-border bg-background">
       <div className="mx-auto max-w-6xl px-6 py-24 md:py-32">
@@ -22,10 +18,10 @@ export function CTASection({ siteConfig }: { siteConfig?: SiteConfig }) {
           />
           <div className="relative">
             <h2 className="mx-auto max-w-2xl text-4xl tracking-tight md:text-6xl">
-              {title}
+              Ready when <span className="serif-italic text-accent">you</span> are.
             </h2>
             <p className="mx-auto mt-5 max-w-xl text-sm text-muted-foreground md:text-base">
-              {subtitle}
+              One small decision today. {cfg.guarantee_days}-day money-back guarantee.
             </p>
             <Link
               to="/checkout"
@@ -35,7 +31,7 @@ export function CTASection({ siteConfig }: { siteConfig?: SiteConfig }) {
                 boxShadow: "var(--shadow-glow)",
               }}
             >
-              {buttonText}
+              {cfg.hero_cta}
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>

@@ -1,23 +1,21 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, Sparkles } from "lucide-react";
-import { offer, site } from "@/config/site";
-import type { SiteConfig } from "@/lib/site-config";
+import { offer, SITE_CONFIG_FALLBACK, type SiteConfig } from "@/config/site";
 
 export function Hero({ siteConfig }: { siteConfig?: SiteConfig }) {
-  const headline = siteConfig?.hero_headline ?? site.tagline;
-  const subheadline = siteConfig?.hero_subheadline ?? offer.shortPitch;
-  const cta = siteConfig?.hero_cta ?? `Get instant access — ${offer.price}`;
-
+  const cfg = siteConfig ?? SITE_CONFIG_FALLBACK;
   return (
     <section
       className="relative overflow-hidden"
       style={{ backgroundImage: "var(--gradient-hero)" }}
     >
+      {/* Ambient orb */}
       <div
         aria-hidden
         className="pointer-events-none absolute -top-32 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full opacity-60 blur-3xl"
         style={{ background: "var(--gradient-accent)" }}
       />
+      {/* Grid texture */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-[0.07]"
@@ -32,15 +30,17 @@ export function Hero({ siteConfig }: { siteConfig?: SiteConfig }) {
 
       <div className="relative mx-auto max-w-6xl px-6 pt-24 pb-28 md:pt-36 md:pb-40">
         <div className="mx-auto max-w-3xl text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
-            <Sparkles className="h-3.5 w-3.5 text-accent" />
-            {offer.badge}
-          </div>
+          {cfg.launch_pricing_active && (
+            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
+              <Sparkles className="h-3.5 w-3.5 text-accent" />
+              {offer.badge}
+            </div>
+          )}
           <h1 className="mt-8 text-5xl tracking-tight md:text-7xl">
-            {headline}
+            {cfg.hero_headline}
           </h1>
           <p className="mx-auto mt-6 max-w-xl text-base text-muted-foreground md:text-lg">
-            {subheadline}
+            {cfg.hero_subheadline}
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
@@ -51,7 +51,7 @@ export function Hero({ siteConfig }: { siteConfig?: SiteConfig }) {
                 boxShadow: "var(--shadow-glow)",
               }}
             >
-              {cta}
+              {cfg.hero_cta}
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Link>
             <Link
@@ -62,7 +62,7 @@ export function Hero({ siteConfig }: { siteConfig?: SiteConfig }) {
             </Link>
           </div>
           <p className="mt-5 text-xs text-muted-foreground">
-            {offer.guarantee}
+            {cfg.guarantee_days}-day money-back guarantee. No questions asked.
           </p>
         </div>
       </div>
