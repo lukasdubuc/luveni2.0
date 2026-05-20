@@ -50,7 +50,7 @@ export const Route = createFileRoute("/")({
     if (configResult.status === "fulfilled") {
       const { data, error } = configResult.value;
       if (error) console.warn("[Northwind] site_config fetch error:", error.message);
-      else if (data) siteConfig = mergeSiteConfig(data);
+      else if (data) siteConfig = mergeSiteConfig(data as any);
     } else {
       console.warn("[Northwind] site_config fetch rejected:", configResult.reason);
     }
