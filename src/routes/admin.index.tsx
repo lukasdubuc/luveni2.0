@@ -91,12 +91,15 @@ const [siteSaving, setSiteSaving] = useState(false);
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // If dev_guest flag is set locally, skip remote Supabase reads to avoid auth errors
+      // Dev guest mode: only skip for LOCAL dev, NOT for production builds
       if (typeof window !== 'undefined') {
         try {
           const host = window.location.hostname;
           const devFlag = localStorage.getItem('dev_guest');
-          if (devFlag && (host === 'localhost' || host === '127.0.0.1' || import.meta.env.DEV)) {
+          // Only bypass fetching if running locally WITH dev_guest flag
+          const isLocalDev = (host === 'localhost' || host === '127.0.0.1') && import.meta.env.DEV;
+          if (devFlag && isLocalDev) {
+            console.log("[Admin] Dev guest mode: skipping Supabase fetch");
             setOrders([]);
             setProducts([]);
             setLeads([]);
@@ -104,7 +107,7 @@ const [siteSaving, setSiteSaving] = useState(false);
             return;
           }
         } catch (e) {
-          // continue to normal fetching
+          console.error("[Admin] Dev guest check failed:", e);
         }
       }
 
@@ -118,8 +121,13 @@ const [siteSaving, setSiteSaving] = useState(false);
       if (oRes.status === "fulfilled" && !oRes.value.error) setOrders(oRes.value.data ?? []);
       else console.warn("[Admin] orders fetch failed");
 
-      if (pRes.status === "fulfilled" && !pRes.value.error) setProducts(pRes.value.data ?? []);
-      else console.warn("[Admin] products fetch failed");
+      if (pRes.status === "fulfilled" && !pRes.value.error) {
+        const fetchedProducts = pRes.value.data ?? [];
+        console.log("[Admin] Products fetched:", fetchedProducts.length, "items", fetchedProducts);
+        setProducts(fetchedProducts);
+      } else {
+        console.warn("[Admin] products fetch failed:", pRes.status === "fulfilled" ? pRes.value.error : pRes.reason);
+      }
 
       if (lRes.status === "fulfilled" && !lRes.value.error) setLeads(lRes.value.data ?? []);
       else console.warn("[Admin] leads fetch failed");
@@ -249,27 +257,35 @@ const [siteSaving, setSiteSaving] = useState(false);
   };
 
   // ── Site config save ───────────────────────────────────────────────────────
-  // Upsert into site_config using a well-known singleton row ID ("main").
-  // If your table doesn't have an "id" column yet, swap to .upsert([{ ...siteContent, id: "main" }]).
   const saveSiteConfig = async () => {
     setSiteSaving(true);
     try {
-      const { error } = await supabase
-        .from("site_config")
-          .upsert([{
-          hero_headline: siteContent.hero_headline,
-          hero_subheadline: siteContent.hero_subheadline,
-          hero_cta: siteContent.hero_cta,
-          price_display: siteContent.price_display,
-          price_original: siteContent.price_original,
-          launch_pricing_active: siteContent.launch_pricing_active,
-          guarantee_days: siteContent.guarantee_days,
-          id: "main",
-          updated_at: new Date().toISOString(),
-        }] as any);
+      // Log the content being saved to verify HTML preservation
+      console.log("[Admin] Saving hero content:", {
+        headline: siteContent.hero_headline,
+        subheadline: siteContent.hero_subheadline,
+        cta: siteContent.hero_cta,
+      });
+
+      const payload = {
+        hero_headline: siteContent.hero_headline,
+        hero_subheadline: siteContent.hero_subheadline,
+        hero_cta: siteContent.hero_cta,
+        price_display: siteContent.price_display,
+        price_original: siteContent.price_original,
+        launch_pricing_active: siteContent.launch_pricing_active,
+        guarantee_days: siteContent.guarantee_days,
+        id: "main",
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase.from("site_config").upsert([payload] as any);
       if (error) throw error;
+
+      console.log("[Admin] Site config saved successfully");
       toast.success("Site content saved and live.");
-      setSiteEdited(false);
+      setVerifiedEdited(false);
+      setSiteEdited(metadataEdited);
     } catch (e: any) {
       console.error("[Admin] site_config save error:", e);
       toast.error(e?.message ?? "Failed to save site content");
@@ -853,25 +869,36 @@ const [siteSaving, setSiteSaving] = useState(false);
                   </div>
 
                   <Accordion title="Hero Section" icon={<Edit3 size={14} />}>
-                    <SiteField
-                      label="Headline"
-                      value={siteContent.hero_headline}
-                      rows={2}
-                      onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_headline: v })); setVerifiedEdited(true); setSiteEdited(true); }}
-                      hint="Supports HTML: use &lt;span class='text-gradient'&gt;text&lt;/span&gt; for styled text"
-                    />
-                    <SiteField
-                      label="Subheadline"
-                      value={siteContent.hero_subheadline}
-                      rows={2}
-                      onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_subheadline: v })); setVerifiedEdited(true); setSiteEdited(true); }}
-                      hint="Supports HTML: use &lt;strong&gt;, &lt;em&gt;, or custom &lt;span&gt; tags"
-                    />
-                    <SiteField
-                      label="CTA Button"
-                      value={siteContent.hero_cta}
-                      onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_cta: v })); setVerifiedEdited(true); setSiteEdited(true); }}
-                    />
+                    <div className="space-y-4">
+                      <div className="rounded-lg bg-indigo-500/10 border border-indigo-500/20 p-3">
+                        <p className="text-xs text-indigo-300 font-medium">💡 HTML Support Enabled</p>
+                        <p className="text-xs text-indigo-200 mt-1">Enter HTML to style text. Example for purple words:</p>
+                        <code className="text-[11px] text-indigo-100 block mt-1.5 font-mono bg-indigo-950/50 p-2 rounded border border-indigo-500/20">
+                          {"Build <span class='text-gradient'>your dream</span> today"}
+                        </code>
+                        <p className="text-xs text-indigo-200 mt-1.5">Other options: &lt;strong&gt;bold&lt;/strong&gt;, &lt;em&gt;italic&lt;/em&gt;</p>
+                      </div>
+
+                      <SiteField
+                        label="Headline"
+                        value={siteContent.hero_headline}
+                        rows={2}
+                        onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_headline: v })); setVerifiedEdited(true); setSiteEdited(true); }}
+                        hint="Renders as HTML with class support (text-gradient = purple effect)"
+                      />
+                      <SiteField
+                        label="Subheadline"
+                        value={siteContent.hero_subheadline}
+                        rows={2}
+                        onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_subheadline: v })); setVerifiedEdited(true); setSiteEdited(true); }}
+                        hint="Renders as HTML with full tag support"
+                      />
+                      <SiteField
+                        label="CTA Button"
+                        value={siteContent.hero_cta}
+                        onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_cta: v })); setVerifiedEdited(true); setSiteEdited(true); }}
+                      />
+                    </div>
                   </Accordion>
 
                   <Accordion title="Pricing" icon={<Tag size={14} />}>
