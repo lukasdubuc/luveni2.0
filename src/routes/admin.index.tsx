@@ -125,7 +125,7 @@ const [siteSaving, setSiteSaving] = useState(false);
       else console.warn("[Admin] leads fetch failed");
 
       if (cRes.status === "fulfilled" && !cRes.value.error && cRes.value.data) {
-        setSiteContent(prev => ({ ...prev, ...Object.fromEntries(Object.entries(cRes.value.data).filter(([_, v]) => v !== null)) }));
+        setSiteContent(prev => ({ ...prev, ...(cRes.value.data as Partial<SiteConfig>) }));
       }
     } finally {
       setLoading(false);
