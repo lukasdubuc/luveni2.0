@@ -165,14 +165,18 @@ function AdminDashboard() {
 
   const resetProductForm = () => setProductForm({
     title: "", description: "", price_cents: "", slug: "",
-    stripe_price_id: "", is_published: true, editingId: null,
+    image_url: "", source_url: "", fulfillment_notes: "",
+    is_published: true, editingId: null,
   });
 
   const startEditProduct = (p: any) => {
     setProductForm({
       title: p.title, description: p.description || "",
       price_cents: (p.price_cents / 100).toString(),
-      slug: p.slug, stripe_price_id: p.stripe_price_id || "",
+      slug: p.slug,
+      image_url: Array.isArray(p.image_urls) ? p.image_urls.join(", ") : "",
+      source_url: p.source_url || "",
+      fulfillment_notes: p.fulfillment_notes || "",
       is_published: p.is_published, editingId: p.id,
     });
     setSection("products");
