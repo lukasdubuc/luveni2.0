@@ -327,7 +327,7 @@ const [siteSaving, setSiteSaving] = useState(false);
                 );
               })}
           </nav>
-            <div className="p-3 border-t border-white/5 space-y-1">
+          <div className="p-3 border-t border-white/5 space-y-1">
               <a
                 href="/"
                 target="_blank"
@@ -861,7 +861,6 @@ const [siteSaving, setSiteSaving] = useState(false);
                       and go live immediately. Your public site reads this table on every page load.
                     </p>
                   </div>
-                </div>
                 </div>
               )}
 
