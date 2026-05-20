@@ -270,8 +270,8 @@ const [siteSaving, setSiteSaving] = useState(false);
             );
           })}
         </nav>
-        <div className="p-2 border-t border-white/5 space-y-0.5">
-          
+      <div className="p-2 border-t border-white/5 space-y-0.5">
+          <a
             href="/"
             target="_blank"
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-slate-200 transition-all"
@@ -279,9 +279,12 @@ const [siteSaving, setSiteSaving] = useState(false);
             <ExternalLink size={16} className="flex-shrink-0" />
             <span>View Site</span>
           </a>
-          <button onClick={handleSignOut}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-all">
-            <LogOut size={16} className="flex-shrink-0" /><span>Sign Out</span>
+          <button 
+            onClick={handleSignOut}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-all"
+          >
+            <LogOut size={16} className="flex-shrink-0" />
+            <span>Sign Out</span>
           </button>
         </div>
       </aside>
