@@ -17,7 +17,7 @@ export const Route = createFileRoute("/shop")({
   },
   head: () => ({
     meta: [
-      { title: "Shop — Northwind" },
+      { title: "Shop" },
       { name: "description", content: "Browse all products." },
     ],
   }),
@@ -34,7 +34,7 @@ function ShopPage() {
       : ((loader?.products as Product[]) ?? []);
 
   return (
-    <div className="min-h-screen bg-white font-mono selection:bg-black selection:text-white">
+    <div className="min-h-screen overflow-x-hidden bg-white font-mono selection:bg-black selection:text-white">
       {products.length === 0 ? (
         <div className="flex h-screen items-center justify-center">
           <span className="text-[10px] uppercase tracking-[0.3em] text-black/30">
@@ -42,7 +42,7 @@ function ShopPage() {
           </span>
         </div>
       ) : (
-        <div className="grid grid-cols-2 bg-white sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
+        <div className="grid grid-cols-2 overflow-visible bg-white sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
           {products.map((product) => (
             <ProductCell key={product.id} product={product} />
           ))}
@@ -69,14 +69,14 @@ function ProductCell({ product }: { product: Product }) {
   return (
     <Link
       to={`/offer/${product.slug}`}
-      className="group relative block overflow-hidden border-none bg-transparent"
+      className="group relative z-0 block border-none bg-transparent outline-none transition-all duration-300 ease-in-out hover:z-10 hover:scale-105 hover:border-transparent focus:outline-none focus-visible:outline-none"
     >
       <div className="relative flex aspect-[2/3] items-center justify-center overflow-hidden bg-transparent p-3 sm:p-4">
         {imageUrl ? (
           <img
             src={imageUrl}
             alt={product.title}
-            className="max-h-full max-w-full object-contain transition-transform duration-500 ease-out group-hover:scale-[1.03]"
+            className="max-h-full max-w-full object-contain"
             loading="lazy"
           />
         ) : (

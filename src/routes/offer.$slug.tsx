@@ -32,9 +32,9 @@ export const Route = createFileRoute("/offer/$slug")({
     const description = product?.description ?? offer.shortPitch;
     return {
       meta: [
-        { title: `${title} — Northwind` },
+        { title: `${title}` },
         { name: "description", content: description },
-        { property: "og:title", content: `${title} — Northwind` },
+        { property: "og:title", content: `${title}` },
         { property: "og:description", content: description },
       ],
     };

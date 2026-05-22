@@ -2,7 +2,7 @@
 // Swap these to re-skin the site for any niche — no other files need changes.
 
 export const site = {
-  brand: "Northwind",
+  brand: "",
   tagline: "A simple, modern way to get the result you actually want.",
   domain: "example.com",
   supportEmail: "hello@example.com",

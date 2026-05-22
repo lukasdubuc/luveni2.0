@@ -13,7 +13,7 @@ export function Header() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 bg-white border-b border-black">
+    <header className="sticky top-0 z-50 border-none bg-white">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
         <div>
           <Link
@@ -51,7 +51,7 @@ export function Header() {
       </div>
 
       {open && (
-        <div className="fixed inset-0 z-40 border-t border-black bg-white md:hidden">
+        <div className="fixed inset-0 z-40 border-none bg-white md:hidden">
           <div className="flex h-full flex-col items-center justify-center gap-8">
             {navLinks.map((l) => (
               <Link
