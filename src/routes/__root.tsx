@@ -105,7 +105,7 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
   const path = useRouterState({ select: (s) => s.location.pathname });
-  const isBare = path.startsWith("/admin") || path === "/login";
+  const isBare = path.startsWith("/admin") || path === "/login" || path.startsWith("/offer/");
   const [footerDescription, setFooterDescription] = useState<string | undefined>(undefined);
 
   useEffect(() => {
