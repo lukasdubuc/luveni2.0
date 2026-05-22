@@ -138,16 +138,16 @@ function ProductsPage() {
 
   /* ── Render ── */
   return (
-    <div className="min-h-screen bg-white text-black font-mono text-sm">
+    <div className="min-h-screen bg-black text-white font-mono text-sm">
 
       {/* ── Top bar ── */}
-      <div className="border-b border-black flex items-center justify-between px-6 py-4">
+      <div className="border-b border-white flex items-center justify-between px-6 py-4">
         <span className="text-[11px] tracking-[0.3em] uppercase font-bold">
           Admin / Products
         </span>
         <button
           onClick={formOpen ? closeForm : openNew}
-          className="flex items-center gap-2 border border-black px-4 py-2 text-[11px] tracking-widest uppercase hover:bg-black hover:text-white transition-colors"
+          className="flex items-center gap-2 border border-white px-4 py-2 text-[11px] tracking-widest uppercase hover:bg-white hover:text-black transition-colors"
         >
           <Plus size={11} />
           {formOpen && !editing?.id ? "Cancel" : "New Product"}
@@ -156,17 +156,17 @@ function ProductsPage() {
 
       {/* ── Collapsible form ── */}
       <div
-        className={`overflow-hidden transition-all duration-300 border-b border-black ${
+        className={`overflow-hidden transition-all duration-300 border-b border-white ${
           formOpen ? "max-h-[1000px]" : "max-h-0"
         }`}
       >
-        <form onSubmit={saveProduct} className="px-6 py-6 bg-[#f7f7f7]">
+        <form onSubmit={saveProduct} className="px-6 py-6 bg-black">
           {/* Form header */}
           <div className="flex items-center justify-between mb-5">
             <span className="text-[11px] tracking-[0.3em] uppercase font-bold">
               {editing?.id ? "Edit Product" : "New Product"}
             </span>
-            <button type="button" onClick={closeForm} className="text-black/40 hover:text-black">
+            <button type="button" onClick={closeForm} className="text-white/40 hover:text-white">
               <ChevronUp size={14} />
             </button>
           </div>
@@ -203,7 +203,7 @@ function ProductsPage() {
               className="md:col-span-2" />
 
             <div className="md:col-span-2">
-              <label className="block text-[10px] tracking-[0.25em] uppercase text-black/40 mb-1">
+              <label className="block text-[10px] tracking-[0.25em] uppercase text-white/40 mb-1">
                 Description
               </label>
               <textarea
@@ -211,20 +211,20 @@ function ProductsPage() {
                 onChange={(e) => setField("description", e.target.value)}
                 rows={3}
                 placeholder="Short product description..."
-                className="w-full border border-black/20 bg-white px-3 py-2 text-[12px] font-mono placeholder:text-black/20 focus:outline-none focus:border-black resize-none"
+                className="w-full border border-white bg-black px-3 py-2 text-[12px] font-mono placeholder:text-white/20 focus:outline-none focus:border-white resize-none"
               />
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-[10px] tracking-[0.25em] uppercase text-black/40 mb-1">
+              <label className="block text-[10px] tracking-[0.25em] uppercase text-white/40 mb-1">
                 Variants JSON
               </label>
               <textarea
                 value={editing?.variantsText ?? "[]"}
                 onChange={(e) => setField("variantsText", e.target.value)}
                 rows={4}
-                placeholder='[{"label":"Size","options":["S","M","L"]}]'
-                className="w-full border border-black/20 bg-white px-3 py-2 text-[11px] font-mono placeholder:text-black/20 focus:outline-none focus:border-black resize-none"
+                placeholder='{"label":"Size","options":["S","M","L"]}'
+                className="w-full border border-white bg-black px-3 py-2 text-[11px] font-mono placeholder:text-white/20 focus:outline-none focus:border-white resize-none"
               />
             </div>
 
@@ -234,10 +234,10 @@ function ProductsPage() {
                 type="button"
                 onClick={() => setField("is_published", !editing?.is_published)}
                 className={`relative w-10 h-5 border transition-colors ${
-                  editing?.is_published ? "bg-black border-black" : "bg-white border-black/30"
+                  editing?.is_published ? "bg-white border-white" : "bg-black border-white/30"
                 }`}
               >
-                <span className={`absolute top-0.5 w-4 h-4 bg-white border border-black/20 transition-all ${
+                <span className={`absolute top-0.5 w-4 h-4 bg-black border border-white/20 transition-all ${
                   editing?.is_published ? "left-5" : "left-0.5"
                 }`} />
               </button>
@@ -252,7 +252,7 @@ function ProductsPage() {
             <button
               type="submit"
               disabled={saving}
-              className="border border-black bg-black text-white px-6 py-2 text-[11px] tracking-widest uppercase hover:bg-white hover:text-black transition-colors disabled:opacity-40 flex items-center gap-2"
+              className="border border-white bg-white text-black px-6 py-2 text-[11px] tracking-widest uppercase hover:bg-black hover:text-white transition-colors disabled:opacity-40 flex items-center gap-2"
             >
               {saving && <Loader2 size={11} className="animate-spin" />}
               {saving ? "Saving..." : editing?.id ? "Update" : "Create"}
@@ -260,7 +260,7 @@ function ProductsPage() {
             <button
               type="button"
               onClick={closeForm}
-              className="text-[11px] tracking-widest uppercase text-black/40 hover:text-black transition-colors"
+              className="text-[11px] tracking-widest uppercase text-white/40 hover:text-white transition-colors"
             >
               Cancel
             </button>
@@ -270,31 +270,31 @@ function ProductsPage() {
 
       {/* ── Product table ── */}
       {loading ? (
-        <div className="flex items-center gap-2 px-6 py-12 text-[11px] tracking-widest uppercase text-black/30">
+        <div className="flex items-center gap-2 px-6 py-12 text-[11px] tracking-widest uppercase text-white/30">
           <Loader2 size={12} className="animate-spin" /> Loading...
         </div>
       ) : products.length === 0 ? (
-        <div className="px-6 py-12 text-[11px] tracking-widest uppercase text-black/25">
+        <div className="px-6 py-12 text-[11px] tracking-widest uppercase text-white/25">
           No products yet.
         </div>
       ) : (
         <>
           {/* Column headers */}
-          <div className="hidden md:grid grid-cols-[2fr_1fr_1fr_1fr_auto] border-b border-black/10 px-6 py-2 bg-[#fafafa]">
+          <div className="hidden md:grid grid-cols-[2fr_1fr_1fr_1fr_auto] border-b border-white px-6 py-2 bg-black">
             {["Title", "Price", "Discount", "Status", ""].map((h) => (
-              <span key={h} className="text-[9px] tracking-[0.3em] uppercase text-black/30">{h}</span>
+              <span key={h} className="text-[9px] tracking-[0.3em] uppercase text-white/30">{h}</span>
             ))}
           </div>
 
           {products.map((p) => (
             <div
               key={p.id}
-              className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr_auto] border-b border-black/10 px-6 py-4 items-center gap-3 hover:bg-black/[0.015] transition-colors"
+              className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr_auto] border-b border-white px-6 py-4 items-center gap-3 hover:bg-white/5 transition-colors"
             >
               {/* Title + slug */}
               <div className="min-w-0">
                 <p className="text-[12px] font-bold tracking-wide truncate">{p.title}</p>
-                <p className="text-[10px] text-black/30 tracking-widest mt-0.5 truncate">
+                <p className="text-[10px] text-white/30 tracking-widest mt-0.5 truncate">
                   /{p.slug}
                 </p>
               </div>
@@ -316,8 +316,8 @@ function ProductsPage() {
               {/* Status badge */}
               <span className={`text-[9px] tracking-[0.2em] uppercase px-2 py-1 w-fit font-bold ${
                 p.is_published
-                  ? "bg-black text-white"
-                  : "border border-black/20 text-black/40"
+                  ? "bg-white text-black"
+                  : "border border-white/20 text-white/40"
               }`}>
                 {p.is_published ? "Live" : "Draft"}
               </span>
@@ -326,21 +326,21 @@ function ProductsPage() {
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => toggleStatus(p)}
-                  className="text-black/25 hover:text-black transition-colors"
+                  className="text-white/25 hover:text-white transition-colors"
                   title={p.is_published ? "Unpublish" : "Publish"}
                 >
                   {p.is_published ? <EyeOff size={13} /> : <Eye size={13} />}
                 </button>
                 <button
                   onClick={() => openEdit(p)}
-                  className="text-black/25 hover:text-black transition-colors"
+                  className="text-white/25 hover:text-white transition-colors"
                   title="Edit"
                 >
                   <Pencil size={13} />
                 </button>
                 <button
                   onClick={() => deleteProduct(p.id, p.title)}
-                  className="text-black/20 hover:text-red-600 transition-colors"
+                  className="text-white/20 hover:text-red-400 transition-colors"
                   title="Delete"
                 >
                   <Trash2 size={13} />
@@ -363,7 +363,7 @@ function Field({
 }) {
   return (
     <div className={className}>
-      <label className="block text-[10px] tracking-[0.25em] uppercase text-black/40 mb-1">
+      <label className="block text-[10px] tracking-[0.25em] uppercase text-white/40 mb-1">
         {label}
       </label>
       <input
@@ -371,7 +371,7 @@ function Field({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full border border-black/20 bg-white px-3 py-2 text-[12px] font-mono placeholder:text-black/20 focus:outline-none focus:border-black"
+        className="w-full border border-white bg-black px-3 py-2 text-[12px] font-mono placeholder:text-white/20 focus:outline-none focus:border-white"
       />
     </div>
   );
