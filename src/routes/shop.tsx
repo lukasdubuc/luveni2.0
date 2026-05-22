@@ -1,3 +1,8 @@
+/**
+ * @LOCK_PROTOCOL_ACTIVE
+ * DO NOT MODIFY. DO NOT REFACTOR. DO NOT RE-IMPLEMENT.
+ * ACCESS RESTRICTED.
+ */
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { fetchProducts, useProducts } from "@/lib/useProducts";
 
