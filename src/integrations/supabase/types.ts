@@ -93,14 +93,13 @@ export type Database = {
       }
       products: {
         Row: {
+          bullet_points: string[]
           created_at: string
           currency: string
           description: string | null
-          fulfillment_notes: string | null
-          bullet_points: string[]
-          variants: Json | null
-          fulfillment_provider: string | null
           external_sku: string | null
+          fulfillment_notes: string | null
+          fulfillment_provider: string | null
           id: string
           image_urls: string[]
           is_published: boolean
@@ -109,16 +108,16 @@ export type Database = {
           source_url: string | null
           title: string
           updated_at: string
+          variants: Json
         }
         Insert: {
+          bullet_points?: string[]
           created_at?: string
           currency?: string
           description?: string | null
-          fulfillment_notes?: string | null
-          bullet_points?: string[]
-          variants?: Json | null
-          fulfillment_provider?: string | null
           external_sku?: string | null
+          fulfillment_notes?: string | null
+          fulfillment_provider?: string | null
           id?: string
           image_urls?: string[]
           is_published?: boolean
@@ -127,16 +126,16 @@ export type Database = {
           source_url?: string | null
           title: string
           updated_at?: string
+          variants?: Json
         }
         Update: {
+          bullet_points?: string[]
           created_at?: string
           currency?: string
           description?: string | null
-          fulfillment_notes?: string | null
-          bullet_points?: string[]
-          variants?: Json | null
-          fulfillment_provider?: string | null
           external_sku?: string | null
+          fulfillment_notes?: string | null
+          fulfillment_provider?: string | null
           id?: string
           image_urls?: string[]
           is_published?: boolean
@@ -145,6 +144,7 @@ export type Database = {
           source_url?: string | null
           title?: string
           updated_at?: string
+          variants?: Json
         }
         Relationships: []
       }
