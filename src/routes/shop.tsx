@@ -42,7 +42,7 @@ function ShopPage() {
           </span>
         </div>
       ) : (
-        <div className="grid grid-cols-2 border-l border-t border-black/10 bg-white sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
+        <div className="grid grid-cols-2 bg-white sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
           {products.map((product) => (
             <ProductCell key={product.id} product={product} />
           ))}
@@ -69,9 +69,9 @@ function ProductCell({ product }: { product: Product }) {
   return (
     <Link
       to={`/offer/${product.slug}`}
-      className="group relative block overflow-hidden border-b border-r border-black/10 bg-white"
+      className="group relative block overflow-hidden border-none bg-transparent"
     >
-      <div className="relative flex aspect-[2/3] items-center justify-center overflow-hidden p-3 sm:p-4">
+      <div className="relative flex aspect-[2/3] items-center justify-center overflow-hidden bg-transparent p-3 sm:p-4">
         {imageUrl ? (
           <img
             src={imageUrl}
@@ -80,7 +80,7 @@ function ProductCell({ product }: { product: Product }) {
             loading="lazy"
           />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-white">
+          <div className="absolute inset-0 flex items-center justify-center bg-transparent">
             <span className="text-[7px] uppercase tracking-[0.3em] text-black/20">
               No Image
             </span>
