@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Work+Sans:wght@300;400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap");
 
 @import "tailwindcss" source(none);
 @source "../src";
@@ -7,11 +7,11 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-2xl: 0;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -33,133 +33,114 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --font-display: var(--font-display);
-  --font-sans: var(--font-sans);
-  --shadow-soft: var(--shadow-soft);
-  --shadow-elevated: var(--shadow-elevated);
-  --shadow-glow: var(--shadow-glow);
-  --gradient-hero: var(--gradient-hero);
-  --gradient-accent: var(--gradient-accent);
-  --gradient-surface: var(--gradient-surface);
+  --font-mono: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --shadow-soft: none;
+  --shadow-elevated: none;
+  --shadow-glow: none;
 }
 
 :root {
-  /* ── VOID THEME — pure black brutalist ── */
-  --radius: 0rem; /* zero border-radius everywhere */
+  /* ── VOID THEME — PURE BRUTALIST ── */
+  --radius: 0rem;
 
-  --background:           oklch(0 0 0);          /* #000000 */
-  --foreground:           oklch(1 0 0);           /* #ffffff */
+  --background: #000000;
+  --foreground: #FFFFFF;
 
-  --card:                 oklch(0.07 0 0);        /* #111111 */
-  --card-foreground:      oklch(1 0 0);
+  --card: #000000;
+  --card-foreground: #FFFFFF;
 
-  --popover:              oklch(0.07 0 0);
-  --popover-foreground:   oklch(1 0 0);
+  --popover: #000000;
+  --popover-foreground: #FFFFFF;
 
-  --primary:              oklch(1 0 0);           /* white */
-  --primary-foreground:   oklch(0 0 0);           /* black */
+  --primary: #FFFFFF;
+  --primary-foreground: #000000;
 
-  --secondary:            oklch(0.12 0 0);        /* #1e1e1e */
-  --secondary-foreground: oklch(1 0 0);
+  --secondary: #000000;
+  --secondary-foreground: #FFFFFF;
 
-  --muted:                oklch(0.1 0 0);         /* #1a1a1a */
-  --muted-foreground:     oklch(0.45 0 0);        /* #777 */
+  --muted: #000000;
+  --muted-foreground: #888888;
 
-  --accent:               oklch(1 0 0);           /* white — replaces indigo */
-  --accent-foreground:    oklch(0 0 0);           /* black text on white */
+  --accent: #FFFFFF;
+  --accent-foreground: #000000;
 
-  --destructive:          oklch(0.62 0.22 27);
-  --destructive-foreground: oklch(0.99 0 0);
+  --destructive: #FF0000;
+  --destructive-foreground: #FFFFFF;
 
-  --success:              oklch(0.72 0.15 165);
-  --success-foreground:   oklch(0 0 0);
+  --success: #00FF00;
+  --success-foreground: #000000;
 
-  --border:               oklch(1 0 0 / 10%);    /* white/10 — subtle 1px lines */
-  --input:                oklch(1 0 0 / 8%);
-  --ring:                 oklch(1 0 0 / 40%);
+  --border: #FFFFFF;
+  --input: #FFFFFF;
+  --ring: #FFFFFF;
 
-  --font-display: "Instrument Serif", ui-serif, Georgia, serif;
-  --font-sans:    "Work Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
-
-  /* Shadows — deeper on pure black */
-  --shadow-soft:
-    0 1px 2px oklch(0 0 0 / 0.8),
-    0 4px 12px oklch(0 0 0 / 0.5);
-  --shadow-elevated:
-    0 8px 24px oklch(0 0 0 / 0.8),
-    0 24px 64px oklch(0 0 0 / 0.6);
-  --shadow-glow: none; /* no glow on void */
-
-  /* Gradients — strip all colour, keep depth only */
-  --gradient-hero:    linear-gradient(180deg, oklch(0 0 0) 0%, oklch(0.05 0 0) 100%);
-  --gradient-accent:  linear-gradient(135deg, oklch(1 0 0) 0%, oklch(0.85 0 0) 100%);
-  --gradient-surface: linear-gradient(180deg, oklch(0.07 0 0) 0%, oklch(0.05 0 0) 100%);
-}
-
-.dark {
-  --background:           oklch(0 0 0);
-  --foreground:           oklch(1 0 0);
-  --card:                 oklch(0.07 0 0);
-  --card-foreground:      oklch(1 0 0);
-  --popover:              oklch(0.07 0 0);
-  --popover-foreground:   oklch(1 0 0);
-  --primary:              oklch(1 0 0);
-  --primary-foreground:   oklch(0 0 0);
-  --secondary:            oklch(0.12 0 0);
-  --secondary-foreground: oklch(1 0 0);
-  --muted:                oklch(0.1 0 0);
-  --muted-foreground:     oklch(0.45 0 0);
-  --accent:               oklch(1 0 0);
-  --accent-foreground:    oklch(0 0 0);
-  --destructive:          oklch(0.62 0.22 27);
-  --destructive-foreground: oklch(0.99 0 0);
-  --success:              oklch(0.72 0.15 165);
-  --success-foreground:   oklch(0 0 0);
-  --border:               oklch(1 0 0 / 10%);
-  --input:                oklch(1 0 0 / 8%);
-  --ring:                 oklch(1 0 0 / 40%);
+  --font-mono: "Space Mono", monospace;
 }
 
 @layer base {
   * {
     border-color: var(--color-border);
-    border-radius: 0; /* global zero radius — brutalist */
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
   }
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
-    font-family: var(--font-sans);
+    font-family: var(--font-mono);
     font-weight: 400;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    margin: 0;
+    padding: 0;
   }
-  h1, h2, h3, h4 {
-    font-family: var(--font-display);
-    font-weight: 400;
-    letter-spacing: -0.015em;
-    line-height: 1.05;
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    letter-spacing: -0.05em;
+    line-height: 1;
   }
-  .font-display  { font-family: var(--font-display); }
-  .serif-italic  { font-style: italic; font-family: var(--font-display); }
+
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  button {
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  /* Remove all default focus rings and use custom ones if needed */
+  *:focus {
+    outline: none;
+  }
 }
 
-/* ── Void utility classes ── */
-.text-gradient {
-  /* No colour gradient — stark white on black */
-  color: oklch(1 0 0);
-  -webkit-text-fill-color: oklch(1 0 0);
+@layer utilities {
+  .grid-void {
+    display: grid;
+    gap: 0;
+    border-top: 1px solid var(--color-border);
+    border-left: 1px solid var(--color-border);
+  }
+
+  .grid-void > * {
+    border-right: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .text-tiny {
+    font-size: 0.625rem; /* 10px */
+    line-height: 1;
+  }
+
+  .tight-mono {
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: -0.05em;
+  }
 }
-
-/* Industrial mono label — use anywhere you want the brutalist type style */
-.label-mono {
-  font-family: 'Courier New', Courier, monospace;
-  font-size: 0.6875rem;       /* 11px */
-  letter-spacing: 0.25em;
-  text-transform: uppercase;
-}
-
-/* Void border — 1px white/10 */
-.border-void { border: 1px solid oklch(1 0 0 / 10%); }
-
-/* Stark border — 1px white/100 (nav underlines, active states) */
-.border-stark { border: 1px solid oklch(1 0 0); }
