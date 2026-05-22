@@ -17,7 +17,8 @@ type ProductVariant = {
 };
 
 export const Route = createFileRoute("/offer")({
-  loader: async ({ params: { slug } }) => {
+  loader: async ({ params }: any) => {
+    const slug = params?.slug as string | undefined;
     if (slug) {
       const { data: product } = await supabase
         .from("products")
@@ -37,8 +38,8 @@ export const Route = createFileRoute("/offer")({
 
     return { product: products?.[0] ?? null };
   },
-  head: ({ loaderData }) => {
-    const product = loaderData.product;
+  head: ({ loaderData }: any) => {
+    const product = loaderData?.product;
     const title = product?.title ?? offer.name;
     const description = product?.description ?? offer.shortPitch;
 

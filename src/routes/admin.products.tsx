@@ -146,7 +146,7 @@ function ProductsPage() {
                   <Pencil size={12} /> Edit
                 </button>
                 <button onClick={async () => {
-                  await supabase.from('products').update({ is_featured: !p.is_featured }).eq('id', p.id);
+                  await supabase.from('products').update({ is_featured: !p.is_featured } as any).eq('id', p.id);
                   window.dispatchEvent(new Event('productsUpdated'));
                   window.location.reload();
                 }} className="text-[10px] font-bold uppercase opacity-40 hover:opacity-100 flex items-center gap-1">
