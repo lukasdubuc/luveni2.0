@@ -1,31 +1,14 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { fetchProducts, useProducts } from "@/lib/useProducts";
-
-export const Route = createFileRoute("/shop")({
-  loader: async () => {
-    const products = await fetchProducts({ onlyPublished: true });
-    return { products: products ?? [] };
-  },
-  head: () => ({
-    meta: [
-      { title: "Shop — Northwind" },
-      { name: "description", content: "Browse published products with clean, modern product cards." },
-    ],
-  }),
-  component: ShopPage,
-});
-
 function ShopPage() {
-  // Use server-side loader data initially, but prefer the shared hook for
-  // client-driven refreshes so both Shop and OfferSection use the same logic.
   const loader = Route.useLoaderData();
   const { products: clientProducts, loading } = useProducts({ onlyPublished: true });
-  const products = (clientProducts && clientProducts.length > 0) ? clientProducts : (loader?.products ?? []);
+  const products: Product[] = (clientProducts && clientProducts.length > 0)
+    ? (clientProducts as Product[])
+    : ((loader?.products as Product[]) ?? []);
 
   return (
     <section className="bg-background min-h-screen py-12">
       <div className="mx-auto max-w-7xl px-2 sm:px-4 lg:px-8">
-        {/* High-density minimal grid - no intro text */}
+        {/* High-density minimal grid */}
         <div className="grid gap-2 sm:gap-3 grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {products.map((product) => {
             const imageUrl = Array.isArray(product.image_urls) && product.image_urls.length > 0

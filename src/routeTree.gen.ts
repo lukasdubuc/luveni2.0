@@ -22,6 +22,7 @@ import { Route as CheckoutRouteImport } from "./routes/checkout"
 import { Route as AboutRouteImport } from "./routes/about"
 import { Route as IndexRouteImport } from "./routes/index"
 import { Route as AdminIndexRouteImport } from "./routes/admin.index"
+import { Route as OfferSlugRouteImport } from "./routes/offer.$slug"
 import { Route as AdminSettingsRouteImport } from "./routes/admin.settings"
 import { Route as AdminProductsRouteImport } from "./routes/admin.products"
 import { Route as AdminOrdersRouteImport } from "./routes/admin.orders"
@@ -93,6 +94,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: "/admin/",
   getParentRoute: () => rootRouteImport,
 } as any)
+const OfferSlugRoute = OfferSlugRouteImport.update({
+  id: "/$slug",
+  path: "/$slug",
+  getParentRoute: () => OfferRoute,
+} as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
   id: "/admin/settings",
   path: "/admin/settings",
@@ -125,7 +131,7 @@ export interface FileRoutesByFullPath {
   "/checkout": typeof CheckoutRoute
   "/contact": typeof ContactRoute
   "/login": typeof LoginRoute
-  "/offer": typeof OfferRoute
+  "/offer": typeof OfferRouteWithChildren
   "/privacy": typeof PrivacyRoute
   "/refund": typeof RefundRoute
   "/shop": typeof ShopRoute
@@ -136,6 +142,7 @@ export interface FileRoutesByFullPath {
   "/admin/orders": typeof AdminOrdersRoute
   "/admin/products": typeof AdminProductsRoute
   "/admin/settings": typeof AdminSettingsRoute
+  "/offer/$slug": typeof OfferSlugRoute
   "/admin/": typeof AdminIndexRoute
   "/api/public/stripe-webhook": typeof ApiPublicStripeWebhookRoute
 }
@@ -145,7 +152,7 @@ export interface FileRoutesByTo {
   "/checkout": typeof CheckoutRoute
   "/contact": typeof ContactRoute
   "/login": typeof LoginRoute
-  "/offer": typeof OfferRoute
+  "/offer": typeof OfferRouteWithChildren
   "/privacy": typeof PrivacyRoute
   "/refund": typeof RefundRoute
   "/shop": typeof ShopRoute
@@ -156,6 +163,7 @@ export interface FileRoutesByTo {
   "/admin/orders": typeof AdminOrdersRoute
   "/admin/products": typeof AdminProductsRoute
   "/admin/settings": typeof AdminSettingsRoute
+  "/offer/$slug": typeof OfferSlugRoute
   "/admin": typeof AdminIndexRoute
   "/api/public/stripe-webhook": typeof ApiPublicStripeWebhookRoute
 }
@@ -166,7 +174,7 @@ export interface FileRoutesById {
   "/checkout": typeof CheckoutRoute
   "/contact": typeof ContactRoute
   "/login": typeof LoginRoute
-  "/offer": typeof OfferRoute
+  "/offer": typeof OfferRouteWithChildren
   "/privacy": typeof PrivacyRoute
   "/refund": typeof RefundRoute
   "/shop": typeof ShopRoute
@@ -177,6 +185,7 @@ export interface FileRoutesById {
   "/admin/orders": typeof AdminOrdersRoute
   "/admin/products": typeof AdminProductsRoute
   "/admin/settings": typeof AdminSettingsRoute
+  "/offer/$slug": typeof OfferSlugRoute
   "/admin/": typeof AdminIndexRoute
   "/api/public/stripe-webhook": typeof ApiPublicStripeWebhookRoute
 }
@@ -199,6 +208,7 @@ export interface FileRouteTypes {
     | "/admin/orders"
     | "/admin/products"
     | "/admin/settings"
+    | "/offer/$slug"
     | "/admin/"
     | "/api/public/stripe-webhook"
   fileRoutesByTo: FileRoutesByTo
@@ -219,6 +229,7 @@ export interface FileRouteTypes {
     | "/admin/orders"
     | "/admin/products"
     | "/admin/settings"
+    | "/offer/$slug"
     | "/admin"
     | "/api/public/stripe-webhook"
   id:
@@ -239,6 +250,7 @@ export interface FileRouteTypes {
     | "/admin/orders"
     | "/admin/products"
     | "/admin/settings"
+    | "/offer/$slug"
     | "/admin/"
     | "/api/public/stripe-webhook"
   fileRoutesById: FileRoutesById
@@ -249,7 +261,7 @@ export interface RootRouteChildren {
   CheckoutRoute: typeof CheckoutRoute
   ContactRoute: typeof ContactRoute
   LoginRoute: typeof LoginRoute
-  OfferRoute: typeof OfferRoute
+  OfferRoute: typeof OfferRouteWithChildren
   PrivacyRoute: typeof PrivacyRoute
   RefundRoute: typeof RefundRoute
   ShopRoute: typeof ShopRoute
@@ -357,6 +369,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    "/offer/$slug": {
+      id: "/offer/$slug"
+      path: "/$slug"
+      fullPath: "/offer/$slug"
+      preLoaderRoute: typeof OfferSlugRouteImport
+      parentRoute: typeof OfferRoute
+    }
     "/admin/settings": {
       id: "/admin/settings"
       path: "/admin/settings"
@@ -395,13 +414,23 @@ declare module "@tanstack/react-router" {
   }
 }
 
+interface OfferRouteChildren {
+  OfferSlugRoute: typeof OfferSlugRoute
+}
+
+const OfferRouteChildren: OfferRouteChildren = {
+  OfferSlugRoute: OfferSlugRoute,
+}
+
+const OfferRouteWithChildren = OfferRoute._addFileChildren(OfferRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   CheckoutRoute: CheckoutRoute,
   ContactRoute: ContactRoute,
   LoginRoute: LoginRoute,
-  OfferRoute: OfferRoute,
+  OfferRoute: OfferRouteWithChildren,
   PrivacyRoute: PrivacyRoute,
   RefundRoute: RefundRoute,
   ShopRoute: ShopRoute,
@@ -418,13 +447,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from "./router.tsx"
-import type { startInstance } from "./start.ts"
-declare module "@tanstack/react-start" {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
