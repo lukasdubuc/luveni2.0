@@ -47,7 +47,7 @@ export function Hero({ siteConfig }: { siteConfig?: SiteConfig }) {
           />
           <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
-              to="/checkout"
+              to="/offer"
               className="group inline-flex w-full items-center justify-center gap-2 rounded-md px-7 py-3.5 text-sm font-medium text-accent-foreground transition-transform hover:-translate-y-0.5 sm:w-auto"
               style={{
                 backgroundImage: "var(--gradient-accent)",

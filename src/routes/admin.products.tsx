@@ -12,6 +12,7 @@ function ProductsPage() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<any | null>(null);
+  const [formCollapsed, setFormCollapsed] = useState(false);
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -79,10 +80,13 @@ function ProductsPage() {
           <p className="text-[9px] font-mono font-bold uppercase tracking-[0.4em] opacity-30 mt-3">services2day // stock_unit</p>
         </div>
         <button 
-          onClick={() => setEditing({
+          onClick={() => {
+            setFormCollapsed(false);
+            setEditing({
             title: "",
             description: "",
             price_cents: 0,
+            price_cents_discounted: null,
             currency: "usd",
             slug: "",
             source_url: "",
@@ -92,7 +96,8 @@ function ProductsPage() {
             variantsText: "[]",
             is_featured: false,
             is_published: false,
-          })}
+          });
+          }}
           className="text-[10px] font-bold border border-black px-6 py-2 uppercase hover:bg-black hover:text-white transition-all"
         >
           Add_New_Item
@@ -134,19 +139,23 @@ function ProductsPage() {
                   </div>
 
               <div className="flex gap-4 border-t border-black/5 pt-4">
-                <button onClick={() => setEditing({
+                <button onClick={() => {
+                  setFormCollapsed(false);
+                  setEditing({
                   ...p,
                   description: p.description ?? "",
                   source_url: p.source_url ?? "",
                   fulfillment_provider: p.fulfillment_provider ?? "",
                   external_sku: p.external_sku ?? "",
                   bullet_points: p.bullet_points ?? [],
+                  price_cents_discounted: p.price_cents_discounted ?? null,
                   variantsText: JSON.stringify(p.variants ?? [], null, 2),
-                })} className="text-[10px] font-bold uppercase opacity-40 hover:opacity-100 flex items-center gap-1">
+                });
+                }} className="text-[10px] font-bold uppercase opacity-40 hover:opacity-100 flex items-center gap-1">
                   <Pencil size={12} /> Edit
                 </button>
                 <button onClick={async () => {
-                  await supabase.from('products').update({ is_featured: !p.is_featured }).eq('id', p.id);
+                  await supabase.from('products').update({ is_featured: !p.is_featured } as any).eq('id', p.id);
                   window.dispatchEvent(new Event('productsUpdated'));
                   window.location.reload();
                 }} className="text-[10px] font-bold uppercase opacity-40 hover:opacity-100 flex items-center gap-1">
@@ -167,111 +176,146 @@ function ProductsPage() {
       {/* EDIT MODAL - TECH INDUSTRIAL STYLE */}
       {editing && (
         <div className="fixed inset-0 z-50 bg-white/90 backdrop-blur-sm flex items-center justify-center p-6">
-          <form onSubmit={saveProduct} className="w-full max-w-xl bg-white border border-black p-10 shadow-2xl">
-            <h2 className="text-2xl font-light italic uppercase tracking-tighter mb-8 border-b border-black/10 pb-4">Modify_Record</h2>
-            <div className="grid grid-cols-2 gap-6 mb-8">
-              <div className="col-span-2">
-                <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Title</label>
-                <input 
-                  className="w-full border-b border-black outline-none py-2 font-bold uppercase text-sm" 
-                  value={editing.title} 
-                  onChange={e => setEditing({...editing, title: e.target.value})}
-                  required 
-                />
-              </div>
-              <div>
-                <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Price (Cents)</label>
-                <input 
-                  type="number" 
-                  className="w-full border-b border-black outline-none py-2 font-mono font-bold" 
-                  value={editing.price_cents} 
-                  onChange={e => setEditing({...editing, price_cents: Number(e.target.value)})}
-                  required 
-                />
-              </div>
-              <div>
-                <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Slug</label>
-                <input 
-                  className="w-full border-b border-black outline-none py-2 text-sm italic" 
-                  value={editing.slug} 
-                  onChange={e => setEditing({...editing, slug: e.target.value})}
-                  required 
-                />
-              </div>
-              <div className="flex items-center gap-3">
-                <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Is Featured</label>
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={!!editing.is_featured}
-                  onChange={e => setEditing({...editing, is_featured: e.target.checked})}
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Description</label>
-                <textarea
-                  rows={4}
-                  className="w-full border border-black/10 bg-white p-3 text-sm outline-none"
-                  value={editing.description ?? ""}
-                  onChange={e => setEditing({...editing, description: e.target.value})}
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Bullet Points</label>
-                <textarea
-                  rows={4}
-                  className="w-full border border-black/10 bg-white p-3 text-sm outline-none"
-                  value={Array.isArray(editing.bullet_points) ? editing.bullet_points.join("\n") : ""}
-                  onChange={e => setEditing({
-                    ...editing,
-                    bullet_points: e.target.value
-                      .split("\n")
-                      .map((line) => line.trim())
-                      .filter(Boolean),
-                  })}
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Variants JSON</label>
-                <textarea
-                  rows={6}
-                  className="w-full border border-black/10 bg-white p-3 text-sm outline-none font-mono"
-                  value={editing.variantsText ?? "[]"}
-                  onChange={e => setEditing({ ...editing, variantsText: e.target.value })}
-                />
-                <p className="mt-2 text-[10px] text-muted-foreground">
-                  Provide a JSON array of variants, for example: <span className="font-mono">{"[{ \"sku\":\"black-s\",\"stock\":10,\"price_cents\":4900,\"attributes\":{\"color\":\"Black\",\"size\":\"S\"}}]"}</span>
-                </p>
-              </div>
-              <div>
-                <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Fulfillment Provider</label>
-                <input
-                  className="w-full border-b border-black outline-none py-2 text-sm"
-                  value={editing.fulfillment_provider ?? ""}
-                  onChange={e => setEditing({...editing, fulfillment_provider: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">External SKU</label>
-                <input
-                  className="w-full border-b border-black outline-none py-2 text-sm"
-                  value={editing.external_sku ?? ""}
-                  onChange={e => setEditing({...editing, external_sku: e.target.value})}
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Source URL</label>
-                <input 
-                  className="w-full border-b border-black outline-none py-2 text-sm italic" 
-                  value={editing.source_url ?? ""} 
-                  onChange={e => setEditing({...editing, source_url: e.target.value})}
-                />
+          <form onSubmit={saveProduct} className={`w-full max-w-xl bg-white border border-black shadow-2xl transition-all duration-300 ${formCollapsed ? 'p-4' : 'p-10'}`}>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className={`font-light italic uppercase tracking-tighter border-b border-black/10 pb-4 flex-1 ${formCollapsed ? 'text-sm' : 'text-2xl'}`}>
+                {formCollapsed ? 'Product_Editor' : 'Modify_Record'}
+              </h2>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFormCollapsed(!formCollapsed)}
+                  className="text-[10px] font-bold uppercase px-3 py-2 border border-black hover:bg-gray-50"
+                >
+                  {formCollapsed ? 'Expand' : 'Collapse'}
+                </button>
               </div>
             </div>
-            <div className="flex gap-4">
-              <button type="submit" className="flex-1 bg-black text-white py-4 font-bold uppercase text-[10px] tracking-widest hover:invert transition-all">Save_Record</button>
-              <button type="button" onClick={() => setEditing(null)} className="px-8 border border-black py-4 font-bold uppercase text-[10px] tracking-widest hover:bg-gray-50">Cancel</button>
-            </div>
+
+            {!formCollapsed && (
+              <>
+                <div className="grid grid-cols-2 gap-6 mb-8">
+                  <div className="col-span-2">
+                    <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Title</label>
+                    <input 
+                      className="w-full border-b border-black outline-none py-2 font-bold uppercase text-sm" 
+                      value={editing.title} 
+                      onChange={e => setEditing({...editing, title: e.target.value})}
+                      required 
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Price (Cents)</label>
+                    <input 
+                      type="number" 
+                      className="w-full border-b border-black outline-none py-2 font-mono font-bold" 
+                      value={editing.price_cents} 
+                      onChange={e => setEditing({...editing, price_cents: Number(e.target.value)})}
+                      required 
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Discounted Price (Cents)</label>
+                    <input 
+                      type="number" 
+                      className="w-full border-b border-black outline-none py-2 font-mono font-bold" 
+                      value={editing.price_cents_discounted ?? ""} 
+                      onChange={e => setEditing({...editing, price_cents_discounted: e.target.value ? Number(e.target.value) : null})}
+                      placeholder="Optional"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Slug</label>
+                    <input 
+                      className="w-full border-b border-black outline-none py-2 text-sm italic" 
+                      value={editing.slug} 
+                      onChange={e => setEditing({...editing, slug: e.target.value})}
+                      required 
+                    />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Is Featured</label>
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={!!editing.is_featured}
+                      onChange={e => setEditing({...editing, is_featured: e.target.checked})}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Description</label>
+                    <textarea
+                      rows={4}
+                      className="w-full border border-black/10 bg-white p-3 text-sm outline-none"
+                      value={editing.description ?? ""}
+                      onChange={e => setEditing({...editing, description: e.target.value})}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Bullet Points</label>
+                    <textarea
+                      rows={4}
+                      className="w-full border border-black/10 bg-white p-3 text-sm outline-none"
+                      value={Array.isArray(editing.bullet_points) ? editing.bullet_points.join("\n") : ""}
+                      onChange={e => setEditing({
+                        ...editing,
+                        bullet_points: e.target.value
+                          .split("\n")
+                          .map((line) => line.trim())
+                          .filter(Boolean),
+                      })}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Variants JSON</label>
+                    <textarea
+                      rows={6}
+                      className="w-full border border-black/10 bg-white p-3 text-sm outline-none font-mono"
+                      value={editing.variantsText ?? "[]"}
+                      onChange={e => setEditing({ ...editing, variantsText: e.target.value })}
+                    />
+                    <p className="mt-2 text-[10px] text-muted-foreground">
+                      Provide a JSON array of variants, for example: <span className="font-mono">{"[{ \"sku\":\"black-s\",\"stock\":10,\"price_cents\":4900,\"attributes\":{\"color\":\"Black\",\"size\":\"S\"}}]"}</span>
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Fulfillment Provider</label>
+                    <input
+                      className="w-full border-b border-black outline-none py-2 text-sm"
+                      value={editing.fulfillment_provider ?? ""}
+                      onChange={e => setEditing({...editing, fulfillment_provider: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">External SKU</label>
+                    <input
+                      className="w-full border-b border-black outline-none py-2 text-sm"
+                      value={editing.external_sku ?? ""}
+                      onChange={e => setEditing({...editing, external_sku: e.target.value})}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Source URL</label>
+                    <input 
+                      className="w-full border-b border-black outline-none py-2 text-sm italic" 
+                      value={editing.source_url ?? ""} 
+                      onChange={e => setEditing({...editing, source_url: e.target.value})}
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <button type="submit" className="flex-1 bg-black text-white py-4 font-bold uppercase text-[10px] tracking-widest hover:invert transition-all">Save_Record</button>
+                  <button type="button" onClick={() => setEditing(null)} className="px-8 border border-black py-4 font-bold uppercase text-[10px] tracking-widest hover:bg-gray-50">Cancel</button>
+                </div>
+              </>
+            )}
+
+            {formCollapsed && (
+              <div className="flex gap-4 mt-4">
+                <button type="submit" className="flex-1 bg-black text-white py-3 font-bold uppercase text-[10px] tracking-widest hover:invert transition-all">Save</button>
+                <button type="button" onClick={() => setEditing(null)} className="px-4 border border-black py-3 font-bold uppercase text-[10px] tracking-widest hover:bg-gray-50">Close</button>
+              </div>
+            )}
           </form>
         </div>
       )}

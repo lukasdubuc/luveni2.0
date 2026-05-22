@@ -28,6 +28,20 @@ export const Route = createFileRoute("/offer")({
       return { product: product ?? null };
     }
 
+    // First, try to find a featured product (newest if multiple)
+    const { data: featuredProducts } = await supabase
+      .from("products")
+      .select("*")
+      .eq("is_published", true)
+      .eq("is_featured", true)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (featuredProducts && featuredProducts.length > 0) {
+      return { product: featuredProducts[0] };
+    }
+
+    // Fallback: get the newest published product
     const { data: products } = await supabase
       .from("products")
       .select("*")
