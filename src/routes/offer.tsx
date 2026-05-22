@@ -17,7 +17,8 @@ type ProductVariant = {
 };
 
 export const Route = createFileRoute("/offer")({
-  loader: async ({ params: { slug } }) => {
+  loader: async ({ params }: any) => {
+    const slug = params?.slug as string | undefined;
     if (slug) {
       const { data: product } = await supabase
         .from("products")
