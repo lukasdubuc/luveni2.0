@@ -61,7 +61,7 @@ export const SITE_CONFIG_FALLBACK: SiteConfig = {
 };
 
 export function mergeSiteConfig(data: Partial<SiteConfig> & { metadata?: Partial<SiteConfigMetadata> | null }): SiteConfig {
-  const rawMetadata = data.metadata && typeof data.metadata === "object" ? data.metadata : {};
+  const rawMetadata: Partial<SiteConfigMetadata> = (data.metadata && typeof data.metadata === "object" ? data.metadata : {}) as Partial<SiteConfigMetadata>;
   const metadata: SiteConfigMetadata = {
     ...SITE_CONFIG_METADATA_FALLBACK,
     ...rawMetadata,
