@@ -3,21 +3,19 @@ import { site } from "@/config/site";
 
 export function Footer({ description }: { description?: string }) {
   return (
-    <footer className="border-t border-white bg-black p-4">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div className="flex flex-col gap-1">
-          <span className="text-tiny tight-mono text-white font-bold">{site.brand}</span>
-          {description && (
-            <p className="text-tiny tight-mono text-white/50 max-w-xs uppercase">
-              {description}
-            </p>
-          )}
+    <footer className="bg-black px-6 py-12">
+      <div className="flex flex-col items-center gap-8">
+        <div className="flex flex-wrap justify-center gap-x-8 gap-y-4">
+          <Link to="/shop" className="text-[10px] tracking-[0.2em] text-white/40 hover:text-white transition-colors">SHOP</Link>
+          <Link to="/about" className="text-[10px] tracking-[0.2em] text-white/40 hover:text-white transition-colors">ABOUT</Link>
+          <Link to="/contact" className="text-[10px] tracking-[0.2em] text-white/40 hover:text-white transition-colors">CONTACT</Link>
+          <Link to="/privacy" className="text-[10px] tracking-[0.2em] text-white/40 hover:text-white transition-colors">PRIVACY</Link>
+          <Link to="/terms" className="text-[10px] tracking-[0.2em] text-white/40 hover:text-white transition-colors">TERMS</Link>
         </div>
         
-        <div className="flex gap-4">
-          <Link to="/privacy" className="text-tiny tight-mono text-white/50 hover:text-white">PRIVACY</Link>
-          <Link to="/terms" className="text-tiny tight-mono text-white/50 hover:text-white">TERMS</Link>
-          <span className="text-tiny tight-mono text-white/30">©{new Date().getFullYear()}</span>
+        <div className="flex flex-col items-center gap-2">
+          <span className="text-[10px] tracking-[0.3em] text-white font-bold">{site.brand}</span>
+          <span className="text-[8px] tracking-[0.2em] text-white/20">©{new Date().getFullYear()}</span>
         </div>
       </div>
     </footer>

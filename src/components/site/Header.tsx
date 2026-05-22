@@ -13,54 +13,67 @@ export function Header() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-white bg-black">
-      <div className="flex h-12 items-center justify-between px-4">
-        {/* Logo */}
-        <Link
-          to="/shop"
-          className="tight-mono text-[12px] text-white font-bold"
-        >
-          {site.brand}
-        </Link>
+    <header className="fixed top-0 left-0 right-0 z-50 bg-transparent pointer-events-none">
+      <div className="flex h-16 items-center justify-between px-6">
+        {/* Logo - Left */}
+        <div className="pointer-events-auto">
+          <Link
+            to="/shop"
+            className="text-[12px] tracking-[0.2em] text-white font-bold"
+          >
+            {site.brand}
+          </Link>
+        </div>
 
-        {/* Desktop Nav */}
-        <nav className="hidden items-center gap-6 md:flex">
+        {/* Desktop Nav - Center */}
+        <nav className="hidden items-center gap-8 md:flex pointer-events-auto">
           {navLinks.map((l) => (
             <Link
               key={l.to}
               to={l.to}
-              className="text-tiny tight-mono text-white/50 hover:text-white transition-colors"
-              activeProps={{ className: "text-white border-b border-white" }}
+              className="text-[10px] tracking-[0.2em] text-white/40 hover:text-white transition-colors"
+              activeProps={{ className: "text-white" }}
             >
               {l.label}
             </Link>
           ))}
         </nav>
 
-        {/* Mobile Toggle */}
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className="md:hidden text-white"
-        >
-          {open ? <X size={16} /> : <Menu size={16} />}
-        </button>
+        {/* Mobile Toggle - Right */}
+        <div className="md:hidden pointer-events-auto">
+          <button
+            onClick={() => setOpen((v) => !v)}
+            className="text-white"
+          >
+            {open ? <X size={18} /> : <Menu size={18} />}
+          </button>
+        </div>
+        
+        {/* Placeholder for balance on desktop */}
+        <div className="hidden md:block w-[100px]"></div>
       </div>
 
       {/* Mobile Menu */}
       {open && (
-        <div className="border-t border-white md:hidden bg-black">
-          <div className="flex flex-col p-4 gap-4">
+        <div className="fixed inset-0 bg-black z-40 pointer-events-auto md:hidden">
+          <div className="flex flex-col items-center justify-center h-full gap-8">
             {navLinks.map((l) => (
               <Link
                 key={l.to}
                 to={l.to}
                 onClick={() => setOpen(false)}
-                className="text-tiny tight-mono text-white/50 hover:text-white"
+                className="text-[14px] tracking-[0.3em] text-white/50 hover:text-white"
                 activeProps={{ className: "text-white" }}
               >
                 {l.label}
               </Link>
             ))}
+            <button 
+              onClick={() => setOpen(false)}
+              className="absolute top-6 right-6 text-white"
+            >
+              <X size={24} />
+            </button>
           </div>
         </div>
       )}

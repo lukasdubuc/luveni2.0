@@ -40,7 +40,7 @@
 }
 
 :root {
-  /* ── VOID THEME — PURE BRUTALIST ── */
+  /* ── YEEZY VOID THEME — PURE BLACK ── */
   --radius: 0rem;
 
   --background: #000000;
@@ -70,8 +70,9 @@
   --success: #00FF00;
   --success-foreground: #000000;
 
-  --border: #FFFFFF;
-  --input: #FFFFFF;
+  /* Set border to transparent for Yeezy look */
+  --border: transparent;
+  --input: transparent;
   --ring: #FFFFFF;
 
   --font-mono: "Space Mono", monospace;
@@ -79,7 +80,7 @@
 
 @layer base {
   * {
-    border-color: var(--color-border);
+    border-color: transparent !important;
     border-radius: 0 !important;
     box-shadow: none !important;
     text-transform: uppercase;
@@ -87,14 +88,15 @@
   }
 
   body {
-    background-color: var(--color-background);
-    color: var(--color-foreground);
+    background-color: #000000;
+    color: #FFFFFF;
     font-family: var(--font-mono);
     font-weight: 400;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     margin: 0;
     padding: 0;
+    overflow-x: hidden;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -114,27 +116,19 @@
     font-family: inherit;
   }
 
-  /* Remove all default focus rings and use custom ones if needed */
   *:focus {
     outline: none;
   }
 }
 
 @layer utilities {
-  .grid-void {
-    display: grid;
-    gap: 0;
-    border-top: 1px solid var(--color-border);
-    border-left: 1px solid var(--color-border);
-  }
-
-  .grid-void > * {
-    border-right: 1px solid var(--color-border);
-    border-bottom: 1px solid var(--color-border);
-  }
-
   .text-tiny {
     font-size: 0.625rem; /* 10px */
+    line-height: 1;
+  }
+
+  .text-micro {
+    font-size: 0.5rem; /* 8px */
     line-height: 1;
   }
 
@@ -142,5 +136,14 @@
     font-family: var(--font-mono);
     text-transform: uppercase;
     letter-spacing: -0.05em;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }

@@ -34,52 +34,22 @@ function ShopPage() {
       : ((loader?.products as Product[]) ?? []);
 
   return (
-    <div className="min-h-screen bg-black font-mono">
-
-      {/* ── Header strip ── */}
-      <div className="border-b border-white px-6 py-4 flex items-center justify-between">
-        <span className="text-[10px] tracking-[0.3em] uppercase text-white font-bold">
-          Shop
-        </span>
-        <div className="flex items-center gap-6">
-          {/* Filter chips */}
-          <div className="hidden sm:flex gap-3">
-            <span className="text-[9px] tracking-[0.2em] uppercase text-white border-b border-white pb-px cursor-pointer">
-              All
-            </span>
-            <span className="text-[9px] tracking-[0.2em] uppercase text-white/30 hover:text-white cursor-pointer transition-colors">
-              New
-            </span>
-            <span className="text-[9px] tracking-[0.2em] uppercase text-white/30 hover:text-white cursor-pointer transition-colors">
-              Sale
-            </span>
-          </div>
-          <span className="text-[9px] tracking-[0.2em] uppercase text-white/20">
-            {products.length}&nbsp;{products.length === 1 ? "Item" : "Items"}
-          </span>
-        </div>
-      </div>
-
+    <div className="min-h-screen bg-black font-mono selection:bg-white selection:text-black">
       {/* ── Empty state ── */}
       {products.length === 0 ? (
-        <div className="flex items-center justify-center h-64">
+        <div className="flex items-center justify-center h-screen">
           <span className="text-[10px] tracking-[0.3em] uppercase text-white/20">
             No Products Available
           </span>
         </div>
       ) : (
         /*
-         * Grid: 60% size reduction achieved by increasing column density
-         *   mobile  → 3 cols (was 2)
-         *   sm      → 4 cols (was 3)
-         *   md      → 5 cols (was 4)
-         *   lg      → 6 cols (was 4)
-         *   xl      → 8 cols (was 6)
-         *
-         * No gap — 1px white borders between cells only.
-         * aspect-[2/3] portrait = editorial, high-fashion look.
+         * Grid: Yeezy.com 1:1
+         *   No borders, no gaps.
+         *   Pure black background.
+         *   Transparent images.
          */
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 border-l border-t border-white">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 bg-black">
           {products.map((product) => (
             <ProductCell key={product.id} product={product} />
           ))}
@@ -106,15 +76,15 @@ function ProductCell({ product }: { product: Product }) {
   return (
     <Link
       to={`/offer/${product.slug}`}
-      className="group relative block border-r border-b border-white bg-black overflow-hidden"
+      className="group relative block bg-black overflow-hidden"
     >
-      {/* Image — aspect-[2/3] portrait, full-bleed */}
-      <div className="aspect-[2/3] relative overflow-hidden">
+      {/* Image — aspect-[1/1] like Yeezy.com, full-bleed, transparent */}
+      <div className="aspect-square relative overflow-hidden flex items-center justify-center p-4 sm:p-8">
         {imageUrl ? (
           <img
             src={imageUrl}
             alt={product.title}
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-102"
+            className="max-w-full max-h-full object-contain transition-transform duration-500 ease-out group-hover:scale-105"
             loading="lazy"
           />
         ) : (
@@ -126,28 +96,25 @@ function ProductCell({ product }: { product: Product }) {
           </div>
         )}
 
-        {/* Sale badge — top right, white pill */}
+        {/* Sale badge — minimal */}
         {hasDiscount && (
-          <span className="absolute top-1 right-1 bg-white text-black text-[6px] tracking-[0.15em] uppercase px-1 py-0.5 font-bold">
+          <span className="absolute top-4 right-4 text-white text-[8px] tracking-[0.15em] uppercase font-bold">
             Sale
           </span>
         )}
-
-        {/* Hover overlay — minimal darkening */}
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
       </div>
 
-      {/* ── Info overlay — bottom-left, tiny mono ── */}
-      <div className="absolute bottom-0 left-0 right-0 p-1.5 bg-black">
-        <p className="text-[7px] tracking-[0.1em] uppercase text-white truncate leading-tight">
+      {/* ── Info — Yeezy style ── */}
+      <div className="text-center pb-8 px-4">
+        <p className="text-[10px] tracking-[0.1em] uppercase text-white leading-tight mb-1">
           {product.title}
         </p>
-        <div className="flex items-baseline gap-1 mt-0.5">
-          <span className="text-[7px] tracking-[0.05em] text-white/70">
+        <div className="flex items-center justify-center gap-2">
+          <span className="text-[10px] tracking-[0.05em] text-white">
             ${(displayPrice / 100).toFixed(0)}
           </span>
           {hasDiscount && (
-            <span className="text-[6px] tracking-[0.05em] text-white/30 line-through">
+            <span className="text-[9px] tracking-[0.05em] text-white/30 line-through">
               ${(product.price_cents / 100).toFixed(0)}
             </span>
           )}
