@@ -1,3 +1,8 @@
+/**
+ * @LOCK_PROTOCOL_ACTIVE
+ * DO NOT MODIFY. DO NOT REFACTOR. DO NOT RE-IMPLEMENT.
+ * ACCESS RESTRICTED.
+ */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
