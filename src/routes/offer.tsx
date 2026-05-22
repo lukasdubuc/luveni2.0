@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Outlet, createFileRoute, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { OfferSection } from "@/components/site/OfferSection";
 import { Testimonials } from "@/components/site/Testimonials";
@@ -70,7 +70,12 @@ export const Route = createFileRoute("/offer")({
 });
 
 function OfferPage() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const { product } = Route.useLoaderData();
+
+  if (pathname.startsWith("/offer/") && pathname !== "/offer") {
+    return <Outlet />;
+  }
   const products = product ? [product] : [];
   const variants = Array.isArray(product?.variants) ? (product.variants as ProductVariant[]) : [];
   const optionKeys = useMemo(
