@@ -1,3 +1,28 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { fetchProducts, useProducts } from "@/lib/useProducts";
+
+type Product = {
+  id: string;
+  title: string;
+  slug: string;
+  price_cents: number;
+  image_urls: string[];
+};
+
+export const Route = createFileRoute("/shop")({
+  loader: async () => {
+    const products = await fetchProducts({ onlyPublished: true });
+    return { products: products ?? [] };
+  },
+  head: () => ({
+    meta: [
+      { title: "Shop — Northwind" },
+      { name: "description", content: "Browse published products with clean, modern product cards." },
+    ],
+  }),
+  component: ShopPage,
+});
+
 function ShopPage() {
   const loader = Route.useLoaderData();
   const { products: clientProducts, loading } = useProducts({ onlyPublished: true });
