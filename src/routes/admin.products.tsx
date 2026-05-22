@@ -2,323 +2,377 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, Trash2, Pencil, Loader2, Check, X } from "lucide-react";
+import { Plus, Trash2, Pencil, Loader2, Eye, EyeOff, ChevronDown, ChevronUp } from "lucide-react";
 
 export const Route = createFileRoute("/admin/products")({
   component: ProductsPage,
 });
 
-function ProductsPage() {
-  const [products, setProducts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState<any | null>(null);
-  const [formCollapsed, setFormCollapsed] = useState(false);
+/* ─── Types ─────────────────────────────────────────────── */
+type Product = {
+  id: string;
+  title: string;
+  slug: string;
+  price_cents: number;
+  discounted_price_cents?: number | null;
+  image_urls: string[];
+  description?: string | null;
+  variants?: any[];
+  is_published: boolean;
+  created_at?: string;
+};
 
+type EditState = Partial<Product> & { variantsText?: string };
+
+const EMPTY: EditState = {
+  title: "",
+  slug: "",
+  price_cents: 0,
+  discounted_price_cents: null,
+  image_urls: [],
+  description: "",
+  variantsText: "[]",
+  is_published: false,
+};
+
+function slugify(s: string) {
+  return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+/* ─── Page ───────────────────────────────────────────────── */
+function ProductsPage() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<EditState | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  /* fetch */
   const fetchProducts = async () => {
     setLoading(true);
-    const { data } = await supabase.from("products").select("*").order("created_at", { ascending: false });
+    const { data } = await supabase
+      .from("products")
+      .select("*")
+      .order("created_at", { ascending: false });
     setProducts(data || []);
     setLoading(false);
   };
 
-  const saveProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const { id, variantsText, ...payload } = editing;
-    let variants = [];
-
-    if (typeof variantsText === "string" && variantsText.trim()) {
-      try {
-        variants = JSON.parse(variantsText);
-      } catch {
-        toast.error("Invalid variant JSON");
-        return;
-      }
-    }
-
-    const payloadWithVariants = { ...payload, variants };
-    const { error } = id 
-      ? await supabase.from("products").update(payloadWithVariants).eq("id", id)
-      : await supabase.from("products").insert([payloadWithVariants]);
-
-    if (error) {
-      toast.error("DATA_SYNC_FAILURE");
-    } else {
-      toast.success("VAULT_UPDATED");
-      setEditing(null);
-      // Notify other parts of the app and perform a hard refresh to ensure
-      // storefronts and caches see the updated data immediately.
-      window.dispatchEvent(new Event("productsUpdated"));
-      // Hard refresh
-      window.location.reload();
-    }
-  };
-
-  const deleteProduct = async (id: string) => {
-    if (!confirm("PERMANENT_ERASURE?")) return;
-    const { error } = await supabase.from("products").delete().eq("id", id);
-    if (error) toast.error("PURGE_FAILED");
-    else {
-      toast.error("PRODUCT_REMOVED");
-      window.dispatchEvent(new Event("productsUpdated"));
-      window.location.reload();
-    }
-  };
-
-  const toggleStatus = async (id: string, current: boolean) => {
-    await supabase.from("products").update({ is_published: !current }).eq("id", id);
-    window.dispatchEvent(new Event("productsUpdated"));
-    window.location.reload();
-  };
-
   useEffect(() => { fetchProducts(); }, []);
 
+  /* open form helpers */
+  function openNew() {
+    setEditing({ ...EMPTY });
+    setFormOpen(true);
+  }
+
+  function openEdit(p: Product) {
+    setEditing({
+      ...p,
+      variantsText: p.variants ? JSON.stringify(p.variants, null, 2) : "[]",
+    });
+    setFormOpen(true);
+  }
+
+  function closeForm() {
+    setEditing(null);
+    setFormOpen(false);
+  }
+
+  function setField<K extends keyof EditState>(key: K, value: EditState[K]) {
+    setEditing((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, [key]: value };
+      if (key === "title" && !prev.id) next.slug = slugify(String(value));
+      return next;
+    });
+  }
+
+  /* save */
+  const saveProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editing) return;
+    setSaving(true);
+
+    const { id, variantsText, ...payload } = editing;
+    let variants: any[] = [];
+    if (typeof variantsText === "string" && variantsText.trim()) {
+      try { variants = JSON.parse(variantsText); }
+      catch { toast.error("Invalid variant JSON"); setSaving(false); return; }
+    }
+
+    const final = { ...payload, variants };
+    const { error } = id
+      ? await supabase.from("products").update(final).eq("id", id)
+      : await supabase.from("products").insert([final]);
+
+    if (error) {
+      toast.error("Save failed: " + error.message);
+    } else {
+      toast.success(id ? "Product updated." : "Product created.");
+      closeForm();
+      window.dispatchEvent(new Event("productsUpdated"));
+      fetchProducts();
+    }
+    setSaving(false);
+  };
+
+  /* delete */
+  const deleteProduct = async (id: string, title: string) => {
+    if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+    const { error } = await supabase.from("products").delete().eq("id", id);
+    if (error) toast.error("Delete failed: " + error.message);
+    else {
+      toast.success("Product removed.");
+      window.dispatchEvent(new Event("productsUpdated"));
+      fetchProducts();
+    }
+  };
+
+  /* toggle publish */
+  const toggleStatus = async (p: Product) => {
+    await supabase.from("products").update({ is_published: !p.is_published }).eq("id", p.id);
+    window.dispatchEvent(new Event("productsUpdated"));
+    fetchProducts();
+  };
+
+  /* ── Render ── */
   return (
-    <div className="min-h-screen bg-[#FBFBFB] p-8 font-sans text-black">
-      <div className="max-w-7xl mx-auto flex justify-between items-end border-b border-black/10 pb-8 mb-12">
-        <div>
-          <h1 className="text-4xl font-light tracking-tighter uppercase italic leading-none">Inventory_Control</h1>
-          <p className="text-[9px] font-mono font-bold uppercase tracking-[0.4em] opacity-30 mt-3">services2day // stock_unit</p>
-        </div>
-        <button 
-          onClick={() => {
-            setFormCollapsed(false);
-            setEditing({
-            title: "",
-            description: "",
-            price_cents: 0,
-            price_cents_discounted: null,
-            currency: "usd",
-            slug: "",
-            source_url: "",
-            fulfillment_provider: "",
-            external_sku: "",
-            bullet_points: [],
-            variantsText: "[]",
-            is_featured: false,
-            is_published: false,
-          });
-          }}
-          className="text-[10px] font-bold border border-black px-6 py-2 uppercase hover:bg-black hover:text-white transition-all"
+    <div className="min-h-screen bg-white text-black font-mono text-sm">
+
+      {/* ── Top bar ── */}
+      <div className="border-b border-black flex items-center justify-between px-6 py-4">
+        <span className="text-[11px] tracking-[0.3em] uppercase font-bold">
+          Admin / Products
+        </span>
+        <button
+          onClick={formOpen ? closeForm : openNew}
+          className="flex items-center gap-2 border border-black px-4 py-2 text-[11px] tracking-widest uppercase hover:bg-black hover:text-white transition-colors"
         >
-          Add_New_Item
+          <Plus size={11} />
+          {formOpen && !editing?.id ? "Cancel" : "New Product"}
         </button>
       </div>
 
-      {loading ? (
-        <div className="p-20 text-center animate-pulse font-mono text-[10px] tracking-widest uppercase">Syncing_Vault...</div>
-      ) : (
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {products.map((p) => (
-            <div key={p.id} className="group border border-black/10 bg-white p-6 transition-all hover:shadow-md relative overflow-hidden">
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h3 className="font-bold uppercase tracking-tight text-lg">{p.title}</h3>
-                  <p className="text-[9px] font-mono opacity-30 uppercase">/{p.slug}</p>
-                  <p className="mt-2 text-[10px] uppercase tracking-[0.2em] text-slate-500">
-                    {p.fulfillment_provider || "No provider"}
-                    {p.external_sku ? ` · SKU: ${p.external_sku}` : ""}
-                  </p>
-                </div>
-                <div className="flex gap-2 items-center">
-                  {p.is_featured && (
-                    <span className="text-[9px] font-bold px-2 py-1 uppercase bg-yellow-100 text-yellow-800 rounded">Featured</span>
-                  )}
-                  <span className={`text-[8px] font-bold px-2 py-1 uppercase border ${p.is_published ? 'bg-black text-white' : 'text-black/30 border-black/10'}`}>
-                    {p.is_published ? 'Live' : 'Draft'}
-                  </span>
-                </div>
-              </div>
-<p className="text-sm text-muted-foreground mb-1">
-                    {p.bullet_points?.length ? `${p.bullet_points.length} bullet points` : "No bullet points yet"}
-                  </p>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    {p.variants?.length ? `${p.variants.length} variants available` : "No variants defined"}
-                  </p>
-                  <div className="text-3xl font-light italic mb-6 tracking-tighter">
-                    ${(p.price_cents / 100).toFixed(2)}
-                  </div>
+      {/* ── Collapsible form ── */}
+      <div
+        className={`overflow-hidden transition-all duration-300 border-b border-black ${
+          formOpen ? "max-h-[1000px]" : "max-h-0"
+        }`}
+      >
+        <form onSubmit={saveProduct} className="px-6 py-6 bg-[#f7f7f7]">
+          {/* Form header */}
+          <div className="flex items-center justify-between mb-5">
+            <span className="text-[11px] tracking-[0.3em] uppercase font-bold">
+              {editing?.id ? "Edit Product" : "New Product"}
+            </span>
+            <button type="button" onClick={closeForm} className="text-black/40 hover:text-black">
+              <ChevronUp size={14} />
+            </button>
+          </div>
 
-              <div className="flex gap-4 border-t border-black/5 pt-4">
-                <button onClick={() => {
-                  setFormCollapsed(false);
-                  setEditing({
-                  ...p,
-                  description: p.description ?? "",
-                  source_url: p.source_url ?? "",
-                  fulfillment_provider: p.fulfillment_provider ?? "",
-                  external_sku: p.external_sku ?? "",
-                  bullet_points: p.bullet_points ?? [],
-                  price_cents_discounted: p.price_cents_discounted ?? null,
-                  variantsText: JSON.stringify(p.variants ?? [], null, 2),
-                });
-                }} className="text-[10px] font-bold uppercase opacity-40 hover:opacity-100 flex items-center gap-1">
-                  <Pencil size={12} /> Edit
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field label="Title"
+              value={editing?.title ?? ""}
+              onChange={(v) => setField("title", v)}
+              placeholder="Product name" />
+
+            <Field label="Slug"
+              value={editing?.slug ?? ""}
+              onChange={(v) => setField("slug", v)}
+              placeholder="auto-generated" />
+
+            <Field label="Price (cents)"
+              type="number"
+              value={String(editing?.price_cents ?? 0)}
+              onChange={(v) => setField("price_cents", parseInt(v) || 0)}
+              placeholder="4900 = $49" />
+
+            <Field label="Discounted Price (cents) — optional"
+              type="number"
+              value={editing?.discounted_price_cents != null ? String(editing.discounted_price_cents) : ""}
+              onChange={(v) => setField("discounted_price_cents", v === "" ? null : parseInt(v) || null)}
+              placeholder="Leave blank for no discount" />
+
+            <Field label="Image URL (first image)"
+              value={Array.isArray(editing?.image_urls) ? (editing!.image_urls[0] ?? "") : ""}
+              onChange={(v) =>
+                setField("image_urls", v.trim() ? [v.trim()] : [])
+              }
+              placeholder="https://..."
+              className="md:col-span-2" />
+
+            <div className="md:col-span-2">
+              <label className="block text-[10px] tracking-[0.25em] uppercase text-black/40 mb-1">
+                Description
+              </label>
+              <textarea
+                value={editing?.description ?? ""}
+                onChange={(e) => setField("description", e.target.value)}
+                rows={3}
+                placeholder="Short product description..."
+                className="w-full border border-black/20 bg-white px-3 py-2 text-[12px] font-mono placeholder:text-black/20 focus:outline-none focus:border-black resize-none"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-[10px] tracking-[0.25em] uppercase text-black/40 mb-1">
+                Variants JSON
+              </label>
+              <textarea
+                value={editing?.variantsText ?? "[]"}
+                onChange={(e) => setField("variantsText", e.target.value)}
+                rows={4}
+                placeholder='[{"label":"Size","options":["S","M","L"]}]'
+                className="w-full border border-black/20 bg-white px-3 py-2 text-[11px] font-mono placeholder:text-black/20 focus:outline-none focus:border-black resize-none"
+              />
+            </div>
+
+            {/* Published toggle */}
+            <div className="md:col-span-2 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setField("is_published", !editing?.is_published)}
+                className={`relative w-10 h-5 border transition-colors ${
+                  editing?.is_published ? "bg-black border-black" : "bg-white border-black/30"
+                }`}
+              >
+                <span className={`absolute top-0.5 w-4 h-4 bg-white border border-black/20 transition-all ${
+                  editing?.is_published ? "left-5" : "left-0.5"
+                }`} />
+              </button>
+              <span className="text-[11px] tracking-widest uppercase">
+                {editing?.is_published ? "Published" : "Draft"}
+              </span>
+            </div>
+          </div>
+
+          {/* Save / Cancel */}
+          <div className="mt-6 flex items-center gap-4">
+            <button
+              type="submit"
+              disabled={saving}
+              className="border border-black bg-black text-white px-6 py-2 text-[11px] tracking-widest uppercase hover:bg-white hover:text-black transition-colors disabled:opacity-40 flex items-center gap-2"
+            >
+              {saving && <Loader2 size={11} className="animate-spin" />}
+              {saving ? "Saving..." : editing?.id ? "Update" : "Create"}
+            </button>
+            <button
+              type="button"
+              onClick={closeForm}
+              className="text-[11px] tracking-widest uppercase text-black/40 hover:text-black transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* ── Product table ── */}
+      {loading ? (
+        <div className="flex items-center gap-2 px-6 py-12 text-[11px] tracking-widest uppercase text-black/30">
+          <Loader2 size={12} className="animate-spin" /> Loading...
+        </div>
+      ) : products.length === 0 ? (
+        <div className="px-6 py-12 text-[11px] tracking-widest uppercase text-black/25">
+          No products yet.
+        </div>
+      ) : (
+        <>
+          {/* Column headers */}
+          <div className="hidden md:grid grid-cols-[2fr_1fr_1fr_1fr_auto] border-b border-black/10 px-6 py-2 bg-[#fafafa]">
+            {["Title", "Price", "Discount", "Status", ""].map((h) => (
+              <span key={h} className="text-[9px] tracking-[0.3em] uppercase text-black/30">{h}</span>
+            ))}
+          </div>
+
+          {products.map((p) => (
+            <div
+              key={p.id}
+              className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr_auto] border-b border-black/10 px-6 py-4 items-center gap-3 hover:bg-black/[0.015] transition-colors"
+            >
+              {/* Title + slug */}
+              <div className="min-w-0">
+                <p className="text-[12px] font-bold tracking-wide truncate">{p.title}</p>
+                <p className="text-[10px] text-black/30 tracking-widest mt-0.5 truncate">
+                  /{p.slug}
+                </p>
+              </div>
+
+              {/* Price */}
+              <span className="text-[12px] tracking-wider">
+                ${(p.price_cents / 100).toFixed(2)}
+              </span>
+
+              {/* Discounted price */}
+              <span className="text-[12px] tracking-wider">
+                {p.discounted_price_cents != null ? (
+                  <>${(p.discounted_price_cents / 100).toFixed(2)}</>
+                ) : (
+                  <span className="text-black/20">—</span>
+                )}
+              </span>
+
+              {/* Status badge */}
+              <span className={`text-[9px] tracking-[0.2em] uppercase px-2 py-1 w-fit font-bold ${
+                p.is_published
+                  ? "bg-black text-white"
+                  : "border border-black/20 text-black/40"
+              }`}>
+                {p.is_published ? "Live" : "Draft"}
+              </span>
+
+              {/* Actions */}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => toggleStatus(p)}
+                  className="text-black/25 hover:text-black transition-colors"
+                  title={p.is_published ? "Unpublish" : "Publish"}
+                >
+                  {p.is_published ? <EyeOff size={13} /> : <Eye size={13} />}
                 </button>
-                <button onClick={async () => {
-                  await supabase.from('products').update({ is_featured: !p.is_featured } as any).eq('id', p.id);
-                  window.dispatchEvent(new Event('productsUpdated'));
-                  window.location.reload();
-                }} className="text-[10px] font-bold uppercase opacity-40 hover:opacity-100 flex items-center gap-1">
-                  {p.is_featured ? 'Unfeature' : 'Feature'}
+                <button
+                  onClick={() => openEdit(p)}
+                  className="text-black/25 hover:text-black transition-colors"
+                  title="Edit"
+                >
+                  <Pencil size={13} />
                 </button>
-                <button onClick={() => toggleStatus(p.id, p.is_published)} className="text-[10px] font-bold uppercase opacity-40 hover:opacity-100 flex items-center gap-1">
-                   {p.is_published ? <X size={12} /> : <Check size={12} />} {p.is_published ? 'Unpublish' : 'Publish'}
-                </button>
-                <button onClick={() => deleteProduct(p.id)} className="text-[10px] font-bold uppercase text-red-400/50 hover:text-red-600 flex items-center gap-1 ml-auto">
-                  <Trash2 size={12} /> Delete
+                <button
+                  onClick={() => deleteProduct(p.id, p.title)}
+                  className="text-black/20 hover:text-red-600 transition-colors"
+                  title="Delete"
+                >
+                  <Trash2 size={13} />
                 </button>
               </div>
             </div>
           ))}
-        </div>
+        </>
       )}
+    </div>
+  );
+}
 
-      {/* EDIT MODAL - TECH INDUSTRIAL STYLE */}
-      {editing && (
-        <div className="fixed inset-0 z-50 bg-white/90 backdrop-blur-sm flex items-center justify-center p-6">
-          <form onSubmit={saveProduct} className={`w-full max-w-xl bg-white border border-black shadow-2xl transition-all duration-300 ${formCollapsed ? 'p-4' : 'p-10'}`}>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className={`font-light italic uppercase tracking-tighter border-b border-black/10 pb-4 flex-1 ${formCollapsed ? 'text-sm' : 'text-2xl'}`}>
-                {formCollapsed ? 'Product_Editor' : 'Modify_Record'}
-              </h2>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setFormCollapsed(!formCollapsed)}
-                  className="text-[10px] font-bold uppercase px-3 py-2 border border-black hover:bg-gray-50"
-                >
-                  {formCollapsed ? 'Expand' : 'Collapse'}
-                </button>
-              </div>
-            </div>
-
-            {!formCollapsed && (
-              <>
-                <div className="grid grid-cols-2 gap-6 mb-8">
-                  <div className="col-span-2">
-                    <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Title</label>
-                    <input 
-                      className="w-full border-b border-black outline-none py-2 font-bold uppercase text-sm" 
-                      value={editing.title} 
-                      onChange={e => setEditing({...editing, title: e.target.value})}
-                      required 
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Price (Cents)</label>
-                    <input 
-                      type="number" 
-                      className="w-full border-b border-black outline-none py-2 font-mono font-bold" 
-                      value={editing.price_cents} 
-                      onChange={e => setEditing({...editing, price_cents: Number(e.target.value)})}
-                      required 
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Discounted Price (Cents)</label>
-                    <input 
-                      type="number" 
-                      className="w-full border-b border-black outline-none py-2 font-mono font-bold" 
-                      value={editing.price_cents_discounted ?? ""} 
-                      onChange={e => setEditing({...editing, price_cents_discounted: e.target.value ? Number(e.target.value) : null})}
-                      placeholder="Optional"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Slug</label>
-                    <input 
-                      className="w-full border-b border-black outline-none py-2 text-sm italic" 
-                      value={editing.slug} 
-                      onChange={e => setEditing({...editing, slug: e.target.value})}
-                      required 
-                    />
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Is Featured</label>
-                    <input
-                      type="checkbox"
-                      className="mt-1"
-                      checked={!!editing.is_featured}
-                      onChange={e => setEditing({...editing, is_featured: e.target.checked})}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Description</label>
-                    <textarea
-                      rows={4}
-                      className="w-full border border-black/10 bg-white p-3 text-sm outline-none"
-                      value={editing.description ?? ""}
-                      onChange={e => setEditing({...editing, description: e.target.value})}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Bullet Points</label>
-                    <textarea
-                      rows={4}
-                      className="w-full border border-black/10 bg-white p-3 text-sm outline-none"
-                      value={Array.isArray(editing.bullet_points) ? editing.bullet_points.join("\n") : ""}
-                      onChange={e => setEditing({
-                        ...editing,
-                        bullet_points: e.target.value
-                          .split("\n")
-                          .map((line) => line.trim())
-                          .filter(Boolean),
-                      })}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Variants JSON</label>
-                    <textarea
-                      rows={6}
-                      className="w-full border border-black/10 bg-white p-3 text-sm outline-none font-mono"
-                      value={editing.variantsText ?? "[]"}
-                      onChange={e => setEditing({ ...editing, variantsText: e.target.value })}
-                    />
-                    <p className="mt-2 text-[10px] text-muted-foreground">
-                      Provide a JSON array of variants, for example: <span className="font-mono">{"[{ \"sku\":\"black-s\",\"stock\":10,\"price_cents\":4900,\"attributes\":{\"color\":\"Black\",\"size\":\"S\"}}]"}</span>
-                    </p>
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Fulfillment Provider</label>
-                    <input
-                      className="w-full border-b border-black outline-none py-2 text-sm"
-                      value={editing.fulfillment_provider ?? ""}
-                      onChange={e => setEditing({...editing, fulfillment_provider: e.target.value})}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">External SKU</label>
-                    <input
-                      className="w-full border-b border-black outline-none py-2 text-sm"
-                      value={editing.external_sku ?? ""}
-                      onChange={e => setEditing({...editing, external_sku: e.target.value})}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-[9px] font-bold uppercase opacity-40 block mb-2 tracking-widest">Source URL</label>
-                    <input 
-                      className="w-full border-b border-black outline-none py-2 text-sm italic" 
-                      value={editing.source_url ?? ""} 
-                      onChange={e => setEditing({...editing, source_url: e.target.value})}
-                    />
-                  </div>
-                </div>
-                <div className="flex gap-4">
-                  <button type="submit" className="flex-1 bg-black text-white py-4 font-bold uppercase text-[10px] tracking-widest hover:invert transition-all">Save_Record</button>
-                  <button type="button" onClick={() => setEditing(null)} className="px-8 border border-black py-4 font-bold uppercase text-[10px] tracking-widest hover:bg-gray-50">Cancel</button>
-                </div>
-              </>
-            )}
-
-            {formCollapsed && (
-              <div className="flex gap-4 mt-4">
-                <button type="submit" className="flex-1 bg-black text-white py-3 font-bold uppercase text-[10px] tracking-widest hover:invert transition-all">Save</button>
-                <button type="button" onClick={() => setEditing(null)} className="px-4 border border-black py-3 font-bold uppercase text-[10px] tracking-widest hover:bg-gray-50">Close</button>
-              </div>
-            )}
-          </form>
-        </div>
-      )}
+/* ─── Reusable Field ─────────────────────────────────────── */
+function Field({
+  label, value, onChange, placeholder, type = "text", className = "",
+}: {
+  label: string; value: string; onChange: (v: string) => void;
+  placeholder?: string; type?: string; className?: string;
+}) {
+  return (
+    <div className={className}>
+      <label className="block text-[10px] tracking-[0.25em] uppercase text-black/40 mb-1">
+        {label}
+      </label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full border border-black/20 bg-white px-3 py-2 text-[12px] font-mono placeholder:text-black/20 focus:outline-none focus:border-black"
+      />
     </div>
   );
 }
