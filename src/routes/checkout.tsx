@@ -106,30 +106,30 @@ function Checkout() {
   }
 
   return (
-    <section className="bg-muted/40">
-      <div className="mx-auto grid max-w-5xl gap-8 px-4 py-12 md:grid-cols-5 md:py-20">
+    <section className="bg-white">
+      <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 md:grid-cols-5 md:py-20">
         <div className="md:col-span-3">
           <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Checkout</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Complete your details to get instant access.
           </p>
-          <form onSubmit={onSubmit} className="mt-8 space-y-5 rounded-2xl border border-border bg-card p-6 shadow-soft">
+          <form onSubmit={onSubmit} className="mt-8 space-y-5 border border-black/10 bg-white p-6">
             <div className="space-y-2">
               <label htmlFor="name" className="text-sm font-medium">Full name</label>
               <input id="name" value={name} onChange={(e) => setName(e.target.value)}
                 required maxLength={120} placeholder="Alex Rivera"
-                className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none ring-ring focus:ring-2" />
+                className="h-11 w-full border border-black/10 bg-white px-3 text-sm outline-none focus:border-black" />
             </div>
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium">Email address</label>
               <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                 required maxLength={255} placeholder="you@email.com"
-                className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none ring-ring focus:ring-2" />
+                className="h-11 w-full border border-black/10 bg-white px-3 text-sm outline-none focus:border-black" />
               <p className="text-xs text-muted-foreground">We'll send your access link to this address.</p>
             </div>
             <button type="submit" disabled={loading}
-              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-md text-base font-medium text-accent-foreground shadow-soft transition-transform hover:-translate-y-0.5 disabled:opacity-60"
-              style={{ backgroundImage: "var(--gradient-accent)" }}>
+              className="inline-flex h-12 w-full items-center justify-center gap-2 border border-black bg-black text-base font-medium text-white transition-colors hover:bg-white hover:text-black disabled:opacity-60"
+              >
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               <Lock className="h-4 w-4" /> Pay {displayPrice} securely
             </button>
@@ -141,7 +141,7 @@ function Checkout() {
           </form>
         </div>
         <aside className="md:col-span-2">
-          <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
+          <div className="border border-black/10 bg-white p-6">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Order summary</h2>
             <div className="mt-4 flex items-start justify-between gap-4">
               <div>
@@ -153,16 +153,16 @@ function Checkout() {
                 <p className="text-xs text-muted-foreground line-through">{displayOriginal}</p>
               </div>
             </div>
-            <div className="my-5 h-px bg-border" />
+            <div className="my-5 h-px bg-black/10" />
             <ul className="space-y-2 text-sm">
               {displayBullets.map((b: string) => (
                 <li key={b} className="flex items-start gap-2">
-                  <Check className="mt-0.5 h-4 w-4 flex-none text-success" />
+                  <Check className="mt-0.5 h-4 w-4 flex-none text-black" />
                   <span className="text-muted-foreground">{b}</span>
                 </li>
               ))}
             </ul>
-            <div className="my-5 h-px bg-border" />
+            <div className="my-5 h-px bg-black/10" />
             <div className="flex items-center justify-between text-base font-semibold">
               <span>Total</span>
               <span>{displayPrice}</span>

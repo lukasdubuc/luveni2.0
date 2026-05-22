@@ -93,9 +93,9 @@ function LoginPage() {
   }
 
   return (
-    <section className="bg-muted/40 min-h-screen flex items-center justify-center p-4 font-mono">
-      <div className="w-full max-w-md rounded-none border border-border bg-card p-8 shadow-sm">
-        <div className="mb-8 border-b border-border pb-6">
+    <section className="bg-white min-h-screen flex items-center justify-center p-4 font-mono">
+      <div className="w-full max-w-md rounded-none border border-black/10 bg-white p-8 ">
+        <div className="mb-8 border-b border-black/10 pb-6">
           <h1 className="text-xl font-black uppercase tracking-widest">
             {mode === "signin" ? "Terminal_Login" : "Create_Access"}
           </h1>
@@ -139,7 +139,7 @@ function LoginPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="EMAIL_ADDRESS"
-            className="h-12 w-full rounded-none border border-border bg-muted/20 px-4 text-xs font-bold outline-none focus:border-black transition-all"
+            className="h-12 w-full rounded-none border border-black/10 bg-white/20 px-4 text-xs font-bold outline-none focus:border-black transition-all"
           />
           <input
             type="password"
@@ -148,7 +148,7 @@ function LoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="ACCESS_KEY"
-            className="h-12 w-full rounded-none border border-border bg-muted/20 px-4 text-xs font-bold outline-none focus:border-black transition-all"
+            className="h-12 w-full rounded-none border border-black/10 bg-white/20 px-4 text-xs font-bold outline-none focus:border-black transition-all"
           />
           <button
             type="submit"

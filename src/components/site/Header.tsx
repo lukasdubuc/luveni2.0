@@ -13,64 +13,61 @@ export function Header() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-transparent pointer-events-none">
-      <div className="flex h-16 items-center justify-between px-6">
-        {/* Logo - Left */}
-        <div className="pointer-events-auto">
+    <header className="sticky top-0 z-50 bg-white border-b border-black">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
+        <div>
           <Link
             to="/shop"
-            className="text-[12px] tracking-[0.2em] text-white font-bold"
+            className="text-[12px] font-bold tracking-[0.2em] text-black"
           >
             {site.brand}
           </Link>
         </div>
 
-        {/* Desktop Nav - Center */}
-        <nav className="hidden items-center gap-8 md:flex pointer-events-auto">
+        <nav className="hidden items-center gap-8 md:flex">
           {navLinks.map((l) => (
             <Link
               key={l.to}
               to={l.to}
-              className="text-[10px] tracking-[0.2em] text-white/40 hover:text-white transition-colors"
-              activeProps={{ className: "text-white" }}
+              className="text-[10px] tracking-[0.2em] text-black/50 transition-colors hover:text-black"
+              activeProps={{ className: "text-black" }}
             >
               {l.label}
             </Link>
           ))}
         </nav>
 
-        {/* Mobile Toggle - Right */}
-        <div className="md:hidden pointer-events-auto">
+        <div className="md:hidden">
           <button
             onClick={() => setOpen((v) => !v)}
-            className="text-white"
+            className="text-black"
+            aria-label="Toggle navigation"
           >
             {open ? <X size={18} /> : <Menu size={18} />}
           </button>
         </div>
         
-        {/* Placeholder for balance on desktop */}
-        <div className="hidden md:block w-[100px]"></div>
+        <div className="hidden w-[100px] md:block" />
       </div>
 
-      {/* Mobile Menu */}
       {open && (
-        <div className="fixed inset-0 bg-black z-40 pointer-events-auto md:hidden">
-          <div className="flex flex-col items-center justify-center h-full gap-8">
+        <div className="fixed inset-0 z-40 border-t border-black bg-white md:hidden">
+          <div className="flex h-full flex-col items-center justify-center gap-8">
             {navLinks.map((l) => (
               <Link
                 key={l.to}
                 to={l.to}
                 onClick={() => setOpen(false)}
-                className="text-[14px] tracking-[0.3em] text-white/50 hover:text-white"
-                activeProps={{ className: "text-white" }}
+                className="text-[14px] tracking-[0.3em] text-black/50 hover:text-black"
+                activeProps={{ className: "text-black" }}
               >
                 {l.label}
               </Link>
             ))}
             <button 
               onClick={() => setOpen(false)}
-              className="absolute top-6 right-6 text-white"
+              className="absolute right-6 top-6 text-black"
+              aria-label="Close navigation"
             >
               <X size={24} />
             </button>

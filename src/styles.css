@@ -40,47 +40,49 @@
 }
 
 :root {
-  /* ── YEEZY VOID THEME — PURE BLACK ── */
+  /* ── YEEZY ARCHIVE LIGHT THEME ── */
   --radius: 0rem;
 
-  --background: #000000;
-  --foreground: #FFFFFF;
+  --background: #FFFFFF;
+  --foreground: #000000;
 
-  --card: #000000;
-  --card-foreground: #FFFFFF;
+  --card: #FFFFFF;
+  --card-foreground: #000000;
 
-  --popover: #000000;
-  --popover-foreground: #FFFFFF;
+  --popover: #FFFFFF;
+  --popover-foreground: #000000;
 
-  --primary: #FFFFFF;
-  --primary-foreground: #000000;
+  --primary: #000000;
+  --primary-foreground: #FFFFFF;
 
-  --secondary: #000000;
-  --secondary-foreground: #FFFFFF;
+  --secondary: #FFFFFF;
+  --secondary-foreground: #000000;
 
-  --muted: #000000;
-  --muted-foreground: #888888;
+  --muted: #FFFFFF;
+  --muted-foreground: rgba(0, 0, 0, 0.55);
 
-  --accent: #FFFFFF;
-  --accent-foreground: #000000;
+  --accent: #000000;
+  --accent-foreground: #FFFFFF;
 
-  --destructive: #FF0000;
+  --destructive: #B00000;
   --destructive-foreground: #FFFFFF;
 
-  --success: #00FF00;
-  --success-foreground: #000000;
+  --success: #000000;
+  --success-foreground: #FFFFFF;
 
-  /* Set border to transparent for Yeezy look */
-  --border: transparent;
-  --input: transparent;
-  --ring: #FFFFFF;
+  --border: rgba(0, 0, 0, 0.10);
+  --input: rgba(0, 0, 0, 0.10);
+  --ring: #000000;
+
+  --gradient-hero: none;
+  --gradient-accent: none;
+  --gradient-surface: none;
 
   --font-mono: "Space Mono", monospace;
 }
 
 @layer base {
   * {
-    border-color: transparent !important;
     border-radius: 0 !important;
     box-shadow: none !important;
     text-transform: uppercase;
@@ -88,8 +90,8 @@
   }
 
   body {
-    background-color: #000000;
-    color: #FFFFFF;
+    background-color: #FFFFFF;
+    color: #000000;
     font-family: var(--font-mono);
     font-weight: 400;
     -webkit-font-smoothing: antialiased;
@@ -117,18 +119,19 @@
   }
 
   *:focus {
-    outline: none;
+    outline: 1px solid rgba(0, 0, 0, 0.35);
+    outline-offset: 2px;
   }
 }
 
 @layer utilities {
   .text-tiny {
-    font-size: 0.625rem; /* 10px */
+    font-size: 0.625rem;
     line-height: 1;
   }
 
   .text-micro {
-    font-size: 0.5rem; /* 8px */
+    font-size: 0.5rem;
     line-height: 1;
   }
 

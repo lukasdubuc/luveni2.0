@@ -81,17 +81,17 @@ function OfferSlugPage() {
 
   return (
     <>
-      <section className="border-b border-border" style={{ backgroundImage: "var(--gradient-hero)" }}>
+      <section className="border-b border-black/10 bg-white">
         <div className="mx-auto max-w-3xl px-4 py-20 text-center">
-          <p className="text-sm font-medium uppercase tracking-wider text-accent">The offer</p>
+          <p className="text-sm font-medium uppercase tracking-wider text-black">The offer</p>
           <h1 className="mt-2 text-4xl font-semibold tracking-tight md:text-5xl">
             {product?.title || offer.name}
           </h1>
-          <p className="mt-4 text-lg text-muted-foreground">
+          <p className="mt-4 text-lg text-black/55">
             {product?.description || offer.shortPitch}
           </p>
           {selectedPrice != null && (
-            <p className="mt-6 text-2xl font-semibold tracking-tight text-foreground">
+            <p className="mt-6 text-2xl font-semibold tracking-tight text-black">
               ${(selectedPrice / 100).toFixed(2)}
             </p>
           )}

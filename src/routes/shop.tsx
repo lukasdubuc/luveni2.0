@@ -34,22 +34,15 @@ function ShopPage() {
       : ((loader?.products as Product[]) ?? []);
 
   return (
-    <div className="min-h-screen bg-black font-mono selection:bg-white selection:text-black">
-      {/* ── Empty state ── */}
+    <div className="min-h-screen bg-white font-mono selection:bg-black selection:text-white">
       {products.length === 0 ? (
-        <div className="flex items-center justify-center h-screen">
-          <span className="text-[10px] tracking-[0.3em] uppercase text-white/20">
+        <div className="flex h-screen items-center justify-center">
+          <span className="text-[10px] uppercase tracking-[0.3em] text-black/30">
             No Products Available
           </span>
         </div>
       ) : (
-        /*
-         * Grid: Yeezy.com 1:1
-         *   No borders, no gaps.
-         *   Pure black background.
-         *   Transparent images.
-         */
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 bg-black">
+        <div className="grid grid-cols-2 border-l border-t border-black/10 bg-white sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
           {products.map((product) => (
             <ProductCell key={product.id} product={product} />
           ))}
@@ -76,45 +69,41 @@ function ProductCell({ product }: { product: Product }) {
   return (
     <Link
       to={`/offer/${product.slug}`}
-      className="group relative block bg-black overflow-hidden"
+      className="group relative block overflow-hidden border-b border-r border-black/10 bg-white"
     >
-      {/* Image — aspect-[1/1] like Yeezy.com, full-bleed, transparent */}
-      <div className="aspect-square relative overflow-hidden flex items-center justify-center p-4 sm:p-8">
+      <div className="relative flex aspect-[2/3] items-center justify-center overflow-hidden p-3 sm:p-4">
         {imageUrl ? (
           <img
             src={imageUrl}
             alt={product.title}
-            className="max-w-full max-h-full object-contain transition-transform duration-500 ease-out group-hover:scale-105"
+            className="max-h-full max-w-full object-contain transition-transform duration-500 ease-out group-hover:scale-[1.03]"
             loading="lazy"
           />
         ) : (
-          /* No-image fallback — pure void */
-          <div className="absolute inset-0 flex items-center justify-center bg-black">
-            <span className="text-[7px] tracking-[0.3em] uppercase text-white/10">
+          <div className="absolute inset-0 flex items-center justify-center bg-white">
+            <span className="text-[7px] uppercase tracking-[0.3em] text-black/20">
               No Image
             </span>
           </div>
         )}
 
-        {/* Sale badge — minimal */}
         {hasDiscount && (
-          <span className="absolute top-4 right-4 text-white text-[8px] tracking-[0.15em] uppercase font-bold">
+          <span className="absolute right-3 top-3 text-[8px] font-bold uppercase tracking-[0.15em] text-black">
             Sale
           </span>
         )}
       </div>
 
-      {/* ── Info — Yeezy style ── */}
-      <div className="text-center pb-8 px-4">
-        <p className="text-[10px] tracking-[0.1em] uppercase text-white leading-tight mb-1">
+      <div className="px-2 pb-6 text-center">
+        <p className="mb-1 text-[9px] uppercase leading-tight tracking-[0.1em] text-black">
           {product.title}
         </p>
         <div className="flex items-center justify-center gap-2">
-          <span className="text-[10px] tracking-[0.05em] text-white">
+          <span className="text-[9px] tracking-[0.05em] text-black">
             ${(displayPrice / 100).toFixed(0)}
           </span>
           {hasDiscount && (
-            <span className="text-[9px] tracking-[0.05em] text-white/30 line-through">
+            <span className="text-[8px] tracking-[0.05em] text-black/35 line-through">
               ${(product.price_cents / 100).toFixed(0)}
             </span>
           )}

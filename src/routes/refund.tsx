@@ -19,7 +19,7 @@ function H({ children }: { children: ReactNode }) {
 function Refund() {
   return (
     <section className="bg-background">
-      <article className="mx-auto max-w-3xl px-4 py-16 text-base leading-relaxed text-muted-foreground">
+      <article className="mx-auto max-w-3xl px-4 py-16 text-base leading-relaxed text-black/55">
         <p className="text-sm uppercase tracking-wider text-accent">Legal</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
           Refund Policy

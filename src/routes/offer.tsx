@@ -136,30 +136,30 @@ function OfferPage() {
 
   return (
     <>
-      <section className="border-b border-border" style={{ backgroundImage: "var(--gradient-hero)" }}>
+      <section className="border-b border-black/10 bg-white">
         <div className="mx-auto max-w-3xl px-4 py-20 text-center">
-          <p className="text-sm font-medium uppercase tracking-wider text-accent">The offer</p>
+          <p className="text-sm font-medium uppercase tracking-wider text-black">The offer</p>
           <h1 className="mt-2 text-4xl font-semibold tracking-tight md:text-5xl">
             {product?.title || offer.name}
           </h1>
-          <p className="mt-4 text-lg text-muted-foreground">
+          <p className="mt-4 text-lg text-black/55">
             {product?.description || offer.shortPitch}
           </p>
         </div>
       </section>
 
       {product && variants.length > 0 && (
-        <section className="bg-background py-10">
-          <div className="mx-auto max-w-5xl px-4">
-            <div className="rounded-3xl border border-border bg-white p-6 shadow-sm">
+        <section className="bg-white py-10">
+          <div className="mx-auto max-w-7xl px-4">
+            <div className="border border-black/10 bg-white p-6">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-accent">Product variants</p>
-                  <p className="mt-2 text-sm text-muted-foreground">Choose from the supplier’s available options.</p>
+                  <p className="text-xs uppercase tracking-[0.3em] text-black">Product variants</p>
+                  <p className="mt-2 text-sm text-black/55">Choose from the supplier’s available options.</p>
                 </div>
-                <div className="text-right text-sm font-medium text-foreground">
+                <div className="text-right text-sm font-medium text-black">
                   {selectedPrice != null ? `$${(selectedPrice / 100).toFixed(2)}` : "Price pending"}
-                  <div className="text-xs text-muted-foreground">{stockMessage}</div>
+                  <div className="text-xs text-black/55">{stockMessage}</div>
                 </div>
               </div>
 
@@ -170,9 +170,9 @@ function OfferPage() {
                   ) as string[];
                   return (
                     <div key={option} className="space-y-3">
-                      <div className="flex items-center justify-between text-sm font-semibold text-foreground uppercase tracking-[0.2em]">
+                      <div className="flex items-center justify-between text-sm font-semibold text-black uppercase tracking-[0.2em]">
                         <span>{option}</span>
-                        <span className="text-xs text-muted-foreground">{selection[option] || "Choose"}</span>
+                        <span className="text-xs text-black/55">{selection[option] || "Choose"}</span>
                       </div>
                       <div className="flex flex-wrap gap-3">
                         {values.map((value) => {
@@ -184,7 +184,7 @@ function OfferPage() {
                               type="button"
                               onClick={() => setSelection((current) => ({ ...current, [option]: value }))}
                               disabled={!available}
-                              className={`rounded-full border px-4 py-2 text-sm transition ${isSelected ? "border-black bg-black text-white" : "border-border bg-white text-foreground hover:border-black"} ${!available ? "cursor-not-allowed opacity-50" : ""}`}
+                              className={`border px-4 py-2 text-sm transition ${isSelected ? "border-black bg-black text-white" : "border-black/10 bg-white text-black hover:border-black"} ${!available ? "cursor-not-allowed opacity-50" : ""}`}
                             >
                               {value}
                               {!available && " · Sold out"}
@@ -198,7 +198,7 @@ function OfferPage() {
               </div>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-black/55">
                   {selectedVariant?.fulfillment_provider
                     ? `Fulfilled by ${selectedVariant.fulfillment_provider}`
                     : product.fulfillment_provider
@@ -208,12 +208,12 @@ function OfferPage() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                   <a
                     href={checkoutHref}
-                    className={`inline-flex items-center justify-center rounded-full bg-black px-6 py-3 text-sm font-semibold text-white transition ${checkoutDisabled ? "pointer-events-none opacity-50" : "hover:-translate-y-0.5"}`}
+                    className={`inline-flex items-center justify-center border border-black bg-black px-6 py-3 text-sm font-semibold text-white transition hover:bg-white hover:text-black ${checkoutDisabled ? "pointer-events-none opacity-50" : "hover:bg-white hover:text-black"}`}
                   >
                     {checkoutDisabled ? "Select a variant" : selectedVariant ? "Checkout this variant" : "Checkout"}
                   </a>
                   {selectedVariant?.sku && (
-                    <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground">SKU: {selectedVariant.sku}</span>
+                    <span className="text-xs uppercase tracking-[0.2em] text-black/55">SKU: {selectedVariant.sku}</span>
                   )}
                 </div>
               </div>
