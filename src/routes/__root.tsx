@@ -129,7 +129,7 @@ function RootComponent() {
       .then(({ data, error }) => {
         if (canceled) return;
         if (!error && data) {
-          setFooterDescription(mergeSiteConfig(data).metadata?.footer_description ?? "");
+          setFooterDescription(mergeSiteConfig(data as any).metadata?.footer_description ?? "");
         }
       });
 
