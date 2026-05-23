@@ -55,7 +55,7 @@ function Checkout() {
   const submit = useServerFn(createCheckout);
   const { product, variantSku } = Route.useLoaderData();
   
-  // Using global cart state
+  // Use global cart state
   const { items, addItem, totalCents } = useCart();
   
   const [name, setName] = useState("");
@@ -75,22 +75,12 @@ function Checkout() {
     }
   }, [product, items.length, addItem, variantSku]);
 
-  const selectedVariant = (product?.variants as any[])?.find(
-    (variant: any) => variant.sku === variantSku,
-  );
-
-  const displayName = selectedVariant?.sku
-    ? `${product?.title} (${selectedVariant.sku})`
-    : product?.title ?? offer.name;
-
   const displayPrice = `$${(totalCents / 100).toFixed(0)}`;
 
-  const displayBullets: string[] = selectedVariant?.bullet_points?.length
-    ? selectedVariant.bullet_points
-    : product?.bullet_points?.length
-    ? product.bullet_points
-    : product?.description
-    ? product.description.split("\n").map((b: string) => b.trim()).filter(Boolean)
+  // Logic to determine bullets based on the first item in the cart (or fallback)
+  const primaryItem = items[0];
+  const displayBullets: string[] = primaryItem 
+    ? (product?.bullet_points ?? product?.description?.split("\n") ?? offer.bullets)
     : offer.bullets;
 
   async function onSubmit(e: React.FormEvent) {
@@ -183,17 +173,23 @@ function Checkout() {
               Order summary
             </h2>
 
-            <div className="mt-4 flex items-start justify-between gap-4">
-              <div>
-                <p className="font-medium">{displayName}</p>
-                <p className="text-sm text-muted-foreground">One-time payment</p>
-              </div>
-              <div className="text-right">
-                <p className="text-lg font-semibold">{displayPrice}</p>
-              </div>
+            {/* Iterating over cart items */}
+            <div className="mt-4 space-y-4">
+              {items.map((item) => (
+                <div key={`${item.productId}-${item.variantSku}`} className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-medium">{item.title}</p>
+                    <p className="text-sm text-muted-foreground">Quantity: {item.quantity}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-semibold">${((item.price_cents * item.quantity) / 100).toFixed(0)}</p>
+                  </div>
+                </div>
+              ))}
             </div>
 
             <div className="my-5 h-px bg-black/10" />
+            
             <ul className="space-y-2 text-sm">
               {displayBullets.map((b: string) => (
                 <li key={b} className="flex items-start gap-2">
@@ -202,6 +198,7 @@ function Checkout() {
                 </li>
               ))}
             </ul>
+            
             <div className="my-5 h-px bg-black/10" />
 
             <div className="flex items-center justify-between text-base font-semibold">
