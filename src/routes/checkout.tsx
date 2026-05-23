@@ -1,5 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute } from '@tanstack/react-router'
 import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Lock, Check } from "lucide-react";
 import { z } from "zod";
