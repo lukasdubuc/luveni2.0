@@ -4,7 +4,13 @@ import { z } from "zod";
 const Schema = z.object({
   email: z.string().trim().email().max(255),
   source: z.string().trim().max(64).optional(),
-  metadata: z.record(z.any()).optional(),
+  metadata: z
+    .record(
+      z.string().min(1).max(64),
+      z.union([z.string().max(256), z.number(), z.boolean(), z.null()]),
+    )
+    .refine((o) => Object.keys(o).length <= 20, { message: "Too many metadata keys" })
+    .optional(),
 });
 
 export const captureLead = createServerFn({ method: "POST" })

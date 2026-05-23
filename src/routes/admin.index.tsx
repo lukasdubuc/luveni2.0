@@ -134,7 +134,7 @@ function AdminPage() {
       if (ordersRes.data) setActiveOrders(ordersRes.data as Order[]);
       if (leadsRes.data) setActiveLeads(leadsRes.data as Lead[]);
       if (siteRes.data) {
-        setSiteContent(prev => ({ ...prev, ...siteRes.data }));
+        setSiteContent(prev => ({ ...prev, ...(siteRes.data as any) }));
       }
     } catch (e) {
       console.error("[Admin] Fetch error:", e);

@@ -54,7 +54,7 @@ function ProductsPage() {
       .from("products")
       .select("*")
       .order("created_at", { ascending: false });
-    setProducts(data || []);
+    setProducts((data || []) as unknown as Product[]);
     setLoading(false);
   };
 
@@ -101,7 +101,7 @@ function ProductsPage() {
       catch { toast.error("Invalid variant JSON"); setSaving(false); return; }
     }
 
-    const final = { ...payload, variants };
+    const final = { ...payload, variants } as any;
     const { error } = id
       ? await supabase.from("products").update(final).eq("id", id)
       : await supabase.from("products").insert([final]);

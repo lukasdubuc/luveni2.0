@@ -1,7 +1,13 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, Sparkles } from "lucide-react";
+import DOMPurify from "isomorphic-dompurify";
 import { offer } from "@/config/site";
 import { SITE_CONFIG_FALLBACK, type SiteConfig } from "@/lib/site-config";
+
+const SANITIZE_OPTS = {
+  ALLOWED_TAGS: ["span", "strong", "em", "br", "b", "i", "u"],
+  ALLOWED_ATTR: ["class"],
+};
 
 export function Hero({ siteConfig }: { siteConfig?: SiteConfig }) {
   const cfg = siteConfig ?? SITE_CONFIG_FALLBACK;
@@ -19,11 +25,11 @@ export function Hero({ siteConfig }: { siteConfig?: SiteConfig }) {
           )}
           <h1 
             className="mt-8 text-5xl tracking-tight md:text-7xl"
-            dangerouslySetInnerHTML={{ __html: cfg.hero_headline }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(cfg.hero_headline, SANITIZE_OPTS) }}
           />
           <p 
             className="mx-auto mt-6 max-w-xl text-base text-black/55 md:text-lg"
-            dangerouslySetInnerHTML={{ __html: cfg.hero_subheadline }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(cfg.hero_subheadline, SANITIZE_OPTS) }}
           />
           <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link

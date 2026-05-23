@@ -102,8 +102,10 @@ export type Database = {
           fulfillment_provider: string | null
           id: string
           image_urls: string[]
+          is_featured: boolean | null
           is_published: boolean
           price_cents: number
+          price_cents_discounted: number | null
           slug: string
           source_url: string | null
           title: string
@@ -120,8 +122,10 @@ export type Database = {
           fulfillment_provider?: string | null
           id?: string
           image_urls?: string[]
+          is_featured?: boolean | null
           is_published?: boolean
           price_cents?: number
+          price_cents_discounted?: number | null
           slug: string
           source_url?: string | null
           title: string
@@ -138,8 +142,10 @@ export type Database = {
           fulfillment_provider?: string | null
           id?: string
           image_urls?: string[]
+          is_featured?: boolean | null
           is_published?: boolean
           price_cents?: number
+          price_cents_discounted?: number | null
           slug?: string
           source_url?: string | null
           title?: string
@@ -156,8 +162,10 @@ export type Database = {
           hero_subheadline: string | null
           id: string
           launch_pricing_active: boolean | null
+          metadata: Json | null
           price_display: string | null
           price_original: string | null
+          theme: string | null
           updated_at: string | null
         }
         Insert: {
@@ -167,8 +175,10 @@ export type Database = {
           hero_subheadline?: string | null
           id: string
           launch_pricing_active?: boolean | null
+          metadata?: Json | null
           price_display?: string | null
           price_original?: string | null
+          theme?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -178,8 +188,10 @@ export type Database = {
           hero_subheadline?: string | null
           id?: string
           launch_pricing_active?: boolean | null
+          metadata?: Json | null
           price_display?: string | null
           price_original?: string | null
+          theme?: string | null
           updated_at?: string | null
         }
         Relationships: []
