@@ -27,7 +27,7 @@ type Product = {
   price_cents: number;
   discounted_price_cents?: number | null;
   image_urls: string[];
-  description?: string;
+  description?: string | null;
   variants?: ProductVariant[];
   bullet_points?: string[];
   is_published?: boolean;
@@ -37,14 +37,18 @@ type Product = {
 
 export const Route = createFileRoute("/offer/$slug")({
   loader: async ({ params }) => {
-    const productResult = await supabase
-      .from("products")
-      .select("*")
-      .eq("slug", params.slug)
-      .eq("is_published", true)
-      .maybeSingle();
+    const [productResult, allProducts] = await Promise.all([
+      supabase
+        .from("products")
+        .select("*")
+        .eq("slug", params.slug)
+        .eq("is_published", true)
+        .maybeSingle(),
+      fetchProducts({ onlyPublished: true }),
+    ]);
     return {
       product: productResult.data ?? null,
+      allProducts: allProducts ?? [],
     };
   },
   head: ({ loaderData }: any) => {
@@ -90,15 +94,11 @@ function formatPrice(cents?: number | null) {
 // ─── Main Page Component ──────────────────────────────────────────────────────
 
 function OfferSlugPage() {
-  const { product } = Route.useLoaderData() as {
+  const { product, allProducts } = Route.useLoaderData() as {
     product: Product | null;
     allProducts: Product[];
   };
   const navigate = useNavigate();
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
-  useEffect(() => {
-    fetchProducts({ onlyPublished: true }).then(setAllProducts);
-  }, []);
 
   // ── Product list navigation ──────────────────────────────────────────────
   const currentIndex = useMemo(

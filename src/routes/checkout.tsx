@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { createFileRoute } from '@tanstack/react-router'
 import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Lock, Check } from "lucide-react";
@@ -57,7 +59,7 @@ function Checkout() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const selectedVariant = product?.variants?.find((variant: any) => variant.sku === variantSku);
+  const selectedVariant = (product?.variants as any[])?.find((variant: any) => variant.sku === variantSku);
   const displayName = selectedVariant?.sku ? `${product?.title} (${selectedVariant.sku})` : product?.title ?? offer.name;
   const displayPrice = product
     ? `$${((selectedVariant?.price_cents ?? product.price_cents) / 100).toFixed(0)}`

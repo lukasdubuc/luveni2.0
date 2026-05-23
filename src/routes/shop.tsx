@@ -81,12 +81,17 @@ const ProductCell = memo(({ product }: { product: Product }) => {
 
   return (
     <Link
+<<<<<<< HEAD
       to={`/offer/${product.slug}`}
       onClick={handleNavigate}
       className={`group relative z-0 block border-none bg-transparent outline-none transition-transform duration-300 ease-in-out hover:z-10 hover:scale-105 hover:border-transparent focus:outline-none focus-visible:outline-none ${
         isPending ? "opacity-70" : ""
       }`}
       style={{ willChange: "transform", backfaceVisibility: "hidden" }}
+=======
+      to={`/offer/${product.slug}` as any}
+      className="group relative z-0 block border-none bg-transparent outline-none transition-all duration-300 ease-in-out hover:z-10 hover:scale-105 hover:border-transparent focus:outline-none focus-visible:outline-none"
+>>>>>>> 44d09e9 (fix: resolve type errors and stabilize build)
     >
       <div className="relative flex aspect-[2/3] items-center justify-center overflow-hidden bg-transparent p-3 sm:p-4">
         {imageUrl ? (
