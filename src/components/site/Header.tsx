@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { site } from "@/config/site";
+import { useCart } from "@/context/CartContext";
 
 const navLinks = [
   { to: "/shop",    label: "SHOP"    },
@@ -9,117 +10,132 @@ const navLinks = [
   { to: "/contact", label: "CONTACT" },
 ] as const;
 
-const cartStyle: React.CSSProperties = {
-  fontSize: "9px",
-  fontFamily: "sans-serif",
-  fontWeight: 700,
-  letterSpacing: "0.28em",
-  textTransform: "uppercase",
-  background: "none",
-  border: "none",
-  cursor: "pointer",
-  padding: 0,
-  color: "inherit",
-};
+// ── Yeezy-style minimal shopping bag SVG icon ─────────────────────────────────
+function BagIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.25}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {/* bag body */}
+      <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
+      {/* bag handle cutout */}
+      <line x1="3" y1="6" x2="21" y2="6" />
+      {/* handle arch */}
+      <path d="M16 10a4 4 0 01-8 0" />
+    </svg>
+  );
+}
 
 export function Header({ theme = "light" }: { theme?: "light" | "dark" }) {
   const [open, setOpen] = useState(false);
+  const { count } = useCart();
   const isDark = theme === "dark";
-  const colorClass = isDark ? "text-white" : "text-black";
-  const mutedClass = isDark ? "text-white/50" : "text-black/50";
+
+  const colorCls   = isDark ? "text-white"      : "text-black";
+  const mutedCls   = isDark ? "text-white/40"   : "text-black/40";
+  const bgCls      = isDark ? "bg-black"        : "bg-white";
+  const borderCls  = isDark ? "border-white/10" : "border-black/8";
+  const overlayBg  = isDark ? "bg-black"        : "bg-white";
 
   return (
     <header
-      className={`sticky top-0 z-50 transition-colors duration-500 ${
-        isDark
-          ? "bg-black border-b border-white/10 md:border-0"
-          : "bg-white border-b border-gray-100 md:border-0"
-      }`}
+      className={`sticky top-0 z-50 transition-colors duration-500 ${bgCls} border-b ${borderCls}`}
     >
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
 
-        {/* ── Mobile: burger top-left ── */}
-        <div className="md:hidden flex items-center">
+        {/* ── Left: burger (mobile) / brand (desktop) ── */}
+        <div className="flex flex-1 items-center">
+          {/* Mobile burger — top-left, no label */}
           <button
             onClick={() => setOpen((v) => !v)}
-            className={colorClass}
             aria-label="Toggle navigation"
+            className={`md:hidden flex items-center ${colorCls}`}
           >
             {open ? <X size={18} /> : <Menu size={18} />}
           </button>
-        </div>
 
-        {/* ── Brand (center on mobile, left on desktop) ── */}
-        <div className="flex flex-1 items-center justify-center md:justify-start">
+          {/* Desktop brand */}
           <Link
             to="/shop"
-            className={`text-[12px] font-bold tracking-[0.2em] ${colorClass}`}
+            className={`hidden md:block text-[11px] font-bold tracking-[0.22em] uppercase ${colorCls}`}
           >
             {site.brand}
           </Link>
         </div>
 
-        {/* ── Desktop nav ── */}
-        <nav className="hidden md:flex flex-none items-center gap-8">
+        {/* ── Mobile center brand ── */}
+        <Link
+          to="/shop"
+          className={`md:hidden absolute left-1/2 -translate-x-1/2 text-[11px] font-bold tracking-[0.22em] uppercase ${colorCls}`}
+        >
+          {site.brand}
+        </Link>
+
+        {/* ── Desktop center nav ── */}
+        <nav className="hidden md:flex items-center gap-8">
           {navLinks.map((l) => (
             <Link
               key={l.to}
               to={l.to}
-              className={`text-[10px] tracking-[0.2em] transition-colors ${mutedClass} hover:${colorClass}`}
-              activeProps={{ className: isDark ? "!text-white" : "!text-black" }}
+              className={`text-[9px] font-bold tracking-[0.28em] uppercase transition-colors ${mutedCls} hover:${colorCls}`}
+              activeProps={{ className: `text-[9px] font-bold tracking-[0.28em] uppercase ${colorCls}` }}
             >
               {l.label}
             </Link>
           ))}
         </nav>
 
-        {/* ── Right slot: CART (both) ── */}
+        {/* ── Right: bag icon (both breakpoints) ── */}
         <div className="flex flex-1 justify-end">
-          <Link to="/checkout">
-            <button
-              style={{
-                ...cartStyle,
-                color: isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)",
-              }}
-              onMouseEnter={(e) =>
-                ((e.currentTarget as HTMLButtonElement).style.color = isDark ? "#fff" : "#000")
-              }
-              onMouseLeave={(e) =>
-                ((e.currentTarget as HTMLButtonElement).style.color = isDark
-                  ? "rgba(255,255,255,0.5)"
-                  : "rgba(0,0,0,0.5)")
-              }
-            >
-              CART
-            </button>
+          <Link
+            to="/checkout"
+            aria-label={`Cart${count > 0 ? `, ${count} item${count !== 1 ? "s" : ""}` : ""}`}
+            className={`relative flex items-center transition-opacity hover:opacity-60 ${colorCls}`}
+          >
+            <BagIcon size={20} />
+            {/* Item count badge — only shown when cart has items */}
+            {count > 0 && (
+              <span
+                className={`absolute -top-1.5 -right-2 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold leading-none
+                  ${isDark ? "bg-white text-black" : "bg-black text-white"}`}
+              >
+                {count > 9 ? "9+" : count}
+              </span>
+            )}
           </Link>
         </div>
       </div>
 
-      {/* ── Mobile overlay menu ── */}
+      {/* ── Mobile fullscreen overlay ── */}
       {open && (
         <div
-          className={`fixed inset-0 z-40 md:hidden ${isDark ? "bg-black" : "bg-white"}`}
+          className={`fixed inset-0 z-40 md:hidden ${overlayBg} flex flex-col items-center justify-center gap-8`}
         >
-          <div className="flex h-full flex-col items-center justify-center gap-8">
-            {navLinks.map((l) => (
-              <Link
-                key={l.to}
-                to={l.to}
-                onClick={() => setOpen(false)}
-                className={`text-[14px] tracking-[0.3em] transition-colors ${mutedClass}`}
-                activeProps={{ className: isDark ? "!text-white" : "!text-black" }}
-              >
-                {l.label}
-              </Link>
-            ))}
-          </div>
+          {navLinks.map((l) => (
+            <Link
+              key={l.to}
+              to={l.to}
+              onClick={() => setOpen(false)}
+              className={`text-[11px] font-bold tracking-[0.35em] uppercase transition-colors ${mutedCls}`}
+              activeProps={{ className: `text-[11px] font-bold tracking-[0.35em] uppercase ${colorCls}` }}
+            >
+              {l.label}
+            </Link>
+          ))}
           <button
             onClick={() => setOpen(false)}
-            className={`absolute right-6 top-6 ${colorClass}`}
             aria-label="Close navigation"
+            className={`absolute right-6 top-4 ${colorCls}`}
           >
-            <X size={24} />
+            <X size={20} />
           </button>
         </div>
       )}
