@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { fetchProducts, useProducts } from "@/lib/useProducts";
-import { useMemo, memo } from "react";
+import { useMemo, memo, useTransition } from "react";
 
 type Product = {
   id: string;
@@ -56,6 +56,9 @@ function ShopPage() {
 }
 
 const ProductCell = memo(({ product }: { product: Product }) => {
+  const navigate = useNavigate();
+  const [isPending, startTransition] = useTransition();
+
   const imageUrl =
     Array.isArray(product.image_urls) && product.image_urls.length > 0
       ? product.image_urls[0]
@@ -69,10 +72,21 @@ const ProductCell = memo(({ product }: { product: Product }) => {
     ? product.discounted_price_cents!
     : product.price_cents;
 
+  const handleNavigate = (e: React.MouseEvent) => {
+    e.preventDefault();
+    startTransition(() => {
+      navigate({ to: `/offer/${product.slug}` });
+    });
+  };
+
   return (
     <Link
       to={`/offer/${product.slug}`}
-      className="group relative z-0 block border-none bg-transparent outline-none transition-all duration-300 ease-in-out hover:z-10 hover:scale-105 hover:border-transparent focus:outline-none focus-visible:outline-none"
+      onClick={handleNavigate}
+      className={`group relative z-0 block border-none bg-transparent outline-none transition-transform duration-300 ease-in-out hover:z-10 hover:scale-105 hover:border-transparent focus:outline-none focus-visible:outline-none ${
+        isPending ? "opacity-70" : ""
+      }`}
+      style={{ willChange: "transform", backfaceVisibility: "hidden" }}
     >
       <div className="relative flex aspect-[2/3] items-center justify-center overflow-hidden bg-transparent p-3 sm:p-4">
         {imageUrl ? (
