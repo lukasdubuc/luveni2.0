@@ -13,7 +13,7 @@ export function Header() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 border-none bg-white">
+    <header className="sticky top-0 z-50 border-none bg-white md:border-none border-b border-black md:border-b-0">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
         <div>
           <Link
@@ -22,6 +22,7 @@ export function Header() {
           >
             {site.brand}
           </Link>
+          <span className="md:hidden text-[10px] font-bold tracking-[0.3em] text-black/30">SHOP</span>
         </div>
 
         <nav className="hidden items-center gap-8 md:flex">

@@ -276,29 +276,31 @@ function AdminDashboard() {
             ))}
           </div>
 
-          {/* MOBILE MENU BUTTON */}
+          {/* MOBILE MENU BUTTON - FAR RIGHT */}
           <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden p-1">
             <Menu size={18} />
           </button>
-
-          {/* SIGN OUT */}
-          <button onClick={handleSignOut} className="text-[10px] uppercase tracking-[0.1em] text-red-500/60 hover:text-red-600 transition-colors">
-            LOGOUT
-          </button>
         </div>
 
-        {/* MOBILE MENU */}
+        {/* MOBILE MENU - FULL SCREEN OVERLAY */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-100 bg-white animate-in slide-in-from-top duration-300">
-            <div className="px-4 py-4 space-y-4">
+          <div className="fixed inset-0 z-40 border-none bg-white md:hidden">
+            <div className="flex h-full flex-col items-center justify-center gap-8">
               {NAV_ITEMS.filter(item => item.id !== "site").map(item => (
                 <button key={item.id} onClick={() => handleNavClick(item.id)}
-                  className={`block w-full text-left text-[10px] uppercase tracking-[0.2em] transition-colors ${
-                    section === item.id ? "text-black" : "text-black/30"
+                  className={`text-[14px] tracking-[0.3em] transition-colors ${
+                    section === item.id ? "text-black" : "text-black/30 hover:text-black"
                   }`}>
                   {item.label}
                 </button>
               ))}
+              <button 
+                onClick={() => setMobileMenuOpen(false)}
+                className="absolute right-6 top-6 text-black"
+                aria-label="Close navigation"
+              >
+                <X size={24} />
+              </button>
             </div>
           </div>
         )}
@@ -520,9 +522,14 @@ function AdminDashboard() {
                 <div className="space-y-8">
                   <div className="space-y-4">
                     <h2 className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Account</h2>
-                    <div className="bg-gray-50/50 p-6 space-y-2">
-                      <p className="text-[10px] text-gray-600">Signed in as</p>
-                      <p className="text-xs font-bold uppercase">{userEmail || "…"}</p>
+                    <div className="bg-gray-50/50 p-6 space-y-4">
+                      <div>
+                        <p className="text-[10px] text-gray-600">Signed in as</p>
+                        <p className="text-xs font-bold uppercase">{userEmail || "…"}</p>
+                      </div>
+                      <button onClick={handleSignOut} className="w-full text-[10px] font-bold uppercase bg-red-50 text-red-600 px-4 py-3 hover:bg-red-100 transition-all">
+                        LOGOUT
+                      </button>
                     </div>
                   </div>
 
