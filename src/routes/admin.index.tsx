@@ -48,6 +48,9 @@ type Lead = {
 };
 
 export const Route = createFileRoute("/admin/")({
+  head: () => ({
+    meta: [{ title: "Admin" }],
+  }),
   component: AdminPage,
 });
 
@@ -102,13 +105,11 @@ function AdminPage() {
 
   // ── Theme Application (instant + persistent) ───────────────────────────
   const applyTheme = useCallback(async (theme: "light" | "dark") => {
-    // 1) Optimistic UI — apply immediately
     document.documentElement.classList.remove("light", "dark");
     document.documentElement.classList.add(theme);
     setIsDark(theme === "dark");
     setSiteContent(s => ({ ...s, theme }));
 
-    // 2) Persist to DB (triggers realtime broadcast to public site)
     try {
       const { error } = await supabase
         .from("site_config")
@@ -122,14 +123,12 @@ function AdminPage() {
   }, []);
 
   useEffect(() => {
-    // Sync isDark whenever siteContent.theme changes (e.g. loaded from DB)
     if (siteContent.theme) {
       document.documentElement.classList.remove("light", "dark");
       document.documentElement.classList.add(siteContent.theme);
       setIsDark(siteContent.theme === "dark");
     }
   }, [siteContent.theme]);
-
 
   // ── Auth & Data Fetch ───────────────────────────────────────────────────
   useEffect(() => {
@@ -145,7 +144,6 @@ function AdminPage() {
     init();
   }, []);
 
-  // ── ENGINE SAFEGUARD: All backend functions isolated below ──────────────
   const fetchData = async () => {
     try {
       const [productsRes, ordersRes, leadsRes, siteRes] = await Promise.all([
@@ -272,7 +270,6 @@ function AdminPage() {
   const saveSiteConfig = async () => {
     setSiteSaving(true);
     try {
-      // Base payload - only include columns that definitely exist
       const payload: any = {
         id: "main",
         hero_headline: siteContent.hero_headline || "",
@@ -286,17 +283,16 @@ function AdminPage() {
         updated_at: new Date().toISOString(),
       };
 
-      // Try to update first, as 'main' should already exist
       const { error: updateError } = await supabase
         .from("site_config")
         .update(payload)
         .eq("id", "main");
-        
+
       if (updateError) {
         console.error("[Admin] Update failed:", updateError);
         throw updateError;
       }
-      
+
       toast.success("Site content saved.");
       setSiteEdited(false);
     } catch (e: any) {
@@ -349,12 +345,10 @@ function AdminPage() {
       {/* NAVBAR */}
       <nav className={`sticky top-0 z-50 md:border-b-0 ${isDark ? "md:bg-black md:border-0 border-b border-white/10 bg-black" : "md:bg-white md:border-0 border-b border-gray-100 bg-white"}`}>
         <div className="flex items-center justify-between px-6 py-4">
-          {/* Left: Admin Label (Mobile Only) / Empty Spacer (Desktop) */}
           <div className="flex-1">
             <div className="md:hidden text-[10px] font-bold uppercase tracking-widest">ADMIN</div>
           </div>
 
-          {/* Center: Menu (Desktop) */}
           <div className="hidden md:flex items-center justify-center gap-8 flex-none">
             {["overview", "products", "orders", "leads", "settings"].map(s => (
               <button
@@ -371,7 +365,6 @@ function AdminPage() {
             ))}
           </div>
 
-          {/* Right: Menu Button (Mobile) / Empty Spacer (Desktop) */}
           <div className="flex-1 flex justify-end">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -383,7 +376,6 @@ function AdminPage() {
           </div>
         </div>
 
-        {/* Mobile Menu */}
         {mobileMenuOpen && (
           <div className={`md:hidden border-t ${isDark ? "border-white/10 bg-black" : "border-gray-100 bg-white"} p-4 space-y-3`}>
             {["overview", "products", "orders", "leads", "settings"].map(s => (
@@ -510,12 +502,12 @@ function AdminPage() {
           </div>
         )}
 
-        {/* PRODUCTS SECTION - STOREFRONT CARDS */}
+        {/* PRODUCTS SECTION */}
         {section === "products" && (
           <div className="space-y-12">
             <div className="flex items-end justify-between">
               <h1 className="text-2xl font-bold uppercase tracking-tighter">Products</h1>
-              <button 
+              <button
                 onClick={() => {
                   if (productFormOpen && !productForm.editingId) {
                     setProductFormOpen(false);
@@ -523,7 +515,7 @@ function AdminPage() {
                     resetProductForm();
                     setProductFormOpen(true);
                   }
-                }} 
+                }}
                 className={`text-[10px] font-bold uppercase tracking-widest px-6 py-2 transition-all ${
                   isDark ? "bg-white text-black hover:bg-gray-200" : "bg-black text-white hover:bg-gray-800"
                 }`}
@@ -532,7 +524,6 @@ function AdminPage() {
               </button>
             </div>
 
-            {/* PRODUCT FORM - COLLAPSIBLE */}
             {productFormOpen && (
               <div className={`p-8 space-y-8 animate-in slide-in-from-top duration-300 ${isDark ? "bg-white/5" : "bg-gray-50/50"}`}>
                 <h2 className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>
@@ -571,11 +562,9 @@ function AdminPage() {
               </div>
             )}
 
-            {/* PRODUCT GRID - STOREFRONT STYLE */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-y-12">
               {products.map(p => (
                 <div key={p.id} className="group relative">
-                  {/* Storefront Product Cell Implementation */}
                   <div className={`relative flex aspect-[2/3] items-center justify-center overflow-hidden bg-transparent p-3 sm:p-4 group-hover:scale-105 transition-all duration-300 ${
                     isDark ? "bg-white/5" : "bg-gray-50/50"
                   }`}>
@@ -588,8 +577,6 @@ function AdminPage() {
                   <div className="px-2 text-center">
                     <p className={`mb-1 text-[9px] uppercase leading-tight tracking-[0.1em] truncate font-bold ${isDark ? "text-white" : "text-black"}`}>{p.title}</p>
                     <p className={`text-[9px] tracking-[0.05em] ${isDark ? "text-white/70" : "text-black/70"}`}>${(p.price_cents / 100).toFixed(0)}</p>
-                    
-                    {/* Admin Controls - Overlay on hover or always visible below */}
                     <div className="flex items-center justify-center gap-3 mt-3">
                       <button onClick={() => togglePublished(p.id, p.is_published)}
                         className={`w-2 h-2 rounded-full transition-all ${p.is_published ? "bg-green-500" : "bg-red-500"}`} />
@@ -608,7 +595,6 @@ function AdminPage() {
           <div className="max-w-2xl space-y-12 opacity-50">
             <h1 className="text-2xl font-bold uppercase tracking-tighter">Website Builder (Hidden)</h1>
             <p className={`text-[10px] uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>This section is currently hidden from the main menu but the code remains intact for future cleanup.</p>
-            {/* [PRESERVED CODE REMAINS IN SOURCE] */}
           </div>
         )}
 
@@ -685,7 +671,6 @@ function AdminPage() {
                 </div>
               </div>
 
-
               <div className="space-y-4">
                 <h2 className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Account</h2>
                 <div className={`p-6 space-y-4 ${isDark ? "bg-white/5" : "bg-gray-50/50"}`}>
@@ -719,7 +704,6 @@ function AdminPage() {
             </div>
           </div>
         )}
-
       </main>
 
       {/* DETAIL MODAL */}
