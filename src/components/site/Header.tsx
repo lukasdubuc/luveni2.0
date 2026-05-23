@@ -18,7 +18,7 @@ export function Header({ theme = "light" }: { theme?: "light" | "dark" }) {
       isDark ? "bg-black md:bg-black md:border-0 border-b border-white/10" : "bg-white md:bg-white md:border-0 border-b border-gray-100"
     }`}>
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-1 items-center gap-2">
           <Link
             to="/shop"
             className={`text-[12px] font-bold tracking-[0.2em] ${isDark ? "text-white" : "text-black"}`}
@@ -28,7 +28,7 @@ export function Header({ theme = "light" }: { theme?: "light" | "dark" }) {
           <span className={`md:hidden text-[10px] font-bold tracking-[0.3em] ${isDark ? "text-white/30" : "text-black/30"}`}>SHOP</span>
         </div>
 
-        <nav className="hidden items-center gap-8 md:flex">
+        <nav className="hidden flex-none items-center gap-8 md:flex">
           {navLinks.map((l) => (
             <Link
               key={l.to}
@@ -43,17 +43,18 @@ export function Header({ theme = "light" }: { theme?: "light" | "dark" }) {
           ))}
         </nav>
 
-        <div className="md:hidden">
-          <button
-            onClick={() => setOpen((v) => !v)}
-            className={isDark ? "text-white" : "text-black"}
-            aria-label="Toggle navigation"
-          >
-            {open ? <X size={18} /> : <Menu size={18} />}
-          </button>
+        <div className="flex flex-1 justify-end">
+          <div className="md:hidden">
+            <button
+              onClick={() => setOpen((v) => !v)}
+              className={isDark ? "text-white" : "text-black"}
+              aria-label="Toggle navigation"
+            >
+              {open ? <X size={18} /> : <Menu size={18} />}
+            </button>
+          </div>
+          <div className="hidden md:block" />
         </div>
-        
-        <div className="hidden w-[100px] md:block" />
       </div>
 
       {open && (

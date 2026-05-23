@@ -349,11 +349,13 @@ function AdminPage() {
       {/* NAVBAR */}
       <nav className={`sticky top-0 z-50 md:border-b-0 ${isDark ? "md:bg-black md:border-0 border-b border-white/10 bg-black" : "md:bg-white md:border-0 border-b border-gray-100 bg-white"}`}>
         <div className="flex items-center justify-between px-6 py-4">
-          {/* Left: Admin Label (Mobile Only) */}
-          <div className="md:hidden text-[10px] font-bold uppercase tracking-widest">ADMIN</div>
+          {/* Left: Admin Label (Mobile Only) / Empty Spacer (Desktop) */}
+          <div className="flex-1">
+            <div className="md:hidden text-[10px] font-bold uppercase tracking-widest">ADMIN</div>
+          </div>
 
           {/* Center: Menu (Desktop) */}
-          <div className="hidden md:flex items-center justify-center gap-8 flex-1">
+          <div className="hidden md:flex items-center justify-center gap-8 flex-none">
             {["overview", "products", "orders", "leads", "settings"].map(s => (
               <button
                 key={s}
@@ -370,12 +372,15 @@ function AdminPage() {
           </div>
 
           {/* Right: Menu Button (Mobile) / Empty Spacer (Desktop) */}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden"
-          >
-            <Menu size={18} />
-          </button>
+          <div className="flex-1 flex justify-end">
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden"
+            >
+              <Menu size={18} />
+            </button>
+            <div className="hidden md:block" />
+          </div>
         </div>
 
         {/* Mobile Menu */}
