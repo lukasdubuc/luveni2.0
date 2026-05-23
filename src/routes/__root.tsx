@@ -79,7 +79,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/6f3e525f-a7aa-493b-a378-6c699f7e5e57" },
       { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/6f3e525f-a7aa-493b-a378-6c699f7e5e57" },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      { rel: "icon", type: "image/png", href: "/favicon.png" },
+    ],
   }),
   shellComponent: RootShell,
   component: RootComponent,
@@ -110,7 +113,6 @@ function RootComponent() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
-    // Apply theme class to document root for CSS variables
     document.documentElement.classList.remove("light", "dark");
     document.documentElement.classList.add(theme);
   }, [theme]);
@@ -126,15 +128,13 @@ function RootComponent() {
   useEffect(() => {
     let canceled = false;
 
-    
-    // Initial fetch
     const fetchConfig = async () => {
       const { data, error } = await supabase
         .from("site_config")
         .select("*")
         .eq("id", "main")
         .maybeSingle();
-        
+
       if (canceled) return;
       if (!error && data) {
         const config = mergeSiteConfig(data as any);
@@ -142,10 +142,9 @@ function RootComponent() {
         setTheme(config.theme || "light");
       }
     };
-    
+
     fetchConfig();
-    
-    // Subscribe to real-time changes
+
     const subscription = supabase
       .channel("site_config_changes")
       .on(
