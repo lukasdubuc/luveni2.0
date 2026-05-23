@@ -90,6 +90,7 @@ function sortOptionKeys(keys: string[]) {
   });
 }
 
+// ── Surgical change: raw price only, no strikethrough logic ──────────────────
 function formatPrice(cents?: number | null) {
   if (cents == null) return "PRICE PENDING";
   return `$${(cents / 100).toFixed(2)}`;
@@ -142,7 +143,6 @@ function OfferSlugPage() {
 
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
-      // Only intercept vertical wheel on the main page area
       if (Math.abs(e.deltaY) < 30) return;
       e.preventDefault();
       if (e.deltaY < 0) {
@@ -162,7 +162,6 @@ function OfferSlugPage() {
       const deltaY = touchStartY.current - e.changedTouches[0].clientY;
       const deltaX = touchStartX.current - e.changedTouches[0].clientX;
 
-      // Only trigger product navigation on primarily vertical swipes
       if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 60) {
         if (deltaY < 0) {
           goToPrev();
@@ -238,7 +237,6 @@ function OfferSlugPage() {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [infoExpanded, setInfoExpanded] = useState(false);
 
-  // Reset image index when product changes
   useEffect(() => {
     setActiveImageIndex(0);
     setInfoExpanded(false);
@@ -279,10 +277,9 @@ function OfferSlugPage() {
     });
   };
 
+  // ── Surgical change: use only selectedVariant or base price — no discounted fallback display ──
   const selectedPrice =
-    selectedVariant?.price_cents ??
-    product?.discounted_price_cents ??
-    product?.price_cents;
+    selectedVariant?.price_cents ?? product?.price_cents;
 
   const checkoutHref = product
     ? `/checkout?productId=${encodeURIComponent(product.id)}${
@@ -329,21 +326,53 @@ function OfferSlugPage() {
   if (!product) {
     return (
       <section
-        className="flex min-h-screen flex-col items-center justify-center bg-white px-4 text-black"
-        style={{ fontFamily: "var(--font-mono, monospace)" }}
+        style={{
+          display: "flex",
+          minHeight: "100vh",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#f4f1eb",
+          color: "#111",
+          padding: "0 1rem",
+          fontFamily: "var(--font-mono, monospace)",
+        }}
       >
-        <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-black/40">
+        <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.35em", textTransform: "uppercase", opacity: 0.4 }}>
           404
         </p>
-        <h1 className="mt-3 text-3xl font-black uppercase tracking-[-0.04em]">
+        <h1 style={{ marginTop: "0.75rem", fontSize: "clamp(1.5rem, 5vw, 2rem)", fontWeight: 900, textTransform: "uppercase", letterSpacing: "-0.04em" }}>
           Offer Not Found
         </h1>
-        <p className="mt-3 text-xs uppercase tracking-[0.2em] text-black/50">
+        <p style={{ marginTop: "0.75rem", fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.2em", opacity: 0.5 }}>
           This product is unavailable or no longer exists.
         </p>
         <a
           href="/shop"
-          className="mt-8 inline-flex h-12 items-center border border-black bg-black px-10 text-xs font-bold uppercase tracking-[0.25em] text-white transition hover:bg-white hover:text-black"
+          style={{
+            marginTop: "2rem",
+            display: "inline-flex",
+            height: "3rem",
+            alignItems: "center",
+            border: "1px solid #111",
+            background: "#111",
+            color: "#f4f1eb",
+            padding: "0 2.5rem",
+            fontSize: "9px",
+            fontWeight: 700,
+            letterSpacing: "0.25em",
+            textTransform: "uppercase",
+            textDecoration: "none",
+            transition: "background 0.2s, color 0.2s",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLAnchorElement).style.background = "#f4f1eb";
+            (e.currentTarget as HTMLAnchorElement).style.color = "#111";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLAnchorElement).style.background = "#111";
+            (e.currentTarget as HTMLAnchorElement).style.color = "#f4f1eb";
+          }}
         >
           Back to Shop
         </a>
@@ -353,23 +382,15 @@ function OfferSlugPage() {
 
   return (
     <>
-      {/* ── Prefetch adjacent products for instant navigation ── */}
       {prevProduct && (
-        <link
-          rel="prefetch"
-          href={`/offer/${prevProduct.slug}`}
-          as="document"
-        />
+        <link rel="prefetch" href={`/offer/${prevProduct.slug}`} as="document" />
       )}
       {nextProduct && (
-        <link
-          rel="prefetch"
-          href={`/offer/${nextProduct.slug}`}
-          as="document"
-        />
+        <link rel="prefetch" href={`/offer/${nextProduct.slug}`} as="document" />
       )}
 
       {/* ── Main layout ── */}
+      {/* Surgical change: background → bone #f4f1eb, foreground → high-contrast #111 */}
       <div
         className="yeezy-pdp"
         style={{
@@ -377,8 +398,8 @@ function OfferSlugPage() {
           inset: 0,
           display: "flex",
           flexDirection: "column",
-          background: "var(--background)",
-          color: "var(--foreground)",
+          background: "#f4f1eb",
+          color: "#111111",
           fontFamily: "var(--font-mono, 'Space Mono', monospace)",
           overflow: "hidden",
           zIndex: 0,
@@ -431,6 +452,7 @@ function OfferSlugPage() {
         </div>
 
         {/* ── Image area ── */}
+        {/* Surgical change: subtle bone-tinted background on image area for depth */}
         <div
           style={{
             flex: "1 1 0",
@@ -439,13 +461,12 @@ function OfferSlugPage() {
             alignItems: "center",
             justifyContent: "center",
             overflow: "hidden",
-            background: "transparent",
+            background: "#eeebe3",
             minHeight: 0,
           }}
           onTouchStart={handleImgTouchStart}
           onTouchEnd={handleImgTouchEnd}
         >
-          {/* Product image */}
           <div
             style={{
               position: "relative",
@@ -478,12 +499,12 @@ function OfferSlugPage() {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  border: "1px solid rgba(0,0,0,0.1)",
+                  border: "1px solid rgba(17,17,17,0.1)",
                   fontSize: "9px",
                   fontWeight: 700,
                   letterSpacing: "0.3em",
                   textTransform: "uppercase",
-                  color: "rgba(0,0,0,0.3)",
+                  color: "rgba(17,17,17,0.3)",
                 }}
               >
                 IMAGE PENDING
@@ -513,15 +534,7 @@ function OfferSlugPage() {
               transition: "opacity 0.2s",
             }}
           >
-            <span
-              style={{
-                fontSize: "22px",
-                fontWeight: 300,
-                color: "inherit",
-                lineHeight: 1,
-                fontFamily: "serif",
-              }}
-            >
+            <span style={{ fontSize: "22px", fontWeight: 300, color: "#111", lineHeight: 1, fontFamily: "serif" }}>
               ‹
             </span>
           </button>
@@ -548,15 +561,7 @@ function OfferSlugPage() {
               transition: "opacity 0.2s",
             }}
           >
-            <span
-              style={{
-                fontSize: "22px",
-                fontWeight: 300,
-                color: "inherit",
-                lineHeight: 1,
-                fontFamily: "serif",
-              }}
-            >
+            <span style={{ fontSize: "22px", fontWeight: 300, color: "#111", lineHeight: 1, fontFamily: "serif" }}>
               ›
             </span>
           </button>
@@ -583,8 +588,8 @@ function OfferSlugPage() {
                     width: i === activeImageIndex ? "18px" : "6px",
                     height: "6px",
                     borderRadius: "3px",
-                    background: i === activeImageIndex ? "currentColor" : "currentColor",
-                    opacity: i === activeImageIndex ? 1 : 0.25,
+                    background: "#111",
+                    opacity: i === activeImageIndex ? 1 : 0.2,
                     border: "none",
                     cursor: "pointer",
                     padding: 0,
@@ -605,7 +610,7 @@ function OfferSlugPage() {
                 fontSize: "8px",
                 fontWeight: 700,
                 letterSpacing: "0.2em",
-                color: "inherit",
+                color: "#111",
                 opacity: 0.35,
                 fontFamily: "var(--font-mono, monospace)",
               }}
@@ -620,9 +625,8 @@ function OfferSlugPage() {
         <div
           style={{
             flexShrink: 0,
-            background: "transparent",
-            borderTop: "1px solid currentColor",
-            borderTopColor: "rgba(128,128,128,0.1)",
+            background: "#f4f1eb",
+            borderTop: "1px solid rgba(17,17,17,0.08)",
             padding: "1rem 1.5rem 0",
             maxHeight: infoExpanded ? "60vh" : "auto",
             overflowY: infoExpanded ? "auto" : "visible",
@@ -639,25 +643,27 @@ function OfferSlugPage() {
               marginBottom: "0.35rem",
             }}
           >
-                <h1
+            <h1
               style={{
                 fontSize: "clamp(1.1rem, 4vw, 1.75rem)",
                 fontWeight: 900,
                 textTransform: "uppercase",
                 letterSpacing: "-0.04em",
                 lineHeight: 1,
-                color: "inherit",
+                color: "#111",
                 margin: 0,
               }}
             >
               {product.title}
             </h1>
+
+            {/* Surgical change: raw price only — no strikethrough, no discounted_price_cents display */}
             <span
               style={{
                 fontSize: "clamp(0.85rem, 2.5vw, 1.1rem)",
                 fontWeight: 700,
                 letterSpacing: "0.1em",
-                color: "inherit",
+                color: "#111",
                 whiteSpace: "nowrap",
                 flexShrink: 0,
               }}
@@ -679,7 +685,7 @@ function OfferSlugPage() {
                 fontWeight: 700,
                 letterSpacing: "0.25em",
                 textTransform: "uppercase",
-                color: "inherit",
+                color: "#111",
                 opacity: 0.4,
                 display: "flex",
                 alignItems: "center",
@@ -697,7 +703,7 @@ function OfferSlugPage() {
               style={{
                 fontSize: "11px",
                 lineHeight: 1.7,
-                color: "inherit",
+                color: "#111",
                 opacity: 0.6,
                 textTransform: "uppercase",
                 letterSpacing: "0.08em",
@@ -712,14 +718,7 @@ function OfferSlugPage() {
 
           {/* Options */}
           {optionKeys.length > 0 && (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.75rem",
-                paddingBottom: "0.75rem",
-              }}
-            >
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", paddingBottom: "0.75rem" }}>
               {optionKeys.map((option) => (
                 <div key={option}>
                   <div
@@ -736,7 +735,7 @@ function OfferSlugPage() {
                         fontWeight: 700,
                         letterSpacing: "0.3em",
                         textTransform: "uppercase",
-                        color: "inherit",
+                        color: "#111",
                       }}
                     >
                       {normalizeOptionName(option)}
@@ -747,20 +746,14 @@ function OfferSlugPage() {
                         fontWeight: 700,
                         letterSpacing: "0.2em",
                         textTransform: "uppercase",
-                        color: "inherit",
+                        color: "#111",
                         opacity: 0.4,
                       }}
                     >
                       {selection[option] || "SELECT"}
                     </span>
                   </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: "0.35rem",
-                    }}
-                  >
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
                     {optionValues[option]?.map((value) => {
                       const selected = selection[option] === value;
                       const available = isOptionAvailable(option, value);
@@ -768,22 +761,16 @@ function OfferSlugPage() {
                         <button
                           key={value}
                           type="button"
-                          onClick={() =>
-                            setSelection((cur) => ({ ...cur, [option]: value }))
-                          }
+                          onClick={() => setSelection((cur) => ({ ...cur, [option]: value }))}
                           disabled={!available}
                           aria-pressed={selected}
                           style={{
                             minHeight: "2rem",
                             minWidth: "2.5rem",
                             padding: "0 0.75rem",
-                            border: selected
-                              ? "1px solid currentColor"
-                              : "1px solid currentColor",
-                            borderColor: selected ? "currentColor" : "rgba(128,128,128,0.2)",
-                            background: selected ? "currentColor" : "transparent",
-                            color: "inherit",
-                            filter: selected ? "invert(1)" : "none",
+                            border: selected ? "1px solid #111" : "1px solid rgba(17,17,17,0.15)",
+                            background: selected ? "#111" : "transparent",
+                            color: selected ? "#f4f1eb" : "#111",
                             fontSize: "9px",
                             fontWeight: 700,
                             letterSpacing: "0.08em",
@@ -809,7 +796,7 @@ function OfferSlugPage() {
         <div
           style={{
             flexShrink: 0,
-            background: "currentColor",
+            background: "#111111",
             height: "3.5rem",
             display: "flex",
             alignItems: "stretch",
@@ -826,8 +813,7 @@ function OfferSlugPage() {
                 fontWeight: 700,
                 letterSpacing: "0.35em",
                 textTransform: "uppercase",
-                color: "inherit",
-                filter: "invert(1)",
+                color: "#f4f1eb",
                 opacity: 0.4,
                 fontFamily: "inherit",
               }}
@@ -856,8 +842,7 @@ function OfferSlugPage() {
                   fontWeight: 700,
                   letterSpacing: "0.35em",
                   textTransform: "uppercase",
-                  color: "inherit",
-                  filter: "invert(1)",
+                  color: "#f4f1eb",
                   fontFamily: "inherit",
                 }}
               >
@@ -866,8 +851,7 @@ function OfferSlugPage() {
               <span
                 style={{
                   fontSize: "20px",
-                  color: "inherit",
-                  filter: "invert(1)",
+                  color: "#f4f1eb",
                   lineHeight: 1,
                   fontWeight: 300,
                   fontFamily: "serif",
