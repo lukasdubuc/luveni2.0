@@ -37,18 +37,14 @@ type Product = {
 
 export const Route = createFileRoute("/offer/$slug")({
   loader: async ({ params }) => {
-    const [productResult, allProducts] = await Promise.all([
-      supabase
-        .from("products")
-        .select("*")
-        .eq("slug", params.slug)
-        .eq("is_published", true)
-        .maybeSingle(),
-      fetchProducts({ onlyPublished: true }),
-    ]);
+    const productResult = await supabase
+      .from("products")
+      .select("*")
+      .eq("slug", params.slug)
+      .eq("is_published", true)
+      .maybeSingle();
     return {
       product: productResult.data ?? null,
-      allProducts: allProducts ?? [],
     };
   },
   head: ({ loaderData }: any) => {
@@ -94,11 +90,15 @@ function formatPrice(cents?: number | null) {
 // ─── Main Page Component ──────────────────────────────────────────────────────
 
 function OfferSlugPage() {
-  const { product, allProducts } = Route.useLoaderData() as {
+  const { product } = Route.useLoaderData() as {
     product: Product | null;
     allProducts: Product[];
   };
   const navigate = useNavigate();
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  useEffect(() => {
+    fetchProducts({ onlyPublished: true }).then(setAllProducts);
+  }, []);
 
   // ── Product list navigation ──────────────────────────────────────────────
   const currentIndex = useMemo(
