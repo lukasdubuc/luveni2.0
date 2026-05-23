@@ -223,23 +223,27 @@ function AdminDashboard() {
     setSiteSaving(true);
     try {
       const payload = {
-        hero_headline: siteContent.hero_headline,
-        hero_subheadline: siteContent.hero_subheadline,
-        hero_cta: siteContent.hero_cta,
-        price_display: siteContent.price_display,
-        price_original: siteContent.price_original,
-        launch_pricing_active: siteContent.launch_pricing_active,
-        guarantee_days: siteContent.guarantee_days,
-        theme: siteContent.theme,
-        metadata: siteContent.metadata,
         id: "main",
+        hero_headline: siteContent.hero_headline || "",
+        hero_subheadline: siteContent.hero_subheadline || "",
+        hero_cta: siteContent.hero_cta || "",
+        price_display: siteContent.price_display || "",
+        price_original: siteContent.price_original || "",
+        launch_pricing_active: siteContent.launch_pricing_active ?? false,
+        guarantee_days: siteContent.guarantee_days || 30,
+        theme: siteContent.theme || "light",
+        metadata: siteContent.metadata || {},
         updated_at: new Date().toISOString(),
       };
-      const { error } = await supabase.from("site_config").upsert([payload] as any);
-      if (error) throw error;
+      const { error } = await supabase.from("site_config").upsert([payload] as any, { onConflict: "id" });
+      if (error) {
+        console.error("[Admin] Save error:", error);
+        throw error;
+      }
       toast.success("Site content saved.");
       setSiteEdited(false);
     } catch (e: any) {
+      console.error("[Admin] Save catch:", e);
       toast.error("Failed to save site content");
     } finally {
       setSiteSaving(false);

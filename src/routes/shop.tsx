@@ -96,15 +96,15 @@ function ProductCell({ product }: { product: Product }) {
       </div>
 
       <div className="px-2 pb-6 text-center">
-        <p className="mb-1 text-[9px] uppercase leading-tight tracking-[0.1em] text-current">
+        <p className="mb-1 text-[9px] uppercase leading-tight tracking-[0.1em] text-current opacity-90">
           {product.title}
         </p>
         <div className="flex items-center justify-center gap-2">
-          <span className="text-[9px] tracking-[0.05em] text-current">
+          <span className="text-[9px] tracking-[0.05em] text-current font-bold">
             ${(displayPrice / 100).toFixed(0)}
           </span>
           {hasDiscount && (
-            <span className="text-[8px] tracking-[0.05em] opacity-35 line-through">
+            <span className="text-[8px] tracking-[0.05em] opacity-45 line-through">
               ${(product.price_cents / 100).toFixed(0)}
             </span>
           )}
