@@ -35,6 +35,10 @@ type Product = {
 
 // ─── Route ────────────────────────────────────────────────────────────────────
 
+const formatTitle = (slug: string) => {
+  return slug.split("-").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+};
+
 export const Route = createFileRoute("/offer/$slug")({
   loader: async ({ params }) => {
     const [productResult, allProducts] = await Promise.all([
@@ -53,7 +57,7 @@ export const Route = createFileRoute("/offer/$slug")({
   },
   head: ({ loaderData }: any) => {
     const product = loaderData?.product;
-    const title = product?.title ?? offer.name;
+    const title = product ? formatTitle(product.slug) : offer.name;
     const description = product?.description ?? offer.shortPitch;
     return {
       meta: [
