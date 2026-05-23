@@ -26,7 +26,7 @@ function LoginPage() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user?.email?.toLowerCase() === AUTHORIZED_EMAIL.toLowerCase()) {
-        navigate({ to: "/admin", replace: true });
+        navigate({ to: "/admin", replace: true } as any);
       }
     });
   }, [navigate]);
@@ -57,7 +57,7 @@ function LoginPage() {
           return;
         }
 
-        navigate({ to: "/admin", replace: true });
+        navigate({ to: "/admin", replace: true } as any);
       }
     } catch (e: any) {
       toast.error(e?.message ?? "Authentication failed");
@@ -117,7 +117,7 @@ function LoginPage() {
           <button
             onClick={() => {
               localStorage.setItem('dev_guest', '1');
-              navigate({ to: '/admin', replace: true });
+              navigate({ to: '/admin', replace: true } as any);
             }}
             className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-none border border-white/10 bg-white/5 text-white text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-all"
             title="Dev-only: bypass admin auth on localhost"

@@ -1,3 +1,5 @@
+# Fix admin.index.tsx
+cat << 'FILE_EOF' > src/routes/admin.index.tsx
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -12,7 +14,7 @@ const executeSafeguard = (action: () => void, description: string) => {
   }
 };
 
-export const Route = createFileRoute("/admin/")({
+export const Route = createFileRoute("/admin/index")({
   component: AdminPage,
 });
 
@@ -40,3 +42,13 @@ function AdminPage() {
     </div>
   );
 }
+FILE_EOF
+
+# Fix login.tsx navigation
+sed -i 's|navigate({ to: "/admin", replace: true });|navigate({ to: "/admin", replace: true } as any);|g' src/routes/login.tsx
+sed -i "s|navigate({ to: '/admin', replace: true });|navigate({ to: '/admin', replace: true } as any);|g" src/routes/login.tsx
+
+# Fix shop.tsx duplicate attribute
+sed -i 's|to={`/offer/${product.slug}` as any} preload="intent"|to={`/offer/${product.slug}`} preload="intent"|g' src/routes/shop.tsx
+
+echo "Build files patched successfully."
