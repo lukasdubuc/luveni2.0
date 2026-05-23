@@ -16,8 +16,6 @@ import * as RadixAccordion from "@radix-ui/react-accordion";
 const AUTHORIZED_EMAIL = "lukasdubuc@gmail.com";
 
 export const Route = createFileRoute("/admin/")({
-  // beforeLoad is the STRICT gatekeeper. It runs before any component renders.
-  // It is the authoritative security boundary for the entire /admin tree.
   beforeLoad: async ({ location }) => {
     const { data: { session }, error } = await supabase.auth.getSession();
     if (!session || error) {
@@ -45,11 +43,11 @@ const NAV_ITEMS: { id: NavSection; label: string; icon: any }[] = [
 const BOTTOM_NAV = NAV_ITEMS.slice(0, 5);
 
 const STATUS_CONFIG: Record<string, { color: string; icon: any; label: string }> = {
-  paid:      { color: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20", icon: CheckCircle2, label: "Paid"      },
-  completed: { color: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20", icon: CheckCircle2, label: "Completed" },
-  pending:   { color: "text-amber-400 bg-amber-400/10 border-amber-400/20",       icon: Clock,        label: "Pending"   },
-  failed:    { color: "text-red-400 bg-red-400/10 border-red-400/20",             icon: XCircle,      label: "Failed"    },
-  archived:  { color: "text-slate-400 bg-slate-400/10 border-slate-400/20",       icon: Archive,      label: "Archived"  },
+  paid:      { color: "text-black bg-white border-black", icon: CheckCircle2, label: "Paid"      },
+  completed: { color: "text-black bg-white border-black", icon: CheckCircle2, label: "Completed" },
+  pending:   { color: "text-black bg-yellow-100 border-black",       icon: Clock,        label: "Pending"   },
+  failed:    { color: "text-white bg-red-600 border-red-600",             icon: XCircle,      label: "Failed"    },
+  archived:  { color: "text-gray-600 bg-gray-100 border-gray-300",       icon: Archive,      label: "Archived"  },
 };
 
 function fmt$(cents: number) {
@@ -79,24 +77,26 @@ function AdminDashboard() {
     is_published: true, editingId: null as string | null,
   });
 
-  // Keep only ONE of these declarations
-const [revenueRange, setRevenueRange] = useState<"day" | "week" | "month" | "year" | "all">("day");
+  const [revenueRange, setRevenueRange] = useState<"day" | "week" | "month" | "year" | "all">("day");
 
-const [siteContent, setSiteContent] = useState<SiteConfig>(SITE_CONFIG_FALLBACK);
-const [siteEdited, setSiteEdited] = useState(false);
-const [verifiedEdited, setVerifiedEdited] = useState(false);
-const [metadataEdited, setMetadataEdited] = useState(false);
-const [siteSaving, setSiteSaving] = useState(false);
+  const [siteContent, setSiteContent] = useState<SiteConfig>(SITE_CONFIG_FALLBACK);
+  const [siteEdited, setSiteEdited] = useState(false);
+  const [verifiedEdited, setVerifiedEdited] = useState(false);
+  const [metadataEdited, setMetadataEdited] = useState(false);
+  const [siteSaving, setSiteSaving] = useState(false);
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // ENGINE SAFEGUARD: All backend logic is isolated below.
+  // These functions handle data fetching, product management, and site config.
+  // ────────────────────────────────────────────────────────────────────────────
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // Dev guest mode: only skip for LOCAL dev, NOT for production builds
       if (typeof window !== 'undefined') {
         try {
           const host = window.location.hostname;
           const devFlag = localStorage.getItem('dev_guest');
-          // Only bypass fetching if running locally WITH dev_guest flag
           const isLocalDev = (host === 'localhost' || host === '127.0.0.1') && import.meta.env.DEV;
           if (devFlag && isLocalDev) {
             console.log("[Admin] Dev guest mode: skipping Supabase fetch");
@@ -182,7 +182,7 @@ const [siteSaving, setSiteSaving] = useState(false);
       description: description || null,
       price_cents: Math.round(parseFloat(price_cents) * 100),
       slug: slug || title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-      image_urls, // Text array stored in Supabase
+      image_urls,
       source_url: source_url || null,
       fulfillment_notes: fulfillment_notes || null,
       is_published,
@@ -256,11 +256,9 @@ const [siteSaving, setSiteSaving] = useState(false);
     setDrawerOpen(false);
   };
 
-  // ── Site config save ───────────────────────────────────────────────────────
   const saveSiteConfig = async () => {
     setSiteSaving(true);
     try {
-      // Log the content being saved to verify HTML preservation
       console.log("[Admin] Saving hero content:", {
         headline: siteContent.hero_headline,
         subheadline: siteContent.hero_subheadline,
@@ -308,17 +306,21 @@ const [siteSaving, setSiteSaving] = useState(false);
 
   const pageTitle = NAV_ITEMS.find(n => n.id === section)?.label ?? "Dashboard";
 
+  // ────────────────────────────────────────────────────────────────────────────
+  // UI RENDERING: Yeezy-inspired minimalist design
+  // ────────────────────────────────────────────────────────────────────────────
+
   return (
-    <div className="min-h-screen bg-[#0f1117] text-slate-100 flex font-sans antialiased"
-      style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
+    <div className="min-h-screen bg-white text-black flex font-sans antialiased"
+      style={{ fontFamily: "'Space Mono', monospace" }}>
 
       {/* DESKTOP SIDEBAR */}
-      <aside className="hidden md:flex w-56 flex-shrink-0 bg-[#13151c] border-r border-white/5 flex-col">
-        <div className="p-4 flex items-center gap-3 border-b border-white/5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center flex-shrink-0">
-            <Zap size={14} className="text-white" />
+      <aside className="hidden md:flex w-56 flex-shrink-0 bg-white border-r border-black flex-col">
+        <div className="p-4 flex items-center gap-3 border-b border-black">
+          <div className="w-8 h-8 border border-black flex items-center justify-center flex-shrink-0">
+            <span className="text-xs font-bold">HQ</span>
           </div>
-          <span className="font-semibold text-sm tracking-tight">HQ</span>
+          <span className="font-bold text-sm uppercase tracking-tight">ADMIN</span>
         </div>
         <nav className="flex-1 p-2 space-y-0.5">
           {NAV_ITEMS.map(item => {
@@ -326,220 +328,115 @@ const [siteSaving, setSiteSaving] = useState(false);
             const active = section === item.id;
             return (
               <button key={item.id} onClick={() => navigateTo(item.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
-                  active ? "bg-violet-500/15 text-violet-300 font-medium" : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm transition-all uppercase font-bold text-xs ${
+                  active ? "bg-black text-white" : "text-black hover:bg-gray-100"
                 }`}>
-                <Icon size={16} className="flex-shrink-0" />
+                <Icon size={14} />
                 <span>{item.label}</span>
-                {item.id === "orders" && pendingOrders.length > 0 && (
-                  <span className="ml-auto text-[10px] bg-amber-400/20 text-amber-400 px-1.5 py-0.5 rounded-full font-medium">
-                    {pendingOrders.length}
-                  </span>
-                )}
               </button>
             );
           })}
         </nav>
-      <div className="p-2 border-t border-white/5 space-y-0.5">
-          <a
-            href="/"
-            target="_blank"
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-slate-200 transition-all"
-          >
-            <ExternalLink size={16} className="flex-shrink-0" />
-            <span>View Site</span>
-          </a>
-          <button 
-            onClick={handleSignOut}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-all"
-          >
-            <LogOut size={16} className="flex-shrink-0" />
-            <span>Sign Out</span>
+        <div className="p-2 border-t border-black">
+          <button onClick={handleSignOut}
+            className="w-full flex items-center gap-2 text-xs font-bold text-red-600 border border-red-600 hover:bg-red-50 px-3 py-2.5 uppercase">
+            <LogOut size={13} /> SIGN OUT
           </button>
         </div>
       </aside>
 
-      {/* MOBILE DRAWER */}
-      {drawerOpen && (
-        <div className="md:hidden fixed inset-0 z-40 flex">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDrawerOpen(false)} />
-          <div className="relative w-64 bg-[#13151c] flex flex-col h-full shadow-2xl animate-in slide-in-from-left duration-200">
-            <div className="p-4 flex items-center justify-between border-b border-white/5">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center">
-                  <Zap size={14} className="text-white" />
-                </div>
-                <span className="font-semibold text-sm">HQ</span>
+      {/* MAIN CONTENT */}
+      <div className="flex-1 flex flex-col min-h-screen">
+        {/* TOP BAR */}
+        <header className="border-b border-black bg-white sticky top-0 z-10">
+          <div className="flex items-center justify-between px-4 md:px-6 py-4">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setDrawerOpen(!drawerOpen)} className="md:hidden text-black">
+                <Menu size={18} />
+              </button>
+              <h1 className="text-lg font-bold uppercase">{pageTitle}</h1>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="relative hidden sm:block">
+                <input type="text" placeholder="Search…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                  className="border border-black bg-white px-3 py-2 text-xs uppercase font-bold placeholder:text-gray-500" />
               </div>
-              <button onClick={() => setDrawerOpen(false)} className="text-slate-500 hover:text-white p-1 rounded transition-colors">
-                <X size={16} />
+              <button onClick={() => setSearchOpen(!searchOpen)} className="md:hidden text-black">
+                <Search size={16} />
               </button>
-            </div>
-            <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
-              {NAV_ITEMS.map(item => {
-                const Icon = item.icon;
-                const active = section === item.id;
-                return (
-                  <button key={item.id} onClick={() => navigateTo(item.id)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all ${
-                      active ? "bg-violet-500/15 text-violet-300 font-medium" : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
-                    }`}>
-                    <Icon size={17} className="flex-shrink-0" />
-                    <span>{item.label}</span>
-                    {item.id === "orders" && pendingOrders.length > 0 && (
-                      <span className="ml-auto text-[10px] bg-amber-400/20 text-amber-400 px-1.5 py-0.5 rounded-full font-medium">
-                        {pendingOrders.length}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-          </nav>
-          <div className="p-3 border-t border-white/5 space-y-1">
-              <a
-                href="/"
-                target="_blank"
-                className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-slate-200 transition-all"
-              >
-                <ExternalLink size={16} /> View Site
-              </a>
-              <button 
-                onClick={handleSignOut}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-red-400 hover:bg-red-500/10 transition-all"
-              >
-                <LogOut size={16} /> Sign Out
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MAIN */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 flex items-center justify-between px-4 md:px-6 border-b border-white/5 bg-[#0f1117]/90 backdrop-blur sticky top-0 z-10">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setDrawerOpen(true)}
-              className="md:hidden text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors">
-              <Menu size={18} />
-            </button>
-            <button onClick={fetchData}
-              className="hidden md:flex text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors" title="Refresh data">
-              <RefreshCw size={14} />
-            </button>
-            <h1 className="font-semibold text-sm text-white md:hidden">{pageTitle}</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setSearchOpen(v => !v)}
-              className="md:hidden text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors">
-              <Search size={16} />
-            </button>
-            <div className="relative hidden md:block">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search…"
-                className="bg-white/5 border border-white/8 rounded-lg pl-9 pr-4 py-1.5 text-sm text-slate-300 placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50 w-48 transition-all" />
-            </div>
-            <div className="flex items-center gap-2 bg-white/5 border border-white/8 rounded-lg px-2.5 py-1.5">
-              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-violet-400 to-indigo-500 text-[9px] font-bold flex items-center justify-center text-white flex-shrink-0">L</div>
-              <span className="text-sm text-slate-300 font-medium hidden sm:block">Lukas</span>
             </div>
           </div>
         </header>
 
-        {searchOpen && (
-          <div className="md:hidden px-4 py-2 bg-[#0f1117] border-b border-white/5">
-            <div className="relative">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <input autoFocus value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search orders, leads…"
-                className="w-full bg-white/5 border border-white/8 rounded-lg pl-9 pr-4 py-2 text-sm text-slate-300 placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50" />
-            </div>
-          </div>
-        )}
-
-        <main className="flex-1 overflow-auto p-4 md:p-6 pb-24 md:pb-6">
+        {/* MAIN AREA */}
+        <main className="flex-1 p-4 md:p-6 overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center h-64">
-              <div className="flex flex-col items-center gap-3">
-                <div className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm text-slate-500">Loading…</p>
-              </div>
+              <p className="text-xs font-bold uppercase">Loading…</p>
             </div>
           ) : (
             <>
               {/* OVERVIEW */}
               {section === "overview" && (
-                <div className="space-y-4 animate-in fade-in duration-300">
-                  <div className="hidden md:block">
-                    <h1 className="text-xl font-semibold text-white">Overview</h1>
-                    <p className="text-sm text-slate-500 mt-0.5">Your business at a glance</p>
+                <div className="space-y-6 animate-in fade-in duration-300">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <KPICard label="Revenue" value={fmt$(filteredRevenue)} sub={`${revenueRange.toUpperCase()} RANGE`} icon={DollarSign} />
+                    <KPICard label="Orders" value={activeOrders.length} sub={`${paidOrders.length} PAID`} icon={ShoppingBag} />
+                    <KPICard label="Conv. Rate" value={`${convRate}%`} sub={`${paidOrders.length} / ${activeOrders.length}`} icon={TrendingUp} />
+                    <KPICard label="Avg Ticket" value={fmt$(avgTicket)} sub="PER ORDER" icon={DollarSign} />
                   </div>
 
-                  <div className="flex gap-1 bg-white/5 border border-white/8 rounded-lg p-1 w-fit">
-                    {(["day","week","month","year","all"] as const).map(r => (
-                      <button key={r} onClick={() => setRevenueRange(r)}
-                        className={"px-2.5 py-1 rounded text-xs font-medium transition-colors " + (revenueRange === r ? "bg-violet-500 text-white" : "text-slate-400 hover:text-white")}>
-                        {r === "all" ? "All" : r.charAt(0).toUpperCase() + r.slice(1)}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <KPICard label="Revenue"    value={fmt$(filteredRevenue)}  sub={revenueRange === "all" ? "All time" : `This ${revenueRange}`}     icon={DollarSign}  color="violet"  />
-                    <KPICard label="Orders"     value={paidOrders.length}   sub="Completed"    icon={ShoppingBag} color="indigo"  />
-                    <KPICard label="Conversion" value={`${convRate}%`}      sub="Paid / total" icon={TrendingUp}  color="emerald" />
-                    <KPICard label="Avg Ticket" value={fmt$(avgTicket)}     sub="Per order"    icon={Tag}         color="amber"   />
-                  </div>
-                  <div className="bg-[#13151c] border border-white/5 rounded-xl overflow-hidden">
-                    <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
-                      <h2 className="font-medium text-sm text-white">Recent Orders</h2>
-                      <button onClick={() => setSection("orders")} className="text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1">
+                  <div className="border border-black bg-white p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-sm font-bold uppercase">Recent Orders</h2>
+                      <button onClick={() => setSection("orders")} className="text-xs text-black hover:underline flex items-center gap-1 font-bold uppercase">
                         View all <ArrowUpRight size={11} />
                       </button>
                     </div>
-                    <div className="divide-y divide-white/5">
+                    <div className="divide-y divide-black">
                       {activeOrders.length === 0 ? (
-                        <p className="text-sm text-slate-500 text-center py-10">No orders yet</p>
+                        <p className="text-xs text-gray-500 text-center py-10 uppercase">No orders yet</p>
                       ) : activeOrders.slice(0, 5).map(o => {
                         const cfg = STATUS_CONFIG[o.status] ?? STATUS_CONFIG.pending;
                         const Icon = cfg.icon;
                         return (
                           <div key={o.id} onClick={() => setSelectedRow({ ...o, _type: "order" })}
-                            className="flex items-center justify-between px-4 py-3 hover:bg-white/3 active:bg-white/5 cursor-pointer transition-colors">
+                            className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 active:bg-gray-100 cursor-pointer transition-colors">
                             <div className="flex items-center gap-3 min-w-0">
-                              <div className="w-8 h-8 rounded-full bg-white/8 flex items-center justify-center text-[11px] font-bold text-slate-400 uppercase flex-shrink-0">
+                              <div className="w-8 h-8 border border-black flex items-center justify-center text-[11px] font-bold text-black uppercase flex-shrink-0">
                                 {(o.name || o.email || "?")[0]}
                               </div>
                               <div className="min-w-0">
-                                <p className="text-sm font-medium text-slate-200 truncate">{o.name || o.email}</p>
-                                <p className="text-xs text-slate-500">{fmtDateShort(o.created_at)}</p>
+                                <p className="text-xs font-bold text-black truncate uppercase">{o.name || o.email}</p>
+                                <p className="text-[10px] text-gray-600 uppercase">{fmtDateShort(o.created_at)}</p>
                               </div>
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                              <span className={`hidden sm:flex text-[10px] px-2 py-0.5 rounded-full border items-center gap-1 ${cfg.color}`}>
+                              <span className={`hidden sm:flex text-[9px] px-2 py-0.5 border font-bold items-center gap-1 ${cfg.color}`}>
                                 <Icon size={9} /> {cfg.label}
                               </span>
-                              <span className="font-mono text-sm font-semibold text-slate-100">{fmt$(o.amount_cents)}</span>
+                              <span className="font-mono text-xs font-bold text-black">{fmt$(o.amount_cents)}</span>
                             </div>
                           </div>
                         );
                       })}
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-[#13151c] border border-white/5 rounded-xl p-4">
-                      <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider mb-2">Products</p>
-                      <p className="text-2xl font-semibold text-white">{products.length}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">{products.filter(p => p.is_published).length} live</p>
-                      <button onClick={() => setSection("products")} className="mt-3 text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1">
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="border border-black bg-white p-4">
+                      <p className="text-[9px] text-gray-600 font-bold uppercase tracking-wider mb-2">Products</p>
+                      <p className="text-2xl font-bold text-black">{products.length}</p>
+                      <p className="text-[10px] text-gray-600 mt-0.5 uppercase">{products.filter(p => p.is_published).length} live</p>
+                      <button onClick={() => setSection("products")} className="mt-3 text-xs text-black hover:underline flex items-center gap-1 font-bold uppercase">
                         Manage <ArrowUpRight size={11} />
                       </button>
                     </div>
-                    <div className="bg-[#13151c] border border-white/5 rounded-xl p-4">
-                      <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider mb-2">Leads</p>
-                      <p className="text-2xl font-semibold text-white">{leads.length}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">Subscribers</p>
-                      <button onClick={() => setSection("leads")} className="mt-3 text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1">
+                    <div className="border border-black bg-white p-4">
+                      <p className="text-[9px] text-gray-600 font-bold uppercase tracking-wider mb-2">Leads</p>
+                      <p className="text-2xl font-bold text-black">{leads.length}</p>
+                      <p className="text-[10px] text-gray-600 mt-0.5 uppercase">Subscribers</p>
+                      <button onClick={() => setSection("leads")} className="mt-3 text-xs text-black hover:underline flex items-center gap-1 font-bold uppercase">
                         View all <ArrowUpRight size={11} />
                       </button>
                     </div>
@@ -552,37 +449,37 @@ const [siteSaving, setSiteSaving] = useState(false);
                 <div className="space-y-4 animate-in fade-in duration-300">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h1 className="text-lg md:text-xl font-semibold text-white">Orders</h1>
-                      <p className="text-xs md:text-sm text-slate-500 mt-0.5">{activeOrders.length} active · {paidOrders.length} paid</p>
+                      <h1 className="text-lg font-bold text-black uppercase">{activeOrders.length} Active Orders</h1>
+                      <p className="text-xs text-gray-600 mt-0.5 uppercase">{paidOrders.length} paid</p>
                     </div>
-                    <button className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-white/5 border border-white/8 px-3 py-1.5 rounded-lg transition-colors">
+                    <button className="flex items-center gap-1.5 text-xs text-black border border-black hover:bg-gray-100 px-3 py-2 transition-colors font-bold uppercase">
                       <Download size={12} /> Export
                     </button>
                   </div>
                   <div className="md:hidden space-y-2">
                     {filteredOrders.length === 0 ? (
-                      <div className="text-center py-16 text-slate-500">
+                      <div className="text-center py-16 text-gray-500">
                         <ShoppingBag size={28} className="mx-auto mb-3 opacity-30" />
-                        <p className="text-sm">No orders</p>
+                        <p className="text-xs uppercase font-bold">No orders</p>
                       </div>
                     ) : filteredOrders.map(o => {
                       const cfg = STATUS_CONFIG[o.status] ?? STATUS_CONFIG.pending;
                       const Icon = cfg.icon;
                       return (
                         <div key={o.id} onClick={() => setSelectedRow({ ...o, _type: "order" })}
-                          className="bg-[#13151c] border border-white/5 rounded-xl px-4 py-3.5 flex items-center justify-between active:bg-white/5 transition-colors cursor-pointer">
+                          className="border border-black px-4 py-3.5 flex items-center justify-between hover:bg-gray-50 transition-colors cursor-pointer">
                           <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-9 h-9 rounded-full bg-white/8 flex items-center justify-center text-[12px] font-bold text-slate-400 uppercase flex-shrink-0">
+                            <div className="w-9 h-9 border border-black flex items-center justify-center text-[12px] font-bold text-black uppercase flex-shrink-0">
                               {(o.name || o.email || "?")[0]}
                             </div>
                             <div className="min-w-0">
-                              <p className="text-sm font-medium text-slate-200 truncate">{o.name || o.email}</p>
-                              <p className="text-xs text-slate-500 truncate">{o.name ? o.email : fmtDateShort(o.created_at)}</p>
+                              <p className="text-xs font-bold text-black truncate uppercase">{o.name || o.email}</p>
+                              <p className="text-[10px] text-gray-600 truncate uppercase">{o.name ? o.email : fmtDateShort(o.created_at)}</p>
                             </div>
                           </div>
                           <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-2">
-                            <span className="font-mono text-sm font-semibold text-slate-100">{fmt$(o.amount_cents || 0)}</span>
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-1 ${cfg.color}`}>
+                            <span className="font-mono text-xs font-bold text-black">{fmt$(o.amount_cents || 0)}</span>
+                            <span className={`text-[9px] px-1.5 py-0.5 border flex items-center gap-1 font-bold ${cfg.color}`}>
                               <Icon size={8} /> {cfg.label}
                             </span>
                           </div>
@@ -590,42 +487,42 @@ const [siteSaving, setSiteSaving] = useState(false);
                       );
                     })}
                   </div>
-                  <div className="hidden md:block bg-[#13151c] border border-white/5 rounded-xl overflow-hidden">
+                  <div className="hidden md:block border border-black overflow-hidden">
                     <table className="w-full">
                       <thead>
-                        <tr className="border-b border-white/5">
+                        <tr className="border-b border-black bg-black text-white">
                           {["Customer", "Amount", "Status", "Date", ""].map(h => (
-                            <th key={h} className="text-left px-5 py-3 text-[11px] font-medium text-slate-500 uppercase tracking-wider">{h}</th>
+                            <th key={h} className="text-left px-5 py-3 text-[10px] font-bold uppercase">{h}</th>
                           ))}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-white/3">
+                      <tbody className="divide-y divide-black">
                         {filteredOrders.map(o => {
                           const cfg = STATUS_CONFIG[o.status] ?? STATUS_CONFIG.pending;
                           const Icon = cfg.icon;
                           return (
-                            <tr key={o.id} className="hover:bg-white/2 transition-colors group">
+                            <tr key={o.id} className="hover:bg-gray-50 transition-colors group">
                               <td className="px-5 py-4">
                                 <div className="flex items-center gap-3">
-                                  <div className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-[11px] font-bold text-slate-400 uppercase flex-shrink-0">
+                                  <div className="w-7 h-7 border border-black flex items-center justify-center text-[10px] font-bold text-black uppercase flex-shrink-0">
                                     {(o.name || o.email || "?")[0]}
                                   </div>
                                   <div>
-                                    <p className="text-sm font-medium text-slate-200">{o.name || "—"}</p>
-                                    <p className="text-xs text-slate-500">{o.email}</p>
+                                    <p className="text-xs font-bold text-black uppercase">{o.name || "—"}</p>
+                                    <p className="text-[10px] text-gray-600">{o.email}</p>
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-5 py-4 font-mono text-sm font-medium text-slate-200">{fmt$(o.amount_cents || 0)}</td>
+                              <td className="px-5 py-4 font-mono text-xs font-bold text-black">{fmt$(o.amount_cents || 0)}</td>
                               <td className="px-5 py-4">
-                                <span className={`text-[10px] px-2 py-1 rounded-full border flex items-center gap-1.5 w-fit ${cfg.color}`}>
+                                <span className={`text-[9px] px-2 py-1 border flex items-center gap-1.5 w-fit font-bold ${cfg.color}`}>
                                   <Icon size={9} /> {cfg.label}
                                 </span>
                               </td>
-                              <td className="px-5 py-4 text-sm text-slate-500">{fmtDate(o.created_at)}</td>
+                              <td className="px-5 py-4 text-xs text-gray-600 uppercase">{fmtDate(o.created_at)}</td>
                               <td className="px-5 py-4">
                                 <button onClick={() => setSelectedRow({ ...o, _type: "order" })}
-                                  className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-white p-1 rounded transition-all">
+                                  className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-black p-1 transition-all">
                                   <MoreHorizontal size={14} />
                                 </button>
                               </td>
@@ -635,9 +532,9 @@ const [siteSaving, setSiteSaving] = useState(false);
                       </tbody>
                     </table>
                     {filteredOrders.length === 0 && (
-                      <div className="text-center py-16 text-slate-500">
+                      <div className="text-center py-16 text-gray-500">
                         <ShoppingBag size={28} className="mx-auto mb-3 opacity-30" />
-                        <p className="text-sm">No orders</p>
+                        <p className="text-xs uppercase font-bold">No orders</p>
                       </div>
                     )}
                   </div>
@@ -648,11 +545,11 @@ const [siteSaving, setSiteSaving] = useState(false);
               {section === "products" && (
                 <div className="space-y-4 animate-in fade-in duration-300">
                   <div>
-                    <h1 className="text-lg md:text-xl font-semibold text-white">Products</h1>
-                    <p className="text-xs md:text-sm text-slate-500 mt-0.5">{products.length} total · {products.filter(p => p.is_published).length} live</p>
+                    <h1 className="text-lg font-bold text-black uppercase">{products.length} Products</h1>
+                    <p className="text-xs text-gray-600 mt-0.5 uppercase">{products.filter(p => p.is_published).length} live</p>
                   </div>
-                  <div className="bg-[#13151c] border border-white/5 rounded-xl p-4 md:p-5">
-                    <h2 className="text-sm font-medium text-white mb-4 flex items-center gap-2">
+                  <div className="border border-black p-4 md:p-5 bg-white">
+                    <h2 className="text-xs font-bold text-black mb-4 flex items-center gap-2 uppercase">
                       {productForm.editingId ? <><Edit3 size={14} /> Edit Product</> : <><Plus size={14} /> New Product</>}
                     </h2>
                     <div className="space-y-3">
@@ -664,29 +561,29 @@ const [siteSaving, setSiteSaving] = useState(false);
                       </div>
                       <FormInput label="Image URL(s) — comma-separated" value={productForm.image_url} onChange={(v: string) => setProductForm(f => ({ ...f, image_url: v }))} placeholder="https://cdn.example.com/photo.jpg" />
                       <div>
-                        <label className="block text-xs text-slate-500 mb-1.5 font-medium">Description</label>
+                        <label className="block text-xs text-gray-600 mb-1.5 font-bold uppercase">Description</label>
                         <textarea value={productForm.description}
                           onChange={e => setProductForm(f => ({ ...f, description: e.target.value }))}
                           placeholder="What's included…" rows={2}
-                          className="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50 resize-none" />
+                          className="w-full border border-black bg-white px-3 py-2.5 text-xs text-black placeholder:text-gray-500 focus:outline-none resize-none font-bold uppercase" />
                       </div>
                     </div>
                     <div className="flex items-center justify-between mt-4">
                       <label className="flex items-center gap-2 cursor-pointer"
                         onClick={() => setProductForm(f => ({ ...f, is_published: !f.is_published }))}>
-                        <div className="relative w-9 rounded-full transition-colors"
-                          style={{ backgroundColor: productForm.is_published ? "#8b5cf6" : "rgba(255,255,255,0.1)", height: 20 }}>
-                          <div className="w-3.5 h-3.5 bg-white rounded-full absolute top-[2px] transition-all"
+                        <div className="relative w-9 rounded-none transition-colors"
+                          style={{ backgroundColor: productForm.is_published ? "#000" : "#fff", height: 20, border: "1px solid #000" }}>
+                          <div className="w-3.5 h-3.5 bg-white border border-black absolute top-[1px] transition-all"
                             style={{ left: productForm.is_published ? 18 : 2 }} />
                         </div>
-                        <span className="text-sm text-slate-400">Published</span>
+                        <span className="text-xs text-black font-bold uppercase">Published</span>
                       </label>
                       <div className="flex gap-2">
                         {productForm.editingId && (
-                          <button onClick={resetProductForm} className="text-sm text-slate-400 px-3 py-2 rounded-lg border border-white/8 hover:bg-white/5 transition-all">Cancel</button>
+                          <button onClick={resetProductForm} className="text-xs text-black px-3 py-2 border border-black hover:bg-gray-100 transition-all font-bold uppercase">Cancel</button>
                         )}
                         <button onClick={saveProduct}
-                          className="flex items-center gap-1.5 text-sm font-medium bg-violet-500 hover:bg-violet-400 text-white px-4 py-2 rounded-lg transition-colors">
+                          className="flex items-center gap-1.5 text-xs font-bold bg-black hover:bg-gray-800 text-white px-4 py-2 transition-colors uppercase">
                           <Save size={13} /> {productForm.editingId ? "Save" : "Create"}
                         </button>
                       </div>
@@ -694,78 +591,73 @@ const [siteSaving, setSiteSaving] = useState(false);
                   </div>
                   <div className="md:hidden space-y-2">
                     {products.length === 0 ? (
-                      <div className="text-center py-12 text-slate-500">
+                      <div className="text-center py-12 text-gray-500">
                         <Package size={28} className="mx-auto mb-3 opacity-30" />
-                        <p className="text-sm">No products yet</p>
+                        <p className="text-xs uppercase font-bold">No products yet</p>
                       </div>
                     ) : products.map(p => (
-                      <div key={p.id} className="bg-[#13151c] border border-white/5 rounded-xl px-4 py-3.5">
+                      <div key={p.id} className="border border-black px-4 py-3.5">
                         <div className="flex items-center justify-between">
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-slate-200 truncate">{p.title}</p>
-                            <p className="text-xs text-slate-500 font-mono mt-0.5">{fmt$(p.price_cents)}</p>
+                            <p className="text-xs font-bold text-black truncate uppercase">{p.title}</p>
+                            <p className="text-[10px] text-gray-600 font-mono mt-0.5">{fmt$(p.price_cents)}</p>
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0 ml-3">
                             <button onClick={() => togglePublished(p.id, p.is_published)}
-                              className={`text-[10px] px-2 py-1 rounded-full border flex items-center gap-1 ${
-                                p.is_published ? "text-emerald-400 bg-emerald-400/10 border-emerald-400/20" : "text-slate-400 bg-slate-400/10 border-slate-400/20"
-                              }`}>
-                              {p.is_published ? <Eye size={9} /> : <EyeOff size={9} />}
-                              {p.is_published ? "Live" : "Draft"}
+                              className={`text-[9px] px-2 py-1 border font-bold flex items-center gap-1 ${p.is_published ? "bg-black text-white border-black" : "bg-white text-black border-black"}`}>
+                              {p.is_published ? <Eye size={10} /> : <EyeOff size={10} />}
                             </button>
-                            <button onClick={() => setSelectedRow({ ...p, _type: "product" })}
-                              className="text-slate-500 hover:text-white p-1 rounded transition-colors">
-                              <MoreHorizontal size={15} />
+                            <button onClick={() => { startEditProduct(p); setSelectedRow(null); }}
+                              className="text-[9px] px-2 py-1 border border-black text-black hover:bg-gray-100 font-bold">
+                              <Edit3 size={10} />
+                            </button>
+                            <button onClick={() => archiveProduct(p.id)}
+                              className="text-[9px] px-2 py-1 border border-red-600 text-red-600 hover:bg-red-50 font-bold">
+                              <Archive size={10} />
                             </button>
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
-                  <div className="hidden md:block bg-[#13151c] border border-white/5 rounded-xl overflow-hidden">
+                  <div className="hidden md:block border border-black overflow-hidden">
                     <table className="w-full">
                       <thead>
-                        <tr className="border-b border-white/5">
-                          {["Product", "Price", "Status", "Image", "Created", ""].map(h => (
-                            <th key={h} className="text-left px-5 py-3 text-[11px] font-medium text-slate-500 uppercase tracking-wider">{h}</th>
+                        <tr className="border-b border-black bg-black text-white">
+                          {["Title", "Price", "Status", "Created", ""].map(h => (
+                            <th key={h} className="text-left px-5 py-3 text-[10px] font-bold uppercase">{h}</th>
                           ))}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-white/3">
+                      <tbody className="divide-y divide-black">
                         {products.map(p => (
-                          <tr key={p.id} className="hover:bg-white/2 transition-colors group">
+                          <tr key={p.id} className="hover:bg-gray-50 transition-colors group">
                             <td className="px-5 py-4">
-                              <p className="text-sm font-medium text-slate-200">{p.title}</p>
-                              <p className="text-xs text-slate-500">{p.slug}</p>
+                              <p className="text-xs font-bold text-black uppercase">{p.title}</p>
                             </td>
-                            <td className="px-5 py-4 font-mono text-sm text-slate-200">{fmt$(p.price_cents)}</td>
+                            <td className="px-5 py-4 font-mono text-xs font-bold text-black">{fmt$(p.price_cents)}</td>
                             <td className="px-5 py-4">
-                              <button onClick={() => togglePublished(p.id, p.is_published)}
-                                className={`text-[10px] px-2 py-1 rounded-full border flex items-center gap-1.5 w-fit transition-colors ${
-                                  p.is_published ? "text-emerald-400 bg-emerald-400/10 border-emerald-400/20" : "text-slate-400 bg-slate-400/10 border-slate-400/20"
-                                }`}>
+                              <span className={`text-[9px] px-2 py-1 border font-bold flex items-center gap-1 w-fit ${p.is_published ? "bg-black text-white border-black" : "bg-white text-black border-black"}`}>
                                 {p.is_published ? <Eye size={9} /> : <EyeOff size={9} />}
-                                {p.is_published ? "Live" : "Draft"}
-                              </button>
+                              </span>
                             </td>
-                            <td className="px-5 py-4">{Array.isArray(p.image_urls) && p.image_urls[0] ? <img src={p.image_urls[0]} alt="" className="h-9 w-9 object-cover rounded border border-white/10" /> : <span className="text-xs text-slate-600">—</span>}</td>
-                            <td className="px-5 py-4 text-sm text-slate-500">{fmtDate(p.created_at)}</td>
+                            <td className="px-5 py-4 text-xs text-gray-600 uppercase">{fmtDate(p.created_at)}</td>
                             <td className="px-5 py-4">
                               <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all">
-                                <button onClick={() => startEditProduct(p)} className="text-slate-500 hover:text-violet-400 p-1 rounded transition-colors"><Edit3 size={13} /></button>
-                                <button onClick={() => setSelectedRow({ ...p, _type: "product" })} className="text-slate-500 hover:text-red-400 p-1 rounded transition-colors"><Archive size={13} /></button>
+                                <button onClick={() => { startEditProduct(p); setSelectedRow(null); }}
+                                  className="text-black hover:text-gray-600 p-1">
+                                  <Edit3 size={14} />
+                                </button>
+                                <button onClick={() => archiveProduct(p.id)}
+                                  className="text-red-600 hover:text-red-800 p-1">
+                                  <Archive size={14} />
+                                </button>
                               </div>
                             </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
-                    {products.length === 0 && (
-                      <div className="text-center py-16 text-slate-500">
-                        <Package size={28} className="mx-auto mb-3 opacity-30" />
-                        <p className="text-sm">No products yet</p>
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
@@ -773,229 +665,80 @@ const [siteSaving, setSiteSaving] = useState(false);
               {/* LEADS */}
               {section === "leads" && (
                 <div className="space-y-4 animate-in fade-in duration-300">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h1 className="text-lg md:text-xl font-semibold text-white">Email Leads</h1>
-                      <p className="text-xs md:text-sm text-slate-500 mt-0.5">{leads.length} subscribers</p>
-                    </div>
-                    <button className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-white/5 border border-white/8 px-3 py-1.5 rounded-lg transition-colors">
-                      <Download size={12} /> Export
-                    </button>
+                  <div>
+                    <h1 className="text-lg font-bold text-black uppercase">{leads.length} Leads</h1>
+                    <p className="text-xs text-gray-600 mt-0.5 uppercase">Email subscribers</p>
                   </div>
-                  <div className="md:hidden space-y-2">
-                    {filteredLeads.length === 0 ? (
-                      <div className="text-center py-16 text-slate-500">
-                        <Users size={28} className="mx-auto mb-3 opacity-30" />
-                        <p className="text-sm">No leads yet</p>
-                      </div>
-                    ) : filteredLeads.map(l => (
-                      <div key={l.id} className="bg-[#13151c] border border-white/5 rounded-xl px-4 py-3.5 flex items-center justify-between">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-8 h-8 rounded-full bg-white/8 flex items-center justify-center flex-shrink-0">
-                            <Mail size={13} className="text-slate-400" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm text-slate-200 truncate">{l.email}</p>
-                            <p className="text-xs text-slate-500 capitalize">{l.source || "homepage"}</p>
-                          </div>
-                        </div>
-                        <span className="text-xs text-slate-500 flex-shrink-0 ml-2">{fmtDateShort(l.created_at)}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="hidden md:block bg-[#13151c] border border-white/5 rounded-xl overflow-hidden">
+                  <div className="border border-black overflow-hidden">
                     <table className="w-full">
                       <thead>
-                        <tr className="border-b border-white/5">
-                          {["Email", "Source", "Date", "Metadata"].map(h => (
-                            <th key={h} className="text-left px-5 py-3 text-[11px] font-medium text-slate-500 uppercase tracking-wider">{h}</th>
+                        <tr className="border-b border-black bg-black text-white">
+                          {["Email", "Created", ""].map(h => (
+                            <th key={h} className="text-left px-5 py-3 text-[10px] font-bold uppercase">{h}</th>
                           ))}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-white/3">
+                      <tbody className="divide-y divide-black">
                         {filteredLeads.map(l => (
-                          <tr key={l.id} className="hover:bg-white/2 transition-colors">
-                            <td className="px-5 py-3">
-                              <div className="flex items-center gap-2">
-                                <Mail size={13} className="text-slate-500" />
-                                <span className="text-sm text-slate-200">{l.email}</span>
-                              </div>
-                            </td>
-                            <td className="px-5 py-3 text-sm text-slate-400 capitalize">{l.source || "homepage"}</td>
-                            <td className="px-5 py-3 text-sm text-slate-500">{fmtDate(l.created_at)}</td>
-                            <td className="px-5 py-3 font-mono text-xs text-slate-600 truncate max-w-[180px]">
-                              {l.metadata ? JSON.stringify(l.metadata).slice(0, 50) : "—"}
+                          <tr key={l.id} className="hover:bg-gray-50 transition-colors group">
+                            <td className="px-5 py-4 text-xs font-bold text-black uppercase">{l.email}</td>
+                            <td className="px-5 py-4 text-xs text-gray-600 uppercase">{fmtDate(l.created_at)}</td>
+                            <td className="px-5 py-4">
+                              <button onClick={() => setSelectedRow({ ...l, _type: "lead" })}
+                                className="opacity-0 group-hover:opacity-100 text-black hover:text-gray-600 p-1 transition-all">
+                                <MoreHorizontal size={14} />
+                              </button>
                             </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
-                    {filteredLeads.length === 0 && (
-                      <div className="text-center py-16 text-slate-500">
-                        <Users size={28} className="mx-auto mb-3 opacity-30" />
-                        <p className="text-sm">No leads yet</p>
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
 
-              {/* SITE */}
+              {/* SITE CONFIG */}
               {section === "site" && (
-                <div className="space-y-4 animate-in fade-in duration-300">
-                  <div className="flex items-center justify-between">
+                <div className="space-y-4 animate-in fade-in duration-300 max-w-2xl">
+                  <div>
+                    <h1 className="text-lg font-bold text-black uppercase">Website Content</h1>
+                    <p className="text-xs text-gray-600 mt-0.5 uppercase">Edit hero section and pricing</p>
+                  </div>
+                  <Accordion title="Hero Section" icon={<Globe size={14} />}>
+                    <SiteField label="Headline" value={siteContent.hero_headline} onChange={(v) => { setSiteContent(prev => ({ ...prev, hero_headline: v })); setSiteEdited(true); }} />
+                    <SiteField label="Subheadline" value={siteContent.hero_subheadline} onChange={(v) => { setSiteContent(prev => ({ ...prev, hero_subheadline: v })); setSiteEdited(true); }} rows={2} />
+                    <SiteField label="CTA Text" value={siteContent.hero_cta} onChange={(v) => { setSiteContent(prev => ({ ...prev, hero_cta: v })); setSiteEdited(true); }} />
+                  </Accordion>
+                  <Accordion title="Pricing" icon={<DollarSign size={14} />}>
+                    <SiteField label="Display Price" value={siteContent.price_display} onChange={(v) => { setSiteContent(prev => ({ ...prev, price_display: v })); setSiteEdited(true); }} />
+                    <SiteField label="Original Price" value={siteContent.price_original} onChange={(v) => { setSiteContent(prev => ({ ...prev, price_original: v })); setSiteEdited(true); }} />
                     <div>
-                      <h1 className="text-lg md:text-xl font-semibold text-white">Website</h1>
-                      <p className="text-xs md:text-sm text-slate-500 mt-0.5">Edit live site content</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                    <a
-                      href="/"
-                      target="_blank"
-                      className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-white/5 border border-white/8 px-3 py-1.5 rounded-lg transition-colors"
-                    >
-                      <ExternalLink size={12} /> Preview
-                    </a>
-                    {siteEdited && (
-                      <button 
-                        onClick={saveSiteConfig} 
-                        disabled={siteSaving}
-                        className="flex items-center gap-1.5 text-xs font-medium bg-violet-500 hover:bg-violet-400 disabled:opacity-60 text-white px-3 py-1.5 rounded-lg transition-colors"
-                      >
-                        <Save size={12} /> {siteSaving ? "Saving…" : "Save & Publish"}
-                      </button>
-                    )}
-                  </div>
-                  </div>
-
-                  <Accordion title="Hero Section" icon={<Edit3 size={14} />}>
-                    <div className="space-y-4">
-                      <div className="rounded-lg bg-indigo-500/10 border border-indigo-500/20 p-3">
-                        <p className="text-xs text-indigo-300 font-medium">💡 HTML Support Enabled</p>
-                        <p className="text-xs text-indigo-200 mt-1">Enter HTML to style text. Example for purple words:</p>
-                        <code className="text-[11px] text-indigo-100 block mt-1.5 font-mono bg-indigo-950/50 p-2 rounded border border-indigo-500/20">
-                          {"Build <span class='text-gradient'>your dream</span> today"}
-                        </code>
-                        <p className="text-xs text-indigo-200 mt-1.5">Other options: &lt;strong&gt;bold&lt;/strong&gt;, &lt;em&gt;italic&lt;/em&gt;</p>
-                      </div>
-
-                      <SiteField
-                        label="Headline"
-                        value={siteContent.hero_headline}
-                        rows={2}
-                        onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_headline: v })); setVerifiedEdited(true); setSiteEdited(true); }}
-                        hint="Renders as HTML with class support (text-gradient = purple effect)"
-                      />
-                      <SiteField
-                        label="Subheadline"
-                        value={siteContent.hero_subheadline}
-                        rows={2}
-                        onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_subheadline: v })); setVerifiedEdited(true); setSiteEdited(true); }}
-                        hint="Renders as HTML with full tag support"
-                      />
-                      <SiteField
-                        label="CTA Button"
-                        value={siteContent.hero_cta}
-                        onChange={(v: string) => { setSiteContent(s => ({ ...s, hero_cta: v })); setVerifiedEdited(true); setSiteEdited(true); }}
-                      />
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={siteContent.launch_pricing_active} onChange={(e) => { setSiteContent(prev => ({ ...prev, launch_pricing_active: e.target.checked })); setSiteEdited(true); }} />
+                        <span className="text-xs text-black font-bold uppercase">Launch Pricing Active</span>
+                      </label>
                     </div>
                   </Accordion>
-
-                  <Accordion title="Pricing" icon={<Tag size={14} />}>
-                    <div className="grid grid-cols-2 gap-3">
-                      <SiteField
-                        label="Display Price"
-                        value={siteContent.price_display}
-                        onChange={(v: string) => { setSiteContent(s => ({ ...s, price_display: v })); setSiteEdited(true); }}
-                      />
-                      <SiteField
-                        label="Original Price"
-                        value={siteContent.price_original}
-                        onChange={(v: string) => { setSiteContent(s => ({ ...s, price_original: v })); setSiteEdited(true); }}
-                      />
-                    </div>
-                    <SiteField
-                      label="Guarantee (days)"
-                      value={siteContent.guarantee_days}
-                      onChange={(v: string) => { setSiteContent(s => ({ ...s, guarantee_days: v })); setSiteEdited(true); }}
-                    />
-                    <div className="flex items-center justify-between py-2.5 px-3 bg-white/3 rounded-lg">
-                      <span className="text-sm text-slate-300">Launch Pricing Active</span>
-                      <button
-                        onClick={() => { setSiteContent(s => ({ ...s, launch_pricing_active: !s.launch_pricing_active })); setSiteEdited(true); }}
-                        className="relative w-10 rounded-full flex-shrink-0 transition-colors"
-                        style={{
-                          backgroundColor: siteContent.launch_pricing_active ? "#8b5cf6" : "rgba(255,255,255,0.1)",
-                          height: 22,
-                        }}
-                      >
-                        <div
-                          className="w-3.5 h-3.5 bg-white rounded-full absolute top-[3px] transition-all"
-                          style={{ left: siteContent.launch_pricing_active ? 22 : 3 }}
-                        />
-                      </button>
-                    </div>
-                  </Accordion>
-
-                  <Accordion title="Newsletter" icon={<Mail size={14} />}>
-                    <SiteField
-                      label="Title"
-                      value={siteContent.metadata?.newsletter_title ?? ""}
-                      onChange={(v: string) => { setSiteContent(s => ({ ...s, metadata: { ...s.metadata, newsletter_title: v } })); setSiteEdited(true); }}
-                    />
-                    <SiteField
-                      label="Subtitle"
-                      value={siteContent.metadata?.newsletter_subtitle ?? ""}
-                      rows={2}
-                      onChange={(v: string) => { setSiteContent(s => ({ ...s, metadata: { ...s.metadata, newsletter_subtitle: v } })); setSiteEdited(true); }}
-                    />
-                    <SiteField
-                      label="Button Text"
-                      value={siteContent.metadata?.newsletter_button_text ?? ""}
-                      onChange={(v: string) => { setSiteContent(s => ({ ...s, metadata: { ...s.metadata, newsletter_button_text: v } })); setSiteEdited(true); }}
-                    />
-                  </Accordion>
-
-                  <Accordion title="Footer" icon={<Settings size={14} />}>
-                    <SiteField
-                      label="Footer Description"
-                      value={siteContent.metadata?.footer_description ?? ""}
-                      rows={2}
-                      onChange={(v: string) => { setSiteContent(s => ({ ...s, metadata: { ...s.metadata, footer_description: v } })); setSiteEdited(true); }}
-                    />
-                  </Accordion>
-
-                  {/* Inline reminder — replaced the dead-end warning with an actionable note */}
-                  <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-4 flex items-start gap-3">
-                    <Bell size={14} className="text-emerald-400 flex-shrink-0 mt-0.5" />
-                    <p className="text-xs text-emerald-300/80 leading-relaxed">
-                      Changes are saved to the <code className="font-mono text-emerald-300 bg-emerald-300/10 px-1 rounded">site_config</code> table
-                      and go live immediately. Your public site reads this table on every page load.
-                    </p>
-                  </div>
+                  {siteEdited && (
+                    <button onClick={saveSiteConfig} disabled={siteSaving}
+                      className="w-full flex items-center justify-center gap-2 text-xs font-bold bg-black text-white hover:bg-gray-800 px-4 py-3 transition-colors uppercase disabled:opacity-50">
+                      <Save size={13} /> {siteSaving ? "Saving…" : "Save Changes"}
+                    </button>
+                  )}
                 </div>
               )}
 
               {/* SETTINGS */}
               {section === "settings" && (
-                <div className="space-y-4 animate-in fade-in duration-300">
+                <div className="space-y-4 animate-in fade-in duration-300 max-w-2xl">
                   <div>
-                    <h1 className="text-lg md:text-xl font-semibold text-white">Settings</h1>
-                    <p className="text-xs md:text-sm text-slate-500 mt-0.5">Account & application</p>
+                    <h1 className="text-lg font-bold text-black uppercase">Settings</h1>
+                    <p className="text-xs text-gray-600 mt-0.5 uppercase">Account and system settings</p>
                   </div>
-                  <div className="bg-[#13151c] border border-white/5 rounded-xl divide-y divide-white/5">
-                    <SettingsRow label="Admin Email" value={AUTHORIZED_EMAIL}      />
-                    <SettingsRow label="Auth"        value="Google OAuth + Email"  />
-                    <SettingsRow label="Database"    value="Supabase (PostgreSQL)" />
-                    <SettingsRow label="Payments"    value="Stripe"                />
-                    <SettingsRow label="Deployment"  value="Cloudflare Workers"    />
-                  </div>
-                  <div className="bg-[#13151c] border border-white/5 rounded-xl p-4">
-                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-3">Danger Zone</p>
-                    <button onClick={handleSignOut}
-                      className="flex items-center justify-center gap-2 text-sm text-red-400 border border-red-400/20 bg-red-400/5 hover:bg-red-400/10 px-4 py-2.5 rounded-lg transition-colors w-full">
-                      <LogOut size={13} /> Sign Out
-                    </button>
+                  <div className="border border-black divide-y divide-black">
+                    <SettingsRow label="Email" value={AUTHORIZED_EMAIL} />
+                    <SettingsRow label="Role" value="Administrator" />
+                    <SettingsRow label="Status" value="Active" />
                   </div>
                 </div>
               )}
@@ -1004,26 +747,26 @@ const [siteSaving, setSiteSaving] = useState(false);
         </main>
 
         {/* MOBILE BOTTOM NAV */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-20 bg-[#13151c]/95 backdrop-blur border-t border-white/8 flex items-stretch"
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-20 bg-white border-t border-black flex items-stretch"
           style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
           {BOTTOM_NAV.map(item => {
             const Icon = item.icon;
             const active = section === item.id;
             return (
               <button key={item.id} onClick={() => setSection(item.id)}
-                className={`flex flex-col items-center justify-center gap-1 py-2.5 flex-1 relative transition-colors min-w-0 ${
-                  active ? "text-violet-400" : "text-slate-500"
+                className={`flex flex-col items-center justify-center gap-1 py-2.5 flex-1 relative transition-colors min-w-0 text-xs font-bold uppercase ${
+                  active ? "text-black bg-gray-100" : "text-gray-600"
                 }`}>
-                {active && <div className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-violet-400 rounded-full" />}
+                {active && <div className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-black" />}
                 <div className="relative">
-                  <Icon size={19} />
+                  <Icon size={16} />
                   {item.id === "orders" && pendingOrders.length > 0 && (
-                    <span className="absolute -top-1 -right-1.5 w-3.5 h-3.5 bg-amber-400 rounded-full text-[8px] font-bold text-black flex items-center justify-center leading-none">
+                    <span className="absolute -top-1 -right-1.5 w-3.5 h-3.5 bg-red-600 text-white rounded-full text-[7px] font-bold flex items-center justify-center leading-none">
                       {pendingOrders.length}
                     </span>
                   )}
                 </div>
-                <span className="text-[10px] font-medium leading-none truncate w-full text-center px-1">{item.label}</span>
+                <span className="text-[9px] font-bold leading-none truncate w-full text-center px-1">{item.label}</span>
               </button>
             );
           })}
@@ -1032,14 +775,14 @@ const [siteSaving, setSiteSaving] = useState(false);
 
       {/* DETAIL MODAL */}
       {selectedRow && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-6 animate-in fade-in duration-150"
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center sm:p-6 animate-in fade-in duration-150"
           onClick={() => setSelectedRow(null)}>
-          <div className="bg-[#13151c] border border-white/10 rounded-t-2xl sm:rounded-2xl p-5 w-full sm:max-w-md shadow-2xl animate-in slide-in-from-bottom duration-200"
+          <div className="bg-white border border-black rounded-none sm:rounded-none p-5 w-full sm:max-w-md shadow-none animate-in slide-in-from-bottom duration-200"
             onClick={e => e.stopPropagation()}>
-            <div className="w-10 h-1 bg-white/15 rounded-full mx-auto mb-5 sm:hidden" />
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-5 sm:hidden" />
             <div className="flex items-center justify-between mb-5">
-              <h3 className="font-semibold text-white">{selectedRow._type === "order" ? "Order Details" : "Product Details"}</h3>
-              <button onClick={() => setSelectedRow(null)} className="text-slate-500 hover:text-white p-1 rounded transition-colors"><X size={16} /></button>
+              <h3 className="font-bold text-black uppercase text-sm">{selectedRow._type === "order" ? "Order Details" : "Product Details"}</h3>
+              <button onClick={() => setSelectedRow(null)} className="text-gray-600 hover:text-black p-1 transition-colors"><X size={16} /></button>
             </div>
             <div className="space-y-2.5 mb-6">
               {selectedRow._type === "order" ? (
@@ -1065,17 +808,17 @@ const [siteSaving, setSiteSaving] = useState(false);
             <div className="flex gap-2">
               {selectedRow._type === "order" ? (
                 <button onClick={() => handleArchiveOrder(selectedRow.id)}
-                  className="flex-1 flex items-center justify-center gap-2 text-sm font-medium text-red-400 border border-red-400/20 bg-red-400/5 hover:bg-red-400/10 py-3 rounded-xl transition-colors">
+                  className="flex-1 flex items-center justify-center gap-2 text-xs font-bold text-white bg-red-600 border border-red-600 hover:bg-red-700 py-3 transition-colors uppercase">
                   <Archive size={13} /> Archive Order
                 </button>
               ) : (
                 <>
                   <button onClick={() => { startEditProduct(selectedRow); setSelectedRow(null); }}
-                    className="flex-1 flex items-center justify-center gap-2 text-sm font-medium text-violet-400 border border-violet-400/20 bg-violet-400/5 hover:bg-violet-400/10 py-3 rounded-xl transition-colors">
+                    className="flex-1 flex items-center justify-center gap-2 text-xs font-bold text-white bg-black border border-black hover:bg-gray-800 py-3 transition-colors uppercase">
                     <Edit3 size={13} /> Edit
                   </button>
                   <button onClick={() => archiveProduct(selectedRow.id)}
-                    className="flex-1 flex items-center justify-center gap-2 text-sm font-medium text-red-400 border border-red-400/20 bg-red-400/5 hover:bg-red-400/10 py-3 rounded-xl transition-colors">
+                    className="flex-1 flex items-center justify-center gap-2 text-xs font-bold text-white bg-red-600 border border-red-600 hover:bg-red-700 py-3 transition-colors uppercase">
                     <Archive size={13} /> Delete
                   </button>
                 </>
@@ -1088,27 +831,21 @@ const [siteSaving, setSiteSaving] = useState(false);
   );
 }
 
-// SUB-COMPONENTS
+// ────────────────────────────────────────────────────────────────────────────
+// SUB-COMPONENTS: Yeezy-inspired minimalist design
+// ────────────────────────────────────────────────────────────────────────────
 
 function KPICard({ label, value, sub, icon: Icon, color }: {
-  label: string; value: string | number; sub: string; icon: any; color: string;
+  label: string; value: string | number; sub: string; icon: any; color?: string;
 }) {
-  const border: Record<string, string> = {
-    violet: "border-violet-500/15", indigo: "border-indigo-500/15",
-    emerald: "border-emerald-500/15", amber: "border-amber-500/15",
-  };
-  const iconCol: Record<string, string> = {
-    violet: "text-violet-400", indigo: "text-indigo-400",
-    emerald: "text-emerald-400", amber: "text-amber-400",
-  };
   return (
-    <div className={`bg-[#13151c] border ${border[color]} rounded-xl p-3.5 md:p-4`}>
+    <div className="border border-black bg-white p-4">
       <div className="flex items-center justify-between mb-2">
-        <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider leading-tight">{label}</p>
-        <Icon size={13} className={iconCol[color]} />
+        <p className="text-[9px] text-gray-600 font-bold uppercase tracking-wider leading-tight">{label}</p>
+        <Icon size={13} className="text-black" />
       </div>
-      <p className="text-xl md:text-2xl font-semibold text-white tracking-tight">{value}</p>
-      <p className="text-[11px] text-slate-500 mt-1">{sub}</p>
+      <p className="text-2xl font-bold text-black tracking-tight">{value}</p>
+      <p className="text-[10px] text-gray-600 mt-1 uppercase">{sub}</p>
     </div>
   );
 }
@@ -1118,9 +855,9 @@ function FormInput({ label, value, onChange, placeholder, type = "text" }: {
 }) {
   return (
     <div>
-      <label className="block text-xs text-slate-500 mb-1.5 font-medium">{label}</label>
+      <label className="block text-xs text-gray-600 mb-1.5 font-bold uppercase">{label}</label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50 transition-colors" />
+        className="w-full border border-black bg-white px-3 py-2.5 text-xs text-black placeholder:text-gray-500 focus:outline-none font-bold uppercase" />
     </div>
   );
 }
@@ -1128,16 +865,16 @@ function FormInput({ label, value, onChange, placeholder, type = "text" }: {
 function SiteField({ label, value, onChange, rows, hint }: {
   label: string; value: string; onChange: (v: string) => void; rows?: number; hint?: string;
 }) {
-  const base = "w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-violet-500/50 transition-colors";
+  const base = "w-full border border-black bg-white px-3 py-2.5 text-xs text-black focus:outline-none font-bold uppercase";
   return (
     <div>
-      <label className="block text-xs text-slate-500 mb-1.5 font-medium">{label}</label>
+      <label className="block text-xs text-gray-600 mb-1.5 font-bold uppercase">{label}</label>
       {rows
         ? <textarea value={value} onChange={e => onChange(e.target.value)} rows={rows} className={`${base} resize-none`} />
         : <input value={value} onChange={e => onChange(e.target.value)} className={base} />
       }
       {hint && (
-        <p className="text-[11px] text-slate-400 mt-1.5">💡 {hint}</p>
+        <p className="text-[10px] text-gray-600 mt-1.5 uppercase">💡 {hint}</p>
       )}
     </div>
   );
@@ -1146,18 +883,18 @@ function SiteField({ label, value, onChange, rows, hint }: {
 function Accordion({ title, children, icon }: { title: string; children: any; icon?: any }) {
   const value = title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
   return (
-    <RadixAccordion.Root type="single" collapsible className="bg-[#13151c] border border-white/5 rounded-xl">
+    <RadixAccordion.Root type="single" collapsible className="bg-white border border-black">
       <RadixAccordion.Item value={value}>
         <RadixAccordion.Header>
-          <RadixAccordion.Trigger className="w-full list-none flex items-center justify-between p-4 cursor-pointer">
+          <RadixAccordion.Trigger className="w-full list-none flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50">
             <div className="flex items-center gap-2">
               {icon}
-              <span className="text-sm font-medium text-white">{title}</span>
+              <span className="text-xs font-bold text-black uppercase">{title}</span>
             </div>
-            <span className="text-xs text-slate-400">Edit</span>
+            <span className="text-[9px] text-gray-600 font-bold uppercase">Edit</span>
           </RadixAccordion.Trigger>
         </RadixAccordion.Header>
-        <RadixAccordion.Content className="px-4 pb-4 pt-2 animate-in fade-in duration-200">
+        <RadixAccordion.Content className="px-4 pb-4 pt-2 animate-in fade-in duration-200 border-t border-black">
           <div className="mt-3 space-y-3">{children}</div>
         </RadixAccordion.Content>
       </RadixAccordion.Item>
@@ -1168,8 +905,8 @@ function Accordion({ title, children, icon }: { title: string; children: any; ic
 function DetailRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex items-start justify-between gap-4">
-      <span className="text-xs text-slate-500 font-medium flex-shrink-0 w-20 pt-0.5">{label}</span>
-      <span className={`text-sm text-slate-200 text-right break-all ${mono ? "font-mono text-xs" : ""}`}>{value}</span>
+      <span className="text-[9px] text-gray-600 font-bold flex-shrink-0 w-20 pt-0.5 uppercase">{label}</span>
+      <span className={`text-xs text-black text-right break-all font-bold ${mono ? "font-mono text-[9px]" : ""}`}>{value}</span>
     </div>
   );
 }
@@ -1177,8 +914,8 @@ function DetailRow({ label, value, mono }: { label: string; value: string; mono?
 function SettingsRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between px-4 py-3.5 gap-4">
-      <span className="text-sm text-slate-400 flex-shrink-0">{label}</span>
-      <span className="text-sm font-medium text-slate-200 text-right">{value}</span>
+      <span className="text-xs text-black flex-shrink-0 font-bold uppercase">{label}</span>
+      <span className="text-xs font-bold text-black text-right uppercase">{value}</span>
     </div>
   );
 }
