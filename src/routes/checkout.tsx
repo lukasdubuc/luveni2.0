@@ -21,7 +21,6 @@ export const Route = createFileRoute("/checkout")({
         .select("*")
         .eq("id", productId)
         .eq("is_published", true)
-        .maybeSingle();
 
       if (product) {
         return { product, variantSku };
@@ -34,7 +33,6 @@ export const Route = createFileRoute("/checkout")({
       .eq("is_published", true)
       .order("created_at", { ascending: false })
       .limit(1);
-    return { product: products?.[0] ?? null, variantSku: null };
   },
   head: () => ({
     meta: [
