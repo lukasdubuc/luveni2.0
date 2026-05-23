@@ -100,11 +100,36 @@ function AdminPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRow, setSelectedRow] = useState<any>(null);
 
-  // ── Theme Detection ─────────────────────────────────────────────────────
-  useEffect(() => {
-    const isDarkMode = document.documentElement.classList.contains("dark");
-    setIsDark(isDarkMode);
+  // ── Theme Application (instant + persistent) ───────────────────────────
+  const applyTheme = useCallback(async (theme: "light" | "dark") => {
+    // 1) Optimistic UI — apply immediately
+    document.documentElement.classList.remove("light", "dark");
+    document.documentElement.classList.add(theme);
+    setIsDark(theme === "dark");
+    setSiteContent(s => ({ ...s, theme }));
+
+    // 2) Persist to DB (triggers realtime broadcast to public site)
+    try {
+      const { error } = await supabase
+        .from("site_config")
+        .update({ theme, updated_at: new Date().toISOString() })
+        .eq("id", "main");
+      if (error) throw error;
+      toast.success(`${theme.toUpperCase()} theme applied`);
+    } catch (e: any) {
+      toast.error(`Theme save failed: ${e.message ?? "unknown"}`);
+    }
   }, []);
+
+  useEffect(() => {
+    // Sync isDark whenever siteContent.theme changes (e.g. loaded from DB)
+    if (siteContent.theme) {
+      document.documentElement.classList.remove("light", "dark");
+      document.documentElement.classList.add(siteContent.theme);
+      setIsDark(siteContent.theme === "dark");
+    }
+  }, [siteContent.theme]);
+
 
   // ── Auth & Data Fetch ───────────────────────────────────────────────────
   useEffect(() => {
