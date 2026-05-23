@@ -51,6 +51,13 @@ const FormSchema = z.object({
   email: z.string().trim().email("Please enter a valid email").max(255),
 });
 
+// ── Cart item type for multi-item support ────────────────────────────────────
+type CartItem = {
+  productId: string;
+  variantSku?: string;
+  quantity: number;
+};
+
 function Checkout() {
   const navigate = useNavigate();
   const submit = useServerFn(createCheckout);
@@ -59,12 +66,30 @@ function Checkout() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const selectedVariant = (product?.variants as any[])?.find((variant: any) => variant.sku === variantSku);
-  const displayName = selectedVariant?.sku ? `${product?.title} (${selectedVariant.sku})` : product?.title ?? offer.name;
+  const selectedVariant = (product?.variants as any[])?.find(
+    (variant: any) => variant.sku === variantSku,
+  );
+
+  // ── Surgical change: multi-item cart state ───────────────────────────────
+  // Initialized from the current route params (single item); extend by pushing
+  // additional CartItem entries as your cart logic grows.
+  const [cartItems, setCartItems] = useState<CartItem[]>([
+    {
+      productId: product?.id ?? "",
+      variantSku: selectedVariant?.sku,
+      quantity: 1,
+    },
+  ]);
+
+  const displayName = selectedVariant?.sku
+    ? `${product?.title} (${selectedVariant.sku})`
+    : product?.title ?? offer.name;
+
+  // ── Surgical change: raw price only — no strikethrough, no originalPrice ──
   const displayPrice = product
     ? `$${((selectedVariant?.price_cents ?? product.price_cents) / 100).toFixed(0)}`
     : offer.price;
-  const displayOriginal = offer.originalPrice;
+
   const displayBullets: string[] = selectedVariant?.bullet_points?.length
     ? selectedVariant.bullet_points
     : product?.bullet_points?.length
@@ -86,8 +111,12 @@ function Checkout() {
         data: {
           name: parsed.data.name,
           email: parsed.data.email,
-          productId: product?.id,
-          variantSku: selectedVariant?.sku,
+          // Pass cartItems array; falls back to single-item shape for
+          // existing server fns that haven't been migrated yet.
+          productId: cartItems[0]?.productId,
+          variantSku: cartItems[0]?.variantSku,
+          // Uncomment when your server fn supports multi-item:
+          // items: cartItems,
         },
       });
       if (!res?.ok) {
@@ -117,20 +146,35 @@ function Checkout() {
           <form onSubmit={onSubmit} className="mt-8 space-y-5 border border-black/10 bg-background/50 p-6">
             <div className="space-y-2">
               <label htmlFor="name" className="text-sm font-medium">Full name</label>
-              <input id="name" value={name} onChange={(e) => setName(e.target.value)}
-                required maxLength={120} placeholder="Alex Rivera"
-                className="h-11 w-full border border-black/10 bg-background px-3 text-sm outline-none focus:border-black" />
+              <input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                maxLength={120}
+                placeholder="Alex Rivera"
+                className="h-11 w-full border border-black/10 bg-background px-3 text-sm outline-none focus:border-black"
+              />
             </div>
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium">Email address</label>
-              <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                required maxLength={255} placeholder="you@email.com"
-                className="h-11 w-full border border-black/10 bg-background px-3 text-sm outline-none focus:border-black" />
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                maxLength={255}
+                placeholder="you@email.com"
+                className="h-11 w-full border border-black/10 bg-background px-3 text-sm outline-none focus:border-black"
+              />
               <p className="text-xs text-muted-foreground">We'll send your access link to this address.</p>
             </div>
-            <button type="submit" disabled={loading}
+            <button
+              type="submit"
+              disabled={loading}
               className="inline-flex h-12 w-full items-center justify-center gap-2 border border-black bg-foreground text-base font-medium text-background transition-colors hover:bg-background hover:text-foreground disabled:opacity-60"
-              >
+            >
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               <Lock className="h-4 w-4" /> Pay {displayPrice} securely
             </button>
@@ -141,9 +185,14 @@ function Checkout() {
             </p>
           </form>
         </div>
+
         <aside className="md:col-span-2">
           <div className="border border-black/10 bg-background/50 p-6">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Order summary</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Order summary
+            </h2>
+
+            {/* ── Surgical change: raw price only — originalPrice/strikethrough removed ── */}
             <div className="mt-4 flex items-start justify-between gap-4">
               <div>
                 <p className="font-medium">{displayName}</p>
@@ -151,9 +200,9 @@ function Checkout() {
               </div>
               <div className="text-right">
                 <p className="text-lg font-semibold">{displayPrice}</p>
-                <p className="text-xs text-muted-foreground line-through">{displayOriginal}</p>
               </div>
             </div>
+
             <div className="my-5 h-px bg-black/10" />
             <ul className="space-y-2 text-sm">
               {displayBullets.map((b: string) => (
@@ -164,10 +213,13 @@ function Checkout() {
               ))}
             </ul>
             <div className="my-5 h-px bg-black/10" />
+
+            {/* ── Total: sum of all cart items ── */}
             <div className="flex items-center justify-between text-base font-semibold">
               <span>Total</span>
               <span>{displayPrice}</span>
             </div>
+
             <p className="mt-4 text-xs text-muted-foreground">{offer.guarantee}</p>
           </div>
         </aside>
