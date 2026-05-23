@@ -99,7 +99,7 @@ function AdminPage() {
   });
 
   // ── UI State ────────────────────────────────────────────────────────────
-  const [revenueRange, setRevenueRange] = useState<"day" | "week" | "month" | "all">("month");
+  const [revenueRange, setRevenueRange] = useState<"day" | "week" | "month" | "all">("day");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRow, setSelectedRow] = useState<any>(null);
 
