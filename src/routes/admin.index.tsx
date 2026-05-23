@@ -1,219 +1,244 @@
-/**
- * @LOCK_PROTOCOL_ACTIVE
- * DO NOT MODIFY. DO NOT REFACTOR. DO NOT RE-IMPLEMENT.
- * ACCESS RESTRICTED.
- */
-import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useState, useEffect, useCallback } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchProducts } from "@/lib/useProducts";
+import { offer } from "@/config/site";
 import { toast } from "sonner";
-import {
-  LayoutDashboard, ShoppingBag, Package, Users, Settings,
-  TrendingUp, DollarSign, ArrowUpRight,
-  RefreshCw, ExternalLink, Archive, Plus, X,
-  Globe, Edit3, Eye, EyeOff, Save, LogOut, Bell, Search,
-  Download, MoreHorizontal, CheckCircle2, Clock,
-  XCircle, Zap, Mail, Tag, Menu, ChevronDown,
-} from "lucide-react";
-import { SITE_CONFIG_FALLBACK, type SiteConfig } from "@/lib/site-config";
-import * as RadixAccordion from "@radix-ui/react-accordion";
+import { Edit3, Archive, X, Menu } from "lucide-react";
 
-const AUTHORIZED_EMAIL = "lukasdubuc@gmail.com";
+// ────────────────────────────────────────────────────────────────────────────
+// TYPES & ROUTE DEFINITION
+// ────────────────────────────────────────────────────────────────────────────
 
-export const Route = createFileRoute("/admin/")({
-  beforeLoad: async ({ location }) => {
-    const { data: { session }, error } = await supabase.auth.getSession();
-    if (!session || error) {
-      throw redirect({ to: "/login" });
-    }
-    if (session.user.email?.toLowerCase() !== AUTHORIZED_EMAIL.toLowerCase()) {
-      await supabase.auth.signOut();
-      throw redirect({ to: "/login" });
-    }
-  },
-  component: AdminDashboard,
-});
-
-type NavSection = "overview" | "orders" | "products" | "leads" | "site" | "settings";
-
-const NAV_ITEMS: { id: NavSection; label: string; icon: any }[] = [
-  { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "orders",   label: "Orders",   icon: ShoppingBag     },
-  { id: "products", label: "Products", icon: Package         },
-  { id: "leads",    label: "Leads",    icon: Users           },
-  { id: "site",     label: "Website",  icon: Globe           },
-  { id: "settings", label: "Settings", icon: Settings        },
-];
-
-const STATUS_CONFIG: Record<string, { color: string; icon: any; label: string }> = {
-  paid:      { color: "text-green-600", icon: CheckCircle2, label: "Paid"      },
-  completed: { color: "text-green-600", icon: CheckCircle2, label: "Completed" },
-  pending:   { color: "text-amber-600", icon: Clock,        label: "Pending"   },
-  failed:    { color: "text-red-600",   icon: XCircle,      label: "Failed"    },
-  archived:  { color: "text-gray-400",   icon: Archive,      label: "Archived"  },
+type SiteContent = {
+  hero_headline: string;
+  hero_subheadline: string;
+  hero_cta: string;
+  price_display: string;
+  price_original: string;
+  launch_pricing_active: boolean;
+  guarantee_days: number;
+  theme?: string;
+  metadata?: any;
 };
 
-function fmt$(cents: number) {
-  return `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
-}
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-function fmtDateShort(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
+type Product = {
+  id: string;
+  title: string;
+  slug: string;
+  price_cents: number;
+  image_urls: string[];
+  is_published: boolean;
+  description?: string;
+};
 
-function AdminDashboard() {
-  const [section,      setSection    ] = useState<NavSection>("overview");
-  const [orders,       setOrders     ] = useState<any[]>([]);
-  const [products,     setProducts   ] = useState<any[]>([]);
-  const [leads,        setLeads      ] = useState<any[]>([]);
-  const [loading,      setLoading    ] = useState(true);
-  const [selectedRow,  setSelectedRow] = useState<any | null>(null);
-  const [searchQuery,  setSearchQuery] = useState("");
+type Order = {
+  id: string;
+  email: string;
+  name?: string;
+  amount_cents: number;
+  status: string;
+  created_at: string;
+};
+
+type Lead = {
+  id: string;
+  email: string;
+  created_at: string;
+};
+
+export const Route = createFileRoute("/admin/")({
+  component: AdminPage,
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// MAIN COMPONENT
+// ────────────────────────────────────────────────────────────────────────────
+
+function AdminPage() {
+  const navigate = useNavigate();
+  const [section, setSection] = useState<"overview" | "products" | "orders" | "leads" | "settings" | "site">("overview");
+  const [isDark, setIsDark] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // ── Data State ──────────────────────────────────────────────────────────
+  const [products, setProducts] = useState<Product[]>([]);
+  const [activeOrders, setActiveOrders] = useState<Order[]>([]);
+  const [activeLeads, setActiveLeads] = useState<Lead[]>([]);
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
-  const [productForm, setProductForm] = useState({
-    title: "", description: "", price_cents: "", slug: "",
-    image_url: "", source_url: "", fulfillment_notes: "",
-    is_published: true, editingId: null as string | null,
+  // ── Site Config State ───────────────────────────────────────────────────
+  const [siteContent, setSiteContent] = useState<SiteContent>({
+    hero_headline: "",
+    hero_subheadline: "",
+    hero_cta: "",
+    price_display: "",
+    price_original: "",
+    launch_pricing_active: false,
+    guarantee_days: 30,
+    theme: "light",
+    metadata: {},
   });
-  const [productFormOpen, setProductFormOpen] = useState(false);
-
-  const [revenueRange, setRevenueRange] = useState<"day" | "week" | "month" | "year" | "all">("day");
-
-  const [siteContent, setSiteContent] = useState<SiteConfig>(SITE_CONFIG_FALLBACK);
   const [siteEdited, setSiteEdited] = useState(false);
   const [siteSaving, setSiteSaving] = useState(false);
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // ENGINE SAFEGUARD: All backend logic is isolated below.
-  // ────────────────────────────────────────────────────────────────────────────
+  // ── Product Form State ──────────────────────────────────────────────────
+  const [productFormOpen, setProductFormOpen] = useState(false);
+  const [productForm, setProductForm] = useState({
+    editingId: null as string | null,
+    title: "",
+    slug: "",
+    price_cents: "",
+    image_url: "",
+    description: "",
+    is_published: true,
+    source_url: "",
+  });
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session || session.user.email?.toLowerCase() !== AUTHORIZED_EMAIL.toLowerCase()) {
-        throw new Error("Unauthorized");
+  // ── UI State ────────────────────────────────────────────────────────────
+  const [revenueRange, setRevenueRange] = useState<"day" | "week" | "month" | "all">("month");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedRow, setSelectedRow] = useState<any>(null);
+
+  // ── Theme Detection ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const isDarkMode = document.documentElement.classList.contains("dark");
+    setIsDark(isDarkMode);
+  }, []);
+
+  // ── Auth & Data Fetch ───────────────────────────────────────────────────
+  useEffect(() => {
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        window.location.href = "/login";
+        return;
       }
-      setUserEmail(session.user.email);
+      setUserEmail(user.email || null);
+      await fetchData();
+    };
+    init();
+  }, []);
 
-      const [oRes, pRes, lRes, cRes] = await Promise.allSettled([
-        supabase.from("orders").select("*").order("created_at", { ascending: false }),
-        supabase.from("products").select("*").order("created_at", { ascending: false }),
-        supabase.from("leads").select("*").order("created_at", { ascending: false }),
-        supabase.from("site_config").select("*").order("updated_at", { ascending: false }).limit(1).maybeSingle(),
+  // ── ENGINE SAFEGUARD: All backend functions isolated below ──────────────
+  const fetchData = async () => {
+    try {
+      const [productsRes, ordersRes, leadsRes, siteRes] = await Promise.all([
+        supabase.from("products").select("*"),
+        supabase.from("orders").select("*"),
+        supabase.from("leads").select("*"),
+        supabase.from("site_config").select("*").eq("id", "main").single(),
       ]);
 
-      if (oRes.status === "fulfilled" && !oRes.value.error) setOrders(oRes.value.data ?? []);
-      if (pRes.status === "fulfilled" && !pRes.value.error) setProducts(pRes.value.data ?? []);
-      if (lRes.status === "fulfilled" && !lRes.value.error) setLeads(lRes.value.data ?? []);
-      if (cRes.status === "fulfilled" && !cRes.value.error && cRes.value.data) {
-        setSiteContent(prev => ({ ...prev, ...(cRes.value.data as Partial<SiteConfig>) }));
+      if (productsRes.data) setProducts(productsRes.data as Product[]);
+      if (ordersRes.data) setActiveOrders(ordersRes.data as Order[]);
+      if (leadsRes.data) setActiveLeads(leadsRes.data as Lead[]);
+      if (siteRes.data) {
+        setSiteContent(prev => ({ ...prev, ...siteRes.data }));
       }
     } catch (e) {
       console.error("[Admin] Fetch error:", e);
-      toast.error("Security check failed or data unavailable.");
-    } finally {
-      setLoading(false);
     }
-  }, []);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
-
-  const rangeStart = (() => {
-    const now = new Date();
-    if (revenueRange === "day")   { const d = new Date(now); d.setHours(0,0,0,0); return d; }
-    if (revenueRange === "week")  { const d = new Date(now); d.setDate(d.getDate() - 7); return d; }
-    if (revenueRange === "month") { const d = new Date(now); d.setMonth(d.getMonth() - 1); return d; }
-    if (revenueRange === "year")  { const d = new Date(now); d.setFullYear(d.getFullYear() - 1); return d; }
-    return null;
-  })();
-
-  const activeOrders  = orders.filter(o => o.status !== "archived");
-  const paidOrders    = activeOrders.filter(o => o.status === "paid" || o.status === "completed");
-  const filteredPaid  = rangeStart ? paidOrders.filter(o => new Date(o.created_at) >= rangeStart) : paidOrders;
-  const filteredRevenue = filteredPaid.reduce((sum, o) => sum + (o.amount_cents || 0), 0);
-  const totalRevenue  = paidOrders.reduce((sum, o) => sum + (o.amount_cents || 0), 0);
-  const pendingOrders = activeOrders.filter(o => o.status === "pending");
-  const convRate      = activeOrders.length ? ((paidOrders.length / activeOrders.length) * 100).toFixed(1) : "0";
-  const avgTicket     = paidOrders.length ? totalRevenue / paidOrders.length : 0;
-
-  const handleArchiveOrder = async (id: string) => {
-    const { error } = await supabase.from("orders").update({ status: "archived" } as any).eq("id", id);
-    if (!error) { setOrders(prev => prev.filter(o => o.id !== id)); setSelectedRow(null); toast.success("Order archived"); }
-    else toast.error("Failed to archive order");
   };
 
   const saveProduct = async () => {
-    const { title, description, price_cents, slug, image_url, source_url, fulfillment_notes, is_published, editingId } = productForm;
-    if (!title || !price_cents) return toast.error("Title and price required");
-    
-    if (title.length > 200 || (description && description.length > 2000)) {
-      return toast.error("Input exceeds safety limits.");
-    }
+    try {
+      const imageUrls = productForm.image_url
+        .split(",")
+        .map(u => u.trim())
+        .filter(u => u);
 
-    const image_urls = image_url.split(",").map(u => u.trim()).filter(Boolean);
-    if (image_urls.length > 10) return toast.error("Too many images.");
+      const payload = {
+        title: productForm.title,
+        slug: productForm.slug,
+        price_cents: parseInt(productForm.price_cents) || 0,
+        image_urls: imageUrls,
+        description: productForm.description,
+        is_published: productForm.is_published,
+        source_url: productForm.source_url,
+        updated_at: new Date().toISOString(),
+      };
 
-    const payload = {
-      title,
-      description: description || null,
-      price_cents: Math.round(parseFloat(price_cents) * 100),
-      slug: slug || title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-      image_urls,
-      source_url: source_url || null,
-      fulfillment_notes: fulfillment_notes || null,
-      is_published,
-      currency: "usd",
-    };
-    
-    if (editingId) {
-      const { error } = await supabase.from("products").update(payload as any).eq("id", editingId);
-      if (!error) { fetchData(); resetProductForm(); toast.success("Product updated"); }
-      else toast.error("Update failed");
-    } else {
-      const { error } = await supabase.from("products").insert([payload as any]);
-      if (!error) { fetchData(); resetProductForm(); toast.success("Product created"); }
-      else toast.error("Create failed");
+      if (productForm.editingId) {
+        const { error } = await supabase
+          .from("products")
+          .update(payload)
+          .eq("id", productForm.editingId);
+        if (error) throw error;
+        toast.success("Product updated.");
+      } else {
+        const { error } = await supabase.from("products").insert([payload]);
+        if (error) throw error;
+        toast.success("Product created.");
+      }
+
+      resetProductForm();
+      await fetchData();
+    } catch (e: any) {
+      toast.error(`Save failed: ${e.message}`);
     }
   };
 
-  const togglePublished = async (id: string, current: boolean) => {
-    const { error } = await supabase.from("products").update({ is_published: !current } as any).eq("id", id);
-    if (!error) { 
-      setProducts(prev => prev.map(p => p.id === id ? { ...p, is_published: !current } : p));
-      toast.success(!current ? "Product published" : "Product unpublished");
-    } else toast.error("Failed to update status");
+  const togglePublished = async (id: string, currentState: boolean) => {
+    try {
+      const { error } = await supabase
+        .from("products")
+        .update({ is_published: !currentState })
+        .eq("id", id);
+      if (error) throw error;
+      await fetchData();
+    } catch (e: any) {
+      toast.error(`Toggle failed: ${e.message}`);
+    }
   };
 
   const archiveProduct = async (id: string) => {
-    if (!window.confirm("Delete this product?")) return;
-    const { error } = await supabase.from("products").delete().eq("id", id);
-    if (!error) { setProducts(prev => prev.filter(p => p.id !== id)); setSelectedRow(null); toast.success("Product deleted"); }
-    else toast.error("Failed to delete product");
+    try {
+      const { error } = await supabase.from("products").delete().eq("id", id);
+      if (error) throw error;
+      toast.success("Product archived.");
+      await fetchData();
+    } catch (e: any) {
+      toast.error(`Archive failed: ${e.message}`);
+    }
+  };
+
+  const handleArchiveOrder = async (id: string) => {
+    try {
+      const { error } = await supabase.from("orders").delete().eq("id", id);
+      if (error) throw error;
+      toast.success("Order archived.");
+      setSelectedRow(null);
+      await fetchData();
+    } catch (e: any) {
+      toast.error(`Archive failed: ${e.message}`);
+    }
   };
 
   const resetProductForm = () => {
     setProductForm({
-      title: "", description: "", price_cents: "", slug: "",
-      image_url: "", source_url: "", fulfillment_notes: "",
-      is_published: true, editingId: null,
+      editingId: null,
+      title: "",
+      slug: "",
+      price_cents: "",
+      image_url: "",
+      description: "",
+      is_published: true,
+      source_url: "",
     });
     setProductFormOpen(false);
   };
 
-  const startEditProduct = (p: any) => {
+  const startEditProduct = (p: Product) => {
     setProductForm({
-      title: p.title, description: p.description || "",
-      price_cents: (p.price_cents / 100).toString(),
+      editingId: p.id,
+      title: p.title,
       slug: p.slug,
-      image_url: Array.isArray(p.image_urls) ? p.image_urls.join(", ") : "",
-      source_url: p.source_url || "",
-      fulfillment_notes: p.fulfillment_notes || "",
-      is_published: p.is_published, editingId: p.id,
+      price_cents: String(p.price_cents),
+      image_url: (p.image_urls || []).join(", "),
+      description: p.description || "",
+      is_published: p.is_published,
+      source_url: "",
     });
     setProductFormOpen(true);
     setSection("products");
@@ -222,7 +247,7 @@ function AdminDashboard() {
   const saveSiteConfig = async () => {
     setSiteSaving(true);
     try {
-      // Base payload matching the known schema in types.ts
+      // Base payload - only include columns that definitely exist
       const payload: any = {
         id: "main",
         hero_headline: siteContent.hero_headline || "",
@@ -235,11 +260,6 @@ function AdminDashboard() {
         updated_at: new Date().toISOString(),
       };
 
-      // Add theme and metadata only if they exist in the schema
-      // (Using dynamic check or just adding them if we've run the migration)
-      payload.theme = siteContent.theme || "light";
-      payload.metadata = siteContent.metadata || {};
-
       // Try to update first, as 'main' should already exist
       const { error: updateError } = await supabase
         .from("site_config")
@@ -247,16 +267,8 @@ function AdminDashboard() {
         .eq("id", "main");
         
       if (updateError) {
-        console.error("[Admin] Update failed, trying upsert:", updateError);
-        // Fallback to upsert if update fails (e.g. if 'main' doesn't exist yet)
-        const { error: upsertError } = await supabase
-          .from("site_config")
-          .upsert([payload], { onConflict: "id" });
-          
-        if (upsertError) {
-          console.error("[Admin] Upsert also failed:", upsertError);
-          throw upsertError;
-        }
+        console.error("[Admin] Update failed:", updateError);
+        throw updateError;
       }
       
       toast.success("Site content saved.");
@@ -273,393 +285,427 @@ function AdminDashboard() {
   const handleSignOut = async () => { await supabase.auth.signOut(); window.location.href = "/login"; };
 
   const filteredOrders = activeOrders.filter(o =>
-    !searchQuery || o.email?.toLowerCase().includes(searchQuery.toLowerCase()) || o.name?.toLowerCase().includes(searchQuery.toLowerCase())
+    o.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    o.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
-  const filteredLeads = leads.filter(l => !searchQuery || l.email?.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  const handleNavClick = (id: NavSection) => {
-    setSection(id);
-    setMobileMenuOpen(false);
+  const filteredLeads = activeLeads.filter(l =>
+    l.email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const paidOrders = activeOrders.filter(o => o.status === "paid");
+  const filteredRevenue = activeOrders
+    .filter(o => {
+      const date = new Date(o.created_at);
+      const now = new Date();
+      if (revenueRange === "day") return date.toDateString() === now.toDateString();
+      if (revenueRange === "week") return (now.getTime() - date.getTime()) < 7 * 24 * 60 * 60 * 1000;
+      if (revenueRange === "month") return date.getMonth() === now.getMonth();
+      return true;
+    })
+    .reduce((sum, o) => sum + o.amount_cents, 0);
+
+  const avgTicket = paidOrders.length > 0 ? filteredRevenue / paidOrders.length : 0;
+  const convRate = activeOrders.length > 0 ? Math.round((paidOrders.length / activeOrders.length) * 100) : 0;
+
+  const fmt$ = (cents: number) => `$${(cents / 100).toFixed(0)}`;
+  const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const fmtDateShort = (d: string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+  const STATUS_CONFIG: Record<string, any> = {
+    paid: { color: "text-green-600 border-green-200 bg-green-50" },
+    pending: { color: "text-yellow-600 border-yellow-200 bg-yellow-50" },
+    failed: { color: "text-red-600 border-red-200 bg-red-50" },
   };
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // UI RENDERING: Unified Navbar, Storefront Cards, Hidden Website Menu
-  // ────────────────────────────────────────────────────────────────────────────
-
-  const isDark = siteContent.theme === "dark";
-
   return (
-    <div className={`min-h-screen font-mono selection:bg-current selection:text-current transition-colors duration-500 ${
-      isDark ? "bg-black text-white" : "bg-white text-black"
-    }`}>
+    <div className={`min-h-screen ${isDark ? "bg-black text-white" : "bg-white text-black"}`}>
+      {/* NAVBAR */}
+      <nav className={`sticky top-0 z-50 border-b ${isDark ? "border-white/10 bg-black" : "border-gray-100 bg-white"}`}>
+        <div className="flex items-center justify-between px-6 py-4">
+          {/* Left: Admin Label (Mobile Only) */}
+          <div className="md:hidden text-[10px] font-bold uppercase tracking-widest">ADMIN</div>
 
-      {/* TOP NAVIGATION BAR - UNIFIED STYLE */}
-      <nav className={`sticky top-0 z-50 border-b md:border-b-0 ${
-        isDark ? "bg-black border-white/10" : "bg-white border-gray-100"
-      }`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between relative">
-          {/* MOBILE ONLY ADMIN LABEL */}
-          <div className="md:hidden flex items-center gap-2">
-            <span className={`text-[10px] uppercase tracking-[0.3em] ${isDark ? "text-white/30" : "text-black/30"}`}>ADMIN</span>
-          </div>
-          
-          {/* DESKTOP NAV - CENTERED */}
-          <div className="hidden md:flex absolute left-1/2 -translate-x-1/2 items-center gap-8">
-            {NAV_ITEMS.filter(item => item.id !== "site").map(item => (
-              <button key={item.id} onClick={() => handleNavClick(item.id)}
-                className={`text-[10px] uppercase tracking-[0.1em] transition-all duration-300 ${
-                  section === item.id ? (isDark ? "text-white" : "text-black") : (isDark ? "text-white/30 hover:text-white" : "text-black/30 hover:text-black")
-                }`}>
-                {item.label}
+          {/* Center: Menu (Desktop) */}
+          <div className="hidden md:flex items-center justify-center gap-8 flex-1">
+            {["overview", "products", "orders", "leads", "settings"].map(s => (
+              <button
+                key={s}
+                onClick={() => setSection(s as any)}
+                className={`text-[10px] font-bold uppercase tracking-widest transition-all ${
+                  section === s
+                    ? isDark ? "text-white" : "text-black"
+                    : isDark ? "text-white/50 hover:text-white/70" : "text-black/50 hover:text-black/70"
+                }`}
+              >
+                {s}
               </button>
             ))}
           </div>
 
-          {/* EMPTY SPACE FOR PC LAYOUT SYMMETRY */}
-          <div className="hidden md:block w-[100px]" />
-
-          {/* MOBILE MENU BUTTON - FAR RIGHT */}
-          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden p-1">
+          {/* Right: Menu Button (Mobile) / Empty Spacer (Desktop) */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden"
+          >
             <Menu size={18} />
           </button>
         </div>
 
-        {/* MOBILE MENU - FULL SCREEN OVERLAY */}
+        {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <div className={`fixed inset-0 z-40 border-none md:hidden ${isDark ? "bg-black" : "bg-white"}`}>
-            <div className="flex h-full flex-col items-center justify-center gap-8">
-              {NAV_ITEMS.filter(item => item.id !== "site").map(item => (
-                <button key={item.id} onClick={() => handleNavClick(item.id)}
-                  className={`text-[14px] tracking-[0.3em] transition-colors ${
-                    section === item.id ? (isDark ? "text-white" : "text-black") : (isDark ? "text-white/30 hover:text-white" : "text-black/30 hover:text-black")
-                  }`}>
-                  {item.label}
-                </button>
-              ))}
-              <button 
-                onClick={() => setMobileMenuOpen(false)}
-                className={`absolute right-6 top-6 ${isDark ? "text-white" : "text-black"}`}
-                aria-label="Close navigation"
+          <div className={`md:hidden border-t ${isDark ? "border-white/10 bg-black" : "border-gray-100 bg-white"} p-4 space-y-3`}>
+            {["overview", "products", "orders", "leads", "settings"].map(s => (
+              <button
+                key={s}
+                onClick={() => {
+                  setSection(s as any);
+                  setMobileMenuOpen(false);
+                }}
+                className={`block w-full text-left text-[10px] font-bold uppercase tracking-widest py-2 ${
+                  section === s
+                    ? isDark ? "text-white" : "text-black"
+                    : isDark ? "text-white/50" : "text-black/50"
+                }`}
               >
-                <X size={24} />
+                {s}
               </button>
-            </div>
+            ))}
           </div>
         )}
       </nav>
 
-      {/* MAIN CONTENT AREA */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-12">
-        {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <span className="text-[10px] uppercase tracking-[0.3em] text-black/30 animate-pulse">AUTHENTICATING…</span>
-          </div>
-        ) : (
-          <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-            
-            {/* OVERVIEW SECTION - REVERTED MOBILE UI */}
-            {section === "overview" && (
-              <div className="space-y-12">
-                <div className="flex items-end justify-between">
-                  <h1 className="text-2xl font-bold uppercase tracking-tighter">Overview</h1>
-                  <div className="flex gap-2">
-                    {["day", "week", "month", "all"].map(r => (
-                      <button key={r} onClick={() => setRevenueRange(r as any)}
-                        className={`text-[9px] font-bold uppercase px-3 py-1 rounded-full transition-all ${
-                          revenueRange === r ? "bg-black text-white" : "bg-gray-100 text-gray-400 hover:bg-gray-200"
-                        }`}>
-                        {r}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+      {/* MAIN CONTENT */}
+      <main className="max-w-7xl mx-auto px-6 py-12 space-y-12">
+        {/* OVERVIEW SECTION */}
+        {section === "overview" && (
+          <div className="space-y-12">
+            <div>
+              <h1 className="text-2xl font-bold uppercase tracking-tighter">Overview</h1>
+            </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-                  <Stat label="Revenue" value={fmt$(filteredRevenue)} sub={`${revenueRange.toUpperCase()} RANGE`} />
-                  <Stat label="Orders" value={activeOrders.length} sub={`${paidOrders.length} PAID`} />
-                  <Stat label="Conversion" value={`${convRate}%`} sub="VISIT TO PAID" />
-                  <Stat label="Avg Ticket" value={fmt$(avgTicket)} sub="PER CUSTOMER" />
-                </div>
+            <div className="flex gap-4">
+              {["day", "week", "month", "all"].map(r => (
+                <button
+                  key={r}
+                  onClick={() => setRevenueRange(r as any)}
+                  className={`text-[9px] font-bold uppercase px-4 py-2 transition-all ${
+                    revenueRange === r
+                      ? isDark ? "bg-white text-black" : "bg-black text-white"
+                      : isDark ? "border border-white/20 text-white/50 hover:text-white" : "border border-gray-200 text-black/50 hover:text-black"
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
 
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Recent Orders</h2>
-                    <button onClick={() => setSection("orders")} className="text-[10px] font-bold uppercase tracking-widest hover:underline">View All</button>
-                  </div>
-                  <div className="space-y-px">
-                    {activeOrders.slice(0, 5).map(o => (
-                      <div key={o.id} onClick={() => setSelectedRow({ ...o, _type: "order" })}
-                        className="group flex items-center justify-between py-4 border-b border-gray-50 hover:bg-gray-50/50 cursor-pointer transition-all">
-                        <div className="flex items-center gap-4">
-                          <div className="w-2 h-2 rounded-full bg-black opacity-0 group-hover:opacity-100 transition-all" />
-                          <div>
-                            <p className="text-xs font-bold uppercase">{o.name || o.email}</p>
-                            <p className="text-[9px] text-gray-400 uppercase">{fmtDateShort(o.created_at)}</p>
-                          </div>
-                        </div>
-                        <p className="text-xs font-bold">{fmt$(o.amount_cents)}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+              <Stat label="Revenue" value={fmt$(filteredRevenue)} sub={`${revenueRange.toUpperCase()} RANGE`} isDark={isDark} />
+              <Stat label="Orders" value={activeOrders.length} sub={`${paidOrders.length} PAID`} isDark={isDark} />
+              <Stat label="Conversion" value={`${convRate}%`} sub="VISIT TO PAID" isDark={isDark} />
+              <Stat label="Avg Ticket" value={fmt$(avgTicket)} sub="PER CUSTOMER" isDark={isDark} />
+            </div>
+
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Recent Orders</h2>
+                <button onClick={() => setSection("orders")} className={`text-[10px] font-bold uppercase tracking-widest hover:underline`}>View All</button>
               </div>
-            )}
-
-            {/* ORDERS SECTION */}
-            {section === "orders" && (
-              <div className="space-y-8">
-                <div className="flex items-end justify-between">
-                  <h1 className="text-2xl font-bold uppercase tracking-tighter">Orders</h1>
-                  <input type="text" placeholder="SEARCH…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                    className="text-[10px] font-bold uppercase border-b border-black focus:outline-none pb-1 w-48" />
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="text-[9px] font-bold uppercase tracking-widest text-gray-400 border-b border-gray-100">
-                        <th className="pb-4">Customer</th>
-                        <th className="pb-4">Amount</th>
-                        <th className="pb-4">Status</th>
-                        <th className="pb-4">Date</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {filteredOrders.map(o => (
-                        <tr key={o.id} onClick={() => setSelectedRow({ ...o, _type: "order" })} className="group hover:bg-gray-50/50 cursor-pointer transition-all">
-                          <td className="py-6">
-                            <p className="text-xs font-bold uppercase">{o.name || "—"}</p>
-                            <p className="text-[9px] text-gray-400 uppercase">{o.email}</p>
-                          </td>
-                          <td className="py-6 text-xs font-bold">{fmt$(o.amount_cents)}</td>
-                          <td className="py-6">
-                            <span className={`text-[9px] font-bold uppercase px-2 py-1 rounded-full border ${STATUS_CONFIG[o.status]?.color || "text-gray-400 border-gray-100"}`}>
-                              {o.status}
-                            </span>
-                          </td>
-                          <td className="py-6 text-[10px] text-gray-400 uppercase">{fmtDate(o.created_at)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* PRODUCTS SECTION - STOREFRONT CARDS */}
-            {section === "products" && (
-              <div className="space-y-12">
-                <div className="flex items-end justify-between">
-                  <h1 className="text-2xl font-bold uppercase tracking-tighter">Products</h1>
-                  <button 
-                    onClick={() => {
-                      if (productFormOpen && !productForm.editingId) {
-                        setProductFormOpen(false);
-                      } else {
-                        resetProductForm();
-                        setProductFormOpen(true);
-                      }
-                    }} 
-                    className="text-[10px] font-bold uppercase tracking-widest bg-black text-white px-6 py-2 hover:bg-gray-800 transition-all"
-                  >
-                    {productFormOpen && !productForm.editingId ? "CLOSE" : "NEW PRODUCT"}
-                  </button>
-                </div>
-
-                {/* PRODUCT FORM - COLLAPSIBLE */}
-                {productFormOpen && (
-                  <div className="bg-gray-50/50 p-8 space-y-8 animate-in slide-in-from-top duration-300">
-                    <h2 className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                      {productForm.editingId ? "Edit Product" : "Create Product"}
-                    </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      <Input label="Title" value={productForm.title} onChange={v => setProductForm(f => ({ ...f, title: v }))} />
-                      <Input label="Price (USD)" value={productForm.price_cents} onChange={v => setProductForm(f => ({ ...f, price_cents: v }))} type="number" />
-                      <Input label="Slug" value={productForm.slug} onChange={v => setProductForm(f => ({ ...f, slug: v }))} />
-                      <Input label="Source URL" value={productForm.source_url} onChange={v => setProductForm(f => ({ ...f, source_url: v }))} />
-                    </div>
-                    <Input label="Image URL(s)" value={productForm.image_url} onChange={v => setProductForm(f => ({ ...f, image_url: v }))} />
-                    <div className="space-y-2">
-                      <label className="text-[9px] font-bold uppercase text-gray-400">Description</label>
-                      <textarea value={productForm.description} onChange={e => setProductForm(f => ({ ...f, description: e.target.value }))}
-                        className="w-full bg-transparent border-b border-gray-200 focus:border-black outline-none py-2 text-xs font-bold uppercase resize-none" rows={2} />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <button onClick={() => setProductForm(f => ({ ...f, is_published: !f.is_published }))}
-                        className={`text-[10px] font-bold uppercase px-4 py-2 rounded-full border transition-all ${
-                          productForm.is_published ? "bg-green-50 text-green-600 border-green-200" : "bg-red-50 text-red-600 border-red-200"
-                        }`}>
-                        {productForm.is_published ? "PUBLISHED" : "DRAFT"}
-                      </button>
-                      <div className="flex gap-4">
-                        <button onClick={resetProductForm} className="text-[10px] font-bold uppercase text-gray-400 hover:text-black">Cancel</button>
-                        <button onClick={saveProduct} className="text-[10px] font-bold uppercase bg-black text-white px-8 py-3 hover:bg-gray-800 transition-all">
-                          {productForm.editingId ? "SAVE" : "CREATE"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* PRODUCT GRID - STOREFRONT STYLE */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-y-12">
-                  {products.map(p => (
-                    <div key={p.id} className="group relative">
-                      {/* Storefront Product Cell Implementation */}
-                      <div className="relative flex aspect-[2/3] items-center justify-center overflow-hidden bg-transparent p-3 sm:p-4 group-hover:scale-105 transition-all duration-300">
-                        {p.image_urls?.[0] ? (
-                          <img src={p.image_urls[0]} alt="" className="max-h-full max-w-full object-contain" />
-                        ) : (
-                          <span className="text-[7px] uppercase tracking-[0.3em] text-black/20">No Image</span>
-                        )}
-                      </div>
-                      <div className="px-2 text-center">
-                        <p className={`mb-1 text-[9px] uppercase leading-tight tracking-[0.1em] truncate font-bold ${isDark ? "text-white" : "text-black"}`}>{p.title}</p>
-                        <p className={`text-[9px] tracking-[0.05em] ${isDark ? "text-white/70" : "text-black/70"}`}>${(p.price_cents / 100).toFixed(0)}</p>
-                        
-                        {/* Admin Controls - Overlay on hover or always visible below */}
-                        <div className="flex items-center justify-center gap-3 mt-3">
-                          <button onClick={() => togglePublished(p.id, p.is_published)}
-                            className={`w-2 h-2 rounded-full transition-all ${p.is_published ? "bg-green-500" : "bg-red-500"}`} />
-                          <button onClick={() => startEditProduct(p)} className={`${isDark ? "text-white/40 hover:text-white" : "text-black/30 hover:text-black"} transition-colors`}><Edit3 size={12} /></button>
-                          <button onClick={() => archiveProduct(p.id)} className={`${isDark ? "text-white/40 hover:text-red-400" : "text-black/30 hover:text-red-500"} transition-colors`}><Archive size={12} /></button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* WEBSITE BUILDER SECTION - HIDDEN BUT PRESERVED */}
-            {section === "site" && (
-              <div className="max-w-2xl space-y-12 opacity-50">
-                <h1 className="text-2xl font-bold uppercase tracking-tighter">Website Builder (Hidden)</h1>
-                <p className="text-[10px] uppercase tracking-widest text-gray-400">This section is currently hidden from the main menu but the code remains intact for future cleanup.</p>
-                {/* [PRESERVED CODE REMAINS IN SOURCE] */}
-              </div>
-            )}
-
-            {/* LEADS SECTION */}
-            {section === "leads" && (
-              <div className="space-y-8">
-                <div className="flex items-end justify-between">
-                  <h1 className="text-2xl font-bold uppercase tracking-tighter">Leads</h1>
-                  <input type="text" placeholder="SEARCH…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                    className="text-[10px] font-bold uppercase border-b border-black focus:outline-none pb-1 w-48" />
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="text-[9px] font-bold uppercase tracking-widest text-gray-400 border-b border-gray-100">
-                        <th className="pb-4">Email</th>
-                        <th className="pb-4">Date</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {filteredLeads.map(l => (
-                        <tr key={l.id} className="hover:bg-gray-50/50 transition-all">
-                          <td className="py-6 text-xs font-bold uppercase">{l.email}</td>
-                          <td className="py-6 text-[10px] text-gray-400 uppercase">{fmtDate(l.created_at)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* SETTINGS SECTION */}
-            {section === "settings" && (
-              <div className="max-w-2xl space-y-12">
-                <h1 className="text-2xl font-bold uppercase tracking-tighter">Settings</h1>
-
-                <div className="space-y-8">
-                  <div className="space-y-4">
-                    <h2 className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Appearance</h2>
-                    <div className={`${isDark ? "bg-white/5" : "bg-gray-50/50"} p-6 space-y-6`}>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] uppercase tracking-widest">Theme</span>
-                        <div className="flex border border-current overflow-hidden">
-                          <button 
-                            onClick={() => { setSiteContent(s => ({ ...s, theme: "light" })); setSiteEdited(true); }}
-                            className={`px-4 py-2 text-[9px] font-bold uppercase transition-all ${!isDark ? "bg-black text-white" : "hover:bg-white/10"}`}
-                          >
-                            LIGHT
-                          </button>
-                          <button 
-                            onClick={() => { setSiteContent(s => ({ ...s, theme: "dark" })); setSiteEdited(true); }}
-                            className={`px-4 py-2 text-[9px] font-bold uppercase transition-all ${isDark ? "bg-white text-black" : "hover:bg-black/10"}`}
-                          >
-                            DARK
-                          </button>
-                        </div>
-                      </div>
-                      {siteEdited && (
-                        <button 
-                          onClick={saveSiteConfig}
-                          disabled={siteSaving}
-                          className={`w-full py-3 text-[10px] font-bold uppercase transition-all ${
-                            isDark ? "bg-white text-black hover:bg-gray-200" : "bg-black text-white hover:bg-gray-800"
-                          }`}
-                        >
-                          {siteSaving ? "SAVING…" : "APPLY CHANGES"}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <h2 className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Account</h2>
-                    <div className={`${isDark ? "bg-white/5" : "bg-gray-50/50"} p-6 space-y-4`}>
+              <div className={`space-y-px ${isDark ? "divide-white/10" : ""}`}>
+                {activeOrders.slice(0, 5).map(o => (
+                  <div key={o.id} onClick={() => setSelectedRow({ ...o, _type: "order" })}
+                    className={`group flex items-center justify-between py-4 border-b cursor-pointer transition-all ${
+                      isDark ? "border-white/10 hover:bg-white/5" : "border-gray-50 hover:bg-gray-50/50"
+                    }`}>
+                    <div className="flex items-center gap-4">
+                      <div className={`w-2 h-2 rounded-full opacity-0 group-hover:opacity-100 transition-all ${isDark ? "bg-white" : "bg-black"}`} />
                       <div>
-                        <p className="text-[10px] text-gray-400">Signed in as</p>
-                        <p className="text-xs font-bold uppercase">{userEmail || "…"}</p>
+                        <p className="text-xs font-bold uppercase">{o.name || o.email}</p>
+                        <p className={`text-[9px] uppercase ${isDark ? "text-white/50" : "text-gray-400"}`}>{fmtDateShort(o.created_at)}</p>
                       </div>
-                      <button onClick={handleSignOut} className="w-full text-[10px] font-bold uppercase bg-red-500/10 text-red-500 px-4 py-3 hover:bg-red-500/20 transition-all">
-                        LOGOUT
-                      </button>
                     </div>
+                    <p className="text-xs font-bold">{fmt$(o.amount_cents)}</p>
                   </div>
-
-                  <div className="space-y-4">
-                    <h2 className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Stripe Webhook</h2>
-                    <div className={`${isDark ? "bg-white/5" : "bg-gray-50/50"} p-6 space-y-3`}>
-                      <p className="text-[10px] text-gray-400">Point Stripe webhook at:</p>
-                      <pre className={`text-[9px] border p-3 overflow-x-auto font-mono ${isDark ? "bg-black border-white/10" : "bg-white border-gray-200"}`}>
-                        {typeof window !== "undefined" ? window.location.origin : ""}/api/public/stripe-webhook
-                      </pre>
-                      <p className="text-[9px] text-gray-400">Listen for: checkout.session.completed, checkout.session.expired, checkout.session.async_payment_failed</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <h2 className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Brand & Copy</h2>
-                    <div className={`${isDark ? "bg-white/5" : "bg-gray-50/50"} p-6 space-y-2`}>
-                      <p className="text-[10px] text-gray-400">Brand name and default copy live in <code className={`px-1 py-0.5 text-[9px] font-mono border ${isDark ? "bg-black border-white/10" : "bg-white border-gray-200"}`}>src/config/site.ts</code>.</p>
-                    </div>
-                  </div>
-                </div>
+                ))}
               </div>
-            )}
-
+            </div>
           </div>
         )}
+
+        {/* ORDERS SECTION */}
+        {section === "orders" && (
+          <div className="space-y-8">
+            <div className="flex items-end justify-between">
+              <h1 className="text-2xl font-bold uppercase tracking-tighter">Orders</h1>
+              <input type="text" placeholder="SEARCH…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                className={`text-[10px] font-bold uppercase border-b focus:outline-none pb-1 w-48 bg-transparent ${
+                  isDark ? "border-white/20 text-white placeholder-white/30" : "border-black text-black placeholder-black/30"
+                }`} />
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className={`text-[9px] font-bold uppercase tracking-widest border-b ${
+                    isDark ? "text-white/50 border-white/10" : "text-gray-400 border-gray-100"
+                  }`}>
+                    <th className="pb-4">Customer</th>
+                    <th className="pb-4">Amount</th>
+                    <th className="pb-4">Status</th>
+                    <th className="pb-4">Date</th>
+                  </tr>
+                </thead>
+                <tbody className={isDark ? "divide-white/10" : "divide-gray-50"}>
+                  {filteredOrders.map(o => (
+                    <tr key={o.id} onClick={() => setSelectedRow({ ...o, _type: "order" })} className={`group hover:cursor-pointer transition-all ${
+                      isDark ? "hover:bg-white/5 divide-white/10" : "hover:bg-gray-50/50 divide-gray-50"
+                    }`}>
+                      <td className="py-6">
+                        <p className="text-xs font-bold uppercase">{o.name || "—"}</p>
+                        <p className={`text-[9px] uppercase ${isDark ? "text-white/50" : "text-gray-400"}`}>{o.email}</p>
+                      </td>
+                      <td className="py-6 text-xs font-bold">{fmt$(o.amount_cents)}</td>
+                      <td className="py-6">
+                        <span className={`text-[9px] font-bold uppercase px-2 py-1 rounded-full border ${STATUS_CONFIG[o.status]?.color || (isDark ? "text-white/50 border-white/10" : "text-gray-400 border-gray-100")}`}>
+                          {o.status}
+                        </span>
+                      </td>
+                      <td className={`py-6 text-[10px] uppercase ${isDark ? "text-white/50" : "text-gray-400"}`}>{fmtDate(o.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* PRODUCTS SECTION - STOREFRONT CARDS */}
+        {section === "products" && (
+          <div className="space-y-12">
+            <div className="flex items-end justify-between">
+              <h1 className="text-2xl font-bold uppercase tracking-tighter">Products</h1>
+              <button 
+                onClick={() => {
+                  if (productFormOpen && !productForm.editingId) {
+                    setProductFormOpen(false);
+                  } else {
+                    resetProductForm();
+                    setProductFormOpen(true);
+                  }
+                }} 
+                className={`text-[10px] font-bold uppercase tracking-widest px-6 py-2 transition-all ${
+                  isDark ? "bg-white text-black hover:bg-gray-200" : "bg-black text-white hover:bg-gray-800"
+                }`}
+              >
+                {productFormOpen && !productForm.editingId ? "CLOSE" : "NEW PRODUCT"}
+              </button>
+            </div>
+
+            {/* PRODUCT FORM - COLLAPSIBLE */}
+            {productFormOpen && (
+              <div className={`p-8 space-y-8 animate-in slide-in-from-top duration-300 ${isDark ? "bg-white/5" : "bg-gray-50/50"}`}>
+                <h2 className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>
+                  {productForm.editingId ? "Edit Product" : "Create Product"}
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <Input label="Title" value={productForm.title} onChange={v => setProductForm(f => ({ ...f, title: v }))} isDark={isDark} />
+                  <Input label="Price (USD)" value={productForm.price_cents} onChange={v => setProductForm(f => ({ ...f, price_cents: v }))} type="number" isDark={isDark} />
+                  <Input label="Slug" value={productForm.slug} onChange={v => setProductForm(f => ({ ...f, slug: v }))} isDark={isDark} />
+                  <Input label="Source URL" value={productForm.source_url} onChange={v => setProductForm(f => ({ ...f, source_url: v }))} isDark={isDark} />
+                </div>
+                <Input label="Image URL(s)" value={productForm.image_url} onChange={v => setProductForm(f => ({ ...f, image_url: v }))} isDark={isDark} />
+                <div className="space-y-2">
+                  <label className={`text-[9px] font-bold uppercase ${isDark ? "text-white/50" : "text-gray-400"}`}>Description</label>
+                  <textarea value={productForm.description} onChange={e => setProductForm(f => ({ ...f, description: e.target.value }))}
+                    className={`w-full bg-transparent border-b focus:border-current outline-none py-2 text-xs font-bold uppercase resize-none ${
+                      isDark ? "border-white/20 text-white" : "border-gray-200 text-black"
+                    }`} rows={2} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <button onClick={() => setProductForm(f => ({ ...f, is_published: !f.is_published }))}
+                    className={`text-[10px] font-bold uppercase px-4 py-2 rounded-full border transition-all ${
+                      productForm.is_published ? "bg-green-50 text-green-600 border-green-200" : "bg-red-50 text-red-600 border-red-200"
+                    }`}>
+                    {productForm.is_published ? "PUBLISHED" : "DRAFT"}
+                  </button>
+                  <div className="flex gap-4">
+                    <button onClick={resetProductForm} className={`text-[10px] font-bold uppercase ${isDark ? "text-white/50 hover:text-white" : "text-gray-400 hover:text-black"}`}>Cancel</button>
+                    <button onClick={saveProduct} className={`text-[10px] font-bold uppercase px-8 py-3 transition-all ${
+                      isDark ? "bg-white text-black hover:bg-gray-200" : "bg-black text-white hover:bg-gray-800"
+                    }`}>
+                      {productForm.editingId ? "SAVE" : "CREATE"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* PRODUCT GRID - STOREFRONT STYLE */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-y-12">
+              {products.map(p => (
+                <div key={p.id} className="group relative">
+                  {/* Storefront Product Cell Implementation */}
+                  <div className={`relative flex aspect-[2/3] items-center justify-center overflow-hidden bg-transparent p-3 sm:p-4 group-hover:scale-105 transition-all duration-300 ${
+                    isDark ? "bg-white/5" : "bg-gray-50/50"
+                  }`}>
+                    {p.image_urls?.[0] ? (
+                      <img src={p.image_urls[0]} alt="" className="max-h-full max-w-full object-contain" />
+                    ) : (
+                      <span className={`text-[7px] uppercase tracking-[0.3em] ${isDark ? "text-white/20" : "text-black/20"}`}>No Image</span>
+                    )}
+                  </div>
+                  <div className="px-2 text-center">
+                    <p className={`mb-1 text-[9px] uppercase leading-tight tracking-[0.1em] truncate font-bold ${isDark ? "text-white" : "text-black"}`}>{p.title}</p>
+                    <p className={`text-[9px] tracking-[0.05em] ${isDark ? "text-white/70" : "text-black/70"}`}>${(p.price_cents / 100).toFixed(0)}</p>
+                    
+                    {/* Admin Controls - Overlay on hover or always visible below */}
+                    <div className="flex items-center justify-center gap-3 mt-3">
+                      <button onClick={() => togglePublished(p.id, p.is_published)}
+                        className={`w-2 h-2 rounded-full transition-all ${p.is_published ? "bg-green-500" : "bg-red-500"}`} />
+                      <button onClick={() => startEditProduct(p)} className={`${isDark ? "text-white/40 hover:text-white" : "text-black/30 hover:text-black"} transition-colors`}><Edit3 size={12} /></button>
+                      <button onClick={() => archiveProduct(p.id)} className={`${isDark ? "text-white/40 hover:text-red-400" : "text-black/30 hover:text-red-500"} transition-colors`}><Archive size={12} /></button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* WEBSITE BUILDER SECTION - HIDDEN BUT PRESERVED */}
+        {section === "site" && (
+          <div className="max-w-2xl space-y-12 opacity-50">
+            <h1 className="text-2xl font-bold uppercase tracking-tighter">Website Builder (Hidden)</h1>
+            <p className={`text-[10px] uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>This section is currently hidden from the main menu but the code remains intact for future cleanup.</p>
+            {/* [PRESERVED CODE REMAINS IN SOURCE] */}
+          </div>
+        )}
+
+        {/* LEADS SECTION */}
+        {section === "leads" && (
+          <div className="space-y-8">
+            <div className="flex items-end justify-between">
+              <h1 className="text-2xl font-bold uppercase tracking-tighter">Leads</h1>
+              <input type="text" placeholder="SEARCH…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                className={`text-[10px] font-bold uppercase border-b focus:outline-none pb-1 w-48 bg-transparent ${
+                  isDark ? "border-white/20 text-white placeholder-white/30" : "border-black text-black placeholder-black/30"
+                }`} />
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className={`text-[9px] font-bold uppercase tracking-widest border-b ${
+                    isDark ? "text-white/50 border-white/10" : "text-gray-400 border-gray-100"
+                  }`}>
+                    <th className="pb-4">Email</th>
+                    <th className="pb-4">Date</th>
+                  </tr>
+                </thead>
+                <tbody className={isDark ? "divide-white/10" : "divide-gray-50"}>
+                  {filteredLeads.map(l => (
+                    <tr key={l.id} className={isDark ? "hover:bg-white/5" : "hover:bg-gray-50/50"}>
+                      <td className="py-6 text-xs font-bold uppercase">{l.email}</td>
+                      <td className={`py-6 text-[10px] uppercase ${isDark ? "text-white/50" : "text-gray-400"}`}>{fmtDate(l.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* SETTINGS SECTION */}
+        {section === "settings" && (
+          <div className="max-w-2xl space-y-12">
+            <h1 className="text-2xl font-bold uppercase tracking-tighter">Settings</h1>
+
+            <div className="space-y-8">
+              <div className="space-y-4">
+                <h2 className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Appearance</h2>
+                <div className={`p-6 space-y-6 ${isDark ? "bg-white/5" : "bg-gray-50/50"}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase tracking-widest">Theme</span>
+                    <div className={`flex border overflow-hidden ${isDark ? "border-white/20" : "border-black/20"}`}>
+                      <button 
+                        onClick={() => { setSiteContent(s => ({ ...s, theme: "light" })); setSiteEdited(true); }}
+                        className={`px-4 py-2 text-[9px] font-bold uppercase transition-all ${!isDark ? isDark ? "bg-white text-black" : "bg-black text-white" : isDark ? "hover:bg-white/10" : "hover:bg-black/10"}`}
+                      >
+                        LIGHT
+                      </button>
+                      <button 
+                        onClick={() => { setSiteContent(s => ({ ...s, theme: "dark" })); setSiteEdited(true); }}
+                        className={`px-4 py-2 text-[9px] font-bold uppercase transition-all ${isDark ? isDark ? "bg-white text-black" : "bg-black text-white" : isDark ? "hover:bg-white/10" : "hover:bg-black/10"}`}
+                      >
+                        DARK
+                      </button>
+                    </div>
+                  </div>
+                  {siteEdited && (
+                    <button 
+                      onClick={saveSiteConfig}
+                      disabled={siteSaving}
+                      className={`w-full py-3 text-[10px] font-bold uppercase transition-all ${
+                        isDark ? "bg-white text-black hover:bg-gray-200" : "bg-black text-white hover:bg-gray-800"
+                      }`}
+                    >
+                      {siteSaving ? "SAVING…" : "APPLY CHANGES"}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h2 className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Account</h2>
+                <div className={`p-6 space-y-4 ${isDark ? "bg-white/5" : "bg-gray-50/50"}`}>
+                  <div>
+                    <p className={`text-[10px] ${isDark ? "text-white/50" : "text-gray-400"}`}>Signed in as</p>
+                    <p className="text-xs font-bold uppercase">{userEmail || "…"}</p>
+                  </div>
+                  <button onClick={handleSignOut} className={`w-full text-[10px] font-bold uppercase px-4 py-3 hover:transition-all ${isDark ? "bg-red-500/10 text-red-400 hover:bg-red-500/20" : "bg-red-500/10 text-red-500 hover:bg-red-500/20"}`}>
+                    LOGOUT
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h2 className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Stripe Webhook</h2>
+                <div className={`p-6 space-y-3 ${isDark ? "bg-white/5" : "bg-gray-50/50"}`}>
+                  <p className={`text-[10px] ${isDark ? "text-white/50" : "text-gray-400"}`}>Point Stripe webhook at:</p>
+                  <pre className={`text-[9px] border p-3 overflow-x-auto font-mono ${isDark ? "bg-black border-white/10" : "bg-white border-gray-200"}`}>
+                    {typeof window !== "undefined" ? window.location.origin : ""}/api/public/stripe-webhook
+                  </pre>
+                  <p className={`text-[9px] ${isDark ? "text-white/50" : "text-gray-400"}`}>Listen for: checkout.session.completed, checkout.session.expired, checkout.session.async_payment_failed</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h2 className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Brand & Copy</h2>
+                <div className={`p-6 space-y-2 ${isDark ? "bg-white/5" : "bg-gray-50/50"}`}>
+                  <p className={`text-[10px] ${isDark ? "text-white/50" : "text-gray-400"}`}>Brand name and default copy live in <code className={`px-1 py-0.5 text-[9px] font-mono border ${isDark ? "bg-black border-white/10" : "bg-white border-gray-200"}`}>src/config/site.ts</code>.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
       </main>
 
       {/* DETAIL MODAL */}
       {selectedRow && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
-          <div className="absolute inset-0 bg-white/90 backdrop-blur-sm" onClick={() => setSelectedRow(null)} />
-          <div className="relative bg-white w-full max-w-lg p-12 space-y-8 border border-gray-100 shadow-2xl max-h-[90vh] overflow-y-auto">
+          <div className={`absolute inset-0 backdrop-blur-sm ${isDark ? "bg-black/90" : "bg-white/90"}`} onClick={() => setSelectedRow(null)} />
+          <div className={`relative w-full max-w-lg p-12 space-y-8 border max-h-[90vh] overflow-y-auto ${
+            isDark ? "bg-black border-white/10" : "bg-white border-gray-100"
+          }`}>
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold uppercase tracking-widest">Details</h3>
+              <h3 className={`text-sm font-bold uppercase tracking-widest ${isDark ? "text-white" : "text-black"}`}>Details</h3>
               <button onClick={() => setSelectedRow(null)}><X size={18} /></button>
             </div>
             <div className="space-y-4">
               {Object.entries(selectedRow).map(([k, v]) => (
                 k !== "_type" && (
-                  <div key={k} className="flex justify-between py-2 border-b border-gray-50 gap-4">
-                    <span className="text-[9px] font-bold uppercase text-gray-400 flex-shrink-0">{k}</span>
+                  <div key={k} className={`flex justify-between py-2 border-b gap-4 ${isDark ? "border-white/10" : "border-gray-50"}`}>
+                    <span className={`text-[9px] font-bold uppercase flex-shrink-0 ${isDark ? "text-white/50" : "text-gray-400"}`}>{k}</span>
                     <span className="text-[10px] font-bold uppercase truncate text-right">{String(v)}</span>
                   </div>
                 )
@@ -667,7 +713,7 @@ function AdminDashboard() {
             </div>
             {selectedRow._type === "order" && (
               <button onClick={() => handleArchiveOrder(selectedRow.id)}
-                className="w-full py-4 text-[10px] font-bold uppercase bg-red-50 text-red-600 hover:bg-red-100 transition-all">
+                className={`w-full py-4 text-[10px] font-bold uppercase transition-all ${isDark ? "bg-red-500/10 text-red-400 hover:bg-red-500/20" : "bg-red-50 text-red-600 hover:bg-red-100"}`}>
                 ARCHIVE ORDER
               </button>
             )}
@@ -682,22 +728,24 @@ function AdminDashboard() {
 // REUSABLE COMPONENTS
 // ────────────────────────────────────────────────────────────────────────────
 
-function Stat({ label, value, sub }: { label: string; value: string | number; sub: string }) {
+function Stat({ label, value, sub, isDark }: { label: string; value: string | number; sub: string; isDark: boolean }) {
   return (
     <div className="space-y-1">
-      <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400">{label}</p>
+      <p className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>{label}</p>
       <p className="text-2xl font-bold tracking-tighter">{value}</p>
-      <p className="text-[8px] font-bold uppercase tracking-widest text-gray-300">{sub}</p>
+      <p className={`text-[8px] font-bold uppercase tracking-widest ${isDark ? "text-white/30" : "text-gray-300"}`}>{sub}</p>
     </div>
   );
 }
 
-function Input({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
+function Input({ label, value, onChange, type = "text", isDark }: { label: string; value: string; onChange: (v: string) => void; type?: string; isDark: boolean }) {
   return (
     <div className="space-y-2">
-      <label className="text-[9px] font-bold uppercase text-gray-400 tracking-widest">{label}</label>
+      <label className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>{label}</label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)}
-        className="w-full bg-transparent border-b border-gray-200 focus:border-black outline-none py-2 text-xs font-bold uppercase transition-all" />
+        className={`w-full bg-transparent border-b focus:border-current outline-none py-2 text-xs font-bold uppercase transition-all ${
+          isDark ? "border-white/20 text-white" : "border-gray-200 text-black"
+        }`} />
     </div>
   );
 }
