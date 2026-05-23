@@ -5,7 +5,6 @@
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts } from "@/lib/useProducts";
 import { offer } from "@/config/site";
@@ -301,6 +300,12 @@ function OfferSlugPage() {
     <>
       {prevProduct && <link rel="prefetch" href={`/offer/${prevProduct.slug}`} as="document" />}
       {nextProduct && <link rel="prefetch" href={`/offer/${nextProduct.slug}`} as="document" />}
+      <style>{`
+        @keyframes pdp-zoom-in {
+          from { opacity: 0; transform: scale(0.94); }
+          to   { opacity: 1; transform: scale(1); }
+        }
+      `}</style>
 
       <div
         className="yeezy-pdp bg-background text-foreground"
@@ -347,14 +352,14 @@ function OfferSlugPage() {
           onTouchStart={handleImgTouchStart}
           onTouchEnd={handleImgTouchEnd}
         >
-          {/* ── SURGICAL CHANGE: framer-motion layoutId on image container only ── */}
-          <motion.div
-            layoutId={`product-image-${product.slug}`}
+          {/* ── Zoom-in entry via CSS keyframe — no framer-motion needed ── */}
+          <div
+            key={product.slug}
             style={{
               position: "relative", width: "100%", height: "100%",
               display: "flex", alignItems: "center", justifyContent: "center",
+              animation: "pdp-zoom-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both",
             }}
-            transition={{ type: "spring", stiffness: 280, damping: 30 }}
           >
             {galleryImages[activeImageIndex] ? (
               <img
@@ -381,7 +386,7 @@ function OfferSlugPage() {
                 IMAGE PENDING
               </div>
             )}
-          </motion.div>
+          </div>
 
           {/* ── Left nav arrow ── */}
           <button onClick={goToPrev} disabled={!prevProduct} aria-label="Previous product"
