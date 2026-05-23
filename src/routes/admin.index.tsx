@@ -257,6 +257,7 @@ function AdminPage() {
         price_original: siteContent.price_original || "",
         launch_pricing_active: siteContent.launch_pricing_active ?? false,
         guarantee_days: String(siteContent.guarantee_days || "30"),
+        theme: siteContent.theme || "light",
         updated_at: new Date().toISOString(),
       };
 
