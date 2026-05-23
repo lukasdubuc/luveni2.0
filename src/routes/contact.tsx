@@ -60,21 +60,21 @@ function Contact() {
   }
 
   return (
-    <section className="bg-white">
+    <section className="bg-background text-foreground">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-16 md:grid-cols-2 md:py-24">
         <div>
           <p className="text-sm font-medium uppercase tracking-wider text-accent">Contact</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">Say hello.</h1>
-          <p className="mt-3 text-black/55">
+          <p className="mt-3 text-muted-foreground">
             Questions about the offer, custom pricing, or feedback? Send a note —
             we usually reply within 24 hours.
           </p>
-          <div className="mt-8 flex items-center gap-3 border border-black/10 bg-white p-4">
-            <span className="grid h-10 w-10 place-items-center border border-black/10 bg-white text-black">
+          <div className="mt-8 flex items-center gap-3 border border-black/10 bg-background/50 p-4">
+            <span className="grid h-10 w-10 place-items-center border border-black/10 bg-background text-foreground">
               <Mail className="h-5 w-5" />
             </span>
             <div className="text-sm">
-              <p className="text-black/55">Or email us directly</p>
+              <p className="text-muted-foreground">Or email us directly</p>
               <a href={`mailto:${site.supportEmail}`} className="font-medium underline">
                 {site.supportEmail}
               </a>
@@ -82,14 +82,14 @@ function Contact() {
           </div>
         </div>
         {sent ? (
-          <div className="border border-black/10 bg-white p-8 text-center">
-            <p className="text-base font-medium text-black">Message sent.</p>
-            <p className="mt-2 text-sm text-black/55">
+          <div className="border border-black/10 bg-background/50 p-8 text-center">
+            <p className="text-base font-medium text-foreground">Message sent.</p>
+            <p className="mt-2 text-sm text-muted-foreground">
               We'll get back to you soon. In the meantime, you can browse the site.
             </p>
           </div>
         ) : (
-          <form onSubmit={onSubmit} className="space-y-4 border border-black/10 bg-white p-6">
+          <form onSubmit={onSubmit} className="space-y-4 border border-black/10 bg-background/50 p-6">
             <div className="space-y-2">
               <label className="text-sm font-medium" htmlFor="c-name">Name</label>
               <input
@@ -97,7 +97,7 @@ function Contact() {
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 required maxLength={120}
-                className="h-11 w-full border border-black/10 bg-white px-3 text-sm outline-none focus:border-black"
+                className="h-11 w-full border border-black/10 bg-background px-3 text-sm outline-none focus:border-black"
               />
             </div>
             <div className="space-y-2">
@@ -106,7 +106,7 @@ function Contact() {
                 id="c-email" type="email" required maxLength={255}
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="h-11 w-full border border-black/10 bg-white px-3 text-sm outline-none focus:border-black"
+                className="h-11 w-full border border-black/10 bg-background px-3 text-sm outline-none focus:border-black"
               />
             </div>
             <div className="space-y-2">
@@ -115,12 +115,12 @@ function Contact() {
                 id="c-msg" required maxLength={2000} rows={5}
                 value={form.message}
                 onChange={(e) => setForm({ ...form, message: e.target.value })}
-                className="w-full border border-black/10 bg-white p-3 text-sm outline-none focus:border-black"
+                className="w-full border border-black/10 bg-background p-3 text-sm outline-none focus:border-black"
               />
             </div>
             <button
               type="submit" disabled={loading}
-              className="inline-flex h-11 w-full items-center justify-center gap-2 border border-black bg-black px-5 text-sm font-medium text-white hover:bg-white hover:text-black disabled:opacity-60"
+              className="inline-flex h-11 w-full items-center justify-center gap-2 border border-black bg-foreground px-5 text-sm font-medium text-background hover:bg-background hover:text-foreground disabled:opacity-60"
             >
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               Send message

@@ -30,20 +30,20 @@ function ThankYou() {
         <h1 className="mt-6 text-3xl font-semibold tracking-tight md:text-4xl">
           You're all set.
         </h1>
-        <p className="mt-3 text-black/55">
+        <p className="mt-3 text-muted-foreground">
           Thank you for your purchase. We just sent a confirmation to your email
           with everything you need to get started.
         </p>
         {order && (
-          <p className="mt-3 text-xs text-black/55">
+          <p className="mt-3 text-xs text-muted-foreground">
             Order reference: <span className="font-mono">{order}</span>
           </p>
         )}
-        <div className="mx-auto mt-8 max-w-md rounded-none border border-black/10 bg-white p-6 text-left ">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-black/55">
+        <div className="mx-auto mt-8 max-w-md rounded-none border border-black/10 bg-background/50 p-6 text-left ">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             What happens next
           </h2>
-          <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-black/55">
+          <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
             <li>Check your inbox for a confirmation email.</li>
             <li>Follow the access link to get started immediately.</li>
             <li>
@@ -56,7 +56,7 @@ function ThankYou() {
         </div>
         <Link
           to="/"
-          className="mt-8 inline-flex items-center justify-center rounded-none border border-black/10 bg-white px-5 py-2.5 text-sm font-medium hover:bg-white"
+          className="mt-8 inline-flex items-center justify-center rounded-none border border-black/10 bg-background px-5 py-2.5 text-sm font-medium hover:bg-background/80"
         >
           Back to home
         </Link>
