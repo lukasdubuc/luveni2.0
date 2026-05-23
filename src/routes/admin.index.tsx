@@ -353,28 +353,31 @@ function AdminPage() {
         </div>
 
         {/* Mobile Menu */}
-        {mobileMenuOpen && (
-          <div className={`md:hidden border-t ${isDark ? "border-white/10 bg-black" : "border-gray-100 bg-white"} p-4 space-y-3`}>
-            {["overview", "products", "orders", "leads", "settings"].map(s => (
-              <button
-                key={s}
-                onClick={() => {
-                  setSection(s as any);
-                  setMobileMenuOpen(false);
-                }}
-                className={`block w-full text-left text-[10px] font-bold uppercase tracking-widest py-2 ${
-                  section === s
-                    ? isDark ? "text-white" : "text-black"
-                    : isDark ? "text-white/50" : "text-black/50"
-                }`}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        )}
-      </nav>
-
+{mobileMenuOpen && (
+  <div className={`fixed inset-0 z-[100] flex flex-col items-center justify-center ${isDark ? "bg-black" : "bg-white"}`}>
+    <button
+      onClick={() => setMobileMenuOpen(false)}
+      className="absolute top-8 right-8"
+    >
+      <X size={32} strokeWidth={1} />
+    </button>
+    
+    <div className="flex flex-col gap-8 text-center">
+      {["overview", "products", "orders", "leads", "settings"].map(s => (
+        <button
+          key={s}
+          onClick={() => {
+            setSection(s as any);
+            setMobileMenuOpen(false);
+          }}
+          className={`text-2xl font-bold uppercase tracking-[0.3em] transition-opacity ${section === s ? (isDark ? "text-white" : "text-black") : (isDark ? "text-white/50" : "text-black/50")}`}
+        >
+          {s}
+        </button>
+      ))}
+    </div>
+  </div>
+)}
       {/* MAIN CONTENT */}
       <main className="max-w-7xl mx-auto px-6 py-12 space-y-12">
         {/* OVERVIEW SECTION */}
