@@ -17,7 +17,7 @@ import { CartProvider } from "@/context/CartContext";
 import appCss from "../styles.css?url";
 import { SiteShell } from "@/components/site/SiteShell";
 import { supabase } from "@/integrations/supabase/client";
-import { mergeSiteConfig, type SiteConfig } from "@/lib/site-config";
+import { mergeSiteConfig } from "@/lib/site-config";
 
 function NotFoundComponent() {
   return (
@@ -72,15 +72,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "A simple, modern way to get the result you want" },
       { name: "description", content: "A focused, no-fluff package that gets you to the result faster. 30-day money-back guarantee." },
-      { name: "author", content: "" },
       { property: "og:title", content: "A simple, modern way to get the result you want" },
-      { property: "og:description", content: "A focused, no-fluff package that gets you to the result faster. 30-day money-back guarantee." },
       { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "A simple, modern way to get the result you want" },
-      { name: "twitter:description", content: "A focused, no-fluff package that gets you to the result faster. 30-day money-back guarantee." },
       { property: "og:image", content: "https://services2day.lovable.app/og-image.png" },
-      { name: "twitter:image", content: "https://services2day.lovable.app/og-image.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -130,7 +124,6 @@ function RootComponent() {
 
   useEffect(() => {
     let canceled = false;
-
     const fetchConfig = async () => {
       const { data, error } = await supabase
         .from("site_config")
@@ -145,23 +138,16 @@ function RootComponent() {
         setTheme(config.theme || "light");
       }
     };
-
     fetchConfig();
-
     const subscription = supabase
       .channel("site_config_changes")
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "site_config", filter: "id=eq.main" },
-        (payload) => {
-          if (canceled) return;
-          const config = mergeSiteConfig(payload.new as any);
-          setFooterDescription(config.metadata?.footer_description ?? "");
-          setTheme(config.theme || "light");
-        }
-      )
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "site_config", filter: "id=eq.main" }, (payload) => {
+        if (canceled) return;
+        const config = mergeSiteConfig(payload.new as any);
+        setFooterDescription(config.metadata?.footer_description ?? "");
+        setTheme(config.theme || "light");
+      })
       .subscribe();
-
     return () => {
       canceled = true;
       subscription.unsubscribe();
