@@ -235,7 +235,11 @@ function AdminDashboard() {
         metadata: siteContent.metadata || {},
         updated_at: new Date().toISOString(),
       };
-      const { error } = await supabase.from("site_config").upsert([payload] as any, { onConflict: "id" });
+      // Ensure we are updating the 'main' config
+      const { error } = await supabase
+        .from("site_config")
+        .upsert([payload] as any, { onConflict: "id", ignoreDuplicates: false });
+        
       if (error) {
         console.error("[Admin] Save error:", error);
         throw error;
@@ -493,15 +497,15 @@ function AdminDashboard() {
                         )}
                       </div>
                       <div className="px-2 text-center">
-                        <p className="mb-1 text-[9px] uppercase leading-tight tracking-[0.1em] text-black truncate">{p.title}</p>
-                        <p className="text-[9px] tracking-[0.05em] text-black">${(p.price_cents / 100).toFixed(0)}</p>
+                        <p className={`mb-1 text-[9px] uppercase leading-tight tracking-[0.1em] truncate font-bold ${isDark ? "text-white" : "text-black"}`}>{p.title}</p>
+                        <p className={`text-[9px] tracking-[0.05em] ${isDark ? "text-white/70" : "text-black/70"}`}>${(p.price_cents / 100).toFixed(0)}</p>
                         
                         {/* Admin Controls - Overlay on hover or always visible below */}
                         <div className="flex items-center justify-center gap-3 mt-3">
                           <button onClick={() => togglePublished(p.id, p.is_published)}
                             className={`w-2 h-2 rounded-full transition-all ${p.is_published ? "bg-green-500" : "bg-red-500"}`} />
-                          <button onClick={() => startEditProduct(p)} className="text-black/30 hover:text-black transition-colors"><Edit3 size={12} /></button>
-                          <button onClick={() => archiveProduct(p.id)} className="text-black/30 hover:text-red-500 transition-colors"><Archive size={12} /></button>
+                          <button onClick={() => startEditProduct(p)} className={`${isDark ? "text-white/40 hover:text-white" : "text-black/30 hover:text-black"} transition-colors`}><Edit3 size={12} /></button>
+                          <button onClick={() => archiveProduct(p.id)} className={`${isDark ? "text-white/40 hover:text-red-400" : "text-black/30 hover:text-red-500"} transition-colors`}><Archive size={12} /></button>
                         </div>
                       </div>
                     </div>
