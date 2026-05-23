@@ -106,29 +106,29 @@ function Checkout() {
   }
 
   return (
-    <section className="bg-white">
+    <section className="bg-background text-foreground">
       <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 md:grid-cols-5 md:py-20">
         <div className="md:col-span-3">
           <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Checkout</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Complete your details to get instant access.
           </p>
-          <form onSubmit={onSubmit} className="mt-8 space-y-5 border border-black/10 bg-white p-6">
+          <form onSubmit={onSubmit} className="mt-8 space-y-5 border border-black/10 bg-background/50 p-6">
             <div className="space-y-2">
               <label htmlFor="name" className="text-sm font-medium">Full name</label>
               <input id="name" value={name} onChange={(e) => setName(e.target.value)}
                 required maxLength={120} placeholder="Alex Rivera"
-                className="h-11 w-full border border-black/10 bg-white px-3 text-sm outline-none focus:border-black" />
+                className="h-11 w-full border border-black/10 bg-background px-3 text-sm outline-none focus:border-black" />
             </div>
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium">Email address</label>
               <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                 required maxLength={255} placeholder="you@email.com"
-                className="h-11 w-full border border-black/10 bg-white px-3 text-sm outline-none focus:border-black" />
+                className="h-11 w-full border border-black/10 bg-background px-3 text-sm outline-none focus:border-black" />
               <p className="text-xs text-muted-foreground">We'll send your access link to this address.</p>
             </div>
             <button type="submit" disabled={loading}
-              className="inline-flex h-12 w-full items-center justify-center gap-2 border border-black bg-black text-base font-medium text-white transition-colors hover:bg-white hover:text-black disabled:opacity-60"
+              className="inline-flex h-12 w-full items-center justify-center gap-2 border border-black bg-foreground text-base font-medium text-background transition-colors hover:bg-background hover:text-foreground disabled:opacity-60"
               >
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               <Lock className="h-4 w-4" /> Pay {displayPrice} securely
@@ -141,7 +141,7 @@ function Checkout() {
           </form>
         </div>
         <aside className="md:col-span-2">
-          <div className="border border-black/10 bg-white p-6">
+          <div className="border border-black/10 bg-background/50 p-6">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Order summary</h2>
             <div className="mt-4 flex items-start justify-between gap-4">
               <div>
@@ -157,7 +157,7 @@ function Checkout() {
             <ul className="space-y-2 text-sm">
               {displayBullets.map((b: string) => (
                 <li key={b} className="flex items-start gap-2">
-                  <Check className="mt-0.5 h-4 w-4 flex-none text-black" />
+                  <Check className="mt-0.5 h-4 w-4 flex-none text-foreground" />
                   <span className="text-muted-foreground">{b}</span>
                 </li>
               ))}
