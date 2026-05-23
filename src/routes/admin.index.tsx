@@ -100,11 +100,36 @@ function AdminPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRow, setSelectedRow] = useState<any>(null);
 
-  // ── Theme Detection ─────────────────────────────────────────────────────
-  useEffect(() => {
-    const isDarkMode = document.documentElement.classList.contains("dark");
-    setIsDark(isDarkMode);
+  // ── Theme Application (instant + persistent) ───────────────────────────
+  const applyTheme = useCallback(async (theme: "light" | "dark") => {
+    // 1) Optimistic UI — apply immediately
+    document.documentElement.classList.remove("light", "dark");
+    document.documentElement.classList.add(theme);
+    setIsDark(theme === "dark");
+    setSiteContent(s => ({ ...s, theme }));
+
+    // 2) Persist to DB (triggers realtime broadcast to public site)
+    try {
+      const { error } = await supabase
+        .from("site_config")
+        .update({ theme, updated_at: new Date().toISOString() })
+        .eq("id", "main");
+      if (error) throw error;
+      toast.success(`${theme.toUpperCase()} theme applied`);
+    } catch (e: any) {
+      toast.error(`Theme save failed: ${e.message ?? "unknown"}`);
+    }
   }, []);
+
+  useEffect(() => {
+    // Sync isDark whenever siteContent.theme changes (e.g. loaded from DB)
+    if (siteContent.theme) {
+      document.documentElement.classList.remove("light", "dark");
+      document.documentElement.classList.add(siteContent.theme);
+      setIsDark(siteContent.theme === "dark");
+    }
+  }, [siteContent.theme]);
+
 
   // ── Auth & Data Fetch ───────────────────────────────────────────────────
   useEffect(() => {
@@ -257,6 +282,7 @@ function AdminPage() {
         price_original: siteContent.price_original || "",
         launch_pricing_active: siteContent.launch_pricing_active ?? false,
         guarantee_days: String(siteContent.guarantee_days || "30"),
+        theme: siteContent.theme || "light",
         updated_at: new Date().toISOString(),
       };
 
@@ -626,22 +652,22 @@ function AdminPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] uppercase tracking-widest">Theme</span>
                     <div className={`flex border overflow-hidden ${isDark ? "border-white/20" : "border-black/20"}`}>
-                      <button 
-                        onClick={() => { setSiteContent(s => ({ ...s, theme: "light" })); setSiteEdited(true); }}
-                        className={`px-4 py-2 text-[9px] font-bold uppercase transition-all ${!isDark ? isDark ? "bg-white text-black" : "bg-black text-white" : isDark ? "hover:bg-white/10" : "hover:bg-black/10"}`}
+                      <button
+                        onClick={() => applyTheme("light")}
+                        className={`px-4 py-2 text-[9px] font-bold uppercase transition-all ${siteContent.theme === "light" ? (isDark ? "bg-white text-black" : "bg-black text-white") : (isDark ? "hover:bg-white/10" : "hover:bg-black/10")}`}
                       >
                         LIGHT
                       </button>
-                      <button 
-                        onClick={() => { setSiteContent(s => ({ ...s, theme: "dark" })); setSiteEdited(true); }}
-                        className={`px-4 py-2 text-[9px] font-bold uppercase transition-all ${isDark ? isDark ? "bg-white text-black" : "bg-black text-white" : isDark ? "hover:bg-white/10" : "hover:bg-black/10"}`}
+                      <button
+                        onClick={() => applyTheme("dark")}
+                        className={`px-4 py-2 text-[9px] font-bold uppercase transition-all ${siteContent.theme === "dark" ? (isDark ? "bg-white text-black" : "bg-black text-white") : (isDark ? "hover:bg-white/10" : "hover:bg-black/10")}`}
                       >
                         DARK
                       </button>
                     </div>
                   </div>
                   {siteEdited && (
-                    <button 
+                    <button
                       onClick={saveSiteConfig}
                       disabled={siteSaving}
                       className={`w-full py-3 text-[10px] font-bold uppercase transition-all ${
@@ -653,6 +679,7 @@ function AdminPage() {
                   )}
                 </div>
               </div>
+
 
               <div className="space-y-4">
                 <h2 className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Account</h2>

@@ -124,9 +124,8 @@ function RootComponent() {
   }, [router, queryClient]);
 
   useEffect(() => {
-    if (isBare) return;
-
     let canceled = false;
+
     
     // Initial fetch
     const fetchConfig = async () => {
