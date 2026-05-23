@@ -373,7 +373,8 @@ function OfferSlugPage() {
           inset: 0,
           display: "flex",
           flexDirection: "column",
-          background: "#fff",
+          background: "inherit",
+          color: "inherit",
           fontFamily: "var(--font-mono, 'Space Mono', monospace)",
           overflow: "hidden",
           zIndex: 0,
@@ -402,7 +403,7 @@ function OfferSlugPage() {
               fontWeight: 700,
               letterSpacing: "0.28em",
               textTransform: "uppercase",
-              color: "#000",
+              color: "inherit",
               textDecoration: "none",
               display: "flex",
               alignItems: "center",
@@ -417,7 +418,8 @@ function OfferSlugPage() {
               fontWeight: 700,
               letterSpacing: "0.28em",
               textTransform: "uppercase",
-              color: isSoldOut ? "#c00" : "#000",
+              color: isSoldOut ? "#c00" : "inherit",
+              opacity: isSoldOut ? 1 : 0.4,
             }}
           >
             {stockMessage}
@@ -433,7 +435,7 @@ function OfferSlugPage() {
             alignItems: "center",
             justifyContent: "center",
             overflow: "hidden",
-            background: "#fff",
+            background: "transparent",
             minHeight: 0,
           }}
           onTouchStart={handleImgTouchStart}
@@ -511,7 +513,7 @@ function OfferSlugPage() {
               style={{
                 fontSize: "22px",
                 fontWeight: 300,
-                color: "#000",
+                color: "inherit",
                 lineHeight: 1,
                 fontFamily: "serif",
               }}
@@ -546,7 +548,7 @@ function OfferSlugPage() {
               style={{
                 fontSize: "22px",
                 fontWeight: 300,
-                color: "#000",
+                color: "inherit",
                 lineHeight: 1,
                 fontFamily: "serif",
               }}
@@ -577,7 +579,8 @@ function OfferSlugPage() {
                     width: i === activeImageIndex ? "18px" : "6px",
                     height: "6px",
                     borderRadius: "3px",
-                    background: i === activeImageIndex ? "#000" : "rgba(0,0,0,0.25)",
+                    background: i === activeImageIndex ? "currentColor" : "currentColor",
+                    opacity: i === activeImageIndex ? 1 : 0.25,
                     border: "none",
                     cursor: "pointer",
                     padding: 0,
@@ -598,7 +601,8 @@ function OfferSlugPage() {
                 fontSize: "8px",
                 fontWeight: 700,
                 letterSpacing: "0.2em",
-                color: "rgba(0,0,0,0.35)",
+                color: "inherit",
+                opacity: 0.35,
                 fontFamily: "var(--font-mono, monospace)",
               }}
             >
@@ -612,8 +616,9 @@ function OfferSlugPage() {
         <div
           style={{
             flexShrink: 0,
-            background: "#fff",
-            borderTop: "1px solid rgba(0,0,0,0.08)",
+            background: "transparent",
+            borderTop: "1px solid currentColor",
+            borderTopColor: "rgba(128,128,128,0.1)",
             padding: "1rem 1.5rem 0",
             maxHeight: infoExpanded ? "60vh" : "auto",
             overflowY: infoExpanded ? "auto" : "visible",
@@ -630,14 +635,14 @@ function OfferSlugPage() {
               marginBottom: "0.35rem",
             }}
           >
-            <h1
+                <h1
               style={{
                 fontSize: "clamp(1.1rem, 4vw, 1.75rem)",
                 fontWeight: 900,
                 textTransform: "uppercase",
                 letterSpacing: "-0.04em",
                 lineHeight: 1,
-                color: "#000",
+                color: "inherit",
                 margin: 0,
               }}
             >
@@ -648,7 +653,7 @@ function OfferSlugPage() {
                 fontSize: "clamp(0.85rem, 2.5vw, 1.1rem)",
                 fontWeight: 700,
                 letterSpacing: "0.1em",
-                color: "#000",
+                color: "inherit",
                 whiteSpace: "nowrap",
                 flexShrink: 0,
               }}
@@ -670,7 +675,8 @@ function OfferSlugPage() {
                 fontWeight: 700,
                 letterSpacing: "0.25em",
                 textTransform: "uppercase",
-                color: "rgba(0,0,0,0.4)",
+                color: "inherit",
+                opacity: 0.4,
                 display: "flex",
                 alignItems: "center",
                 gap: "0.3rem",
@@ -687,7 +693,8 @@ function OfferSlugPage() {
               style={{
                 fontSize: "11px",
                 lineHeight: 1.7,
-                color: "rgba(0,0,0,0.6)",
+                color: "inherit",
+                opacity: 0.6,
                 textTransform: "uppercase",
                 letterSpacing: "0.08em",
                 whiteSpace: "pre-line",
@@ -725,7 +732,7 @@ function OfferSlugPage() {
                         fontWeight: 700,
                         letterSpacing: "0.3em",
                         textTransform: "uppercase",
-                        color: "#000",
+                        color: "inherit",
                       }}
                     >
                       {normalizeOptionName(option)}
@@ -736,7 +743,8 @@ function OfferSlugPage() {
                         fontWeight: 700,
                         letterSpacing: "0.2em",
                         textTransform: "uppercase",
-                        color: "rgba(0,0,0,0.4)",
+                        color: "inherit",
+                        opacity: 0.4,
                       }}
                     >
                       {selection[option] || "SELECT"}
@@ -766,10 +774,12 @@ function OfferSlugPage() {
                             minWidth: "2.5rem",
                             padding: "0 0.75rem",
                             border: selected
-                              ? "1px solid #000"
-                              : "1px solid rgba(0,0,0,0.2)",
-                            background: selected ? "#000" : "#fff",
-                            color: selected ? "#fff" : "#000",
+                              ? "1px solid currentColor"
+                              : "1px solid currentColor",
+                            borderColor: selected ? "currentColor" : "rgba(128,128,128,0.2)",
+                            background: selected ? "currentColor" : "transparent",
+                            color: "inherit",
+                            filter: selected ? "invert(1)" : "none",
                             fontSize: "9px",
                             fontWeight: 700,
                             letterSpacing: "0.08em",
@@ -791,11 +801,11 @@ function OfferSlugPage() {
           )}
         </div>
 
-        {/* ── Fixed black footer bar — Add to Cart ── */}
+        {/* ── Fixed footer bar — Add to Cart ── */}
         <div
           style={{
             flexShrink: 0,
-            background: "#000",
+            background: "currentColor",
             height: "3.5rem",
             display: "flex",
             alignItems: "stretch",
@@ -812,7 +822,9 @@ function OfferSlugPage() {
                 fontWeight: 700,
                 letterSpacing: "0.35em",
                 textTransform: "uppercase",
-                color: "rgba(255,255,255,0.4)",
+                color: "inherit",
+                filter: "invert(1)",
+                opacity: 0.4,
                 fontFamily: "inherit",
               }}
             >
@@ -840,7 +852,8 @@ function OfferSlugPage() {
                   fontWeight: 700,
                   letterSpacing: "0.35em",
                   textTransform: "uppercase",
-                  color: "#fff",
+                  color: "inherit",
+                  filter: "invert(1)",
                   fontFamily: "inherit",
                 }}
               >
@@ -849,7 +862,8 @@ function OfferSlugPage() {
               <span
                 style={{
                   fontSize: "20px",
-                  color: "#fff",
+                  color: "inherit",
+                  filter: "invert(1)",
                   lineHeight: 1,
                   fontWeight: 300,
                   fontFamily: "serif",

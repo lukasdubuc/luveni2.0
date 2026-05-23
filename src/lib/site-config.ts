@@ -34,6 +34,7 @@ export type SiteConfig = {
   price_original: string;
   launch_pricing_active: boolean;
   guarantee_days: string;
+  theme: "light" | "dark";
   metadata: SiteConfigMetadata;
   id?: string;
   updated_at?: string;
@@ -57,6 +58,7 @@ export const SITE_CONFIG_FALLBACK: SiteConfig = {
   price_original: offer.originalPrice,
   launch_pricing_active: true,
   guarantee_days: "30",
+  theme: "light",
   metadata: SITE_CONFIG_METADATA_FALLBACK,
 };
 

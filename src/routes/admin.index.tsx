@@ -230,6 +230,7 @@ function AdminDashboard() {
         price_original: siteContent.price_original,
         launch_pricing_active: siteContent.launch_pricing_active,
         guarantee_days: siteContent.guarantee_days,
+        theme: siteContent.theme,
         metadata: siteContent.metadata,
         id: "main",
         updated_at: new Date().toISOString(),
@@ -261,15 +262,21 @@ function AdminDashboard() {
   // UI RENDERING: Unified Navbar, Storefront Cards, Hidden Website Menu
   // ────────────────────────────────────────────────────────────────────────────
 
+  const isDark = siteContent.theme === "dark";
+
   return (
-    <div className="min-h-screen bg-white text-black font-mono selection:bg-black selection:text-white">
+    <div className={`min-h-screen font-mono selection:bg-current selection:text-current transition-colors duration-500 ${
+      isDark ? "bg-black text-white" : "bg-white text-black"
+    }`}>
 
       {/* TOP NAVIGATION BAR - UNIFIED STYLE */}
-      <nav className="sticky top-0 z-50 bg-white border-b border-gray-100 md:border-b-0">
+      <nav className={`sticky top-0 z-50 border-b md:border-b-0 ${
+        isDark ? "bg-black border-white/10" : "bg-white border-gray-100"
+      }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between relative">
           {/* MOBILE ONLY ADMIN LABEL */}
           <div className="md:hidden flex items-center gap-2">
-            <span className="text-[10px] uppercase tracking-[0.3em] text-black/30">ADMIN</span>
+            <span className={`text-[10px] uppercase tracking-[0.3em] ${isDark ? "text-white/30" : "text-black/30"}`}>ADMIN</span>
           </div>
           
           {/* DESKTOP NAV - CENTERED */}
@@ -277,7 +284,7 @@ function AdminDashboard() {
             {NAV_ITEMS.filter(item => item.id !== "site").map(item => (
               <button key={item.id} onClick={() => handleNavClick(item.id)}
                 className={`text-[10px] uppercase tracking-[0.1em] transition-all duration-300 ${
-                  section === item.id ? "text-black" : "text-black/30 hover:text-black"
+                  section === item.id ? (isDark ? "text-white" : "text-black") : (isDark ? "text-white/30 hover:text-white" : "text-black/30 hover:text-black")
                 }`}>
                 {item.label}
               </button>
@@ -295,19 +302,19 @@ function AdminDashboard() {
 
         {/* MOBILE MENU - FULL SCREEN OVERLAY */}
         {mobileMenuOpen && (
-          <div className="fixed inset-0 z-40 border-none bg-white md:hidden">
+          <div className={`fixed inset-0 z-40 border-none md:hidden ${isDark ? "bg-black" : "bg-white"}`}>
             <div className="flex h-full flex-col items-center justify-center gap-8">
               {NAV_ITEMS.filter(item => item.id !== "site").map(item => (
                 <button key={item.id} onClick={() => handleNavClick(item.id)}
                   className={`text-[14px] tracking-[0.3em] transition-colors ${
-                    section === item.id ? "text-black" : "text-black/30 hover:text-black"
+                    section === item.id ? (isDark ? "text-white" : "text-black") : (isDark ? "text-white/30 hover:text-white" : "text-black/30 hover:text-black")
                   }`}>
                   {item.label}
                 </button>
               ))}
               <button 
                 onClick={() => setMobileMenuOpen(false)}
-                className="absolute right-6 top-6 text-black"
+                className={`absolute right-6 top-6 ${isDark ? "text-white" : "text-black"}`}
                 aria-label="Close navigation"
               >
                 <X size={24} />
@@ -544,13 +551,47 @@ function AdminDashboard() {
 
                 <div className="space-y-8">
                   <div className="space-y-4">
+                    <h2 className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Appearance</h2>
+                    <div className={`${isDark ? "bg-white/5" : "bg-gray-50/50"} p-6 space-y-6`}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-widest">Theme</span>
+                        <div className="flex border border-current overflow-hidden">
+                          <button 
+                            onClick={() => { setSiteContent(s => ({ ...s, theme: "light" })); setSiteEdited(true); }}
+                            className={`px-4 py-2 text-[9px] font-bold uppercase transition-all ${!isDark ? "bg-black text-white" : "hover:bg-white/10"}`}
+                          >
+                            LIGHT
+                          </button>
+                          <button 
+                            onClick={() => { setSiteContent(s => ({ ...s, theme: "dark" })); setSiteEdited(true); }}
+                            className={`px-4 py-2 text-[9px] font-bold uppercase transition-all ${isDark ? "bg-white text-black" : "hover:bg-black/10"}`}
+                          >
+                            DARK
+                          </button>
+                        </div>
+                      </div>
+                      {siteEdited && (
+                        <button 
+                          onClick={saveSiteConfig}
+                          disabled={siteSaving}
+                          className={`w-full py-3 text-[10px] font-bold uppercase transition-all ${
+                            isDark ? "bg-white text-black hover:bg-gray-200" : "bg-black text-white hover:bg-gray-800"
+                          }`}
+                        >
+                          {siteSaving ? "SAVING…" : "APPLY CHANGES"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
                     <h2 className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Account</h2>
-                    <div className="bg-gray-50/50 p-6 space-y-4">
+                    <div className={`${isDark ? "bg-white/5" : "bg-gray-50/50"} p-6 space-y-4`}>
                       <div>
-                        <p className="text-[10px] text-gray-600">Signed in as</p>
+                        <p className="text-[10px] text-gray-400">Signed in as</p>
                         <p className="text-xs font-bold uppercase">{userEmail || "…"}</p>
                       </div>
-                      <button onClick={handleSignOut} className="w-full text-[10px] font-bold uppercase bg-red-50 text-red-600 px-4 py-3 hover:bg-red-100 transition-all">
+                      <button onClick={handleSignOut} className="w-full text-[10px] font-bold uppercase bg-red-500/10 text-red-500 px-4 py-3 hover:bg-red-500/20 transition-all">
                         LOGOUT
                       </button>
                     </div>
@@ -558,19 +599,19 @@ function AdminDashboard() {
 
                   <div className="space-y-4">
                     <h2 className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Stripe Webhook</h2>
-                    <div className="bg-gray-50/50 p-6 space-y-3">
-                      <p className="text-[10px] text-gray-600">Point Stripe webhook at:</p>
-                      <pre className="text-[9px] bg-white border border-gray-200 p-3 overflow-x-auto font-mono">
+                    <div className={`${isDark ? "bg-white/5" : "bg-gray-50/50"} p-6 space-y-3`}>
+                      <p className="text-[10px] text-gray-400">Point Stripe webhook at:</p>
+                      <pre className={`text-[9px] border p-3 overflow-x-auto font-mono ${isDark ? "bg-black border-white/10" : "bg-white border-gray-200"}`}>
                         {typeof window !== "undefined" ? window.location.origin : ""}/api/public/stripe-webhook
                       </pre>
-                      <p className="text-[9px] text-gray-600">Listen for: checkout.session.completed, checkout.session.expired, checkout.session.async_payment_failed</p>
+                      <p className="text-[9px] text-gray-400">Listen for: checkout.session.completed, checkout.session.expired, checkout.session.async_payment_failed</p>
                     </div>
                   </div>
 
                   <div className="space-y-4">
                     <h2 className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Brand & Copy</h2>
-                    <div className="bg-gray-50/50 p-6 space-y-2">
-                      <p className="text-[10px] text-gray-600">Brand name and default copy live in <code className="bg-white px-1 py-0.5 text-[9px] font-mono border border-gray-200">src/config/site.ts</code>.</p>
+                    <div className={`${isDark ? "bg-white/5" : "bg-gray-50/50"} p-6 space-y-2`}>
+                      <p className="text-[10px] text-gray-400">Brand name and default copy live in <code className={`px-1 py-0.5 text-[9px] font-mono border ${isDark ? "bg-black border-white/10" : "bg-white border-gray-200"}`}>src/config/site.ts</code>.</p>
                     </div>
                   </div>
                 </div>

@@ -27,6 +27,7 @@ export const Route = createFileRoute("/shop")({
 function ShopPage() {
   const loader = Route.useLoaderData();
   const { products: clientProducts } = useProducts({ onlyPublished: true });
+  // Note: Theme is handled by SiteShell wrapper which provides the context class
 
   const products: Product[] =
     clientProducts && clientProducts.length > 0
@@ -34,15 +35,15 @@ function ShopPage() {
       : ((loader?.products as Product[]) ?? []);
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-white font-mono selection:bg-black selection:text-white">
+    <div className="min-h-screen overflow-x-hidden bg-inherit font-mono selection:bg-current selection:text-current">
       {products.length === 0 ? (
         <div className="flex h-screen items-center justify-center">
-          <span className="text-[10px] uppercase tracking-[0.3em] text-black/30">
+          <span className="text-[10px] uppercase tracking-[0.3em] opacity-30">
             No Products Available
           </span>
         </div>
       ) : (
-        <div className="grid grid-cols-2 overflow-visible bg-white sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
+        <div className="grid grid-cols-2 overflow-visible bg-inherit sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
           {products.map((product) => (
             <ProductCell key={product.id} product={product} />
           ))}
@@ -81,29 +82,29 @@ function ProductCell({ product }: { product: Product }) {
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center bg-transparent">
-            <span className="text-[7px] uppercase tracking-[0.3em] text-black/20">
+            <span className="text-[7px] uppercase tracking-[0.3em] opacity-20">
               No Image
             </span>
           </div>
         )}
 
         {hasDiscount && (
-          <span className="absolute right-3 top-3 text-[8px] font-bold uppercase tracking-[0.15em] text-black">
+          <span className="absolute right-3 top-3 text-[8px] font-bold uppercase tracking-[0.15em] text-current">
             Sale
           </span>
         )}
       </div>
 
       <div className="px-2 pb-6 text-center">
-        <p className="mb-1 text-[9px] uppercase leading-tight tracking-[0.1em] text-black">
+        <p className="mb-1 text-[9px] uppercase leading-tight tracking-[0.1em] text-current">
           {product.title}
         </p>
         <div className="flex items-center justify-center gap-2">
-          <span className="text-[9px] tracking-[0.05em] text-black">
+          <span className="text-[9px] tracking-[0.05em] text-current">
             ${(displayPrice / 100).toFixed(0)}
           </span>
           {hasDiscount && (
-            <span className="text-[8px] tracking-[0.05em] text-black/35 line-through">
+            <span className="text-[8px] tracking-[0.05em] opacity-35 line-through">
               ${(product.price_cents / 100).toFixed(0)}
             </span>
           )}

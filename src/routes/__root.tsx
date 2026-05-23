@@ -107,6 +107,7 @@ function RootComponent() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const isBare = path.startsWith("/admin") || path === "/login" || path.startsWith("/offer/");
   const [footerDescription, setFooterDescription] = useState<string | undefined>(undefined);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
@@ -129,7 +130,9 @@ function RootComponent() {
       .then(({ data, error }) => {
         if (canceled) return;
         if (!error && data) {
-          setFooterDescription(mergeSiteConfig(data as any).metadata?.footer_description ?? "");
+          const config = mergeSiteConfig(data as any);
+          setFooterDescription(config.metadata?.footer_description ?? "");
+          setTheme(config.theme || "light");
         }
       });
 
@@ -140,8 +143,8 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {isBare ? <Outlet /> : <SiteShell footerDescription={footerDescription}><Outlet /></SiteShell>}
-      <Toaster position="top-center" richColors />
+      {isBare ? <Outlet /> : <SiteShell footerDescription={footerDescription} theme={theme}><Outlet /></SiteShell>}
+      <Toaster position="top-center" richColors theme={theme} />
     </QueryClientProvider>
   );
 }
