@@ -378,6 +378,8 @@ function AdminPage() {
     </div>
   </div>
 )}
+      </nav>
+
       {/* MAIN CONTENT */}
       <main className="max-w-7xl mx-auto px-6 py-12 space-y-12">
         {/* OVERVIEW SECTION */}
@@ -705,14 +707,16 @@ function AdminPage() {
               <button onClick={() => setSelectedRow(null)}><X size={18} /></button>
             </div>
             <div className="space-y-4">
-              {Object.entries(selectedRow).map(([k, v]) => (
-                k !== "_type" && (
-                  <div key={k} className={`flex justify-between py-2 border-b gap-4 ${isDark ? "border-white/10" : "border-gray-50"}`}>
-                    <span className={`text-[9px] font-bold uppercase flex-shrink-0 ${isDark ? "text-white/50" : "text-gray-400"}`}>{k}</span>
-                    <span className="text-[10px] font-bold uppercase truncate text-right">{String(v)}</span>
-                  </div>
-                )
-              ))}
+              {Object.entries(selectedRow).map(([k, v]) => {
+                return (
+                  k !== "_type" && (
+                    <div key={k} className={`flex justify-between py-2 border-b gap-4 ${isDark ? "border-white/10" : "border-gray-50"}`}>
+                      <span className={`text-[9px] font-bold uppercase flex-shrink-0 ${isDark ? "text-white/50" : "text-gray-400"}`}>{k}</span>
+                      <span className="text-[10px] font-bold uppercase truncate text-right">{String(v)}</span>
+                    </div>
+                  )
+                );
+              })}
             </div>
             {selectedRow._type === "order" && (
               <button onClick={() => handleArchiveOrder(selectedRow.id)}
