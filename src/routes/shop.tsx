@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { fetchProducts, useProducts } from "@/lib/useProducts";
+import { useMemo, memo } from "react";
 
 type Product = {
   id: string;
@@ -29,10 +30,11 @@ function ShopPage() {
   const { products: clientProducts } = useProducts({ onlyPublished: true });
   // Note: Theme is handled by SiteShell wrapper which provides the context class
 
-  const products: Product[] =
-    clientProducts && clientProducts.length > 0
+  const products: Product[] = useMemo(() => {
+    return clientProducts && clientProducts.length > 0
       ? (clientProducts as Product[])
       : ((loader?.products as Product[]) ?? []);
+  }, [clientProducts, loader?.products]);
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-inherit font-mono selection:bg-current selection:text-current">
@@ -53,7 +55,7 @@ function ShopPage() {
   );
 }
 
-function ProductCell({ product }: { product: Product }) {
+const ProductCell = memo(({ product }: { product: Product }) => {
   const imageUrl =
     Array.isArray(product.image_urls) && product.image_urls.length > 0
       ? product.image_urls[0]
@@ -112,4 +114,6 @@ function ProductCell({ product }: { product: Product }) {
       </div>
     </Link>
   );
-}
+});
+
+ProductCell.displayName = "ProductCell";
