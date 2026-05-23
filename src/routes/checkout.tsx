@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
-import { createFileRoute } from '@tanstack/react-router'
+import { useNavigate, useSearch } from "@tanstack/react-router";
+import { createFileRoute } from '@tanstack/react-router';
 import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Lock, Check } from "lucide-react";
 import { z } from "zod";
@@ -26,14 +26,7 @@ export const Route = createFileRoute("/checkout")({
 
       if (product) return { product, variantSku };
     }
-
-    const { data: products } = await supabase
-      .from("products")
-      .select("*")
-      .eq("is_published", true)
-      .order("created_at", { ascending: false })
-      .limit(1);
-    return { product: products?.[0] ?? null, variantSku: null };
+    return { product: null, variantSku: null };
   },
   head: () => ({
     meta: [
@@ -54,34 +47,40 @@ function Checkout() {
   const navigate = useNavigate();
   const submit = useServerFn(createCheckout);
   const { product, variantSku } = Route.useLoaderData();
-  
-  // Use global cart state
   const { items, addItem, totalCents } = useCart();
   
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Initialize cart with product from loader if empty
+  // FIX: Only auto-add if the product ID is explicitly in the URL search params.
+  // This prevents the "Vans" auto-add issue on simple refreshes.
   useEffect(() => {
-    if (product && items.length === 0) {
-      addItem({
-        productId: product.id,
-        variantSku: variantSku ?? undefined,
-        title: product.title,
-        price_cents: product.price_cents,
-        quantity: 1
-      });
+    const searchParams = new URLSearchParams(window.location.search);
+    const hasProductId = searchParams.has("productId");
+
+    if (product && hasProductId) {
+      // Check if this item is already in the cart to avoid duplicates
+      const exists = items.find(i => i.productId === product.id && i.variantSku === variantSku);
+      if (!exists) {
+        addItem({
+          productId: product.id,
+          variantSku: variantSku ?? undefined,
+          title: product.title,
+          price_cents: product.price_cents,
+          quantity: 1
+        });
+      }
     }
-  }, [product, items.length, addItem, variantSku]);
+  }, [product, variantSku, addItem, items]);
 
   const displayPrice = `$${(totalCents / 100).toFixed(0)}`;
-
-  // Logic to determine bullets based on the first item in the cart (or fallback)
-  const primaryItem = items[0];
-  const displayBullets: string[] = primaryItem 
-    ? (product?.bullet_points ?? product?.description?.split("\n") ?? offer.bullets)
-    : offer.bullets;
+  
+  // Bullets display logic
+  const displayBullets: string[] = product?.bullet_points 
+    ? product.bullet_points 
+    : product?.description?.split("\n").map((b: string) => b.trim()).filter(Boolean) 
+    ?? offer.bullets;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -121,59 +120,26 @@ function Checkout() {
       <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 md:grid-cols-5 md:py-20">
         <div className="md:col-span-3">
           <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Checkout</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Complete your details to get instant access.
-          </p>
           <form onSubmit={onSubmit} className="mt-8 space-y-5 border border-black/10 bg-background/50 p-6">
             <div className="space-y-2">
               <label htmlFor="name" className="text-sm font-medium">Full name</label>
-              <input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                maxLength={120}
-                placeholder="Alex Rivera"
-                className="h-11 w-full border border-black/10 bg-background px-3 text-sm outline-none focus:border-black"
-              />
+              <input id="name" value={name} onChange={(e) => setName(e.target.value)} required maxLength={120} placeholder="Alex Rivera" className="h-11 w-full border border-black/10 bg-background px-3 text-sm outline-none focus:border-black" />
             </div>
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium">Email address</label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                maxLength={255}
-                placeholder="you@email.com"
-                className="h-11 w-full border border-black/10 bg-background px-3 text-sm outline-none focus:border-black"
-              />
-              <p className="text-xs text-muted-foreground">We'll send your access link to this address.</p>
+              <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required maxLength={255} placeholder="you@email.com" className="h-11 w-full border border-black/10 bg-background px-3 text-sm outline-none focus:border-black" />
             </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="inline-flex h-12 w-full items-center justify-center gap-2 border border-black bg-foreground text-base font-medium text-background transition-colors hover:bg-background hover:text-foreground disabled:opacity-60"
-            >
+            <button type="submit" disabled={loading} className="inline-flex h-12 w-full items-center justify-center gap-2 border border-black bg-foreground text-base font-medium text-background transition-colors hover:bg-background hover:text-foreground disabled:opacity-60">
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               <Lock className="h-4 w-4" /> Pay {displayPrice} securely
             </button>
-            <p className="text-center text-xs text-muted-foreground">
-              By completing this purchase you agree to our{" "}
-              <a href="/terms" className="underline hover:text-foreground">Terms</a> and{" "}
-              <a href="/privacy" className="underline hover:text-foreground">Privacy Policy</a>.
-            </p>
           </form>
         </div>
 
         <aside className="md:col-span-2">
           <div className="border border-black/10 bg-background/50 p-6">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              Order summary
-            </h2>
-
-            {/* Iterating over cart items */}
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Order summary</h2>
+            
             <div className="mt-4 space-y-4">
               {items.map((item) => (
                 <div key={`${item.productId}-${item.variantSku}`} className="flex items-start justify-between gap-4">
@@ -189,7 +155,6 @@ function Checkout() {
             </div>
 
             <div className="my-5 h-px bg-black/10" />
-            
             <ul className="space-y-2 text-sm">
               {displayBullets.map((b: string) => (
                 <li key={b} className="flex items-start gap-2">
@@ -198,14 +163,12 @@ function Checkout() {
                 </li>
               ))}
             </ul>
-            
             <div className="my-5 h-px bg-black/10" />
 
             <div className="flex items-center justify-between text-base font-semibold">
               <span>Total</span>
               <span>{displayPrice}</span>
             </div>
-
             <p className="mt-4 text-xs text-muted-foreground">{offer.guarantee}</p>
           </div>
         </aside>
