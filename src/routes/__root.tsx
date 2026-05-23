@@ -11,6 +11,9 @@ import {
 import { Toaster } from "sonner";
 import { useEffect, useState } from "react";
 
+// Import the CartProvider
+import { CartProvider } from "@/context/CartContext";
+
 import appCss from "../styles.css?url";
 import { SiteShell } from "@/components/site/SiteShell";
 import { supabase } from "@/integrations/supabase/client";
@@ -167,8 +170,16 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {isBare ? <Outlet /> : <SiteShell footerDescription={footerDescription} theme={theme}><Outlet /></SiteShell>}
-      <Toaster position="top-center" richColors theme={theme} />
+      <CartProvider>
+        {isBare ? (
+          <Outlet />
+        ) : (
+          <SiteShell footerDescription={footerDescription} theme={theme}>
+            <Outlet />
+          </SiteShell>
+        )}
+        <Toaster position="top-center" richColors theme={theme} />
+      </CartProvider>
     </QueryClientProvider>
   );
 }
