@@ -29,10 +29,18 @@ CREATE POLICY "Admins can manage products" ON public.products
   USING (auth.jwt() ->> 'email' = 'lukasdubuc@gmail.com');
 
 -- Site Config: Public can read for theme/metadata, Admins can manage
+-- Note: Upsert requires both SELECT, INSERT, and UPDATE permissions
 CREATE POLICY "Public can view site_config" ON public.site_config 
   FOR SELECT USING (true);
-CREATE POLICY "Admins can manage site_config" ON public.site_config 
-  USING (auth.jwt() ->> 'email' = 'lukasdubuc@gmail.com');
+
+CREATE POLICY "Admins can select site_config" ON public.site_config 
+  FOR SELECT USING (auth.jwt() ->> 'email' = 'lukasdubuc@gmail.com');
+
+CREATE POLICY "Admins can insert site_config" ON public.site_config 
+  FOR INSERT WITH CHECK (auth.jwt() ->> 'email' = 'lukasdubuc@gmail.com');
+
+CREATE POLICY "Admins can update site_config" ON public.site_config 
+  FOR UPDATE USING (auth.jwt() ->> 'email' = 'lukasdubuc@gmail.com');
 
 -- 4. Permissions
 GRANT SELECT ON public.site_config TO anon;

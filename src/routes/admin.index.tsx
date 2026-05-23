@@ -240,20 +240,31 @@ function AdminDashboard() {
       payload.theme = siteContent.theme || "light";
       payload.metadata = siteContent.metadata || {};
 
-      const { error } = await supabase
+      // Try to update first, as 'main' should already exist
+      const { error: updateError } = await supabase
         .from("site_config")
-        .upsert([payload], { onConflict: "id" });
+        .update(payload)
+        .eq("id", "main");
         
-      if (error) {
-        console.error("[Admin] Save error:", error);
-        throw error;
+      if (updateError) {
+        console.error("[Admin] Update failed, trying upsert:", updateError);
+        // Fallback to upsert if update fails (e.g. if 'main' doesn't exist yet)
+        const { error: upsertError } = await supabase
+          .from("site_config")
+          .upsert([payload], { onConflict: "id" });
+          
+        if (upsertError) {
+          console.error("[Admin] Upsert also failed:", upsertError);
+          throw upsertError;
+        }
       }
       
       toast.success("Site content saved.");
       setSiteEdited(false);
     } catch (e: any) {
       console.error("[Admin] Save catch:", e);
-      toast.error("Failed to save site content. Check console for details.");
+      const msg = e.message || e.details || "Unknown error";
+      toast.error(`Failed: ${msg}`);
     } finally {
       setSiteSaving(false);
     }
