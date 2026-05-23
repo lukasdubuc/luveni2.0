@@ -13,9 +13,9 @@ export function Header() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 border-none bg-white md:border-none border-b border-black md:border-b-0">
+    <header className="sticky top-0 z-50 bg-white border-b border-black md:border-b-0">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
-        <div>
+        <div className="flex items-center gap-2">
           <Link
             to="/shop"
             className="text-[12px] font-bold tracking-[0.2em] text-black"

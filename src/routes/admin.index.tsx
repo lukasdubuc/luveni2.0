@@ -79,6 +79,7 @@ function AdminDashboard() {
     image_url: "", source_url: "", fulfillment_notes: "",
     is_published: true, editingId: null as string | null,
   });
+  const [productFormOpen, setProductFormOpen] = useState(false);
 
   const [revenueRange, setRevenueRange] = useState<"day" | "week" | "month" | "year" | "all">("day");
 
@@ -195,11 +196,14 @@ function AdminDashboard() {
     else toast.error("Failed to delete product");
   };
 
-  const resetProductForm = () => setProductForm({
-    title: "", description: "", price_cents: "", slug: "",
-    image_url: "", source_url: "", fulfillment_notes: "",
-    is_published: true, editingId: null,
-  });
+  const resetProductForm = () => {
+    setProductForm({
+      title: "", description: "", price_cents: "", slug: "",
+      image_url: "", source_url: "", fulfillment_notes: "",
+      is_published: true, editingId: null,
+    });
+    setProductFormOpen(false);
+  };
 
   const startEditProduct = (p: any) => {
     setProductForm({
@@ -211,6 +215,7 @@ function AdminDashboard() {
       fulfillment_notes: p.fulfillment_notes || "",
       is_published: p.is_published, editingId: p.id,
     });
+    setProductFormOpen(true);
     setSection("products");
   };
 
@@ -260,9 +265,11 @@ function AdminDashboard() {
     <div className="min-h-screen bg-white text-black font-mono selection:bg-black selection:text-white">
 
       {/* TOP NAVIGATION BAR - UNIFIED STYLE */}
-      <nav className="sticky top-0 z-50 bg-white border-b border-gray-100">
+      <nav className="sticky top-0 z-50 bg-white border-b border-black md:border-b-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <span className="text-[10px] uppercase tracking-[0.3em] text-black/30">ADMIN</span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-[0.3em] text-black/30">ADMIN</span>
+          </div>
           
           {/* DESKTOP NAV */}
           <div className="hidden md:flex items-center gap-8">
@@ -408,43 +415,55 @@ function AdminDashboard() {
               <div className="space-y-12">
                 <div className="flex items-end justify-between">
                   <h1 className="text-2xl font-bold uppercase tracking-tighter">Products</h1>
-                  <button onClick={resetProductForm} className="text-[10px] font-bold uppercase tracking-widest bg-black text-white px-6 py-2 hover:bg-gray-800 transition-all">
-                    NEW PRODUCT
+                  <button 
+                    onClick={() => {
+                      if (productFormOpen && !productForm.editingId) {
+                        setProductFormOpen(false);
+                      } else {
+                        resetProductForm();
+                        setProductFormOpen(true);
+                      }
+                    }} 
+                    className="text-[10px] font-bold uppercase tracking-widest bg-black text-white px-6 py-2 hover:bg-gray-800 transition-all"
+                  >
+                    {productFormOpen && !productForm.editingId ? "CLOSE" : "NEW PRODUCT"}
                   </button>
                 </div>
 
-                {/* PRODUCT FORM */}
-                <div className="bg-gray-50/50 p-8 space-y-8">
-                  <h2 className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                    {productForm.editingId ? "Edit Product" : "Create Product"}
-                  </h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <Input label="Title" value={productForm.title} onChange={v => setProductForm(f => ({ ...f, title: v }))} />
-                    <Input label="Price (USD)" value={productForm.price_cents} onChange={v => setProductForm(f => ({ ...f, price_cents: v }))} type="number" />
-                    <Input label="Slug" value={productForm.slug} onChange={v => setProductForm(f => ({ ...f, slug: v }))} />
-                    <Input label="Source URL" value={productForm.source_url} onChange={v => setProductForm(f => ({ ...f, source_url: v }))} />
-                  </div>
-                  <Input label="Image URL(s)" value={productForm.image_url} onChange={v => setProductForm(f => ({ ...f, image_url: v }))} />
-                  <div className="space-y-2">
-                    <label className="text-[9px] font-bold uppercase text-gray-400">Description</label>
-                    <textarea value={productForm.description} onChange={e => setProductForm(f => ({ ...f, description: e.target.value }))}
-                      className="w-full bg-transparent border-b border-gray-200 focus:border-black outline-none py-2 text-xs font-bold uppercase resize-none" rows={2} />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <button onClick={() => setProductForm(f => ({ ...f, is_published: !f.is_published }))}
-                      className={`text-[10px] font-bold uppercase px-4 py-2 rounded-full border transition-all ${
-                        productForm.is_published ? "bg-green-50 text-green-600 border-green-200" : "bg-red-50 text-red-600 border-red-200"
-                      }`}>
-                      {productForm.is_published ? "PUBLISHED" : "DRAFT"}
-                    </button>
-                    <div className="flex gap-4">
-                      {productForm.editingId && <button onClick={resetProductForm} className="text-[10px] font-bold uppercase text-gray-400 hover:text-black">Cancel</button>}
-                      <button onClick={saveProduct} className="text-[10px] font-bold uppercase bg-black text-white px-8 py-3 hover:bg-gray-800 transition-all">
-                        {productForm.editingId ? "SAVE" : "CREATE"}
+                {/* PRODUCT FORM - COLLAPSIBLE */}
+                {productFormOpen && (
+                  <div className="bg-gray-50/50 p-8 space-y-8 animate-in slide-in-from-top duration-300">
+                    <h2 className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                      {productForm.editingId ? "Edit Product" : "Create Product"}
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      <Input label="Title" value={productForm.title} onChange={v => setProductForm(f => ({ ...f, title: v }))} />
+                      <Input label="Price (USD)" value={productForm.price_cents} onChange={v => setProductForm(f => ({ ...f, price_cents: v }))} type="number" />
+                      <Input label="Slug" value={productForm.slug} onChange={v => setProductForm(f => ({ ...f, slug: v }))} />
+                      <Input label="Source URL" value={productForm.source_url} onChange={v => setProductForm(f => ({ ...f, source_url: v }))} />
+                    </div>
+                    <Input label="Image URL(s)" value={productForm.image_url} onChange={v => setProductForm(f => ({ ...f, image_url: v }))} />
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-bold uppercase text-gray-400">Description</label>
+                      <textarea value={productForm.description} onChange={e => setProductForm(f => ({ ...f, description: e.target.value }))}
+                        className="w-full bg-transparent border-b border-gray-200 focus:border-black outline-none py-2 text-xs font-bold uppercase resize-none" rows={2} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <button onClick={() => setProductForm(f => ({ ...f, is_published: !f.is_published }))}
+                        className={`text-[10px] font-bold uppercase px-4 py-2 rounded-full border transition-all ${
+                          productForm.is_published ? "bg-green-50 text-green-600 border-green-200" : "bg-red-50 text-red-600 border-red-200"
+                        }`}>
+                        {productForm.is_published ? "PUBLISHED" : "DRAFT"}
                       </button>
+                      <div className="flex gap-4">
+                        <button onClick={resetProductForm} className="text-[10px] font-bold uppercase text-gray-400 hover:text-black">Cancel</button>
+                        <button onClick={saveProduct} className="text-[10px] font-bold uppercase bg-black text-white px-8 py-3 hover:bg-gray-800 transition-all">
+                          {productForm.editingId ? "SAVE" : "CREATE"}
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 {/* PRODUCT GRID - STOREFRONT STYLE */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-y-12">
