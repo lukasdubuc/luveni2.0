@@ -265,14 +265,15 @@ function AdminDashboard() {
     <div className="min-h-screen bg-white text-black font-mono selection:bg-black selection:text-white">
 
       {/* TOP NAVIGATION BAR - UNIFIED STYLE */}
-      <nav className="sticky top-0 z-50 bg-white border-b border-black md:border-b-0">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+      <nav className="sticky top-0 z-50 bg-white border-b border-gray-100 md:border-b-0">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between relative">
+          {/* MOBILE ONLY ADMIN LABEL */}
+          <div className="md:hidden flex items-center gap-2">
             <span className="text-[10px] uppercase tracking-[0.3em] text-black/30">ADMIN</span>
           </div>
           
-          {/* DESKTOP NAV */}
-          <div className="hidden md:flex items-center gap-8">
+          {/* DESKTOP NAV - CENTERED */}
+          <div className="hidden md:flex absolute left-1/2 -translate-x-1/2 items-center gap-8">
             {NAV_ITEMS.filter(item => item.id !== "site").map(item => (
               <button key={item.id} onClick={() => handleNavClick(item.id)}
                 className={`text-[10px] uppercase tracking-[0.1em] transition-all duration-300 ${
@@ -282,6 +283,9 @@ function AdminDashboard() {
               </button>
             ))}
           </div>
+
+          {/* EMPTY SPACE FOR PC LAYOUT SYMMETRY */}
+          <div className="hidden md:block w-[100px]" />
 
           {/* MOBILE MENU BUTTON - FAR RIGHT */}
           <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden p-1">
