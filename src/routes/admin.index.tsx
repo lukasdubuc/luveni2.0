@@ -627,22 +627,22 @@ function AdminPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] uppercase tracking-widest">Theme</span>
                     <div className={`flex border overflow-hidden ${isDark ? "border-white/20" : "border-black/20"}`}>
-                      <button 
-                        onClick={() => { setSiteContent(s => ({ ...s, theme: "light" })); setSiteEdited(true); }}
-                        className={`px-4 py-2 text-[9px] font-bold uppercase transition-all ${!isDark ? isDark ? "bg-white text-black" : "bg-black text-white" : isDark ? "hover:bg-white/10" : "hover:bg-black/10"}`}
+                      <button
+                        onClick={() => applyTheme("light")}
+                        className={`px-4 py-2 text-[9px] font-bold uppercase transition-all ${siteContent.theme === "light" ? (isDark ? "bg-white text-black" : "bg-black text-white") : (isDark ? "hover:bg-white/10" : "hover:bg-black/10")}`}
                       >
                         LIGHT
                       </button>
-                      <button 
-                        onClick={() => { setSiteContent(s => ({ ...s, theme: "dark" })); setSiteEdited(true); }}
-                        className={`px-4 py-2 text-[9px] font-bold uppercase transition-all ${isDark ? isDark ? "bg-white text-black" : "bg-black text-white" : isDark ? "hover:bg-white/10" : "hover:bg-black/10"}`}
+                      <button
+                        onClick={() => applyTheme("dark")}
+                        className={`px-4 py-2 text-[9px] font-bold uppercase transition-all ${siteContent.theme === "dark" ? (isDark ? "bg-white text-black" : "bg-black text-white") : (isDark ? "hover:bg-white/10" : "hover:bg-black/10")}`}
                       >
                         DARK
                       </button>
                     </div>
                   </div>
                   {siteEdited && (
-                    <button 
+                    <button
                       onClick={saveSiteConfig}
                       disabled={siteSaving}
                       className={`w-full py-3 text-[10px] font-bold uppercase transition-all ${
@@ -654,6 +654,7 @@ function AdminPage() {
                   )}
                 </div>
               </div>
+
 
               <div className="space-y-4">
                 <h2 className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Account</h2>
