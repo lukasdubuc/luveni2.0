@@ -28,11 +28,12 @@ CREATE POLICY "Public can view published products" ON public.products
 CREATE POLICY "Admins can manage products" ON public.products 
   USING (auth.jwt() ->> 'email' = 'lukasdubuc@gmail.com');
 
--- Site Config: Admins ONLY
+-- Site Config: Public can read for theme/metadata, Admins can manage
+CREATE POLICY "Public can view site_config" ON public.site_config 
+  FOR SELECT USING (true);
 CREATE POLICY "Admins can manage site_config" ON public.site_config 
   USING (auth.jwt() ->> 'email' = 'lukasdubuc@gmail.com');
 
--- 4. Restrict internal fields for anonymous users
--- This is partially handled by the SELECT policy above, but for extra security:
-REVOKE ALL ON public.site_config FROM anon;
+-- 4. Permissions
+GRANT SELECT ON public.site_config TO anon;
 GRANT SELECT ON public.products TO anon; -- Required for shop, but gated by RLS
