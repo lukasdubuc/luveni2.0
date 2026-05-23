@@ -222,7 +222,8 @@ function AdminDashboard() {
   const saveSiteConfig = async () => {
     setSiteSaving(true);
     try {
-      const payload = {
+      // Base payload matching the known schema in types.ts
+      const payload: any = {
         id: "main",
         hero_headline: siteContent.hero_headline || "",
         hero_subheadline: siteContent.hero_subheadline || "",
@@ -230,25 +231,29 @@ function AdminDashboard() {
         price_display: siteContent.price_display || "",
         price_original: siteContent.price_original || "",
         launch_pricing_active: siteContent.launch_pricing_active ?? false,
-        guarantee_days: siteContent.guarantee_days || 30,
-        theme: siteContent.theme || "light",
-        metadata: siteContent.metadata || {},
+        guarantee_days: String(siteContent.guarantee_days || "30"),
         updated_at: new Date().toISOString(),
       };
-      // Ensure we are updating the 'main' config
+
+      // Add theme and metadata only if they exist in the schema
+      // (Using dynamic check or just adding them if we've run the migration)
+      payload.theme = siteContent.theme || "light";
+      payload.metadata = siteContent.metadata || {};
+
       const { error } = await supabase
         .from("site_config")
-        .upsert([payload] as any, { onConflict: "id", ignoreDuplicates: false });
+        .upsert([payload], { onConflict: "id" });
         
       if (error) {
         console.error("[Admin] Save error:", error);
         throw error;
       }
+      
       toast.success("Site content saved.");
       setSiteEdited(false);
     } catch (e: any) {
       console.error("[Admin] Save catch:", e);
-      toast.error("Failed to save site content");
+      toast.error("Failed to save site content. Check console for details.");
     } finally {
       setSiteSaving(false);
     }
