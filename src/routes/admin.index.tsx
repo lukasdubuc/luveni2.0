@@ -321,7 +321,7 @@ function AdminPage() {
   return (
     <div className={`min-h-screen ${isDark ? "bg-black text-white" : "bg-white text-black"}`}>
       {/* NAVBAR */}
-      <nav className={`sticky top-0 z-50 border-b ${isDark ? "border-white/10 bg-black" : "border-gray-100 bg-white"}`}>
+      <nav className={`sticky top-0 z-50 md:border-b-0 ${isDark ? "md:bg-black md:border-0 border-b border-white/10 bg-black" : "md:bg-white md:border-0 border-b border-gray-100 bg-white"}`}>
         <div className="flex items-center justify-between px-6 py-4">
           {/* Left: Admin Label (Mobile Only) */}
           <div className="md:hidden text-[10px] font-bold uppercase tracking-widest">ADMIN</div>

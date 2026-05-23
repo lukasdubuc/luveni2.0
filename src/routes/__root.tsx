@@ -127,23 +127,43 @@ function RootComponent() {
     if (isBare) return;
 
     let canceled = false;
-    supabase
-      .from("site_config")
-      .select("*")
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (canceled) return;
-        if (!error && data) {
-          const config = mergeSiteConfig(data as any);
+    
+    // Initial fetch
+    const fetchConfig = async () => {
+      const { data, error } = await supabase
+        .from("site_config")
+        .select("*")
+        .eq("id", "main")
+        .maybeSingle();
+        
+      if (canceled) return;
+      if (!error && data) {
+        const config = mergeSiteConfig(data as any);
+        setFooterDescription(config.metadata?.footer_description ?? "");
+        setTheme(config.theme || "light");
+      }
+    };
+    
+    fetchConfig();
+    
+    // Subscribe to real-time changes
+    const subscription = supabase
+      .channel("site_config_changes")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "site_config", filter: "id=eq.main" },
+        (payload) => {
+          if (canceled) return;
+          const config = mergeSiteConfig(payload.new as any);
           setFooterDescription(config.metadata?.footer_description ?? "");
           setTheme(config.theme || "light");
         }
-      });
+      )
+      .subscribe();
 
     return () => {
       canceled = true;
+      subscription.unsubscribe();
     };
   }, [isBare]);
 

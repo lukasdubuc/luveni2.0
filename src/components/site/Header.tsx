@@ -14,8 +14,8 @@ export function Header({ theme = "light" }: { theme?: "light" | "dark" }) {
   const isDark = theme === "dark";
 
   return (
-    <header className={`sticky top-0 z-50 border-b md:border-b-0 transition-colors duration-500 ${
-      isDark ? "bg-black border-white/10" : "bg-white border-gray-100"
+    <header className={`sticky top-0 z-50 md:border-b-0 transition-colors duration-500 ${
+      isDark ? "bg-black md:bg-black md:border-0 border-b border-white/10" : "bg-white md:bg-white md:border-0 border-b border-gray-100"
     }`}>
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
         <div className="flex items-center gap-2">
