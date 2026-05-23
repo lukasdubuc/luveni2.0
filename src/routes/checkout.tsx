@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { createFileRoute } from '@tanstack/react-router'
 import { useServerFn } from "@tanstack/react-start";
@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { offer } from "@/config/site";
 import { supabase } from "@/integrations/supabase/client";
 import { createCheckout } from "@/lib/checkout.functions";
+import { useCart } from "@/context/CartContext";
 
 export const Route = createFileRoute("/checkout")({
   loader: async ({ location }) => {
@@ -21,10 +22,9 @@ export const Route = createFileRoute("/checkout")({
         .select("*")
         .eq("id", productId)
         .eq("is_published", true)
+        .maybeSingle();
 
-      if (product) {
-        return { product, variantSku };
-      }
+      if (product) return { product, variantSku };
     }
 
     const { data: products } = await supabase
@@ -33,11 +33,12 @@ export const Route = createFileRoute("/checkout")({
       .eq("is_published", true)
       .order("created_at", { ascending: false })
       .limit(1);
+    return { product: products?.[0] ?? null, variantSku: null };
   },
   head: () => ({
     meta: [
       { title: `Checkout — ${offer.name}` },
-      { name: "description", content: `Secure checkout for ${offer.name}. ${offer.guarantee}` },
+      { name: "description", content: `Secure checkout for ${offer.name}.` },
       { name: "robots", content: "noindex" },
     ],
   }),
@@ -49,44 +50,40 @@ const FormSchema = z.object({
   email: z.string().trim().email("Please enter a valid email").max(255),
 });
 
-// ── Cart item type for multi-item support ────────────────────────────────────
-type CartItem = {
-  productId: string;
-  variantSku?: string;
-  quantity: number;
-};
-
 function Checkout() {
   const navigate = useNavigate();
   const submit = useServerFn(createCheckout);
   const { product, variantSku } = Route.useLoaderData();
+  
+  // Using global cart state
+  const { items, addItem, totalCents } = useCart();
+  
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Initialize cart with product from loader if empty
+  useEffect(() => {
+    if (product && items.length === 0) {
+      addItem({
+        productId: product.id,
+        variantSku: variantSku ?? undefined,
+        title: product.title,
+        price_cents: product.price_cents,
+        quantity: 1
+      });
+    }
+  }, [product, items.length, addItem, variantSku]);
 
   const selectedVariant = (product?.variants as any[])?.find(
     (variant: any) => variant.sku === variantSku,
   );
 
-  // ── Surgical change: multi-item cart state ───────────────────────────────
-  // Initialized from the current route params (single item); extend by pushing
-  // additional CartItem entries as your cart logic grows.
-  const [cartItems, setCartItems] = useState<CartItem[]>([
-    {
-      productId: product?.id ?? "",
-      variantSku: selectedVariant?.sku,
-      quantity: 1,
-    },
-  ]);
-
   const displayName = selectedVariant?.sku
     ? `${product?.title} (${selectedVariant.sku})`
     : product?.title ?? offer.name;
 
-  // ── Surgical change: raw price only — no strikethrough, no originalPrice ──
-  const displayPrice = product
-    ? `$${((selectedVariant?.price_cents ?? product.price_cents) / 100).toFixed(0)}`
-    : offer.price;
+  const displayPrice = `$${(totalCents / 100).toFixed(0)}`;
 
   const displayBullets: string[] = selectedVariant?.bullet_points?.length
     ? selectedVariant.bullet_points
@@ -106,15 +103,11 @@ function Checkout() {
     setLoading(true);
     try {
       const res = await submit({
-        data: {
-          name: parsed.data.name,
-          email: parsed.data.email,
-          // Pass cartItems array; falls back to single-item shape for
-          // existing server fns that haven't been migrated yet.
-          productId: cartItems[0]?.productId,
-          variantSku: cartItems[0]?.variantSku,
-          // Uncomment when your server fn supports multi-item:
-          // items: cartItems,
+        data: { 
+          name: parsed.data.name, 
+          email: parsed.data.email, 
+          productId: items[0]?.productId, 
+          variantSku: items[0]?.variantSku 
         },
       });
       if (!res?.ok) {
@@ -190,7 +183,6 @@ function Checkout() {
               Order summary
             </h2>
 
-            {/* ── Surgical change: raw price only — originalPrice/strikethrough removed ── */}
             <div className="mt-4 flex items-start justify-between gap-4">
               <div>
                 <p className="font-medium">{displayName}</p>
@@ -212,7 +204,6 @@ function Checkout() {
             </ul>
             <div className="my-5 h-px bg-black/10" />
 
-            {/* ── Total: sum of all cart items ── */}
             <div className="flex items-center justify-between text-base font-semibold">
               <span>Total</span>
               <span>{displayPrice}</span>
