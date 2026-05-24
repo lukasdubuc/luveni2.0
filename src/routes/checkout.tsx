@@ -2,37 +2,14 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { createFileRoute } from '@tanstack/react-router';
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, Lock, Check } from "lucide-react";
-import { z } from "zod";
+import { Loader2, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { createCheckout } from "@/lib/checkout.functions";
 import { useCart } from "@/context/CartContext";
 
-// --- Form Schema ---
-const FormSchema = z.object({
-  name: z.string().trim().min(1, "Name is required"),
-  email: z.string().trim().email("Invalid email"),
-  address: z.string().min(1, "Address is required"),
-  apartment: z.string().optional(),
-  city: z.string().min(1, "City is required"),
-  state: z.string().min(1, "State is required"),
-  zip: z.string().min(1, "Zip is required"),
-  country: z.string().min(1, "Country is required"),
-});
-
 export const Route = createFileRoute("/checkout")({
   meta: () => [{ title: "Cart" }],
-  loader: async ({ location }) => {
-    const params = new URLSearchParams(location.searchStr ?? "");
-    const productId = params.get("productId");
-    const variantSku = params.get("variantSku");
-    if (productId) {
-      const { data: product } = await supabase.from("products").select("*").eq("id", productId).eq("is_published", true).maybeSingle();
-      if (product) return { product, variantSku };
-    }
-    return { product: null, variantSku: null };
-  },
   component: Checkout,
 });
 
@@ -42,107 +19,116 @@ function Checkout() {
   const { items, totalCents, updateItemQuantity, removeItem } = useCart();
   
   const [formData, setFormData] = useState({
-    name: "", email: "", address: "", apartment: "", city: "", state: "", zip: "", country: "United States"
+    firstName: "", lastName: "", email: "", address: "", apt: "", 
+    city: "", state: "", zip: "", country: "United States", phone: ""
   });
-  const [subscribe, setSubscribe] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"card" | "usdc" | "yzy">("card");
   const [loading, setLoading] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"card" | "usdc" | "yzy">("card");
 
   useEffect(() => { document.title = "Cart"; }, []);
 
-  const isFormComplete = formData.name && formData.email && formData.address && formData.city && formData.state && formData.zip;
-
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (totalCents <= 0) { toast.error("Cart is empty"); return; }
-    
-    const parsed = FormSchema.safeParse(formData);
-    if (!parsed.success) { toast.error(parsed.error.issues[0]?.message); return; }
-    
     setLoading(true);
     try {
       const res = await submit({
-        data: { ...parsed.data, subscribe, paymentMethod, productId: items[0]?.productId, variantSku: items[0]?.variantSku },
+        data: { ...formData, paymentMethod, items },
       });
-      if (!res?.ok) { toast.error(res?.error ?? "Checkout failed"); return; }
-      if (res.redirectUrl) window.location.href = res.redirectUrl;
-      else navigate({ to: "/thank-you", search: { order: res.orderId } });
-    } catch { toast.error("Error processing"); } finally { setLoading(false); }
+      if (res?.redirectUrl) window.location.href = res.redirectUrl;
+      else if (res?.error) toast.error(res.error);
+    } catch { toast.error("Checkout failed."); } 
+    finally { setLoading(false); }
   }
 
-  return (
-    <section className="bg-background text-foreground min-h-screen py-12 px-4">
-      <div className="mx-auto max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-16">
-        
-        {/* Left: Forms */}
-        <form onSubmit={onSubmit} className="space-y-10">
-          <h1 className="text-2xl font-semibold tracking-tight">Checkout</h1>
+  const Input = ({ placeholder, name, type = "text" }: any) => (
+    <input 
+      placeholder={placeholder} type={type} 
+      className="w-full border-b border-black dark:border-white/20 bg-transparent py-3 text-sm outline-none placeholder:text-gray-400"
+      onChange={(e) => setFormData({...formData, [name]: e.target.value})}
+    />
+  );
 
+  return (
+    <section className="bg-background text-foreground min-h-screen py-12 px-6">
+      <div className="mx-auto max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-20">
+        
+        {/* LEFT: Forms */}
+        <form onSubmit={onSubmit} className="space-y-12">
+          
           {/* Contact */}
           <div className="space-y-4">
-            <h2 className="text-sm font-bold uppercase tracking-widest">Contact</h2>
-            <input placeholder="Full Name" className="w-full border-b border-black/20 dark:border-white/20 py-2 bg-transparent outline-none focus:border-black dark:focus:border-white" onChange={e => setFormData({...formData, name: e.target.value})} />
-            <input type="email" placeholder="Email Address" className="w-full border-b border-black/20 dark:border-white/20 py-2 bg-transparent outline-none focus:border-black dark:focus:border-white" onChange={e => setFormData({...formData, email: e.target.value})} />
-            <label className="flex items-center gap-2 text-xs">
-              <input type="checkbox" checked={subscribe} onChange={() => setSubscribe(!subscribe)} />
-              Subscribe to updates and notifications
+            <h2 className="text-xs font-bold tracking-widest uppercase">Contact Information</h2>
+            <Input placeholder="Email Address" name="email" />
+            <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest">
+              <input type="checkbox" /> Subscribe to updates and notifications
             </label>
           </div>
 
-          {/* Billing */}
+          {/* Shipping */}
           <div className="space-y-4">
-            <h2 className="text-sm font-bold uppercase tracking-widest">Billing Address</h2>
-            <input placeholder="Address" className="w-full border-b border-black/20 dark:border-white/20 py-2 bg-transparent outline-none focus:border-black" onChange={e => setFormData({...formData, address: e.target.value})} />
-            <input placeholder="Apartment, Suite, Unit, etc. (Optional)" className="w-full border-b border-black/20 dark:border-white/20 py-2 bg-transparent outline-none focus:border-black" onChange={e => setFormData({...formData, apartment: e.target.value})} />
+            <h2 className="text-xs font-bold tracking-widest uppercase">Shipping Address</h2>
             <div className="grid grid-cols-2 gap-4">
-              <input placeholder="City" className="border-b border-black/20 dark:border-white/20 py-2 bg-transparent outline-none focus:border-black" onChange={e => setFormData({...formData, city: e.target.value})} />
-              <select className="border-b border-black/20 dark:border-white/20 py-2 bg-transparent outline-none focus:border-black" onChange={e => setFormData({...formData, state: e.target.value})}>
-                <option>SELECT STATE</option>
-                {['Alabama', 'California', 'New York', 'Texas'].map(s => <option key={s}>{s}</option>)}
-              </select>
+              <Input placeholder="First Name" name="firstName" />
+              <Input placeholder="Last Name" name="lastName" />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <input placeholder="Zip / Postal Code" className="border-b border-black/20 dark:border-white/20 py-2 bg-transparent outline-none focus:border-black" onChange={e => setFormData({...formData, zip: e.target.value})} />
-              <select className="border-b border-black/20 dark:border-white/20 py-2 bg-transparent outline-none focus:border-black" onChange={e => setFormData({...formData, country: e.target.value})}>
-                <option>United States</option>
-              </select>
+            <Input placeholder="Address" name="address" />
+            <Input placeholder="Apartment, Suite, Unit, etc. (Optional)" name="apt" />
+            <div className="grid grid-cols-3 gap-4">
+              <div className="col-span-1"><Input placeholder="City" name="city" /></div>
+              <div className="col-span-1">
+                <select className="w-full border-b border-black dark:border-white/20 bg-transparent py-3 text-sm outline-none">
+                  <option>State</option>
+                  <option>Texas</option>
+                </select>
+              </div>
+              <div className="col-span-1"><Input placeholder="Zip" name="zip" /></div>
             </div>
+            <Input placeholder="Phone Number" name="phone" />
           </div>
 
           {/* Payment */}
           <div className="space-y-4">
-            <h2 className="text-sm font-bold uppercase tracking-widest">Payment Details</h2>
-            {!isFormComplete ? (
-              <p className="text-xs text-muted-foreground p-4 bg-gray-100 dark:bg-white/5">PLEASE ENTER YOUR INFORMATION ABOVE TO SELECT A PAYMENT METHOD</p>
-            ) : (
-              <div className="space-y-2">
-                {[ { id: 'card', label: 'Credit / Debit Card' }, { id: 'usdc', label: 'USDC (Crypto)' }, { id: 'yzy', label: 'YZY (Crypto)' } ].map((m) => (
-                  <button key={m.id} type="button" onClick={() => setPaymentMethod(m.id as any)} className={`w-full p-4 border flex justify-between items-center ${paymentMethod === m.id ? 'border-black dark:border-white' : 'border-transparent bg-gray-100 dark:bg-white/5'}`}>
-                    {m.label} {paymentMethod === m.id && <Check className="h-4 w-4" />}
-                  </button>
-                ))}
-              </div>
-            )}
-            <button type="submit" disabled={!isFormComplete || loading} className="w-full h-12 bg-foreground text-background font-bold uppercase tracking-widest hover:opacity-80 transition-opacity">
-              {loading ? <Loader2 className="animate-spin mx-auto" /> : "Complete Purchase"}
-            </button>
+            <h2 className="text-xs font-bold tracking-widest uppercase">Payment Details</h2>
+            <p className="text-[10px] text-gray-500 uppercase italic">Please enter your information above to select a payment method</p>
+            <div className="grid gap-2">
+              {[ { id: 'card', label: 'Credit / Debit Card' }, { id: 'usdc', label: 'USDC (Crypto)' }, { id: 'yzy', label: 'YZY (Crypto)' } ].map((m) => (
+                <button key={m.id} type="button" onClick={() => setPaymentMethod(m.id as any)} className={`border p-4 text-left ${paymentMethod === m.id ? 'border-black dark:border-white' : 'border-gray-200'}`}>
+                  {m.label}
+                </button>
+              ))}
+            </div>
           </div>
+
+          <button type="submit" disabled={loading} className="w-full bg-foreground text-background py-4 font-bold uppercase tracking-widest hover:opacity-80 transition-opacity">
+            {loading ? <Loader2 className="animate-spin mx-auto" /> : "Complete Purchase"}
+          </button>
         </form>
 
-        {/* Right: Summary */}
-        <aside className="border-l border-black/10 dark:border-white/10 pl-16">
-          <h2 className="text-sm font-bold uppercase tracking-widest mb-8">Order Summary</h2>
+        {/* RIGHT: Order Summary */}
+        <aside className="space-y-8">
+          <h2 className="text-xs font-bold tracking-widest uppercase">Order Summary</h2>
           <div className="space-y-6">
             {items.map((item) => (
-              <div key={item.productId} className="flex justify-between items-center">
+              <div key={`${item.productId}-${item.variantSku}`} className="flex justify-between items-start">
                 <div>
-                  <p className="font-medium">{item.title}</p>
-                  <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>
+                  <p className="text-sm font-medium">{item.title}</p>
+                  <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
                 </div>
-                <p>${((item.price_cents * item.quantity) / 100).toFixed(0)}</p>
+                <p className="text-sm">${((item.price_cents * item.quantity) / 100).toFixed(0)}</p>
               </div>
             ))}
-            <div className="border-t pt-4 font-bold flex justify-between">
+          </div>
+
+          <div className="border-t border-black dark:border-white pt-6 space-y-2">
+            <div className="flex justify-between text-sm uppercase tracking-widest">
+              <span>Subtotal</span>
+              <span>${(totalCents / 100).toFixed(0)}</span>
+            </div>
+            <div className="flex justify-between text-sm uppercase tracking-widest text-gray-500">
+              <span>Shipping</span>
+              <span>Calculated at next step</span>
+            </div>
+            <div className="flex justify-between text-lg font-bold pt-4">
               <span>Total</span>
               <span>${(totalCents / 100).toFixed(0)}</span>
             </div>
