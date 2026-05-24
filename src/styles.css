@@ -1,7 +1,6 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap");
 @import "tailwindcss" source(none);
-
 @source "../src";
-
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
@@ -11,110 +10,34 @@
   --color-foreground: var(--foreground);
   --color-primary: var(--primary);
   --color-border: var(--border);
-
-  --font-sans:
-    "Helvetica Neue",
-    Helvetica,
-    Arial,
-    sans-serif;
-
-  --font-mono:
-    "Space Mono",
-    ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    Monaco,
-    Consolas,
-    "Liberation Mono",
-    "Courier New",
-    monospace;
+  --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
-/* =========================
-   BASE THEME
-========================= */
+/* Force early background paint */
+html { background-color: var(--background); }
 
 :root {
   color-scheme: light;
-
-  --background: #FFFFFF;
-  --foreground: #000000;
-
-  --primary: #000000;
-
-  --border: rgba(0, 0, 0, 0.10);
+  --background: #FFFFFF; --foreground: #000000;
+  --primary: #000000; --border: rgba(0, 0, 0, 0.10);
 }
 
-html.dark {
+:root.dark {
   color-scheme: dark;
-
-  --background: #000000;
-  --foreground: #FFFFFF;
-
-  --primary: #FFFFFF;
-
-  --border: rgba(255, 255, 255, 0.15);
+  --background: #000000; --foreground: #FFFFFF;
+  --primary: #FFFFFF; --border: rgba(255, 255, 255, 0.15);
 }
-
-/* =========================
-   FIX: PREVENT WHITE FLASH
-========================= */
-
-html,
-body {
-  background-color: #000000; /* default paint safe */
-}
-
-/* =========================
-   GLOBAL BASE STYLES
-========================= */
 
 @layer base {
-
-  :where(*) {
-    border-radius: 0;
-    box-shadow: none;
-  }
-
-  html,
-  body,
-  #root {
-    min-height: 100%;
-  }
-
+  * { border-radius: 0 !important; box-shadow: none !important; text-transform: uppercase; }
   body {
-    margin: 0;
-    padding: 0;
-
     background-color: var(--background);
     color: var(--foreground);
-
     font-family: var(--font-sans);
     font-size: 13px;
-
-    text-transform: uppercase;
-
-    overflow-x: hidden;
-
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    margin: 0; padding: 0;
   }
-
-  a {
-    text-decoration: none;
-    color: inherit;
-  }
-
-  button {
-    cursor: pointer;
-    font-family: inherit;
-  }
-}
-
-/* =========================
-   ROUTE PERF
-========================= */
-
-.route-container {
-  contain: layout paint;
+  a { text-decoration: none; color: inherit; }
+  button { cursor: pointer; font-family: inherit; }
 }
