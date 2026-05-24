@@ -63,8 +63,7 @@ const ProductCell = memo(({ product }: { product: Product }) => {
     <Link
       to={`/offer/${product.slug}`}
       preload="intent"
-      viewTransition
-      className="group relative z-0 block border-none bg-transparent outline-none transition-transform duration-300 ease-in-out hover:z-10 hover:scale-105 hover:border-transparent focus:outline-none focus-visible:outline-none"
+      className="group relative z-0 block border-none bg-transparent outline-none hover:z-10 focus:outline-none focus-visible:outline-none"
     >
       <div className="relative flex aspect-square items-center justify-center overflow-hidden bg-transparent p-6 sm:p-8 md:p-10">
         {imageUrl ? (

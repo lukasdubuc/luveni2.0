@@ -382,7 +382,6 @@ function OfferSlugPage() {
             maxWidth: "480px",
             padding: "3.5rem 2rem 2rem",
             boxSizing: "border-box",
-            animation: "pdp-fade-in 0.4s ease both",
           }}
           key={product.slug}
         >

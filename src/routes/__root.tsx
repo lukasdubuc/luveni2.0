@@ -54,7 +54,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
             try {
               var t = localStorage.getItem('theme') || 'light';
               var d = document.documentElement;
-              d.classList.add(t);
+              d.className = t;
               d.style.backgroundColor = t === 'dark' ? '#000000' : '#FFFFFF';
               d.style.colorScheme = t;
             } catch (e) {}
@@ -77,9 +77,12 @@ function RootComponent() {
 
   useEffect(() => {
     localStorage.setItem('theme', theme);
-    document.documentElement.classList.remove("light", "dark");
-    document.documentElement.classList.add(theme);
-    document.documentElement.style.backgroundColor = theme === 'dark' ? '#000000' : '#FFFFFF';
+    const d = document.documentElement;
+    if (d.className !== theme) {
+      d.className = theme;
+      d.style.backgroundColor = theme === 'dark' ? '#000000' : '#FFFFFF';
+      d.style.colorScheme = theme;
+    }
   }, [theme]);
 
   useEffect(() => {

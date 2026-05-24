@@ -5,7 +5,7 @@ export function Footer({ description, theme = "light" }: { description?: string;
   const isDark = theme === "dark";
 
   return (
-    <footer className={`border-t transition-colors duration-500 px-6 py-12 ${
+    <footer className={`border-t px-6 py-12 ${
       isDark ? "bg-black border-white/10 text-white" : "bg-white border-black/10 text-black"
     }`}>
       <div className="mx-auto flex max-w-7xl flex-col items-center gap-8">
