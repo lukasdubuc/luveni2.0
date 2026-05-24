@@ -71,6 +71,7 @@ function Checkout() {
         
         {/* LEFT: Forms */}
         <form onSubmit={onSubmit} className="space-y-12">
+          
           <div className="space-y-4">
             <h2 className="text-xs font-bold tracking-widest uppercase">Contact Information</h2>
             <Input placeholder="Email Address" name="email" />
@@ -114,38 +115,43 @@ function Checkout() {
           <h2 className="text-xs font-bold tracking-widest uppercase">Order Summary</h2>
           
           <div className="space-y-6">
-            {items.map((item) => (
-              <div key={`${item.productId}-${item.variantSku}`} className="flex items-center gap-4 border-b border-black/10 pb-4">
-                
-                {/* Transparent Product Image Container */}
-                <div className="w-16 h-16 flex-shrink-0 flex items-center justify-center">
-                  {item.image_url && (
-                    <img 
-                      src={item.image_url} 
-                      alt={item.title} 
-                      className="w-full h-full object-contain"
-                    />
-                  )}
-                </div>
+            {items.map((item) => {
+              // Priority resolution for the image key
+              const imageUrl = item.image_url || item.image || item.src;
 
-                {/* Product Details */}
-                <div className="flex-grow">
-                  <p className="text-sm font-bold uppercase">{item.title}</p>
-                  <p className="text-[10px] text-gray-500 uppercase tracking-widest">Qty: {item.quantity}</p>
-                </div>
+              return (
+                <div key={`${item.productId}-${item.variantSku}`} className="flex items-center gap-4 border-b border-black/10 pb-4">
+                  
+                  {/* Transparent Product Image */}
+                  <div className="w-16 h-16 flex-shrink-0 flex items-center justify-center">
+                    {imageUrl && (
+                      <img 
+                        src={imageUrl} 
+                        alt={item.title} 
+                        className="w-full h-full object-contain"
+                      />
+                    )}
+                  </div>
 
-                {/* Price + Controls */}
-                <div className="text-right space-y-2">
-                  <p className="text-sm font-bold">${((item.price_cents * item.quantity) / 100).toFixed(0)}</p>
-                  <div className="flex items-center justify-end gap-3 text-xs">
-                    <button type="button" onClick={() => updateItemQuantity(item.productId, item.quantity - 1, item.variantSku)} className="hover:underline opacity-60"> - </button>
-                    <span className="font-mono">{item.quantity}</span>
-                    <button type="button" onClick={() => updateItemQuantity(item.productId, item.quantity + 1, item.variantSku)} className="hover:underline opacity-60"> + </button>
-                    <button type="button" onClick={() => removeItem(item.productId, item.variantSku)} className="hover:underline text-red-500 ml-3">Remove</button>
+                  {/* Product Details */}
+                  <div className="flex-grow">
+                    <p className="text-sm font-bold uppercase">{item.title}</p>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-widest">Qty: {item.quantity}</p>
+                  </div>
+
+                  {/* Price + Controls */}
+                  <div className="text-right space-y-2">
+                    <p className="text-sm font-bold">${((item.price_cents * item.quantity) / 100).toFixed(0)}</p>
+                    <div className="flex items-center justify-end gap-3 text-xs">
+                      <button type="button" onClick={() => updateItemQuantity(item.productId, item.quantity - 1, item.variantSku)} className="hover:underline opacity-60"> - </button>
+                      <span className="font-mono">{item.quantity}</span>
+                      <button type="button" onClick={() => updateItemQuantity(item.productId, item.quantity + 1, item.variantSku)} className="hover:underline opacity-60"> + </button>
+                      <button type="button" onClick={() => removeItem(item.productId, item.variantSku)} className="hover:underline text-red-500 ml-3">Remove</button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="border-t border-black dark:border-white pt-6 space-y-2 uppercase tracking-widest text-sm">
