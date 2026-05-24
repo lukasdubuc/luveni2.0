@@ -339,12 +339,11 @@ function OfferSlugPage() {
       >
         <div
            style={{
-  position: "fixed", inset: 0,
-  display: "flex", alignItems: "center", justifyContent: "center",
-  fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
-  overflow: "hidden", zIndex: 0,
-  viewTransitionName: "offerpage",
-}}
+           position: "fixed", inset: 0,
+           display: "flex", alignItems: "center", justifyContent: "center",
+           fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+           overflow: "hidden", zIndex: 0,
+           }}
           {/* ── Top-left: back arrow ── */}
           <Link
             to="/shop"
