@@ -12,7 +12,7 @@ import {
 
 import { Toaster } from "sonner";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, memo } from "react";
 
 import { CartProvider } from "@/context/CartContext";
 
@@ -26,7 +26,7 @@ import { mergeSiteConfig } from "@/lib/site-config";
 
 function NotFoundComponent() {
   return (
-    <SiteShell>
+    <SiteShell bare={false}>
       <div className="mx-auto max-w-md px-4 py-24 text-center">
         <h1 className="text-7xl font-semibold tracking-tight">
           404
@@ -59,7 +59,7 @@ function ErrorComponent({
   const router = useRouter();
 
   return (
-    <SiteShell>
+    <SiteShell bare={false}>
       <div className="mx-auto max-w-md px-4 py-24 text-center">
         <h1 className="text-xl font-semibold tracking-tight">
           This page didn't load
@@ -67,7 +67,7 @@ function ErrorComponent({
 
         <button
           onClick={() => {
-            router.invalidate();
+            router.invalidate({ sync: false });
 
             reset();
           }}
@@ -144,17 +144,19 @@ function RootShell({
     <html lang="en" suppressHydrationWarning>
       <head>
 
-        {/* SAFE PREPAINT */}
+        {/* PRE-PAINT THEME LOCK */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
 (function () {
   try {
-    var theme = localStorage.getItem("theme");
+    var theme = localStorage.getItem("theme") || "dark";
 
-    if (theme === "dark") {
-      document.documentElement.classList.add("dark");
-    }
+    var d = document.documentElement;
+
+    d.classList.remove("light", "dark");
+
+    d.classList.add(theme);
   } catch (e) {}
 })();
 `,
@@ -173,6 +175,14 @@ function RootShell({
   );
 }
 
+const PersistentOutlet = memo(function PersistentOutlet() {
+  return (
+    <div className="route-container">
+      <Outlet />
+    </div>
+  );
+});
+
 function RootComponent() {
   const { queryClient } =
     Route.useRouteContext();
@@ -183,43 +193,30 @@ function RootComponent() {
     select: (s) => s.location.pathname,
   });
 
-  /*
-    KEEP SHELL PERSISTENT
-    THIS IS THE BIG PERFORMANCE WIN
-  */
   const isBare =
     path.startsWith("/admin") ||
     path === "/login" ||
     path.startsWith("/offer/");
 
   const [footerDescription, setFooterDescription] =
-    useState<string | undefined>(undefined);
+    useState<string>();
 
   /*
-    RESTORED SAFE THEME STATE
+    AUTH INVALIDATION
+    TARGETED ONLY
   */
-  const [theme, setTheme] =
-    useState<"light" | "dark">("light");
 
-  /*
-    SAFE THEME SYNC
-  */
-  useEffect(() => {
-    localStorage.setItem("theme", theme);
-
-    document.documentElement.className = theme;
-  }, [theme]);
-
-  /*
-    AUTH STATE
-  */
   useEffect(() => {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(() => {
-      router.invalidate();
+      queryClient.invalidateQueries({
+        queryKey: ["auth"],
+      });
 
-      queryClient.invalidateQueries();
+      router.invalidate({
+        sync: false,
+      });
     });
 
     return () => subscription.unsubscribe();
@@ -228,6 +225,7 @@ function RootComponent() {
   /*
     SITE CONFIG
   */
+
   useEffect(() => {
     let canceled = false;
 
@@ -246,7 +244,15 @@ function RootComponent() {
         config.metadata?.footer_description ?? ""
       );
 
-      setTheme(config.theme || "light");
+      const theme = config.theme || "dark";
+
+      localStorage.setItem("theme", theme);
+
+      const d = document.documentElement;
+
+      d.classList.remove("light", "dark");
+
+      d.classList.add(theme);
     };
 
     fetchConfig();
@@ -270,7 +276,15 @@ function RootComponent() {
             config.metadata?.footer_description ?? ""
           );
 
-          setTheme(config.theme || "light");
+          const theme = config.theme || "dark";
+
+          localStorage.setItem("theme", theme);
+
+          const d = document.documentElement;
+
+          d.classList.remove("light", "dark");
+
+          d.classList.add(theme);
         }
       )
       .subscribe();
@@ -286,19 +300,17 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <CartProvider>
 
-        {/* PERSISTENT SHELL */}
         <SiteShell
           bare={isBare}
           footerDescription={footerDescription}
-          theme={theme}
         >
-          <Outlet />
+          <PersistentOutlet />
         </SiteShell>
 
         <Toaster
           position="top-center"
           richColors
-          theme={theme}
+          theme="dark"
         />
       </CartProvider>
     </QueryClientProvider>
