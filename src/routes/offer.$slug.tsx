@@ -298,14 +298,13 @@ function OfferSlugPage() {
         <p className="mt-3 text-xs uppercase tracking-[0.2em] opacity-50">
           This product is unavailable.
         </p>
-        
-      <Link
-  to="/shop"
-  preload="intent"
-  className="mt-8 inline-flex h-12 items-center border border-foreground bg-foreground text-background px-10 text-xs font-bold uppercase tracking-[0.25em] transition hover:bg-background hover:text-foreground"
->
-  Back to Shop
-</Link>
+        <Link
+          to="/shop"
+          preload="intent"
+          className="mt-8 inline-flex h-12 items-center border border-foreground bg-foreground text-background px-10 text-xs font-bold uppercase tracking-[0.25em] transition hover:bg-background hover:text-foreground"
+        >
+          Back to Shop
+        </Link>
       </section>
     );
   }
@@ -338,15 +337,14 @@ function OfferSlugPage() {
         style={{ overflow: "hidden", zIndex: 0 }}
       >
         <div
-          <div
-  style={{
-    position: "fixed", inset: 0,
-    display: "flex", alignItems: "center", justifyContent: "center",
-    fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
-    overflow: "hidden", zIndex: 0,
-  }}
->
-  {/* ── Top-left: back arrow ── */}
+          style={{
+            position: "fixed", inset: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+            overflow: "hidden", zIndex: 0,
+          }}
+        >
+          {/* ── Top-left: back arrow ── */}
           <Link
             to="/shop"
             preload="intent"
@@ -384,7 +382,7 @@ function OfferSlugPage() {
             }}
             key={product.slug}
           >
-           {/* ── Image row ── */}
+            {/* ── Image row ── */}
             <div style={{
               width: "100%", display: "flex",
               alignItems: "center", justifyContent: "center",
@@ -408,7 +406,8 @@ function OfferSlugPage() {
                     style={{
                       maxWidth: "min(320px, 70vw)", maxHeight: "45vh",
                       objectFit: "contain", display: "block",
-                      animation: "pdp-img-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both",
+                      animation: "pdp-img-in 0.4s ease both",
+                      willChange: "opacity",
                     }}
                   />
                 ) : (
@@ -426,12 +425,6 @@ function OfferSlugPage() {
 
               <button className="pdp-img-nav-btn" onClick={goNextImage} disabled={activeImageIndex === galleryImages.length - 1} aria-label="Next image"
                 style={{ fontSize: "38px", fontWeight: 200, opacity: activeImageIndex === galleryImages.length - 1 ? 0.15 : 0.75 }}>
-                ›
-              </button>
-            </div>
-
-              <button className="pdp-img-nav-btn" onClick={goNextImage} disabled={activeImageIndex === galleryImages.length - 1} aria-label="Next image"
-                style={{ fontSize: "22px", fontWeight: 300, opacity: activeImageIndex === galleryImages.length - 1 ? 0.15 : 0.7 }}>
                 ›
               </button>
             </div>
