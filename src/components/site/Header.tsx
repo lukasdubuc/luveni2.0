@@ -47,7 +47,7 @@ export function Header({ theme = "light" }: { theme?: "light" | "dark" }) {
 
   return (
     <header
-      className={`sticky top-0 z-50 transition-colors duration-500 ${bgCls} border-b ${borderCls}`}
+      className={`sticky top-0 z-50 transition-colors duration-500 ${bgCls} border-b md:border-b-0 ${borderCls}`}
     >
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
 
