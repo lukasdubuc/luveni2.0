@@ -46,20 +46,23 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
-        <HeadContent />
+        {/* Hoisted before HeadContent so it runs before stylesheet paint */}
         <script dangerouslySetInnerHTML={{ __html: `
           (function() {
             try {
-              var theme = localStorage.getItem('theme') || 'light';
-              document.documentElement.classList.add(theme);
-              document.documentElement.style.backgroundColor = theme === 'dark' ? '#000000' : '#FFFFFF';
+              var t = localStorage.getItem('theme') || 'light';
+              var d = document.documentElement;
+              d.classList.add(t);
+              d.style.backgroundColor = t === 'dark' ? '#000000' : '#FFFFFF';
+              d.style.colorScheme = t;
             } catch (e) {}
           })()
         ` }} />
+        <HeadContent />
       </head>
-      <body>{children}<Scripts /></body>
+      <body suppressHydrationWarning>{children}<Scripts /></body>
     </html>
   );
 }
@@ -100,7 +103,7 @@ function RootComponent() {
       setTheme(config.theme || "light");
     }).subscribe();
     return () => { canceled = true; sub.unsubscribe(); };
-  }, [isBare]);
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
