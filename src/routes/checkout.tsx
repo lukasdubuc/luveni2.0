@@ -9,7 +9,7 @@ function CheckoutPage() {
   const { items, updateItemQuantity, removeItem, totalCents } = useCart();
 
   return (
-    <div className="min-h-screen bg-background text-foreground font-mono px-4 py-8">
+    <div className="min-h-screen bg-background text-foreground font-mono px-4 py-8 overflow-x-hidden">
       <div className="max-w-3xl mx-auto">
         <h1 className="text-xl font-bold uppercase tracking-widest mb-8">Checkout</h1>
 
@@ -17,14 +17,14 @@ function CheckoutPage() {
         <div className="md:hidden space-y-6">
           {items.map((item) => (
             <div key={`${item.productId}-${item.variantSku}`} className="flex gap-4 border-b border-border pb-4">
-              {/* Image */}
-              <div className="w-20 h-20 bg-muted flex-shrink-0">
+              {/* Image - Border and background classes removed */}
+              <div className="w-20 h-20 flex-shrink-0">
                 <img src={item.image_url} alt={item.title} className="w-full h-full object-cover" />
               </div>
               
               {/* Info */}
-              <div className="flex flex-col flex-1 gap-1">
-                <h3 className="text-sm font-bold uppercase">{item.title}</h3>
+              <div className="flex flex-col flex-1 gap-1 min-w-0">
+                <h3 className="text-sm font-bold uppercase truncate">{item.title}</h3>
                 <p className="text-xs opacity-70">${(item.price_cents / 100).toFixed(2)}</p>
                 
                 {/* Controls */}
@@ -42,9 +42,7 @@ function CheckoutPage() {
         </div>
 
         {/* --- DESKTOP VIEW (Only visible on medium screens and up) --- */}
-        {/* Replace the content below with your original Desktop code */}
         <div className="hidden md:block">
-           {/* Your existing PC code goes here. I've left a placeholder structure below: */}
            <table className="w-full text-left">
              <thead>
                <tr>
@@ -71,15 +69,12 @@ function CheckoutPage() {
            </table>
         </div>
 
-        {/* --- SUMMARY SECTION (Works for both) --- */}
+        {/* --- SUMMARY SECTION --- */}
         <div className="mt-12 border-t border-border pt-6">
           <div className="flex justify-between items-center text-sm font-bold uppercase tracking-widest">
             <span>Total</span>
             <span>${(totalCents / 100).toFixed(2)}</span>
           </div>
-          <Link to="/shop" className="block mt-6 text-center text-xs uppercase opacity-50 hover:opacity-100">
-            Continue Shopping
-          </Link>
         </div>
       </div>
     </div>
