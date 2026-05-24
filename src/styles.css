@@ -64,10 +64,8 @@ html { background-color: var(--background); }
     to   { opacity: 1; transform: translateZ(0); }
   }
 
-  /* Prevent white flash — match the offer page background during transition */
   ::view-transition-image-pair(root) {
     isolation: isolate;
-    background-color: #f0f0f0;
   }
 
   ::view-transition-old(root) {
@@ -81,6 +79,5 @@ html { background-color: var(--background); }
     will-change: transform, opacity;
     backface-visibility: hidden;
     transform-origin: center center;
-    background-color: #f0f0f0;
   }
 }
