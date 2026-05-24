@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { fetchProducts, useProducts } from "@/lib/useProducts";
 import { useMemo, memo } from "react";
+
 type Product = {
   id: string;
   title: string;
@@ -9,6 +10,7 @@ type Product = {
   discounted_price_cents?: number | null;
   image_urls: string[];
 };
+
 export const Route = createFileRoute("/shop")({
   loader: async () => {
     const products = await fetchProducts({ onlyPublished: true });
@@ -22,6 +24,7 @@ export const Route = createFileRoute("/shop")({
   }),
   component: ShopPage,
 });
+
 function ShopPage() {
   const loader = Route.useLoaderData();
   const { products: clientProducts } = useProducts({ onlyPublished: true });
@@ -30,6 +33,7 @@ function ShopPage() {
       ? (clientProducts as Product[])
       : ((loader?.products as Product[]) ?? []);
   }, [clientProducts, loader?.products]);
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-inherit font-mono selection:bg-current selection:text-current">
       {products.length === 0 ? (
@@ -48,6 +52,7 @@ function ShopPage() {
     </div>
   );
 }
+
 const ProductCell = memo(({ product }: { product: Product }) => {
   const imageUrl =
     Array.isArray(product.image_urls) && product.image_urls.length > 0
@@ -59,12 +64,15 @@ const ProductCell = memo(({ product }: { product: Product }) => {
   const displayPrice = hasDiscount
     ? product.discounted_price_cents!
     : product.price_cents;
+
   return (
     <Link
-      to={`/offer/${product.slug}`}
+      to="/offer/$slug"
+      params={{ slug: product.slug }}
       preload="intent"
       viewTransition
       className="group relative z-0 block border-none bg-transparent outline-none transition-transform duration-300 ease-in-out hover:z-10 hover:scale-105 hover:border-transparent focus:outline-none focus-visible:outline-none"
+      style={{ willChange: "transform" }}
     >
       <div className="relative flex aspect-square items-center justify-center overflow-hidden bg-transparent p-6 sm:p-8 md:p-10">
         {imageUrl ? (
