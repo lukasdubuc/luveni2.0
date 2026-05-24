@@ -130,6 +130,33 @@ function OfferSlugPage() {
     setTimeout(() => { navigateCooldown.current = false; }, 500);
   }, [nextProduct, navigate]);
 
+  // ── Preload adjacent products and their images ──────────────────────────
+  useEffect(() => {
+    if (!product || allProducts.length === 0) return;
+
+    // Preload prev/next product images
+    [prevProduct, nextProduct].forEach((p) => {
+      if (p?.image_urls?.[0]) {
+        const link = document.createElement("link");
+        link.rel = "preload";
+        link.as = "image";
+        link.href = p.image_urls[0];
+        document.head.appendChild(link);
+      }
+    });
+
+    // Prefetch prev/next product pages
+    [prevProduct, nextProduct].forEach((p) => {
+      if (p) {
+        const link = document.createElement("link");
+        link.rel = "prefetch";
+        link.href = `/offer/${p.slug}`;
+        link.as = "document";
+        document.head.appendChild(link);
+      }
+    });
+  }, [product, prevProduct, nextProduct]);
+
   // ── Wheel / swipe gesture (navigates between products — unchanged) ────────
   const touchStartY = useRef<number | null>(null);
   const touchStartX = useRef<number | null>(null);
@@ -402,7 +429,6 @@ function OfferSlugPage() {
                     style={{
                       maxWidth: "min(320px, 70vw)", maxHeight: "45vh",
                       objectFit: "contain", display: "block",
-                      willChange: "opacity",
                     }}
                   />
                 ) : (
