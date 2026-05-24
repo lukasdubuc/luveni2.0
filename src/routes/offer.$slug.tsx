@@ -249,7 +249,6 @@ function OfferSlugPage() {
   // ── Add to cart handler ──────────────────────────────────────────────────
   const handleAddToCart = useCallback(() => {
     if (!product || checkoutDisabled || isSoldOut) return;
-    // If there are options and they're not open yet, open them first
     if (optionKeys.length > 0 && !optionsOpen) {
       setOptionsOpen(true);
       return;
@@ -351,7 +350,7 @@ function OfferSlugPage() {
           style={{
             position: "absolute", top: "1.25rem", left: "1.25rem", zIndex: 20,
             color: "inherit", textDecoration: "none",
-            fontSize: "20px", fontWeight: 300, lineHeight: 1,
+            fontSize: "38px", fontWeight: 200, lineHeight: 1,
             opacity: 0.7,
             display: "flex", alignItems: "center",
           }}
