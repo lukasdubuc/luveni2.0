@@ -11,12 +11,17 @@ import {
 } from "@tanstack/react-router";
 
 import { Toaster } from "sonner";
+
 import { useEffect, useState, memo } from "react";
 
 import { CartProvider } from "@/context/CartContext";
+
 import appCss from "../styles.css?url";
+
 import { SiteShell } from "@/components/site/SiteShell";
+
 import { supabase } from "@/integrations/supabase/client";
+
 import { mergeSiteConfig } from "@/lib/site-config";
 
 /* ---------------- NOT FOUND ---------------- */
@@ -109,29 +114,25 @@ export const Route =
 
 /* ---------------- SHELL ---------------- */
 
-function RootShell({ children }: { children: React.ReactNode }) {
+function RootShell({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* FIXED PREPAINT (NO FLASH) */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
 (function () {
   try {
     var theme = localStorage.getItem("theme") || "dark";
+
     var d = document.documentElement;
 
     d.classList.remove("light", "dark");
     d.classList.add(theme);
-
-    // 🔥 prevent white flash BEFORE CSS loads
-    document.documentElement.style.backgroundColor =
-      theme === "dark" ? "#000000" : "#FFFFFF";
-
-    document.body.style.backgroundColor =
-      theme === "dark" ? "#000000" : "#FFFFFF";
-
   } catch (e) {}
 })();
 `,
@@ -169,8 +170,11 @@ function RootComponent() {
     select: (s) => s.location.pathname,
   });
 
-  // ⚠️ FIX: DO NOT RE-MOUNT LAYOUT FOR OFFER ROUTES
-  // This was causing lag + black screen transitions
+  const isBare =
+    path.startsWith("/admin") ||
+    path === "/login" ||
+    path.startsWith("/offer/");
+
   const [footerDescription, setFooterDescription] = useState<string>();
 
   useEffect(() => {
@@ -200,9 +204,11 @@ function RootComponent() {
       setFooterDescription(config.metadata?.footer_description ?? "");
 
       const theme = config.theme || "dark";
+
       localStorage.setItem("theme", theme);
 
       const d = document.documentElement;
+
       d.classList.remove("light", "dark");
       d.classList.add(theme);
     };
@@ -227,9 +233,11 @@ function RootComponent() {
           );
 
           const theme = config.theme || "dark";
+
           localStorage.setItem("theme", theme);
 
           const d = document.documentElement;
+
           d.classList.remove("light", "dark");
           d.classList.add(theme);
         }
@@ -245,8 +253,10 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <CartProvider>
-        {/* IMPORTANT: KEEP SHELL ALWAYS MOUNTED */}
-        <SiteShell footerDescription={footerDescription}>
+        <SiteShell
+          bare={isBare}
+          footerDescription={footerDescription}
+        >
           <PersistentOutlet />
         </SiteShell>
 
