@@ -94,18 +94,18 @@
   * {
     border-radius: 0 !important;
     box-shadow: none !important;
-    /* Removed: global text-transform: uppercase — Yeezy does NOT force uppercase everywhere */
-    /* Removed: global letter-spacing — let each element control its own */
+    /* Global uppercase — matches Yeezy's all-caps treatment sitewide */
+    text-transform: uppercase;
   }
 
   body {
     background-color: var(--background);
     color: var(--foreground);
-    /* Yeezy uses plain Helvetica Neue, not monospace, as the body font */
+    /* Helvetica Neue — the font Yeezy uses for all product labels */
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 400;
-    letter-spacing: -0.01em;
+    letter-spacing: 0em;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     margin: 0;
@@ -116,7 +116,7 @@
   h1, h2, h3, h4, h5, h6 {
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     font-weight: 400;
-    letter-spacing: -0.02em;
+    letter-spacing: 0em;
     line-height: 1.1;
   }
 
