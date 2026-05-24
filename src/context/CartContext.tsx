@@ -6,6 +6,7 @@ export type CartItem = {
   title: string;
   price_cents: number;
   quantity: number;
+  image_url: string; // <--- ADDED THIS
 };
 
 type CartContextType = {
@@ -24,12 +25,10 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
 
-  // Restore from localStorage on initial load
   useEffect(() => {
     restoreFromStorage();
   }, []);
 
-  // Sync to localStorage whenever items change
   useEffect(() => {
     if (items.length > 0) {
       localStorage.setItem("cart_items", JSON.stringify(items));
@@ -58,9 +57,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
         );
         if (idx > -1) {
           const next = [...prev];
-          next[idx] = { ...next[idx], quantity: next[idx].quantity + (incoming.quantity ?? 1) };
+          next[idx] = { 
+            ...next[idx], 
+            quantity: next[idx].quantity + (incoming.quantity ?? 1) 
+          };
           return next;
         }
+        // This will now successfully include image_url
         return [...prev, { ...incoming, quantity: incoming.quantity ?? 1 }];
       });
     },
@@ -77,7 +80,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         (i.productId === productId && i.variantSku === variantSku) 
           ? { ...i, quantity: Math.max(0, quantity) } 
           : i
-      ).filter(i => i.quantity > 0) // Remove if quantity becomes 0
+      ).filter(i => i.quantity > 0)
     );
   }, []);
 
