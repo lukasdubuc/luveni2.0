@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
+import { createContext, useContext, useState, useCallback, ReactNode, useEffect, useMemo } from "react";
 
 export type CartItem = {
   productId: string;
@@ -21,27 +21,15 @@ type CartContextType = {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  // Start empty to ensure fresh cart on refresh
+  // Always start empty to ensure a clean state on fresh loads
   const [items, setItems] = useState<CartItem[]>([]);
 
-  // Function to pull saved cart from LocalStorage
-  const restoreFromStorage = useCallback(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("cart_items");
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            setItems(parsed);
-          }
-        } catch (e) {
-          console.error("Failed to restore cart", e);
-        }
-      }
-    }
-  }, []);
+  // Debugging: Log whenever state changes
+  useEffect(() => {
+    console.log("Cart State Updated:", items);
+  }, [items]);
 
-  // Sync state to localStorage whenever items change
+  // Sync to localStorage
   useEffect(() => {
     if (items.length > 0) {
       localStorage.setItem("cart_items", JSON.stringify(items));
@@ -50,22 +38,33 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [items]);
 
+  const restoreFromStorage = useCallback(() => {
+    const saved = localStorage.getItem("cart_items");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setItems(parsed);
+        console.log("Cart restored from storage");
+      } catch (e) {
+        console.error("Cart corruption during restore", e);
+      }
+    }
+  }, []);
+
   const addItem = useCallback(
     (incoming: Omit<CartItem, "quantity"> & { quantity?: number }) => {
+      console.log("addItem triggered with:", incoming);
       setItems((prev) => {
         const idx = prev.findIndex(
-          (i) =>
-            i.productId === incoming.productId &&
-            i.variantSku === incoming.variantSku,
+          (i) => i.productId === incoming.productId && i.variantSku === incoming.variantSku,
         );
         if (idx > -1) {
           const next = [...prev];
-          next[idx] = {
-            ...next[idx],
-            quantity: next[idx].quantity + (incoming.quantity ?? 1),
-          };
+          next[idx] = { ...next[idx], quantity: next[idx].quantity + (incoming.quantity ?? 1) };
+          console.log("Item updated quantity:", next[idx]);
           return next;
         }
+        console.log("Adding new item to cart");
         return [...prev, { ...incoming, quantity: incoming.quantity ?? 1 }];
       });
     },
@@ -73,11 +72,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   );
 
   const removeItem = useCallback((productId: string, variantSku?: string) => {
-    setItems((prev) =>
-      prev.filter(
-        (i) => !(i.productId === productId && i.variantSku === variantSku),
-      ),
-    );
+    setItems((prev) => prev.filter((i) => !(i.productId === productId && i.variantSku === variantSku)));
   }, []);
 
   const clearCart = useCallback(() => {
@@ -85,24 +80,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("cart_items");
   }, []);
 
-  const totalCents = items.reduce(
-    (sum, i) => sum + i.price_cents * i.quantity,
-    0,
-  );
-  const count = items.reduce((sum, i) => sum + i.quantity, 0);
+  // Use useMemo to prevent unnecessary re-renders of consuming components
+  const value = useMemo(() => ({
+    items,
+    addItem,
+    removeItem,
+    clearCart,
+    restoreFromStorage,
+    totalCents: items.reduce((sum, i) => sum + i.price_cents * i.quantity, 0),
+    count: items.reduce((sum, i) => sum + i.quantity, 0)
+  }), [items, addItem, removeItem, clearCart, restoreFromStorage]);
 
   return (
-    <CartContext.Provider
-      value={{ 
-        items, 
-        addItem, 
-        removeItem, 
-        clearCart, 
-        restoreFromStorage, 
-        totalCents, 
-        count 
-      }}
-    >
+    <CartContext.Provider value={value}>
       {children}
     </CartContext.Provider>
   );
