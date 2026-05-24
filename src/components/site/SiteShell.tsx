@@ -1,3 +1,7 @@
+import type { ReactNode } from "react";
+import { Header } from "./Header";
+import { Footer } from "./Footer";
+
 export function SiteShell({ 
   children, 
   footerDescription, 
@@ -8,8 +12,7 @@ export function SiteShell({
   theme?: "light" | "dark" 
 }) {
   return (
-    // Removed transition-colors duration-200
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
+    <div className="flex min-h-screen flex-col bg-background text-foreground transition-colors duration-200">
       <Header theme={theme} />
       <main className="w-full flex-1">
         {children}
