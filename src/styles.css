@@ -30,7 +30,11 @@
     monospace;
 }
 
-/* SAFE EARLY PAINT */
+/*
+  DARK-FIRST EARLY PAINT
+
+  Prevents white flash before hydration/theme sync.
+*/
 
 html {
   background-color: #000000;
@@ -39,6 +43,7 @@ html {
 html.light {
   background-color: #FFFFFF;
 }
+
 :root {
   color-scheme: light;
 
@@ -104,7 +109,12 @@ html.light {
   }
 }
 
-/* SAFE CONTAINMENT */
+/*
+  ROUTE CONTAINMENT
+
+  Prevents full-page layout invalidation
+  during route swaps.
+*/
 
 .route-container {
   contain: layout paint;
