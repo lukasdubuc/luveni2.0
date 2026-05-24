@@ -352,7 +352,6 @@ function OfferSlugPage() {
           onTouchStart={handleImgTouchStart}
           onTouchEnd={handleImgTouchEnd}
         >
-          {/* ── Zoom-in entry via CSS keyframe — no framer-motion needed ── */}
           <div
             key={product.slug}
             style={{
@@ -541,7 +540,7 @@ function OfferSlugPage() {
           )}
         </div>
 
-        {/* ── Footer CTA — now adds to cart instead of navigating to checkout ── */}
+        {/* ── Footer CTA ── */}
         <div style={{
           flexShrink: 0, background: "currentColor", height: "3.5rem",
           display: "flex", alignItems: "stretch",
