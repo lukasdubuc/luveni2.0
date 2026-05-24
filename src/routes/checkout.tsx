@@ -5,12 +5,13 @@ import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Lock } from "lucide-react";
 import { z } from "zod";
 import { toast } from "sonner";
-import { offer } from "@/config/site";
 import { supabase } from "@/integrations/supabase/client";
 import { createCheckout } from "@/lib/checkout.functions";
 import { useCart } from "@/context/CartContext";
 
 export const Route = createFileRoute("/checkout")({
+  // This sets the browser tab title
+  meta: () => [{ title: "Cart" }],
   loader: async ({ location }) => {
     const params = new URLSearchParams(location.searchStr ?? "");
     const productId = params.get("productId");
