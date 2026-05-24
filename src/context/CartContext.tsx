@@ -21,7 +21,6 @@ type CartContextType = {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  // Start empty; the useEffect below will populate it from storage
   const [items, setItems] = useState<CartItem[]>([]);
 
   // Restore from localStorage on initial load
@@ -72,23 +71,25 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setItems((prev) => {
       const filtered = prev.filter((i) => {
         const matchesId = i.productId === productId;
-        // Handle undefined vs undefined cases
         const matchesSku = i.variantSku === variantSku;
-        
         const isMatch = matchesId && matchesSku;
         if (isMatch) {
-            console.log("Match found! Removing item:", i);
+          console.log("Match found! Removing item:", i);
         }
         return !isMatch;
       });
-      
       if (filtered.length === prev.length) {
-          console.warn("No item was found to remove. Current items:", prev);
+        console.warn("No item was found to remove. Current items:", prev);
       }
       return filtered;
     });
   }, []);
-  // Use useMemo to prevent unnecessary re-renders of consuming components
+
+  const clearCart = useCallback(() => {
+    setItems([]);
+    localStorage.removeItem("cart_items");
+  }, []);
+
   const value = useMemo(() => ({
     items,
     addItem,
