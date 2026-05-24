@@ -30,15 +30,11 @@
     monospace;
 }
 
-/*
-  DARK-FIRST EARLY PAINT
+/* =========================
+   BASE THEME (STABLE)
+========================= */
 
-  Prevents white flash before hydration/theme sync.
-*/
-
-html {
-  background-color: #000000;
-
+:root {
   color-scheme: light;
 
   --background: #FFFFFF;
@@ -48,18 +44,6 @@ html {
 
   --border: rgba(0, 0, 0, 0.10);
 }
-
-/*
-  LIGHT MODE OVERRIDE
-*/
-
-html.light {
-  background-color: #FFFFFF;
-}
-
-/*
-  DARK MODE VARIABLES
-*/
 
 html.dark {
   color-scheme: dark;
@@ -71,6 +55,18 @@ html.dark {
 
   --border: rgba(255, 255, 255, 0.15);
 }
+
+/* =========================
+   EARLY PAINT FIX (NO FLASH)
+========================= */
+
+html {
+  background-color: #000000;
+}
+
+/* =========================
+   GLOBAL BASE STYLES
+========================= */
 
 @layer base {
 
@@ -93,7 +89,6 @@ html.dark {
     color: var(--foreground);
 
     font-family: var(--font-sans);
-
     font-size: 13px;
 
     text-transform: uppercase;
@@ -115,12 +110,9 @@ html.dark {
   }
 }
 
-/*
-  ROUTE CONTAINMENT
-
-  Prevents full-page layout invalidation
-  during route swaps.
-*/
+/* =========================
+   ROUTE CONTAINER PERF
+========================= */
 
 .route-container {
   contain: layout paint;
