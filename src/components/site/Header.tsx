@@ -29,22 +29,36 @@ function BagIcon({ size = 18 }: { size?: number }) {
   );
 }
 
+function useTheme() {
+  const [isDark, setIsDark] = useState(() =>
+    typeof document !== "undefined"
+      ? document.documentElement.classList.contains("dark")
+      : false
+  );
+
+  useEffect(() => {
+    const update = () =>
+      setIsDark(document.documentElement.classList.contains("dark"));
+
+    update();
+
+    const obs = new MutationObserver(update);
+    obs.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    return () => obs.disconnect();
+  }, []);
+
+  return isDark;
+}
+
 export function Header() {
   const [open, setOpen] = useState(false);
   const { count } = useCart();
 
-  // 🔥 FORCE REACTIVE THEME (fixes sticky header issue)
-  const [_, forceUpdate] = useState(0);
-
-  useEffect(() => {
-    const update = () => forceUpdate((x) => x + 1);
-
-    window.addEventListener("theme-sync", update);
-    return () => window.removeEventListener("theme-sync", update);
-  }, []);
-
-  const isDark =
-    document.documentElement.classList.contains("dark");
+  const isDark = useTheme();
 
   const colorCls = isDark ? "text-white" : "text-black";
   const mutedCls = isDark ? "text-white/40" : "text-black/40";
@@ -57,6 +71,7 @@ export function Header() {
       className={`sticky top-0 z-50 transition-colors duration-500 ${bgCls} border-b md:border-b-0 ${borderCls}`}
     >
       <div className="flex h-14 w-full items-center justify-between px-6">
+
         <div className="flex flex-1 items-center">
           <button
             onClick={() => setOpen((v) => !v)}
