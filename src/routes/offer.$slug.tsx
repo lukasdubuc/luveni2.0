@@ -248,17 +248,12 @@ function OfferSlugPage() {
 
   // ── Add to cart handler with Engine Safeguards ───────────────────────────
   const handleAddToCart = useCallback(() => {
-    // ENGINE SAFEGUARD: Validation Layer
     if (!product) return;
     if (checkoutDisabled || isSoldOut) return;
-    
-    // ENGINE SAFEGUARD: State Integrity
     if (optionKeys.length > 0 && !optionsOpen) {
       setOptionsOpen(true);
       return;
     }
-    
-    // ENGINE SAFEGUARD: Execution Check
     try {
       addItem({
         productId: product.id,
@@ -300,7 +295,7 @@ function OfferSlugPage() {
   if (!product) {
     return (
       <section
-        className="flex min-h-screen flex-col items-center justify-center bg-[#f0f0f0] text-black px-4"
+        className="flex min-h-screen flex-col items-center justify-center bg-background text-foreground px-4"
         style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
       >
         <p className="text-[10px] font-bold uppercase tracking-[0.35em] opacity-40">404</p>
@@ -308,9 +303,9 @@ function OfferSlugPage() {
         <p className="mt-3 text-xs uppercase tracking-[0.2em] opacity-50">
           This product is unavailable.
         </p>
-        <a
+        
           href="/shop"
-          className="mt-8 inline-flex h-12 items-center border border-black bg-black text-[#f0f0f0] px-10 text-xs font-bold uppercase tracking-[0.25em] transition hover:bg-[#f0f0f0] hover:text-black"
+          className="mt-8 inline-flex h-12 items-center border border-foreground bg-foreground text-background px-10 text-xs font-bold uppercase tracking-[0.25em] transition hover:bg-background hover:text-foreground"
         >
           Back to Shop
         </a>
@@ -337,26 +332,20 @@ function OfferSlugPage() {
         .pdp-img-nav-btn:hover { opacity: 0.4; }
         .pdp-img-nav-btn:disabled { opacity: 0.12; cursor: default; }
         @media (max-width: 640px) { .pdp-img-nav-btn { font-size: 44px !important; padding: 0.5rem 0.875rem; } }
+        html, body { background-color: var(--background) !important; color: var(--foreground) !important; }
       `}</style>
 
-      {/* ── Full-screen Yeezy Storefront Theme ── */}
+      {/* ── Full-screen storefront ── */}
       <div
-        className="flex min-h-screen flex-col bg-[#f0f0f0] text-black"
-        style={{
-          overflow: "hidden",
-          zIndex: 0,
-        }}
+        className="flex min-h-screen flex-col bg-background text-foreground"
+        style={{ overflow: "hidden", zIndex: 0 }}
       >
         <div
           style={{
-            position: "fixed",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            position: "fixed", inset: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
             fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
-            overflow: "hidden",
-            zIndex: 0,
+            overflow: "hidden", zIndex: 0,
           }}
         >
           {/* ── Top-left: back arrow ── */}
@@ -367,8 +356,7 @@ function OfferSlugPage() {
               position: "absolute", top: "1.25rem", left: "1.25rem", zIndex: 20,
               color: "inherit", textDecoration: "none",
               fontSize: "38px", fontWeight: 200, lineHeight: 1,
-              opacity: 0.7,
-              display: "flex", alignItems: "center",
+              opacity: 0.7, display: "flex", alignItems: "center",
             }}
             aria-label="Back to shop"
           >
@@ -380,7 +368,7 @@ function OfferSlugPage() {
             style={{
               position: "absolute", top: "1.25rem", right: "1.25rem", zIndex: 20,
               fontSize: "11px", fontWeight: 400, letterSpacing: "0.02em",
-              color: isSoldOut ? "#c00" : "black",
+              color: isSoldOut ? "#c00" : "inherit",
               opacity: isSoldOut ? 1 : 0.5,
             }}
           >
@@ -390,42 +378,28 @@ function OfferSlugPage() {
           {/* ── Center column: image + info ── */}
           <div
             style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              width: "100%",
-              maxWidth: "480px",
-              padding: "3.5rem 2rem 2rem",
-              boxSizing: "border-box",
+              display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center",
+              width: "100%", maxWidth: "480px",
+              padding: "3.5rem 2rem 2rem", boxSizing: "border-box",
               animation: "pdp-fade-in 0.4s ease both",
             }}
             key={product.slug}
           >
-            {/* ── Image row: left arrow + image + right arrow ── */}
+            {/* ── Image row ── */}
             <div style={{
-              width: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.5rem",
-              marginBottom: "1.5rem",
+              width: "100%", display: "flex",
+              alignItems: "center", justifyContent: "center",
+              gap: "0.5rem", marginBottom: "1.5rem",
             }}
               onTouchStart={handleImgTouchStart}
               onTouchEnd={handleImgTouchEnd}
             >
-              {/* Left image arrow */}
-              <button
-                className="pdp-img-nav-btn"
-                onClick={goPrevImage}
-                disabled={activeImageIndex === 0}
-                aria-label="Previous image"
-                style={{ fontSize: "38px", fontWeight: 200, opacity: activeImageIndex === 0 ? 0.12 : 0.75 }}
-              >
+              <button className="pdp-img-nav-btn" onClick={goPrevImage} disabled={activeImageIndex === 0} aria-label="Previous image"
+                style={{ fontSize: "38px", fontWeight: 200, opacity: activeImageIndex === 0 ? 0.12 : 0.75 }}>
                 ‹
               </button>
 
-              {/* Product image */}
               <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 {galleryImages[activeImageIndex] ? (
                   <img
@@ -434,10 +408,8 @@ function OfferSlugPage() {
                     alt={`${product.title} — image ${activeImageIndex + 1}`}
                     loading="eager"
                     style={{
-                      maxWidth: "min(320px, 70vw)",
-                      maxHeight: "45vh",
-                      objectFit: "contain",
-                      display: "block",
+                      maxWidth: "min(320px, 70vw)", maxHeight: "45vh",
+                      objectFit: "contain", display: "block",
                       animation: "pdp-img-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both",
                     }}
                   />
@@ -445,7 +417,7 @@ function OfferSlugPage() {
                   <div style={{
                     width: "min(320px, 70vw)", aspectRatio: "1",
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    border: "1px solid rgba(0,0,0,0.15)",
+                    border: "1px solid var(--border)",
                     fontSize: "9px", fontWeight: 500, letterSpacing: "0.3em",
                     textTransform: "uppercase", opacity: 0.3,
                   }}>
@@ -454,14 +426,8 @@ function OfferSlugPage() {
                 )}
               </div>
 
-              {/* Right image arrow */}
-              <button
-                className="pdp-img-nav-btn"
-                onClick={goNextImage}
-                disabled={activeImageIndex === galleryImages.length - 1}
-                aria-label="Next image"
-                style={{ fontSize: "22px", fontWeight: 300, opacity: activeImageIndex === galleryImages.length - 1 ? 0.15 : 0.7 }}
-              >
+              <button className="pdp-img-nav-btn" onClick={goNextImage} disabled={activeImageIndex === galleryImages.length - 1} aria-label="Next image"
+                style={{ fontSize: "22px", fontWeight: 300, opacity: activeImageIndex === galleryImages.length - 1 ? 0.15 : 0.7 }}>
                 ›
               </button>
             </div>
@@ -470,14 +436,10 @@ function OfferSlugPage() {
             {galleryImages.length > 1 && (
               <div style={{ display: "flex", gap: "6px", marginBottom: "1.5rem" }}>
                 {galleryImages.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setActiveImageIndex(i)}
-                    aria-label={`Image ${i + 1}`}
+                  <button key={i} onClick={() => setActiveImageIndex(i)} aria-label={`Image ${i + 1}`}
                     style={{
-                      width: "6px", height: "6px",
-                      borderRadius: "50%",
-                      background: "black",
+                      width: "6px", height: "6px", borderRadius: "50%",
+                      background: "var(--foreground)",
                       opacity: i === activeImageIndex ? 0.8 : 0.2,
                       border: "none", cursor: "pointer", padding: 0,
                       transition: "opacity 0.2s ease",
@@ -489,26 +451,18 @@ function OfferSlugPage() {
 
             {/* Title */}
             <div style={{
-              fontSize: "clamp(0.85rem, 2vw, 1rem)",
-              fontWeight: 400,
-              letterSpacing: "0.02em",
-              color: "black",
-              textAlign: "center",
-              marginBottom: "0.4rem",
-              opacity: 0.9,
+              fontSize: "clamp(0.85rem, 2vw, 1rem)", fontWeight: 400,
+              letterSpacing: "0.02em", color: "var(--foreground)",
+              textAlign: "center", marginBottom: "0.4rem", opacity: 0.9,
             }}>
               {product.title}
             </div>
 
             {/* Price */}
             <div style={{
-              fontSize: "clamp(0.85rem, 2vw, 1rem)",
-              fontWeight: 400,
-              letterSpacing: "0.02em",
-              color: "black",
-              textAlign: "center",
-              marginBottom: "1.5rem",
-              opacity: 0.9,
+              fontSize: "clamp(0.85rem, 2vw, 1rem)", fontWeight: 400,
+              letterSpacing: "0.02em", color: "var(--foreground)",
+              textAlign: "center", marginBottom: "1.5rem", opacity: 0.9,
             }}>
               {formatPrice(selectedPrice)}
             </div>
@@ -526,6 +480,7 @@ function OfferSlugPage() {
                       fontSize: "9px", fontWeight: 500, letterSpacing: "0.2em",
                       textTransform: "uppercase", opacity: 0.45,
                       textAlign: "center", marginBottom: "0.5rem",
+                      color: "var(--foreground)",
                     }}>
                       {normalizeOptionName(option)} — {selection[option] || "SELECT"}
                     </div>
@@ -542,10 +497,10 @@ function OfferSlugPage() {
                             aria-pressed={selected}
                             style={{
                               minHeight: "2rem", minWidth: "2.5rem", padding: "0 0.75rem",
-                              borderColor: selected ? "black" : "rgba(0,0,0,0.25)",
+                              borderColor: selected ? "var(--foreground)" : "var(--border)",
                               border: "1px solid",
-                              background: selected ? "black" : "transparent",
-                              color: selected ? "#f0f0f0" : "black",
+                              background: selected ? "var(--foreground)" : "transparent",
+                              color: selected ? "var(--background)" : "var(--foreground)",
                               fontSize: "9px", fontWeight: 500, letterSpacing: "0.08em",
                               textTransform: "uppercase",
                               cursor: available ? "pointer" : "not-allowed",
@@ -568,7 +523,7 @@ function OfferSlugPage() {
             {isSoldOut ? (
               <div style={{
                 fontSize: "10px", fontWeight: 500, letterSpacing: "0.2em",
-                textTransform: "uppercase", opacity: 0.35,
+                textTransform: "uppercase", opacity: 0.35, color: "var(--foreground)",
               }}>
                 SOLD OUT
               </div>
@@ -581,15 +536,13 @@ function OfferSlugPage() {
                 style={{
                   background: "transparent", border: "none",
                   cursor: (checkoutDisabled && optionsOpen) ? "not-allowed" : "pointer",
-                  color: "black",
+                  color: "var(--foreground)",
                   fontSize: addedFeedback ? "10px" : "28px",
-                  fontWeight: 200,
-                  lineHeight: 1,
+                  fontWeight: 200, lineHeight: 1,
                   opacity: (checkoutDisabled && optionsOpen) ? 0.3 : 0.8,
                   transition: "opacity 0.2s, transform 0.15s, font-size 0.15s",
                   letterSpacing: addedFeedback ? "0.2em" : "0",
-                  textTransform: "uppercase",
-                  padding: "0.25rem",
+                  textTransform: "uppercase", padding: "0.25rem",
                   fontFamily: "inherit",
                 }}
               >
@@ -603,8 +556,7 @@ function OfferSlugPage() {
             <div style={{
               position: "absolute", bottom: "1.25rem", right: "1.5rem",
               fontSize: "9px", fontWeight: 400, letterSpacing: "0.15em",
-              color: "black", opacity: 0.3,
-              fontFamily: "inherit",
+              color: "var(--foreground)", opacity: 0.3, fontFamily: "inherit",
             }}>
               {String(currentIndex + 1).padStart(2, "0")} / {String(allProducts.length).padStart(2, "0")}
             </div>
