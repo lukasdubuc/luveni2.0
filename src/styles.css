@@ -40,4 +40,17 @@ html { background-color: var(--background); }
   }
   a { text-decoration: none; color: inherit; }
   button { cursor: pointer; font-family: inherit; }
+
+/* Add to the end of styles.css */
+@media (max-width: 768px) {
+  /* Kill the fade so swaps are instant */
+  .transition-colors {
+    transition: none !important;
+  }
+  
+  /* Stop the mobile 'overscroll' flash */
+  html, body {
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
+  }
 }
