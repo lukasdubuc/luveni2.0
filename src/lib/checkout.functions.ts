@@ -28,27 +28,26 @@ export const createCheckout = createServerFn({ method: "POST" })
       // 1. Fetch Product & Inventory
       const { data: product } = await supabaseAdmin
         .from("products")
-        .select("id, title, price_cents, variants, stock") // Assumes 'stock' column exists
+        .select("id, title, price_cents, variants")
         .eq("id", item.productId)
         .maybeSingle();
 
       if (!product) return { ok: false as const, error: `Product ${item.productId} not found.` };
 
-      // 2. Determine Price and Stock Level
+      // 2. Determine Price and Stock Level (stock lives per-variant in JSONB)
       let price = product.price_cents;
-      let availableStock = product.stock;
+      let availableStock: number | undefined;
 
-      if (item.variantSku && product.variants) {
-        const variant = product.variants.find((v: any) => v.sku === item.variantSku);
+      if (item.variantSku && Array.isArray(product.variants)) {
+        const variant = (product.variants as any[]).find((v: any) => v.sku === item.variantSku);
         if (variant) {
-          price = variant.price_cents;
-          // If you track stock by variant, check that instead
-          if (variant.stock !== undefined) availableStock = variant.stock;
+          if (typeof variant.price_cents === "number") price = variant.price_cents;
+          if (typeof variant.stock === "number") availableStock = variant.stock;
         }
       }
 
-      // 3. Verify Availability
-      if (availableStock < item.quantity) {
+      // 3. Verify Availability (only when stock is tracked)
+      if (availableStock !== undefined && availableStock < item.quantity) {
         return { ok: false as const, error: `Insufficient stock for ${product.title}.` };
       }
 
