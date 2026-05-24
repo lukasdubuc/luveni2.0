@@ -24,14 +24,17 @@ import { supabase } from "@/integrations/supabase/client";
 
 import { mergeSiteConfig } from "@/lib/site-config";
 
-/* ---------------- NOT FOUND ---------------- */
-
 function NotFoundComponent() {
   return (
     <SiteShell bare={false}>
       <div className="mx-auto max-w-md px-4 py-24 text-center">
-        <h1 className="text-7xl font-semibold tracking-tight">404</h1>
-        <h2 className="mt-4 text-xl font-semibold">Page not found</h2>
+        <h1 className="text-7xl font-semibold tracking-tight">
+          404
+        </h1>
+
+        <h2 className="mt-4 text-xl font-semibold">
+          Page not found
+        </h2>
 
         <Link
           to="/"
@@ -44,8 +47,6 @@ function NotFoundComponent() {
   );
 }
 
-/* ---------------- ERROR ---------------- */
-
 function ErrorComponent({
   error,
   reset,
@@ -54,6 +55,7 @@ function ErrorComponent({
   reset: () => void;
 }) {
   console.error(error);
+
   const router = useRouter();
 
   return (
@@ -66,6 +68,7 @@ function ErrorComponent({
         <button
           onClick={() => {
             router.invalidate({ sync: false });
+
             reset();
           }}
           className="mt-6 bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
@@ -76,8 +79,6 @@ function ErrorComponent({
     </SiteShell>
   );
 }
-
-/* ---------------- ROUTE ---------------- */
 
 export const Route =
   createRootRouteWithContext<{
@@ -114,13 +115,15 @@ export const Route =
     errorComponent: ErrorComponent,
   });
 
-/* ---------------- SHELL ---------------- */
-
-function RootShell({ children }: { children: React.ReactNode }) {
+function RootShell({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* PRE-PAINT THEME LOCK (UNCHANGED - THIS IS GOOD) */}
+        {/* PRE-PAINT THEME LOCK */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -131,6 +134,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
     var d = document.documentElement;
 
     d.classList.remove("light", "dark");
+
     d.classList.add(theme);
   } catch (e) {}
 })();
@@ -143,13 +147,12 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
       <body suppressHydrationWarning>
         {children}
+
         <Scripts />
       </body>
     </html>
   );
 }
-
-/* ---------------- OUTLET ---------------- */
 
 const PersistentOutlet = memo(function PersistentOutlet() {
   return (
@@ -159,10 +162,9 @@ const PersistentOutlet = memo(function PersistentOutlet() {
   );
 });
 
-/* ---------------- ROOT ---------------- */
-
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
   const router = useRouter();
 
   const path = useRouterState({
@@ -174,9 +176,9 @@ function RootComponent() {
     path === "/login" ||
     path.startsWith("/offer/");
 
-  const [footerDescription, setFooterDescription] = useState<string>();
+  const [footerDescription, setFooterDescription] =
+    useState<string>();
 
-  /* AUTH */
   useEffect(() => {
     const { data: { subscription } } =
       supabase.auth.onAuthStateChange(() => {
@@ -187,7 +189,6 @@ function RootComponent() {
     return () => subscription.unsubscribe();
   }, [router, queryClient]);
 
-  /* SITE CONFIG (FIXED SYNC BEHAVIOR) */
   useEffect(() => {
     let canceled = false;
 
@@ -204,17 +205,14 @@ function RootComponent() {
 
       setFooterDescription(config.metadata?.footer_description ?? "");
 
-      // IMPORTANT FIX: single source of truth
-      const theme =
-        localStorage.getItem("theme") ||
-        config.theme ||
-        "dark";
+      const theme = config.theme || "dark";
 
       localStorage.setItem("theme", theme);
 
       const d = document.documentElement;
 
       d.classList.remove("light", "dark");
+
       d.classList.add(theme);
     };
 
@@ -237,16 +235,14 @@ function RootComponent() {
             config.metadata?.footer_description ?? ""
           );
 
-          const theme =
-            config.theme ||
-            localStorage.getItem("theme") ||
-            "dark";
+          const theme = config.theme || "dark";
 
           localStorage.setItem("theme", theme);
 
           const d = document.documentElement;
 
           d.classList.remove("light", "dark");
+
           d.classList.add(theme);
         }
       )
@@ -261,11 +257,18 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <CartProvider>
-        <SiteShell bare={isBare} footerDescription={footerDescription}>
+        <SiteShell
+          bare={isBare}
+          footerDescription={footerDescription}
+        >
           <PersistentOutlet />
         </SiteShell>
 
-        <Toaster position="top-center" richColors theme="dark" />
+        <Toaster
+          position="top-center"
+          richColors
+          theme="dark"
+        />
       </CartProvider>
     </QueryClientProvider>
   );
