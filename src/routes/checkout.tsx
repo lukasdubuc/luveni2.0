@@ -9,6 +9,7 @@ function CheckoutPage() {
   const { items, updateItemQuantity, removeItem, totalCents } = useCart();
 
   return (
+    // Added overflow-x-hidden to fix mobile zoom issues
     <div className="min-h-screen bg-background text-foreground font-mono px-4 py-8 overflow-x-hidden">
       <div className="max-w-3xl mx-auto">
         <h1 className="text-xl font-bold uppercase tracking-widest mb-8">Checkout</h1>
@@ -17,9 +18,9 @@ function CheckoutPage() {
         <div className="md:hidden space-y-6">
           {items.map((item) => (
             <div key={`${item.productId}-${item.variantSku}`} className="flex gap-4 border-b border-border pb-4">
-              {/* Image - Cleaned up to remove background and border */}
-              <div className="w-20 h-20 flex-shrink-0">
-                <img src={item.image_url} alt={item.title} className="w-full h-full object-cover" />
+              {/* Image - Border removed */}
+              <div className="w-20 h-20 flex-shrink-0 border-none">
+                <img src={item.image_url} alt={item.title} className="w-full h-full object-cover border-none" />
               </div>
               
               {/* Info */}
