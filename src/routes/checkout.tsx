@@ -22,6 +22,11 @@ function Checkout() {
     city: "", state: "", zip: "", phone: ""
   });
 
+  // Explicitly force the title
+  useEffect(() => {
+    document.title = "Cart";
+  }, []);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (items.length === 0) {
@@ -114,9 +119,16 @@ function Checkout() {
             {items.map((item) => (
               <div key={`${item.productId}-${item.variantSku}`} className="flex items-center gap-4 border-b border-black/10 pb-4">
                 
-                {/* Product Image */}
-                <div className="w-16 h-16 bg-gray-100 flex-shrink-0">
-                  <img src={item.image_url} alt={item.title} className="w-full h-full object-cover" />
+                {/* Product Image: Smaller container, object-contain to prevent cropping */}
+                <div className="w-12 h-12 bg-gray-100 flex-shrink-0 overflow-hidden">
+                  {item.image_url && (
+                    <img 
+                      src={item.image_url} 
+                      alt={item.title} 
+                      className="w-full h-full object-contain"
+                      onError={(e) => (e.currentTarget.style.display = 'none')} 
+                    />
+                  )}
                 </div>
 
                 {/* Product Details */}
