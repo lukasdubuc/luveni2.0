@@ -1,4 +1,3 @@
-@import url("https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap");
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
@@ -10,34 +9,114 @@
   --color-foreground: var(--foreground);
   --color-primary: var(--primary);
   --color-border: var(--border);
+
   --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --font-mono: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  --font-mono:
+    "Space Mono",
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    "Courier New",
+    monospace;
 }
 
-/* Force early background paint */
-html { background-color: var(--background); }
+/* ---------- EARLY PAINT LOCK ---------- */
+
+html {
+  background-color: #ffffff;
+  color-scheme: light;
+}
+
+html.dark {
+  background-color: #000000;
+  color-scheme: dark;
+}
+
+/* ---------- THEME VARIABLES ---------- */
 
 :root {
-  color-scheme: light;
-  --background: #FFFFFF; --foreground: #000000;
-  --primary: #000000; --border: rgba(0, 0, 0, 0.10);
+  --background: #FFFFFF;
+  --foreground: #000000;
+
+  --primary: #000000;
+
+  --border: rgba(0, 0, 0, 0.10);
 }
 
 :root.dark {
-  color-scheme: dark;
-  --background: #000000; --foreground: #FFFFFF;
-  --primary: #FFFFFF; --border: rgba(255, 255, 255, 0.15);
+  --background: #000000;
+  --foreground: #FFFFFF;
+
+  --primary: #FFFFFF;
+
+  --border: rgba(255, 255, 255, 0.15);
 }
 
+/* ---------- BASE ---------- */
+
 @layer base {
-  * { border-radius: 0 !important; box-shadow: none !important; text-transform: uppercase; }
+
+  :where(*) {
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
   body {
+    margin: 0;
+    padding: 0;
+
     background-color: var(--background);
     color: var(--foreground);
+
     font-family: var(--font-sans);
     font-size: 13px;
-    margin: 0; padding: 0;
+
+    text-transform: uppercase;
+
+    text-rendering: optimizeSpeed;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+
+    overflow-x: hidden;
   }
-  a { text-decoration: none; color: inherit; }
-  button { cursor: pointer; font-family: inherit; }
+
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  button {
+    cursor: pointer;
+    font-family: inherit;
+  }
+}
+
+/* ---------- RENDER CONTAINMENT ---------- */
+
+.shell-root {
+  min-height: 100vh;
+
+  contain: layout style paint;
+}
+
+.route-container {
+  contain: layout paint;
+
+  will-change: transform;
+
+  transform: translateZ(0);
+
+  backface-visibility: hidden;
+
+  isolation: isolate;
 }
