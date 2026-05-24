@@ -49,7 +49,7 @@ export function Header({ theme = "light" }: { theme?: "light" | "dark" }) {
     <header
       className={`sticky top-0 z-50 transition-colors duration-500 ${bgCls} border-b md:border-b-0 ${borderCls}`}
     >
-      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
+      <div className="flex h-14 w-full items-center justify-between px-6">
 
         {/* ── Left: burger (mobile) / brand (desktop) ── */}
         <div className="flex flex-1 items-center">
