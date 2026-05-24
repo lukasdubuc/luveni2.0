@@ -386,7 +386,7 @@ function OfferSlugPage() {
             }}
             key={product.slug}
           >
-            {/* ── Image row ── */}
+           {/* ── Image row ── */}
             <div style={{
               width: "100%", display: "flex",
               alignItems: "center", justifyContent: "center",
@@ -425,6 +425,12 @@ function OfferSlugPage() {
                   </div>
                 )}
               </div>
+
+              <button className="pdp-img-nav-btn" onClick={goNextImage} disabled={activeImageIndex === galleryImages.length - 1} aria-label="Next image"
+                style={{ fontSize: "38px", fontWeight: 200, opacity: activeImageIndex === galleryImages.length - 1 ? 0.15 : 0.75 }}>
+                ›
+              </button>
+            </div>
 
               <button className="pdp-img-nav-btn" onClick={goNextImage} disabled={activeImageIndex === galleryImages.length - 1} aria-label="Next image"
                 style={{ fontSize: "22px", fontWeight: 300, opacity: activeImageIndex === galleryImages.length - 1 ? 0.15 : 0.7 }}>
