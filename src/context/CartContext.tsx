@@ -68,14 +68,26 @@ export function CartProvider({ children }: { children: ReactNode }) {
   );
 
   const removeItem = useCallback((productId: string, variantSku?: string) => {
-    setItems((prev) => prev.filter((i) => !(i.productId === productId && i.variantSku === variantSku)));
+    console.log("Attempting to remove:", { productId, variantSku });
+    setItems((prev) => {
+      const filtered = prev.filter((i) => {
+        const matchesId = i.productId === productId;
+        // Handle undefined vs undefined cases
+        const matchesSku = i.variantSku === variantSku;
+        
+        const isMatch = matchesId && matchesSku;
+        if (isMatch) {
+            console.log("Match found! Removing item:", i);
+        }
+        return !isMatch;
+      });
+      
+      if (filtered.length === prev.length) {
+          console.warn("No item was found to remove. Current items:", prev);
+      }
+      return filtered;
+    });
   }, []);
-
-  const clearCart = useCallback(() => {
-    setItems([]);
-    localStorage.removeItem("cart_items");
-  }, []);
-
   // Use useMemo to prevent unnecessary re-renders of consuming components
   const value = useMemo(() => ({
     items,
