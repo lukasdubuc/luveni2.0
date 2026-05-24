@@ -345,8 +345,9 @@ function OfferSlugPage() {
         }}
       >
         {/* ── Top-left: back arrow ── */}
-        <a
-          href="/shop"
+        <Link
+          to="/shop"
+          preload="intent"
           style={{
             position: "absolute", top: "1.25rem", left: "1.25rem", zIndex: 20,
             color: "inherit", textDecoration: "none",
@@ -357,7 +358,7 @@ function OfferSlugPage() {
           aria-label="Back to shop"
         >
           ‹
-        </a>
+        </Link>
 
         {/* ── Top-right: sold out status ── */}
         <div
