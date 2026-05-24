@@ -20,38 +20,53 @@ export const createCheckout = createServerFn({ method: "POST" })
 
     if (!stripeKey) return { ok: false as const, error: "Payments not configured." };
 
-    // 1. Calculate totals server-side (Security: Never trust client-side prices)
     const line_items = [];
     let totalCents = 0;
 
+    // --- NEW: INVENTORY VALIDATION ---
     for (const item of data.items) {
+      // 1. Fetch Product & Inventory
       const { data: product } = await supabaseAdmin
         .from("products")
-        .select("id,title,price_cents,variants")
+        .select("id, title, price_cents, variants, stock") // Assumes 'stock' column exists
         .eq("id", item.productId)
         .maybeSingle();
 
-      if (!product) continue;
+      if (!product) return { ok: false as const, error: `Product ${item.productId} not found.` };
 
-      let variant = null;
-      if (item.variantSku) {
-        variant = product.variants?.find((v: any) => v.sku === item.variantSku);
+      // 2. Determine Price and Stock Level
+      let price = product.price_cents;
+      let availableStock = product.stock;
+
+      if (item.variantSku && product.variants) {
+        const variant = product.variants.find((v: any) => v.sku === item.variantSku);
+        if (variant) {
+          price = variant.price_cents;
+          // If you track stock by variant, check that instead
+          if (variant.stock !== undefined) availableStock = variant.stock;
+        }
       }
 
-      const price = variant?.price_cents ?? product.price_cents;
+      // 3. Verify Availability
+      if (availableStock < item.quantity) {
+        return { ok: false as const, error: `Insufficient stock for ${product.title}.` };
+      }
+
       totalCents += price * item.quantity;
       
       line_items.push({
         quantity: item.quantity,
         price_data: {
-          currency: 'usd', // Assuming USD
+          currency: 'usd',
           unit_amount: price,
-          product_data: { name: variant ? `${product.title} (${variant.sku})` : product.title },
+          product_data: { 
+            name: item.variantSku ? `${product.title} (${item.variantSku})` : product.title 
+          },
         },
       });
     }
 
-    // 2. Create Order
+    // 4. Create Order
     const { data: order, error: orderErr } = await supabaseAdmin
       .from("orders")
       .insert({
@@ -66,7 +81,7 @@ export const createCheckout = createServerFn({ method: "POST" })
 
     if (orderErr || !order) return { ok: false as const, error: "Could not create order." };
 
-    // 3. Stripe Session
+    // 5. Stripe Session
     const stripe = new Stripe(stripeKey);
     const origin = "https://services2day.lovable.app";
 
