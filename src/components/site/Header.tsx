@@ -65,7 +65,8 @@ export function Header({ theme = "light" }: { theme?: "light" | "dark" }) {
           {/* Desktop brand */}
           <Link
             to="/shop"
-            className={`hidden md:block text-[11px] font-bold tracking-[0.22em] uppercase ${colorCls}`}
+            className={`hidden md:block text-[13px] font-normal tracking-[0em] ${colorCls}`}
+            style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}
           >
             {site.brand}
           </Link>
@@ -74,7 +75,8 @@ export function Header({ theme = "light" }: { theme?: "light" | "dark" }) {
         {/* ── Mobile center brand ── */}
         <Link
           to="/shop"
-          className={`md:hidden absolute left-1/2 -translate-x-1/2 text-[11px] font-bold tracking-[0.22em] uppercase ${colorCls}`}
+          className={`md:hidden absolute left-1/2 -translate-x-1/2 text-[13px] font-normal tracking-[0em] ${colorCls}`}
+          style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}
         >
           {site.brand}
         </Link>
@@ -85,8 +87,9 @@ export function Header({ theme = "light" }: { theme?: "light" | "dark" }) {
             <Link
               key={l.to}
               to={l.to}
-              className={`text-[9px] font-bold tracking-[0.28em] uppercase transition-colors ${mutedCls} hover:${colorCls}`}
-              activeProps={{ className: `text-[9px] font-bold tracking-[0.28em] uppercase ${colorCls}` }}
+              className={`text-[13px] font-normal tracking-[0em] transition-colors ${mutedCls} hover:${colorCls}`}
+              activeProps={{ className: `text-[13px] font-normal tracking-[0em] ${colorCls}` }}
+              style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}
             >
               {l.label}
             </Link>
@@ -100,16 +103,16 @@ export function Header({ theme = "light" }: { theme?: "light" | "dark" }) {
             aria-label={`Cart${count > 0 ? `, ${count} item${count !== 1 ? "s" : ""}` : ""}`}
             className={`relative flex items-center transition-opacity hover:opacity-60 ${colorCls}`}
           >
-            <BagIcon size={20} />
-            {/* Item count badge — only shown when cart has items */}
+            {/* Yeezy-style: count number sits inline left of the bag icon */}
             {count > 0 && (
               <span
-                className={`absolute -top-1.5 -right-2 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold leading-none
-                  ${isDark ? "bg-white text-black" : "bg-black text-white"}`}
+                className={`mr-1 text-[13px] font-normal leading-none ${colorCls}`}
+                style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}
               >
                 {count > 9 ? "9+" : count}
               </span>
             )}
+            <BagIcon size={20} />
           </Link>
         </div>
       </div>
@@ -124,8 +127,9 @@ export function Header({ theme = "light" }: { theme?: "light" | "dark" }) {
               key={l.to}
               to={l.to}
               onClick={() => setOpen(false)}
-              className={`text-[11px] font-bold tracking-[0.35em] uppercase transition-colors ${mutedCls}`}
-              activeProps={{ className: `text-[11px] font-bold tracking-[0.35em] uppercase ${colorCls}` }}
+              className={`text-[13px] font-normal tracking-[0em] transition-colors ${mutedCls}`}
+              activeProps={{ className: `text-[13px] font-normal tracking-[0em] ${colorCls}` }}
+              style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}
             >
               {l.label}
             </Link>
