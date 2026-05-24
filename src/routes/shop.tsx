@@ -81,6 +81,8 @@ const ProductCell = memo(({ product }: { product: Product }) => {
             alt={product.title}
             className="max-h-full max-w-full object-contain"
             loading="lazy"
+            decoding="async"
+            style={{ willChange: "transform", backfaceVisibility: "hidden" }}
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center bg-transparent">
