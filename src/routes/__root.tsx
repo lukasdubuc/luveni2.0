@@ -133,25 +133,21 @@ function RootComponent() {
     path.startsWith("/offer/");
 
   const [footerDescription, setFooterDescription] = useState<string | undefined>(undefined);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
 
-  // Initialize directly from localStorage to ensure zero-delay theme application
-  const [theme, setTheme] = useState<"light" | "dark">(() => {
-    if (typeof window !== "undefined") {
-      return (localStorage.getItem("theme") as "light" | "dark") || "light";
-    }
-    return "light";
-  });
-
-  // Direct sync: Update DOM and LocalStorage immediately when theme state changes
+  // SSR-Safe Sync: Only runs in the browser after component mount
   useEffect(() => {
-    localStorage.setItem("theme", theme);
-    document.documentElement.className = theme;
-    document.documentElement.style.backgroundColor = theme === "dark" ? "#000000" : "#FFFFFF";
-  }, [theme]);
+    const savedTheme = (localStorage.getItem("theme") as "light" | "dark") || "light";
+    setTheme(savedTheme);
+    document.documentElement.classList.remove("light", "dark");
+    document.documentElement.classList.add(savedTheme);
+  }, []);
 
   /* AUTH */
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
       queryClient.invalidateQueries({ queryKey: ["auth"] });
       router.invalidate();
     });
@@ -163,23 +159,49 @@ function RootComponent() {
     let canceled = false;
 
     const fetchConfig = async () => {
-      const { data } = await supabase.from("site_config").select("*").eq("id", "main").maybeSingle();
+      const { data } = await supabase
+        .from("site_config")
+        .select("*")
+        .eq("id", "main")
+        .maybeSingle();
+
       if (canceled || !data) return;
 
       const config = mergeSiteConfig(data as any);
       setFooterDescription(config.metadata?.footer_description ?? "");
-      setTheme(config.theme || "light");
+      
+      const t = config.theme || "light";
+      setTheme(t);
+      localStorage.setItem("theme", t);
+      document.documentElement.classList.remove("light", "dark");
+      document.documentElement.classList.add(t);
+      document.documentElement.style.backgroundColor = t === "dark" ? "#000000" : "#FFFFFF";
     };
 
     fetchConfig();
 
     const sub = supabase
       .channel("site_config_changes")
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "site_config", filter: "id=eq.main" }, (p) => {
-        const config = mergeSiteConfig(p.new as any);
-        setFooterDescription(config.metadata?.footer_description ?? "");
-        setTheme(config.theme || "light");
-      })
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "site_config",
+          filter: "id=eq.main",
+        },
+        (p) => {
+          const config = mergeSiteConfig(p.new as any);
+          setFooterDescription(config.metadata?.footer_description ?? "");
+          const t = config.theme || "light";
+          
+          setTheme(t);
+          localStorage.setItem("theme", t);
+          document.documentElement.classList.remove("light", "dark");
+          document.documentElement.classList.add(t);
+          document.documentElement.style.backgroundColor = t === "dark" ? "#000000" : "#FFFFFF";
+        }
+      )
       .subscribe();
 
     return () => {
@@ -200,7 +222,12 @@ function RootComponent() {
             </SiteShell>
           )}
         </div>
-        <Toaster position="top-center" richColors theme={theme} />
+
+        <Toaster
+          position="top-center"
+          richColors
+          theme={theme}
+        />
       </CartProvider>
     </QueryClientProvider>
   );
