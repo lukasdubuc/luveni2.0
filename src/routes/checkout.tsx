@@ -50,10 +50,92 @@ function CheckoutPage() {
       <div className="max-w-7xl mx-auto">
         <h1 className="text-xl font-bold uppercase tracking-widest mb-10">Checkout</h1>
 
-        <div className="grid md:grid-cols-2 gap-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-16 auto-rows-max md:auto-rows-auto">
 
-          {/* ── LEFT: Form ── */}
-          <form onSubmit={handleSubmit} className="space-y-8">
+          {/* ── ORDER SUMMARY: Shown first on mobile ── */}
+          <div className="order-first md:order-last">
+            <h2 className="text-xs font-bold uppercase tracking-widest mb-4 border-b border-border pb-2">Order Summary</h2>
+
+            {/* MOBILE item list */}
+            <div className="md:hidden space-y-4 mb-6">
+              {items.map((item) => (
+                <div key={`${item.productId}-${item.variantSku}`} className="flex gap-3 border-b border-border pb-4">
+                  <div className="w-16 h-16 flex-shrink-0 overflow-hidden">
+                    <img src={item.image_url} alt={item.title} className="w-full h-full object-cover" />
+                  </div>
+                  <div className="flex flex-col flex-1 gap-1 min-w-0">
+                    <h3 className="text-xs font-bold uppercase leading-tight">{item.title}</h3>
+                    <p className="text-[10px] opacity-60">${(item.price_cents / 100).toFixed(2)} each</p>
+                    <div className="flex items-center justify-between mt-1">
+                      <div className="flex items-center border border-border">
+                        <button onClick={() => updateItemQuantity(item.productId, item.quantity - 1, item.variantSku)} className="px-2 py-1 text-xs hover:bg-muted">-</button>
+                        <span className="px-2 text-xs">{item.quantity}</span>
+                        <button onClick={() => updateItemQuantity(item.productId, item.quantity + 1, item.variantSku)} className="px-2 py-1 text-xs hover:bg-muted">+</button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold">${((item.price_cents * item.quantity) / 100).toFixed(2)}</span>
+                        <button onClick={() => removeItem(item.productId, item.variantSku)} className="text-[10px] uppercase underline opacity-50">Remove</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* DESKTOP item list */}
+            <div className="hidden md:block mb-6">
+              <table className="w-full text-left">
+                <thead>
+                  <tr>
+                    <th className="pb-3 uppercase text-[10px] tracking-widest opacity-60">Product</th>
+                    <th className="pb-3 uppercase text-[10px] tracking-widest opacity-60">Qty</th>
+                    <th className="pb-3 uppercase text-[10px] tracking-widest opacity-60 text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => (
+                    <tr key={`${item.productId}-${item.variantSku}`} className="border-t border-border">
+                      <td className="py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-20 h-20 flex-shrink-0 overflow-hidden">
+                            <img src={item.image_url} alt={item.title} className="w-full h-full object-cover" />
+                          </div>
+                          <span className="text-xs">{item.title}</span>
+                        </div>
+                      </td>
+                      <td className="py-3">
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => updateItemQuantity(item.productId, item.quantity - 1, item.variantSku)} className="text-xs px-1 hover:opacity-60">-</button>
+                          <span className="text-xs">{item.quantity}</span>
+                          <button onClick={() => updateItemQuantity(item.productId, item.quantity + 1, item.variantSku)} className="text-xs px-1 hover:opacity-60">+</button>
+                        </div>
+                      </td>
+                      <td className="py-3 text-right text-xs">${((item.price_cents * item.quantity) / 100).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Totals */}
+            <div className="border-t border-border pt-4 space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="opacity-60 uppercase tracking-widest">Subtotal</span>
+                <span>${(totalCents / 100).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="opacity-60 uppercase tracking-widest">Shipping</span>
+                <span className="opacity-60">Calculated at next step</span>
+              </div>
+              <div className="flex justify-between text-sm font-bold uppercase tracking-widest border-t border-border pt-2 mt-2">
+                <span>Total</span>
+                <span>${(totalCents / 100).toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* ── FORM: Shown second on mobile ── */}
+          <form onSubmit={handleSubmit} className="space-y-8 order-last md:order-first">
 
             {/* Contact Information */}
             <div>
@@ -113,91 +195,6 @@ function CheckoutPage() {
               {loading ? "Redirecting..." : "Complete Purchase"}
             </button>
           </form>
-
-          {/* ── RIGHT: Order Summary ── */}
-          <div>
-            <h2 className="text-xs font-bold uppercase tracking-widest mb-4 border-b border-border pb-2">Order Summary</h2>
-
-            {/* MOBILE item list */}
-            <div className="md:hidden space-y-4 mb-6">
-              {items.map((item) => (
-                <div key={`${item.productId}-${item.variantSku}`} className="flex gap-3 border-b border-border pb-4">
-                  {/* FIX 1: no border on image wrapper */}
-                  <div className="w-16 h-16 flex-shrink-0 overflow-hidden">
-                    <img src={item.image_url} alt={item.title} className="w-full h-full object-cover" />
-                  </div>
-                  <div className="flex flex-col flex-1 gap-1 min-w-0">
-                    <h3 className="text-xs font-bold uppercase leading-tight">{item.title}</h3>
-                    <p className="text-[10px] opacity-60">${(item.price_cents / 100).toFixed(2)} each</p>
-                    {/* FIX 2: clean mobile layout - qty left, price+remove right */}
-                    <div className="flex items-center justify-between mt-1">
-                      <div className="flex items-center border border-border">
-                        <button onClick={() => updateItemQuantity(item.productId, item.quantity - 1, item.variantSku)} className="px-2 py-1 text-xs hover:bg-muted">-</button>
-                        <span className="px-2 text-xs">{item.quantity}</span>
-                        <button onClick={() => updateItemQuantity(item.productId, item.quantity + 1, item.variantSku)} className="px-2 py-1 text-xs hover:bg-muted">+</button>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold">${((item.price_cents * item.quantity) / 100).toFixed(2)}</span>
-                        <button onClick={() => removeItem(item.productId, item.variantSku)} className="text-[10px] uppercase underline opacity-50">Remove</button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* DESKTOP item list */}
-            <div className="hidden md:block mb-6">
-              <table className="w-full text-left">
-                <thead>
-                  <tr>
-                    <th className="pb-3 uppercase text-[10px] tracking-widest opacity-60">Product</th>
-                    <th className="pb-3 uppercase text-[10px] tracking-widest opacity-60">Qty</th>
-                    <th className="pb-3 uppercase text-[10px] tracking-widest opacity-60 text-right">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item) => (
-                    <tr key={`${item.productId}-${item.variantSku}`} className="border-t border-border">
-                      {/* FIX 3: image + title together, no stray image_url text */}
-                      <td className="py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-20 h-20 flex-shrink-0 overflow-hidden">
-                            <img src={item.image_url} alt={item.title} className="w-full h-full object-cover" />
-                          </div>
-                          <span className="text-xs">{item.title}</span>
-                        </div>
-                      </td>
-                      <td className="py-3">
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => updateItemQuantity(item.productId, item.quantity - 1, item.variantSku)} className="text-xs px-1 hover:opacity-60">-</button>
-                          <span className="text-xs">{item.quantity}</span>
-                          <button onClick={() => updateItemQuantity(item.productId, item.quantity + 1, item.variantSku)} className="text-xs px-1 hover:opacity-60">+</button>
-                        </div>
-                      </td>
-                      <td className="py-3 text-right text-xs">${((item.price_cents * item.quantity) / 100).toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Totals */}
-            <div className="border-t border-border pt-4 space-y-2">
-              <div className="flex justify-between text-xs">
-                <span className="opacity-60 uppercase tracking-widest">Subtotal</span>
-                <span>${(totalCents / 100).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="opacity-60 uppercase tracking-widest">Shipping</span>
-                <span className="opacity-60">Calculated at next step</span>
-              </div>
-              <div className="flex justify-between text-sm font-bold uppercase tracking-widest border-t border-border pt-2 mt-2">
-                <span>Total</span>
-                <span>${(totalCents / 100).toFixed(2)}</span>
-              </div>
-            </div>
-          </div>
 
         </div>
       </div>
