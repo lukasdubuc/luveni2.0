@@ -21,8 +21,12 @@ type CartContextType = {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  // Always start empty to ensure a clean state on fresh loads
   const [items, setItems] = useState<CartItem[]>([]);
+
+  // --- FIX: Run restore on initial mount ---
+  useEffect(() => {
+    restoreFromStorage();
+  }, []);
 
   // Debugging: Log whenever state changes
   useEffect(() => {
