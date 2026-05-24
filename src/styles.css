@@ -33,6 +33,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
   --font-mono: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --shadow-soft: none;
   --shadow-elevated: none;
@@ -40,10 +41,8 @@
 }
 
 :root {
-  /* ── YEEZY ARCHIVE DYNAMIC THEME ── */
   --radius: 0rem;
 
-  /* Default Light Theme Values */
   --background: #FFFFFF;
   --foreground: #000000;
   --card: #FFFFFF;
@@ -65,11 +64,9 @@
   --border: rgba(0, 0, 0, 0.10);
   --input: rgba(0, 0, 0, 0.10);
   --ring: #000000;
-  --font-mono: "Space Mono", monospace;
 }
 
 :root.dark {
-  /* ── YEEZY ARCHIVE DARK THEME ── */
   --background: #000000;
   --foreground: #FFFFFF;
   --card: #000000;
@@ -97,15 +94,18 @@
   * {
     border-radius: 0 !important;
     box-shadow: none !important;
-    text-transform: uppercase;
-    letter-spacing: -0.02em;
+    /* Removed: global text-transform: uppercase — Yeezy does NOT force uppercase everywhere */
+    /* Removed: global letter-spacing — let each element control its own */
   }
 
   body {
     background-color: var(--background);
     color: var(--foreground);
-    font-family: var(--font-mono);
+    /* Yeezy uses plain Helvetica Neue, not monospace, as the body font */
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 14px;
     font-weight: 400;
+    letter-spacing: -0.01em;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     margin: 0;
@@ -114,10 +114,10 @@
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-mono);
-    font-weight: 700;
-    letter-spacing: -0.05em;
-    line-height: 1;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
   }
 
   a {
