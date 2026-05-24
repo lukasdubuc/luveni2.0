@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { fetchProducts, useProducts } from "@/lib/useProducts";
 import { useMemo, memo } from "react";
-import { useCart } from "@/context/CartContext"; // Added import
 
 type Product = {
   id: string;
@@ -56,8 +55,6 @@ function ShopPage() {
 }
 
 const ProductCell = memo(({ product }: { product: Product }) => {
-  const { addItem } = useCart(); // Hook access
-
   const imageUrl =
     Array.isArray(product.image_urls) && product.image_urls.length > 0
       ? product.image_urls[0]
@@ -70,18 +67,6 @@ const ProductCell = memo(({ product }: { product: Product }) => {
   const displayPrice = hasDiscount
     ? product.discounted_price_cents!
     : product.price_cents;
-
-  // New function to stop navigation and add to cart
-  const handleAddToCart = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    addItem({
-      productId: product.id,
-      title: product.title,
-      price_cents: product.price_cents,
-      quantity: 1
-    });
-  };
 
   return (
     <Link
@@ -127,14 +112,6 @@ const ProductCell = memo(({ product }: { product: Product }) => {
             </span>
           )}
         </div>
-        
-        {/* ADD TO CART BUTTON */}
-        <button 
-          onClick={handleAddToCart}
-          className="mt-2 text-[8px] uppercase tracking-[0.1em] border border-current px-2 py-1 hover:bg-current hover:text-white transition-colors"
-        >
-          Add to Cart
-        </button>
       </div>
     </Link>
   );
