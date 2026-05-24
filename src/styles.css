@@ -72,7 +72,7 @@ html { background-color: var(--background); }
     margin: 0; padding: 0;
     transition: background-color 0.2s ease, color 0.2s ease;
   }
-  a { text-decoration: none; color: inherit; }
+  a { text-decoration: none; color: inherit; cursor: pointer; }
   button { cursor: pointer; font-family: inherit; }
 }
 
