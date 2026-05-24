@@ -6,60 +6,27 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --radius-sm: 0; --radius-md: 0; --radius-lg: 0; --radius-xl: 0; --radius-2xl: 0;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-success: var(--success);
-  --color-success-foreground: var(--success-foreground);
   --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
   --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
   --font-mono: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
+/* Force early background paint */
 html { background-color: var(--background); }
 
 :root {
   color-scheme: light;
   --background: #FFFFFF; --foreground: #000000;
-  --card: #FFFFFF; --card-foreground: #000000;
-  --popover: #FFFFFF; --popover-foreground: #000000;
-  --primary: #000000; --primary-foreground: #FFFFFF;
-  --secondary: #FFFFFF; --secondary-foreground: #000000;
-  --muted: #FFFFFF; --muted-foreground: rgba(0, 0, 0, 0.55);
-  --accent: #000000; --accent-foreground: #FFFFFF;
-  --destructive: #B00000; --destructive-foreground: #FFFFFF;
-  --success: #000000; --success-foreground: #FFFFFF;
-  --border: rgba(0, 0, 0, 0.10); --input: rgba(0, 0, 0, 0.10); --ring: #000000;
+  --primary: #000000; --border: rgba(0, 0, 0, 0.10);
 }
 
 :root.dark {
   color-scheme: dark;
   --background: #000000; --foreground: #FFFFFF;
-  --card: #000000; --card-foreground: #FFFFFF;
-  --popover: #000000; --popover-foreground: #FFFFFF;
-  --primary: #FFFFFF; --primary-foreground: #000000;
-  --secondary: #000000; --secondary-foreground: #FFFFFF;
-  --muted: #000000; --muted-foreground: rgba(255, 255, 255, 0.55);
-  --accent: #FFFFFF; --accent-foreground: #000000;
-  --destructive: #FF4444; --destructive-foreground: #FFFFFF;
-  --success: #FFFFFF; --success-foreground: #000000;
-  --border: rgba(255, 255, 255, 0.15); --input: rgba(255, 255, 255, 0.15); --ring: #FFFFFF;
+  --primary: #FFFFFF; --border: rgba(255, 255, 255, 0.15);
 }
 
 @layer base {
@@ -68,17 +35,9 @@ html { background-color: var(--background); }
     background-color: var(--background);
     color: var(--foreground);
     font-family: var(--font-sans);
-    font-size: 13px; font-weight: 400;
+    font-size: 13px;
     margin: 0; padding: 0;
-    transition: background-color 0.2s ease, color 0.2s ease;
   }
-  a { text-decoration: none; color: inherit; cursor: pointer; }
+  a { text-decoration: none; color: inherit; }
   button { cursor: pointer; font-family: inherit; }
-}
-
-@layer utilities {
-  .text-tiny { font-size: 0.625rem; }
-  .text-micro { font-size: 0.5rem; }
-  .no-scrollbar::-webkit-scrollbar { display: none; }
-  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 }
