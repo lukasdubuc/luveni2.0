@@ -330,271 +330,278 @@ function OfferSlugPage() {
         @media (max-width: 640px) { .pdp-img-nav-btn { font-size: 44px !important; padding: 0.5rem 0.875rem; } }
       `}</style>
 
-      {/* ── Full-screen container ── */}
+      {/* ── Full-screen container (Structural Parity Fix) ── */}
       <div
-        className="bg-background text-foreground"
+        className="flex min-h-screen flex-col bg-background text-foreground"
         style={{
-          position: "fixed",
-          inset: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
           overflow: "hidden",
           zIndex: 0,
         }}
       >
-        {/* ── Top-left: back arrow ── */}
-        <Link
-          to="/shop"
-          preload="intent"
-          style={{
-            position: "absolute", top: "1.25rem", left: "1.25rem", zIndex: 20,
-            color: "inherit", textDecoration: "none",
-            fontSize: "38px", fontWeight: 200, lineHeight: 1,
-            opacity: 0.7,
-            display: "flex", alignItems: "center",
-          }}
-          aria-label="Back to shop"
-        >
-          ‹
-        </Link>
-
-        {/* ── Top-right: sold out status ── */}
         <div
           style={{
-            position: "absolute", top: "1.25rem", right: "1.25rem", zIndex: 20,
-            fontSize: "11px", fontWeight: 400, letterSpacing: "0.02em",
-            color: isSoldOut ? "#c00" : "inherit",
-            opacity: isSoldOut ? 1 : 0.5,
-          }}
-        >
-          {isSoldOut ? "SOLD OUT" : ""}
-        </div>
-
-        {/* ── Center column: image + info ── */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "100%",
-            maxWidth: "480px",
-            padding: "3.5rem 2rem 2rem",
-            boxSizing: "border-box",
-            animation: "pdp-fade-in 0.4s ease both",
-          }}
-          key={product.slug}
-        >
-          {/* ── Image row: left arrow + image + right arrow ── */}
-          <div style={{
-            width: "100%",
+            position: "fixed",
+            inset: 0,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            gap: "0.5rem",
-            marginBottom: "1.5rem",
+            fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+            overflow: "hidden",
+            zIndex: 0,
           }}
-            onTouchStart={handleImgTouchStart}
-            onTouchEnd={handleImgTouchEnd}
+        >
+          {/* ── Top-left: back arrow ── */}
+          <Link
+            to="/shop"
+            preload="intent"
+            style={{
+              position: "absolute", top: "1.25rem", left: "1.25rem", zIndex: 20,
+              color: "inherit", textDecoration: "none",
+              fontSize: "38px", fontWeight: 200, lineHeight: 1,
+              opacity: 0.7,
+              display: "flex", alignItems: "center",
+            }}
+            aria-label="Back to shop"
           >
-            {/* Left image arrow */}
-            <button
-              className="pdp-img-nav-btn"
-              onClick={goPrevImage}
-              disabled={activeImageIndex === 0}
-              aria-label="Previous image"
-              style={{ fontSize: "38px", fontWeight: 200, opacity: activeImageIndex === 0 ? 0.12 : 0.75 }}
-            >
-              ‹
-            </button>
+            ‹
+          </Link>
 
-            {/* Product image */}
-            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              {galleryImages[activeImageIndex] ? (
-                <img
-                  key={galleryImages[activeImageIndex]}
-                  src={galleryImages[activeImageIndex]}
-                  alt={`${product.title} — image ${activeImageIndex + 1}`}
-                  loading="eager"
-                  style={{
-                    maxWidth: "min(320px, 70vw)",
-                    maxHeight: "45vh",
-                    objectFit: "contain",
-                    display: "block",
-                    animation: "pdp-img-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both",
-                  }}
-                />
-              ) : (
-                <div style={{
-                  width: "min(320px, 70vw)", aspectRatio: "1",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  border: "1px solid rgba(128,128,128,0.15)",
-                  fontSize: "9px", fontWeight: 500, letterSpacing: "0.3em",
-                  textTransform: "uppercase", opacity: 0.3,
-                }}>
-                  IMAGE PENDING
-                </div>
-              )}
-            </div>
-
-            {/* Right image arrow */}
-            <button
-              className="pdp-img-nav-btn"
-              onClick={goNextImage}
-              disabled={activeImageIndex === galleryImages.length - 1}
-              aria-label="Next image"
-              style={{ fontSize: "22px", fontWeight: 300, opacity: activeImageIndex === galleryImages.length - 1 ? 0.15 : 0.7 }}
-            >
-              ›
-            </button>
+          {/* ── Top-right: sold out status ── */}
+          <div
+            style={{
+              position: "absolute", top: "1.25rem", right: "1.25rem", zIndex: 20,
+              fontSize: "11px", fontWeight: 400, letterSpacing: "0.02em",
+              color: isSoldOut ? "#c00" : "inherit",
+              opacity: isSoldOut ? 1 : 0.5,
+            }}
+          >
+            {isSoldOut ? "SOLD OUT" : ""}
           </div>
 
-          {/* Image dots */}
-          {galleryImages.length > 1 && (
-            <div style={{ display: "flex", gap: "6px", marginBottom: "1.5rem" }}>
-              {galleryImages.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setActiveImageIndex(i)}
-                  aria-label={`Image ${i + 1}`}
-                  style={{
-                    width: "6px", height: "6px",
-                    borderRadius: "50%",
-                    background: "currentColor",
-                    opacity: i === activeImageIndex ? 0.8 : 0.2,
-                    border: "none", cursor: "pointer", padding: 0,
-                    transition: "opacity 0.2s ease",
-                  }}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* Title */}
-          <div style={{
-            fontSize: "clamp(0.85rem, 2vw, 1rem)",
-            fontWeight: 400,
-            letterSpacing: "0.02em",
-            color: "inherit",
-            textAlign: "center",
-            marginBottom: "0.4rem",
-            opacity: 0.9,
-          }}>
-            {product.title}
-          </div>
-
-          {/* Price */}
-          <div style={{
-            fontSize: "clamp(0.85rem, 2vw, 1rem)",
-            fontWeight: 400,
-            letterSpacing: "0.02em",
-            color: "inherit",
-            textAlign: "center",
-            marginBottom: "1.5rem",
-            opacity: 0.9,
-          }}>
-            {formatPrice(selectedPrice)}
-          </div>
-
-          {/* Variant options (shown when optionsOpen) */}
-          {optionsOpen && optionKeys.length > 0 && (
+          {/* ── Center column: image + info ── */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "100%",
+              maxWidth: "480px",
+              padding: "3.5rem 2rem 2rem",
+              boxSizing: "border-box",
+              animation: "pdp-fade-in 0.4s ease both",
+            }}
+            key={product.slug}
+          >
+            {/* ── Image row: left arrow + image + right arrow ── */}
             <div style={{
-              width: "100%", display: "flex", flexDirection: "column",
-              gap: "1rem", marginBottom: "1.25rem",
-              animation: "pdp-fade-in 0.25s ease both",
-            }}>
-              {optionKeys.map((option) => (
-                <div key={option}>
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.5rem",
+              marginBottom: "1.5rem",
+            }}
+              onTouchStart={handleImgTouchStart}
+              onTouchEnd={handleImgTouchEnd}
+            >
+              {/* Left image arrow */}
+              <button
+                className="pdp-img-nav-btn"
+                onClick={goPrevImage}
+                disabled={activeImageIndex === 0}
+                aria-label="Previous image"
+                style={{ fontSize: "38px", fontWeight: 200, opacity: activeImageIndex === 0 ? 0.12 : 0.75 }}
+              >
+                ‹
+              </button>
+
+              {/* Product image */}
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {galleryImages[activeImageIndex] ? (
+                  <img
+                    key={galleryImages[activeImageIndex]}
+                    src={galleryImages[activeImageIndex]}
+                    alt={`${product.title} — image ${activeImageIndex + 1}`}
+                    loading="eager"
+                    style={{
+                      maxWidth: "min(320px, 70vw)",
+                      maxHeight: "45vh",
+                      objectFit: "contain",
+                      display: "block",
+                      animation: "pdp-img-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both",
+                    }}
+                  />
+                ) : (
                   <div style={{
-                    fontSize: "9px", fontWeight: 500, letterSpacing: "0.2em",
-                    textTransform: "uppercase", opacity: 0.45,
-                    textAlign: "center", marginBottom: "0.5rem",
+                    width: "min(320px, 70vw)", aspectRatio: "1",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    border: "1px solid rgba(128,128,128,0.15)",
+                    fontSize: "9px", fontWeight: 500, letterSpacing: "0.3em",
+                    textTransform: "uppercase", opacity: 0.3,
                   }}>
-                    {normalizeOptionName(option)} — {selection[option] || "SELECT"}
+                    IMAGE PENDING
                   </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", justifyContent: "center" }}>
-                    {optionValues[option]?.map((value) => {
-                      const selected = selection[option] === value;
-                      const available = isOptionAvailable(option, value);
-                      return (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => setSelection((cur) => ({ ...cur, [option]: value }))}
-                          disabled={!available}
-                          aria-pressed={selected}
-                          style={{
-                            minHeight: "2rem", minWidth: "2.5rem", padding: "0 0.75rem",
-                            borderColor: selected ? "currentColor" : "rgba(128,128,128,0.25)",
-                            border: "1px solid",
-                            background: selected ? "currentColor" : "transparent",
-                            color: "inherit",
-                            filter: selected ? "invert(1)" : "none",
-                            fontSize: "9px", fontWeight: 500, letterSpacing: "0.08em",
-                            textTransform: "uppercase",
-                            cursor: available ? "pointer" : "not-allowed",
-                            opacity: available ? 1 : 0.3,
-                            transition: "all 0.15s ease",
-                            fontFamily: "inherit",
-                          }}
-                        >
-                          {value}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                )}
+              </div>
 
-          {/* CTA: "+" button (or SOLD OUT / ADDED) */}
-          {isSoldOut ? (
-            <div style={{
-              fontSize: "10px", fontWeight: 500, letterSpacing: "0.2em",
-              textTransform: "uppercase", opacity: 0.35,
-            }}>
-              SOLD OUT
+              {/* Right image arrow */}
+              <button
+                className="pdp-img-nav-btn"
+                onClick={goNextImage}
+                disabled={activeImageIndex === galleryImages.length - 1}
+                aria-label="Next image"
+                style={{ fontSize: "22px", fontWeight: 300, opacity: activeImageIndex === galleryImages.length - 1 ? 0.15 : 0.7 }}
+              >
+                ›
+              </button>
             </div>
-          ) : (
-            <button
-              onClick={handleAddToCart}
-              disabled={checkoutDisabled && optionsOpen}
-              className="pdp-plus-btn"
-              aria-label="Add to cart"
-              style={{
-                background: "transparent", border: "none",
-                cursor: (checkoutDisabled && optionsOpen) ? "not-allowed" : "pointer",
-                color: "inherit",
-                fontSize: addedFeedback ? "10px" : "28px",
-                fontWeight: 200,
-                lineHeight: 1,
-                opacity: (checkoutDisabled && optionsOpen) ? 0.3 : 0.8,
-                transition: "opacity 0.2s, transform 0.15s, font-size 0.15s",
-                letterSpacing: addedFeedback ? "0.2em" : "0",
-                textTransform: "uppercase",
-                padding: "0.25rem",
-                fontFamily: "inherit",
-              }}
-            >
-              {addedFeedback ? "ADDED" : "+"}
-            </button>
+
+            {/* Image dots */}
+            {galleryImages.length > 1 && (
+              <div style={{ display: "flex", gap: "6px", marginBottom: "1.5rem" }}>
+                {galleryImages.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setActiveImageIndex(i)}
+                    aria-label={`Image ${i + 1}`}
+                    style={{
+                      width: "6px", height: "6px",
+                      borderRadius: "50%",
+                      background: "currentColor",
+                      opacity: i === activeImageIndex ? 0.8 : 0.2,
+                      border: "none", cursor: "pointer", padding: 0,
+                      transition: "opacity 0.2s ease",
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Title */}
+            <div style={{
+              fontSize: "clamp(0.85rem, 2vw, 1rem)",
+              fontWeight: 400,
+              letterSpacing: "0.02em",
+              color: "inherit",
+              textAlign: "center",
+              marginBottom: "0.4rem",
+              opacity: 0.9,
+            }}>
+              {product.title}
+            </div>
+
+            {/* Price */}
+            <div style={{
+              fontSize: "clamp(0.85rem, 2vw, 1rem)",
+              fontWeight: 400,
+              letterSpacing: "0.02em",
+              color: "inherit",
+              textAlign: "center",
+              marginBottom: "1.5rem",
+              opacity: 0.9,
+            }}>
+              {formatPrice(selectedPrice)}
+            </div>
+
+            {/* Variant options (shown when optionsOpen) */}
+            {optionsOpen && optionKeys.length > 0 && (
+              <div style={{
+                width: "100%", display: "flex", flexDirection: "column",
+                gap: "1rem", marginBottom: "1.25rem",
+                animation: "pdp-fade-in 0.25s ease both",
+              }}>
+                {optionKeys.map((option) => (
+                  <div key={option}>
+                    <div style={{
+                      fontSize: "9px", fontWeight: 500, letterSpacing: "0.2em",
+                      textTransform: "uppercase", opacity: 0.45,
+                      textAlign: "center", marginBottom: "0.5rem",
+                    }}>
+                      {normalizeOptionName(option)} — {selection[option] || "SELECT"}
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", justifyContent: "center" }}>
+                      {optionValues[option]?.map((value) => {
+                        const selected = selection[option] === value;
+                        const available = isOptionAvailable(option, value);
+                        return (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => setSelection((cur) => ({ ...cur, [option]: value }))}
+                            disabled={!available}
+                            aria-pressed={selected}
+                            style={{
+                              minHeight: "2rem", minWidth: "2.5rem", padding: "0 0.75rem",
+                              borderColor: selected ? "currentColor" : "rgba(128,128,128,0.25)",
+                              border: "1px solid",
+                              background: selected ? "currentColor" : "transparent",
+                              color: "inherit",
+                              filter: selected ? "invert(1)" : "none",
+                              fontSize: "9px", fontWeight: 500, letterSpacing: "0.08em",
+                              textTransform: "uppercase",
+                              cursor: available ? "pointer" : "not-allowed",
+                              opacity: available ? 1 : 0.3,
+                              transition: "all 0.15s ease",
+                              fontFamily: "inherit",
+                            }}
+                          >
+                            {value}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* CTA: "+" button (or SOLD OUT / ADDED) */}
+            {isSoldOut ? (
+              <div style={{
+                fontSize: "10px", fontWeight: 500, letterSpacing: "0.2em",
+                textTransform: "uppercase", opacity: 0.35,
+              }}>
+                SOLD OUT
+              </div>
+            ) : (
+              <button
+                onClick={handleAddToCart}
+                disabled={checkoutDisabled && optionsOpen}
+                className="pdp-plus-btn"
+                aria-label="Add to cart"
+                style={{
+                  background: "transparent", border: "none",
+                  cursor: (checkoutDisabled && optionsOpen) ? "not-allowed" : "pointer",
+                  color: "inherit",
+                  fontSize: addedFeedback ? "10px" : "28px",
+                  fontWeight: 200,
+                  lineHeight: 1,
+                  opacity: (checkoutDisabled && optionsOpen) ? 0.3 : 0.8,
+                  transition: "opacity 0.2s, transform 0.15s, font-size 0.15s",
+                  letterSpacing: addedFeedback ? "0.2em" : "0",
+                  textTransform: "uppercase",
+                  padding: "0.25rem",
+                  fontFamily: "inherit",
+                }}
+              >
+                {addedFeedback ? "ADDED" : "+"}
+              </button>
+            )}
+          </div>
+
+          {/* ── Bottom-right: product counter ── */}
+          {allProducts.length > 1 && (
+            <div style={{
+              position: "absolute", bottom: "1.25rem", right: "1.5rem",
+              fontSize: "9px", fontWeight: 400, letterSpacing: "0.15em",
+              color: "inherit", opacity: 0.3,
+              fontFamily: "inherit",
+            }}>
+              {String(currentIndex + 1).padStart(2, "0")} / {String(allProducts.length).padStart(2, "0")}
+            </div>
           )}
         </div>
-
-        {/* ── Bottom-right: product counter ── */}
-        {allProducts.length > 1 && (
-          <div style={{
-            position: "absolute", bottom: "1.25rem", right: "1.5rem",
-            fontSize: "9px", fontWeight: 400, letterSpacing: "0.15em",
-            color: "inherit", opacity: 0.3,
-            fontFamily: "inherit",
-          }}>
-            {String(currentIndex + 1).padStart(2, "0")} / {String(allProducts.length).padStart(2, "0")}
-          </div>
-        )}
       </div>
     </>
   );
