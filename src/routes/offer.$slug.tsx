@@ -260,6 +260,7 @@ function OfferSlugPage() {
       variantSku: selectedVariant?.sku,
       title: selectedVariant?.sku ? `${product.title} (${selectedVariant.sku})` : product.title,
       price_cents: selectedPrice ?? product.price_cents,
+      image_url: product.image_urls?.[0] || "",
     });
     setAddedFeedback(true);
     setTimeout(() => setAddedFeedback(false), 1200);
@@ -563,32 +564,4 @@ function OfferSlugPage() {
                 justifyContent: "space-between", padding: "0 1.5rem",
                 background: "transparent", border: "none",
                 cursor: checkoutDisabled ? "not-allowed" : "pointer",
-                opacity: checkoutDisabled ? 0.4 : 1,
-                transition: "opacity 0.2s",
-              }}
-            >
-              <span style={{
-                fontSize: "9px", fontWeight: 700, letterSpacing: "0.35em",
-                textTransform: "uppercase", color: "inherit",
-                filter: "invert(1)", fontFamily: "inherit",
-                transition: "opacity 0.15s",
-              }}>
-                {addedFeedback
-                  ? "ADDED ✓"
-                  : checkoutDisabled
-                  ? "SELECT OPTIONS"
-                  : "ADD TO CART"}
-              </span>
-              <span style={{
-                fontSize: "20px", color: "inherit", filter: "invert(1)",
-                lineHeight: 1, fontWeight: 300, fontFamily: "serif",
-              }}>
-                →
-              </span>
-            </button>
-          )}
-        </div>
-      </div>
-    </>
-  );
-}
+                opacity: checkoutDisabled ?
