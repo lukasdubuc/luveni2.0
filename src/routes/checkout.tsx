@@ -69,9 +69,8 @@ function Checkout() {
     <section className="bg-background text-foreground min-h-screen py-12 px-6">
       <div className="mx-auto max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-20">
         
-        {/* LEFT: Forms */}
         <form onSubmit={onSubmit} className="space-y-12">
-          
+          {/* ... (Keep your existing Form content here) ... */}
           <div className="space-y-4">
             <h2 className="text-xs font-bold tracking-widest uppercase">Contact Information</h2>
             <Input placeholder="Email Address" name="email" />
@@ -110,36 +109,33 @@ function Checkout() {
           </button>
         </form>
 
-        {/* RIGHT: Order Summary */}
         <aside className="space-y-8">
           <h2 className="text-xs font-bold tracking-widest uppercase">Order Summary</h2>
           
           <div className="space-y-6">
             {items.map((item) => {
-              // Priority resolution for the image key
-              const imageUrl = item.image_url || item.image || item.src;
+              // Direct extraction
+              const url = item.image_url;
 
               return (
                 <div key={`${item.productId}-${item.variantSku}`} className="flex items-center gap-4 border-b border-black/10 pb-4">
                   
-                  {/* Transparent Product Image */}
-                  <div className="w-16 h-16 flex-shrink-0 flex items-center justify-center">
-                    {imageUrl && (
-                      <img 
-                        src={imageUrl} 
-                        alt={item.title} 
-                        className="w-full h-full object-contain"
-                      />
+                  {/* Visual Debugger */}
+                  <div className="w-16 h-16 flex-shrink-0 flex flex-col items-center justify-center overflow-hidden border border-black/10">
+                    {url ? (
+                      <img src={url} alt={item.title} className="w-full h-full object-contain" />
+                    ) : (
+                      <span className="text-[8px] text-red-500 text-center">NO IMG FOUND</span>
                     )}
                   </div>
 
-                  {/* Product Details */}
                   <div className="flex-grow">
                     <p className="text-sm font-bold uppercase">{item.title}</p>
                     <p className="text-[10px] text-gray-500 uppercase tracking-widest">Qty: {item.quantity}</p>
+                    {/* Shows the actual variable value */}
+                    <p className="text-[8px] text-gray-400 mt-1">Image Value: {url || "undefined"}</p>
                   </div>
 
-                  {/* Price + Controls */}
                   <div className="text-right space-y-2">
                     <p className="text-sm font-bold">${((item.price_cents * item.quantity) / 100).toFixed(0)}</p>
                     <div className="flex items-center justify-end gap-3 text-xs">
