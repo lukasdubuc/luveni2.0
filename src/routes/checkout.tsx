@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { createFileRoute } from '@tanstack/react-router';
 import { useServerFn } from "@tanstack/react-start";
@@ -10,7 +10,6 @@ import { createCheckout } from "@/lib/checkout.functions";
 import { useCart } from "@/context/CartContext";
 
 export const Route = createFileRoute("/checkout")({
-  // This sets the browser tab title
   meta: () => [{ title: "Cart" }],
   loader: async ({ location }) => {
     const params = new URLSearchParams(location.searchStr ?? "");
@@ -47,11 +46,17 @@ function Checkout() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Force update tab title when component mounts
+  useEffect(() => {
+    document.title = "Cart";
+  }, []);
+
   const displayPrice = `$${(totalCents / 100).toFixed(0)}`;
   
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     
+    // SAFEGUARD: Block empty checkout
     if (totalCents <= 0) {
       toast.error("Your cart is empty. Please add items to continue.");
       return;
