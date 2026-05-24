@@ -48,18 +48,22 @@ function RootShell({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Hoisted before HeadContent so it runs before stylesheet paint */}
+        {/* Atomic Style Lock: Injected BEFORE HeadContent/CSS to force immediate paint */}
+        <style dangerouslySetInnerHTML={{ __html: `
+          html { background-color: #000000; color-scheme: dark; }
+          html.light { background-color: #FFFFFF; color-scheme: light; }
+        ` }} />
+        
+        {/* Sync Script: Forces correct class state before page is visible */}
         <script dangerouslySetInnerHTML={{ __html: `
           (function() {
             try {
               var t = localStorage.getItem('theme') || 'light';
-              var d = document.documentElement;
-              d.className = t;
-              d.style.backgroundColor = t === 'dark' ? '#000000' : '#FFFFFF';
-              d.style.colorScheme = t;
+              document.documentElement.className = t;
             } catch (e) {}
           })()
         ` }} />
+        
         <HeadContent />
       </head>
       <body suppressHydrationWarning>{children}<Scripts /></body>
@@ -77,12 +81,7 @@ function RootComponent() {
 
   useEffect(() => {
     localStorage.setItem('theme', theme);
-    const d = document.documentElement;
-    if (d.className !== theme) {
-      d.className = theme;
-      d.style.backgroundColor = theme === 'dark' ? '#000000' : '#FFFFFF';
-      d.style.colorScheme = theme;
-    }
+    document.documentElement.className = theme;
   }, [theme]);
 
   useEffect(() => {
@@ -111,7 +110,6 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <CartProvider>
-        {/* Removed 'animate-in' to prevent layout thrashing */}
         <div className="min-h-screen bg-background text-foreground">
           {isBare ? <Outlet /> : <SiteShell footerDescription={footerDescription} theme={theme}><Outlet /></SiteShell>}
         </div>
