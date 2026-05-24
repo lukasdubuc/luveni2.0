@@ -12,6 +12,7 @@ type CartContextType = {
   items: CartItem[];
   addItem: (item: Omit<CartItem, "quantity"> & { quantity?: number }) => void;
   removeItem: (productId: string, variantSku?: string) => void;
+  updateItemQuantity: (productId: string, quantity: number, variantSku?: string) => void;
   clearCart: () => void;
   restoreFromStorage: () => void;
   totalCents: number;
@@ -67,22 +68,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
   );
 
   const removeItem = useCallback((productId: string, variantSku?: string) => {
-    console.log("Attempting to remove:", { productId, variantSku });
-    setItems((prev) => {
-      const filtered = prev.filter((i) => {
-        const matchesId = i.productId === productId;
-        const matchesSku = i.variantSku === variantSku;
-        const isMatch = matchesId && matchesSku;
-        if (isMatch) {
-          console.log("Match found! Removing item:", i);
-        }
-        return !isMatch;
-      });
-      if (filtered.length === prev.length) {
-        console.warn("No item was found to remove. Current items:", prev);
-      }
-      return filtered;
-    });
+    setItems((prev) => prev.filter((i) => !(i.productId === productId && i.variantSku === variantSku)));
+  }, []);
+
+  const updateItemQuantity = useCallback((productId: string, quantity: number, variantSku?: string) => {
+    setItems((prev) => 
+      prev.map((i) => 
+        (i.productId === productId && i.variantSku === variantSku) 
+          ? { ...i, quantity: Math.max(0, quantity) } 
+          : i
+      ).filter(i => i.quantity > 0) // Remove if quantity becomes 0
+    );
   }, []);
 
   const clearCart = useCallback(() => {
@@ -94,11 +90,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
     items,
     addItem,
     removeItem,
+    updateItemQuantity,
     clearCart,
     restoreFromStorage,
     totalCents: items.reduce((sum, i) => sum + i.price_cents * i.quantity, 0),
     count: items.reduce((sum, i) => sum + i.quantity, 0)
-  }), [items, addItem, removeItem, clearCart, restoreFromStorage]);
+  }), [items, addItem, removeItem, updateItemQuantity, clearCart, restoreFromStorage]);
 
   return (
     <CartContext.Provider value={value}>
