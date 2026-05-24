@@ -12,7 +12,7 @@ import {
 
 import { Toaster } from "sonner";
 
-import { useEffect, useState, memo } from "react";
+import { useEffect, useState } from "react";
 
 import { CartProvider } from "@/context/CartContext";
 
@@ -26,9 +26,11 @@ import { mergeSiteConfig } from "@/lib/site-config";
 
 function NotFoundComponent() {
   return (
-    <SiteShell bare={false}>
+    <SiteShell>
       <div className="mx-auto max-w-md px-4 py-24 text-center">
-        <h1 className="text-7xl font-semibold tracking-tight">404</h1>
+        <h1 className="text-7xl font-semibold tracking-tight">
+          404
+        </h1>
 
         <h2 className="mt-4 text-xl font-semibold">
           Page not found
@@ -57,7 +59,7 @@ function ErrorComponent({
   const router = useRouter();
 
   return (
-    <SiteShell bare={false}>
+    <SiteShell>
       <div className="mx-auto max-w-md px-4 py-24 text-center">
         <h1 className="text-xl font-semibold tracking-tight">
           This page didn't load
@@ -65,7 +67,8 @@ function ErrorComponent({
 
         <button
           onClick={() => {
-            router.invalidate({ sync: false });
+            router.invalidate();
+
             reset();
           }}
           className="mt-6 bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
@@ -141,24 +144,16 @@ function RootShell({
     <html lang="en" suppressHydrationWarning>
       <head>
 
-        {/* PRE-PAINT THEME LOCK */}
+        {/* SAFE PREPAINT */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
 (function () {
   try {
-    var theme = localStorage.getItem("theme") || "light";
-
-    var d = document.documentElement;
+    var theme = localStorage.getItem("theme");
 
     if (theme === "dark") {
-      d.classList.add("dark");
-      d.style.backgroundColor = "#000000";
-      d.style.colorScheme = "dark";
-    } else {
-      d.classList.remove("dark");
-      d.style.backgroundColor = "#FFFFFF";
-      d.style.colorScheme = "light";
+      document.documentElement.classList.add("dark");
     }
   } catch (e) {}
 })();
@@ -178,16 +173,9 @@ function RootShell({
   );
 }
 
-const PersistentOutlet = memo(function PersistentOutlet() {
-  return (
-    <div className="route-container">
-      <Outlet />
-    </div>
-  );
-});
-
 function RootComponent() {
-  const { queryClient } = Route.useRouteContext();
+  const { queryClient } =
+    Route.useRouteContext();
 
   const router = useRouter();
 
@@ -195,48 +183,43 @@ function RootComponent() {
     select: (s) => s.location.pathname,
   });
 
+  /*
+    KEEP SHELL PERSISTENT
+    THIS IS THE BIG PERFORMANCE WIN
+  */
   const isBare =
     path.startsWith("/admin") ||
     path === "/login" ||
     path.startsWith("/offer/");
 
   const [footerDescription, setFooterDescription] =
-    useState<string>();
+    useState<string | undefined>(undefined);
 
   /*
-    THEME IS DOM-DRIVEN NOW
-    NO ROOT RE-RENDERING
+    RESTORED SAFE THEME STATE
   */
+  const [theme, setTheme] =
+    useState<"light" | "dark">("light");
 
+  /*
+    SAFE THEME SYNC
+  */
   useEffect(() => {
-    const storedTheme =
-      localStorage.getItem("theme") || "light";
+    localStorage.setItem("theme", theme);
 
-    const d = document.documentElement;
-
-    if (storedTheme === "dark") {
-      d.classList.add("dark");
-    } else {
-      d.classList.remove("dark");
-    }
-  }, []);
+    document.documentElement.className = theme;
+  }, [theme]);
 
   /*
-    AUTH INVALIDATION
-    TARGETED ONLY
+    AUTH STATE
   */
-
   useEffect(() => {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(() => {
-      queryClient.invalidateQueries({
-        queryKey: ["auth"],
-      });
+      router.invalidate();
 
-      router.invalidate({
-        sync: false,
-      });
+      queryClient.invalidateQueries();
     });
 
     return () => subscription.unsubscribe();
@@ -245,7 +228,6 @@ function RootComponent() {
   /*
     SITE CONFIG
   */
-
   useEffect(() => {
     let canceled = false;
 
@@ -264,21 +246,7 @@ function RootComponent() {
         config.metadata?.footer_description ?? ""
       );
 
-      const theme = config.theme || "light";
-
-      localStorage.setItem("theme", theme);
-
-      const d = document.documentElement;
-
-      if (theme === "dark") {
-        d.classList.add("dark");
-        d.style.backgroundColor = "#000000";
-        d.style.colorScheme = "dark";
-      } else {
-        d.classList.remove("dark");
-        d.style.backgroundColor = "#FFFFFF";
-        d.style.colorScheme = "light";
-      }
+      setTheme(config.theme || "light");
     };
 
     fetchConfig();
@@ -294,27 +262,15 @@ function RootComponent() {
           filter: "id=eq.main",
         },
         (payload) => {
-          const config = mergeSiteConfig(payload.new as any);
+          const config = mergeSiteConfig(
+            payload.new as any
+          );
 
           setFooterDescription(
             config.metadata?.footer_description ?? ""
           );
 
-          const theme = config.theme || "light";
-
-          localStorage.setItem("theme", theme);
-
-          const d = document.documentElement;
-
-          if (theme === "dark") {
-            d.classList.add("dark");
-            d.style.backgroundColor = "#000000";
-            d.style.colorScheme = "dark";
-          } else {
-            d.classList.remove("dark");
-            d.style.backgroundColor = "#FFFFFF";
-            d.style.colorScheme = "light";
-          }
+          setTheme(config.theme || "light");
         }
       )
       .subscribe();
@@ -330,23 +286,19 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <CartProvider>
 
+        {/* PERSISTENT SHELL */}
         <SiteShell
           bare={isBare}
           footerDescription={footerDescription}
+          theme={theme}
         >
-          <div className="shell-root">
-            <PersistentOutlet />
-          </div>
+          <Outlet />
         </SiteShell>
 
         <Toaster
           position="top-center"
           richColors
-          theme={
-            document.documentElement.classList.contains("dark")
-              ? "dark"
-              : "light"
-          }
+          theme={theme}
         />
       </CartProvider>
     </QueryClientProvider>
