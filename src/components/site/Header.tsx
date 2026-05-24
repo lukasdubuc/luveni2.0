@@ -19,17 +19,15 @@ function BagIcon({ size = 18 }: { size?: number }) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.25}
+      strokeWidth={1}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      {/* bag body */}
-      <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
-      {/* bag handle cutout */}
-      <line x1="3" y1="6" x2="21" y2="6" />
-      {/* handle arch */}
-      <path d="M16 10a4 4 0 01-8 0" />
+      {/* rectangular bag body */}
+      <rect x="4" y="8" width="16" height="13" />
+      {/* left handle */}
+      <path d="M9 8 C9 8 9 4 12 4 C15 4 15 8 15 8" />
     </svg>
   );
 }
