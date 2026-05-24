@@ -10,10 +10,7 @@ import {
 } from "@tanstack/react-router";
 import { Toaster } from "sonner";
 import { useEffect, useState } from "react";
-
-// Import the CartProvider
 import { CartProvider } from "@/context/CartContext";
-
 import appCss from "../styles.css?url";
 import { SiteShell } from "@/components/site/SiteShell";
 import { supabase } from "@/integrations/supabase/client";
@@ -92,6 +89,16 @@ function RootShell({ children }: { children: React.ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        <script dangerouslySetInnerHTML={{
+          __html: `
+            (function() {
+              try {
+                var theme = localStorage.getItem('theme') || 'light';
+                document.documentElement.classList.add(theme);
+              } catch (e) {}
+            })()
+          `
+        }} />
       </head>
       <body>
         {children}
@@ -110,6 +117,7 @@ function RootComponent() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
+    localStorage.setItem('theme', theme);
     document.documentElement.classList.remove("light", "dark");
     document.documentElement.classList.add(theme);
   }, [theme]);
@@ -157,7 +165,6 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <CartProvider>
-        {/* CSS-only animation for smoothness, no JS interference */}
         <div className="animate-in fade-in duration-300">
           {isBare ? (
             <Outlet />
