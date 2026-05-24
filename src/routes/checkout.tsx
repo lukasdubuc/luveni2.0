@@ -22,7 +22,6 @@ function Checkout() {
     city: "", state: "", zip: "", phone: ""
   });
 
-  // Explicitly force the title
   useEffect(() => {
     document.title = "Cart";
   }, []);
@@ -72,7 +71,6 @@ function Checkout() {
         
         {/* LEFT: Forms */}
         <form onSubmit={onSubmit} className="space-y-12">
-          
           <div className="space-y-4">
             <h2 className="text-xs font-bold tracking-widest uppercase">Contact Information</h2>
             <Input placeholder="Email Address" name="email" />
@@ -119,14 +117,13 @@ function Checkout() {
             {items.map((item) => (
               <div key={`${item.productId}-${item.variantSku}`} className="flex items-center gap-4 border-b border-black/10 pb-4">
                 
-                {/* Product Image: Smaller container, object-contain to prevent cropping */}
-                <div className="w-12 h-12 bg-gray-100 flex-shrink-0 overflow-hidden">
+                {/* Transparent Product Image Container */}
+                <div className="w-16 h-16 flex-shrink-0 flex items-center justify-center">
                   {item.image_url && (
                     <img 
                       src={item.image_url} 
                       alt={item.title} 
                       className="w-full h-full object-contain"
-                      onError={(e) => (e.currentTarget.style.display = 'none')} 
                     />
                   )}
                 </div>
