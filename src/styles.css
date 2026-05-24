@@ -42,16 +42,14 @@ html { background-color: var(--background); }
   button { cursor: pointer; font-family: inherit; }
 }
 
-/* ── Mobile-only: smooth zoom-in transition from /shop → /offer/:slug ── */
+/* ── Mobile-only: zoom-in transition shop → offer/$slug only ── */
+/* No @view-transition { navigation: auto } — we rely solely on TanStack's   */
+/* viewTransition prop on the shop Link, so only that one direction triggers. */
 @media (max-width: 767px) {
-  @view-transition {
-    navigation: auto;
-  }
-
   @keyframes vt-zoom-in {
     from {
       opacity: 0;
-      transform: scale(0.94) translateZ(0);
+      transform: scale(0.93) translateZ(0);
     }
     to {
       opacity: 1;
@@ -64,18 +62,14 @@ html { background-color: var(--background); }
     to   { opacity: 1; transform: translateZ(0); }
   }
 
-  ::view-transition-image-pair(root) {
-    isolation: isolate;
-  }
-
   ::view-transition-old(root) {
-    animation: vt-hold 220ms ease both;
+    animation: vt-hold 200ms ease both;
     will-change: opacity;
     backface-visibility: hidden;
   }
 
   ::view-transition-new(root) {
-    animation: vt-zoom-in 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: vt-zoom-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
     will-change: transform, opacity;
     backface-visibility: hidden;
     transform-origin: center center;
