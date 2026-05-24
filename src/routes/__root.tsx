@@ -73,7 +73,11 @@ function RootComponent() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const isBare = path.startsWith("/admin") || path === "/login" || path.startsWith("/offer/");
   const [footerDescription, setFooterDescription] = useState<string | undefined>(undefined);
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    if (typeof window === "undefined") return "light";
+    try { return (localStorage.getItem("theme") as "light" | "dark") || "light"; }
+    catch { return "light"; }
+  });
 
   useEffect(() => {
     localStorage.setItem('theme', theme);
