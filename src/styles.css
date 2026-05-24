@@ -30,9 +30,15 @@
     monospace;
 }
 
-/* =========================
-   BASE THEME (STABLE)
-========================= */
+/* SAFE EARLY PAINT */
+
+html {
+  background-color: #FFFFFF;
+}
+
+html.dark {
+  background-color: #000000;
+}
 
 :root {
   color-scheme: light;
@@ -45,7 +51,7 @@
   --border: rgba(0, 0, 0, 0.10);
 }
 
-html.dark {
+:root.dark {
   color-scheme: dark;
 
   --background: #000000;
@@ -55,18 +61,6 @@ html.dark {
 
   --border: rgba(255, 255, 255, 0.15);
 }
-
-/* =========================
-   EARLY PAINT FIX (NO FLASH)
-========================= */
-
-html {
-  background-color: #000000;
-}
-
-/* =========================
-   GLOBAL BASE STYLES
-========================= */
 
 @layer base {
 
@@ -89,6 +83,7 @@ html {
     color: var(--foreground);
 
     font-family: var(--font-sans);
+
     font-size: 13px;
 
     text-transform: uppercase;
@@ -110,9 +105,7 @@ html {
   }
 }
 
-/* =========================
-   ROUTE CONTAINER PERF
-========================= */
+/* SAFE CONTAINMENT */
 
 .route-container {
   contain: layout paint;
