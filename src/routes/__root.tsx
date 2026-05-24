@@ -90,26 +90,22 @@ function RootShell({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* SAFE PRE-PAINT THEME */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-(function () {
-  try {
-    var t = localStorage.getItem('theme') || 'light';
-    var d = document.documentElement;
-
-    d.classList.remove("light", "dark");
-    d.classList.add(t);
-
-    d.style.backgroundColor = t === 'dark' ? '#000000' : '#FFFFFF';
-    d.style.colorScheme = t;
-  } catch (e) {}
-})();
-`,
-          }}
-        />
-
+        {/* ATOMIC THEME LOCK: Blocks render to prevent white-flash */}
+        <style dangerouslySetInnerHTML={{ __html: `
+          html { background-color: #000000; color-scheme: dark; }
+          html.light { background-color: #FFFFFF; color-scheme: light; }
+        ` }} />
+        
+        <script dangerouslySetInnerHTML={{ __html: `
+          (function () {
+            try {
+              var t = localStorage.getItem('theme') || 'light';
+              document.documentElement.className = t;
+              document.documentElement.style.backgroundColor = t === 'dark' ? '#000000' : '#FFFFFF';
+            } catch (e) {}
+          })();
+        ` }} />
+        
         <HeadContent />
       </head>
 
@@ -136,48 +132,29 @@ function RootComponent() {
     path === "/login" ||
     path.startsWith("/offer/");
 
-  const [footerDescription, setFooterDescription] = useState<
-    string | undefined
-  >(undefined);
+  const [footerDescription, setFooterDescription] = useState<string | undefined>(undefined);
 
-  // ✅ SINGLE SOURCE OF TRUTH: DOM → React sync
+  // Initialize directly from localStorage to ensure zero-delay theme application
   const [theme, setTheme] = useState<"light" | "dark">(() => {
-    if (typeof document === "undefined") return "light";
-    return document.documentElement.classList.contains("dark")
-      ? "dark"
-      : "light";
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("theme") as "light" | "dark") || "light";
+    }
+    return "light";
   });
 
+  // Direct sync: Update DOM and LocalStorage immediately when theme state changes
   useEffect(() => {
-    const syncTheme = () => {
-      const t = document.documentElement.classList.contains("dark")
-        ? "dark"
-        : "light";
-
-      setTheme(t);
-    };
-
-    syncTheme();
-
-    const observer = new MutationObserver(syncTheme);
-
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-
-    return () => observer.disconnect();
-  }, []);
+    localStorage.setItem("theme", theme);
+    document.documentElement.className = theme;
+    document.documentElement.style.backgroundColor = theme === "dark" ? "#000000" : "#FFFFFF";
+  }, [theme]);
 
   /* AUTH */
   useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
       queryClient.invalidateQueries({ queryKey: ["auth"] });
       router.invalidate();
     });
-
     return () => subscription.unsubscribe();
   }, [router, queryClient]);
 
@@ -186,51 +163,23 @@ function RootComponent() {
     let canceled = false;
 
     const fetchConfig = async () => {
-      const { data } = await supabase
-        .from("site_config")
-        .select("*")
-        .eq("id", "main")
-        .maybeSingle();
-
+      const { data } = await supabase.from("site_config").select("*").eq("id", "main").maybeSingle();
       if (canceled || !data) return;
 
       const config = mergeSiteConfig(data as any);
-
       setFooterDescription(config.metadata?.footer_description ?? "");
-
-      const t = config.theme || "light";
-
-      localStorage.setItem("theme", t);
-
-      document.documentElement.classList.remove("light", "dark");
-      document.documentElement.classList.add(t);
+      setTheme(config.theme || "light");
     };
 
     fetchConfig();
 
     const sub = supabase
       .channel("site_config_changes")
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "site_config",
-          filter: "id=eq.main",
-        },
-        (p) => {
-          const config = mergeSiteConfig(p.new as any);
-
-          setFooterDescription(config.metadata?.footer_description ?? "");
-
-          const t = config.theme || "light";
-
-          localStorage.setItem("theme", t);
-
-          document.documentElement.classList.remove("light", "dark");
-          document.documentElement.classList.add(t);
-        }
-      )
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "site_config", filter: "id=eq.main" }, (p) => {
+        const config = mergeSiteConfig(p.new as any);
+        setFooterDescription(config.metadata?.footer_description ?? "");
+        setTheme(config.theme || "light");
+      })
       .subscribe();
 
     return () => {
@@ -251,12 +200,7 @@ function RootComponent() {
             </SiteShell>
           )}
         </div>
-
-        <Toaster
-          position="top-center"
-          richColors
-          theme={theme}
-        />
+        <Toaster position="top-center" richColors theme={theme} />
       </CartProvider>
     </QueryClientProvider>
   );
