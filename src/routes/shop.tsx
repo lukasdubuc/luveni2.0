@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { fetchProducts, useProducts } from "@/lib/useProducts";
 import { useMemo, memo } from "react";
-
 type Product = {
   id: string;
   title: string;
@@ -10,7 +9,6 @@ type Product = {
   discounted_price_cents?: number | null;
   image_urls: string[];
 };
-
 export const Route = createFileRoute("/shop")({
   loader: async () => {
     const products = await fetchProducts({ onlyPublished: true });
@@ -24,17 +22,14 @@ export const Route = createFileRoute("/shop")({
   }),
   component: ShopPage,
 });
-
 function ShopPage() {
   const loader = Route.useLoaderData();
   const { products: clientProducts } = useProducts({ onlyPublished: true });
-
   const products: Product[] = useMemo(() => {
     return clientProducts && clientProducts.length > 0
       ? (clientProducts as Product[])
       : ((loader?.products as Product[]) ?? []);
   }, [clientProducts, loader?.products]);
-
   return (
     <div className="min-h-screen overflow-x-hidden bg-inherit font-mono selection:bg-current selection:text-current">
       {products.length === 0 ? (
@@ -44,7 +39,7 @@ function ShopPage() {
           </span>
         </div>
       ) : (
-        <div className="grid grid-cols-2 overflow-visible bg-inherit sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
+        <div className="grid grid-cols-2 overflow-visible bg-inherit sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
           {products.map((product) => (
             <ProductCell key={product.id} product={product} />
           ))}
@@ -53,21 +48,17 @@ function ShopPage() {
     </div>
   );
 }
-
 const ProductCell = memo(({ product }: { product: Product }) => {
   const imageUrl =
     Array.isArray(product.image_urls) && product.image_urls.length > 0
       ? product.image_urls[0]
       : null;
-
   const hasDiscount =
     product.discounted_price_cents != null &&
     product.discounted_price_cents < product.price_cents;
-
   const displayPrice = hasDiscount
     ? product.discounted_price_cents!
     : product.price_cents;
-
   return (
     <Link
       to={`/offer/${product.slug}`}
@@ -75,7 +66,7 @@ const ProductCell = memo(({ product }: { product: Product }) => {
       viewTransition
       className="group relative z-0 block border-none bg-transparent outline-none transition-transform duration-300 ease-in-out hover:z-10 hover:scale-105 hover:border-transparent focus:outline-none focus-visible:outline-none"
     >
-      <div className="relative flex aspect-[2/3] items-center justify-center overflow-hidden bg-transparent p-3 sm:p-4">
+      <div className="relative flex aspect-square items-center justify-center overflow-hidden bg-transparent p-6 sm:p-8 md:p-10">
         {imageUrl ? (
           <img
             src={imageUrl}
@@ -90,24 +81,22 @@ const ProductCell = memo(({ product }: { product: Product }) => {
             </span>
           </div>
         )}
-
         {hasDiscount && (
           <span className="absolute right-3 top-3 text-[8px] font-bold uppercase tracking-[0.15em] text-current">
             Sale
           </span>
         )}
       </div>
-
-      <div className="px-2 pb-6 text-center">
-        <p className="mb-1 text-[9px] uppercase leading-tight tracking-[0.1em] text-current opacity-90">
+      <div className="px-2 pb-8 text-center">
+        <p className="mb-1.5 text-[11px] leading-tight tracking-[0.02em] text-current opacity-90">
           {product.title}
         </p>
         <div className="flex items-center justify-center gap-2">
-          <span className="text-[9px] tracking-[0.05em] text-current font-bold">
+          <span className="text-[11px] tracking-[0.02em] text-current">
             ${(displayPrice / 100).toFixed(0)}
           </span>
           {hasDiscount && (
-            <span className="text-[8px] tracking-[0.05em] opacity-45 line-through">
+            <span className="text-[10px] tracking-[0.02em] opacity-45 line-through">
               ${(product.price_cents / 100).toFixed(0)}
             </span>
           )}
@@ -116,5 +105,4 @@ const ProductCell = memo(({ product }: { product: Product }) => {
     </Link>
   );
 });
-
 ProductCell.displayName = "ProductCell";
