@@ -315,10 +315,6 @@ function OfferSlugPage() {
       {nextProduct && <link rel="prefetch" href={`/offer/${nextProduct.slug}`} as="document" />}
       <style>{`
         @keyframes pdp-fade-in {
-          from { opacity: 0; transform: translateY(8px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes pdp-img-in {
           from { opacity: 0; }
           to   { opacity: 1; }
         }
@@ -378,7 +374,7 @@ function OfferSlugPage() {
               alignItems: "center", justifyContent: "center",
               width: "100%", maxWidth: "480px",
               padding: "3.5rem 2rem 2rem", boxSizing: "border-box",
-              animation: "pdp-fade-in 0.4s ease both",
+              animation: "pdp-fade-in 0.15s linear both",
             }}
             key={product.slug}
           >
@@ -406,7 +402,6 @@ function OfferSlugPage() {
                     style={{
                       maxWidth: "min(320px, 70vw)", maxHeight: "45vh",
                       objectFit: "contain", display: "block",
-                      animation: "pdp-img-in 0.4s ease both",
                       willChange: "opacity",
                     }}
                   />
@@ -469,7 +464,7 @@ function OfferSlugPage() {
               <div style={{
                 width: "100%", display: "flex", flexDirection: "column",
                 gap: "1rem", marginBottom: "1.25rem",
-                animation: "pdp-fade-in 0.25s ease both",
+                animation: "pdp-fade-in 0.15s linear both",
               }}>
                 {optionKeys.map((option) => (
                   <div key={option}>
