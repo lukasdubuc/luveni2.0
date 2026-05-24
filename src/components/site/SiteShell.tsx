@@ -12,7 +12,8 @@ export function SiteShell({
   theme?: "light" | "dark" 
 }) {
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground transition-colors duration-200">
+    // REMOVED: transition-colors duration-200
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
       <Header theme={theme} />
       <main className="w-full flex-1">
         {children}
