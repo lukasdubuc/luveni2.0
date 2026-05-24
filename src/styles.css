@@ -1,5 +1,7 @@
 @import "tailwindcss" source(none);
+
 @source "../src";
+
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
@@ -10,7 +12,11 @@
   --color-primary: var(--primary);
   --color-border: var(--border);
 
-  --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-sans:
+    "Helvetica Neue",
+    Helvetica,
+    Arial,
+    sans-serif;
 
   --font-mono:
     "Space Mono",
@@ -24,21 +30,19 @@
     monospace;
 }
 
-/* ---------- EARLY PAINT LOCK ---------- */
+/* SAFE EARLY PAINT */
 
 html {
-  background-color: #ffffff;
-  color-scheme: light;
+  background-color: #FFFFFF;
 }
 
 html.dark {
   background-color: #000000;
-  color-scheme: dark;
 }
 
-/* ---------- THEME VARIABLES ---------- */
-
 :root {
+  color-scheme: light;
+
   --background: #FFFFFF;
   --foreground: #000000;
 
@@ -48,6 +52,8 @@ html.dark {
 }
 
 :root.dark {
+  color-scheme: dark;
+
   --background: #000000;
   --foreground: #FFFFFF;
 
@@ -55,8 +61,6 @@ html.dark {
 
   --border: rgba(255, 255, 255, 0.15);
 }
-
-/* ---------- BASE ---------- */
 
 @layer base {
 
@@ -79,15 +83,15 @@ html.dark {
     color: var(--foreground);
 
     font-family: var(--font-sans);
+
     font-size: 13px;
 
     text-transform: uppercase;
 
-    text-rendering: optimizeSpeed;
+    overflow-x: hidden;
+
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-
-    overflow-x: hidden;
   }
 
   a {
@@ -101,22 +105,8 @@ html.dark {
   }
 }
 
-/* ---------- RENDER CONTAINMENT ---------- */
-
-.shell-root {
-  min-height: 100vh;
-
-  contain: layout style paint;
-}
+/* SAFE CONTAINMENT */
 
 .route-container {
   contain: layout paint;
-
-  will-change: transform;
-
-  transform: translateZ(0);
-
-  backface-visibility: hidden;
-
-  isolation: isolate;
 }
