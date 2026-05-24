@@ -1,57 +1,112 @@
-import type { ReactNode } from "react";
+@import "tailwindcss" source(none);
 
-import { Header } from "./Header";
-import { Footer } from "./Footer";
+@source "../src";
 
-export function SiteShell({
-  children,
-  footerDescription,
-  theme = "light",
-  bare = false,
-}: {
-  children: ReactNode;
+@import "tw-animate-css";
 
-  footerDescription?: string;
+@custom-variant dark (&:is(.dark *));
 
-  theme?: "light" | "dark";
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-border: var(--border);
 
-  bare?: boolean;
-}) {
-  return (
-    <div
-      className="
-        shell-root
-        flex
-        min-h-screen
-        flex-col
-        bg-background
-        text-foreground
-      "
-    >
+  --font-sans:
+    "Helvetica Neue",
+    Helvetica,
+    Arial,
+    sans-serif;
 
-      {/* PERSISTENT HEADER SLOT */}
-      {!bare && (
-        <Header theme={theme} />
-      )}
+  --font-mono:
+    "Space Mono",
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    "Courier New",
+    monospace;
+}
 
-      {/* PERSISTENT ROUTE CONTAINER */}
-      <main
-        className="
-          route-container
-          w-full
-          flex-1
-        "
-      >
-        {children}
-      </main>
+/* SAFE EARLY PAINT */
 
-      {/* PERSISTENT FOOTER SLOT */}
-      {!bare && (
-        <Footer
-          description={footerDescription}
-          theme={theme}
-        />
-      )}
-    </div>
-  );
+html {
+  background-color: #FFFFFF;
+}
+
+html.dark {
+  background-color: #000000;
+}
+
+:root {
+  color-scheme: light;
+
+  --background: #FFFFFF;
+  --foreground: #000000;
+
+  --primary: #000000;
+
+  --border: rgba(0, 0, 0, 0.10);
+}
+
+:root.dark {
+  color-scheme: dark;
+
+  --background: #000000;
+  --foreground: #FFFFFF;
+
+  --primary: #FFFFFF;
+
+  --border: rgba(255, 255, 255, 0.15);
+}
+
+@layer base {
+
+  :where(*) {
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+
+    background-color: var(--background);
+    color: var(--foreground);
+
+    font-family: var(--font-sans);
+
+    font-size: 13px;
+
+    text-transform: uppercase;
+
+    overflow-x: hidden;
+
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  button {
+    cursor: pointer;
+    font-family: inherit;
+  }
+}
+
+/* SAFE CONTAINMENT */
+
+.route-container {
+  contain: layout paint;
 }
