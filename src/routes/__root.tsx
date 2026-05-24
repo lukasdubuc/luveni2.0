@@ -24,17 +24,14 @@ import { supabase } from "@/integrations/supabase/client";
 
 import { mergeSiteConfig } from "@/lib/site-config";
 
+/* ---------------- NOT FOUND ---------------- */
+
 function NotFoundComponent() {
   return (
     <SiteShell bare={false}>
       <div className="mx-auto max-w-md px-4 py-24 text-center">
-        <h1 className="text-7xl font-semibold tracking-tight">
-          404
-        </h1>
-
-        <h2 className="mt-4 text-xl font-semibold">
-          Page not found
-        </h2>
+        <h1 className="text-7xl font-semibold tracking-tight">404</h1>
+        <h2 className="mt-4 text-xl font-semibold">Page not found</h2>
 
         <Link
           to="/"
@@ -47,6 +44,8 @@ function NotFoundComponent() {
   );
 }
 
+/* ---------------- ERROR ---------------- */
+
 function ErrorComponent({
   error,
   reset,
@@ -55,7 +54,6 @@ function ErrorComponent({
   reset: () => void;
 }) {
   console.error(error);
-
   const router = useRouter();
 
   return (
@@ -68,7 +66,6 @@ function ErrorComponent({
         <button
           onClick={() => {
             router.invalidate({ sync: false });
-
             reset();
           }}
           className="mt-6 bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
@@ -80,71 +77,50 @@ function ErrorComponent({
   );
 }
 
+/* ---------------- ROUTE ---------------- */
+
 export const Route =
   createRootRouteWithContext<{
     queryClient: QueryClient;
   }>()({
     head: () => ({
       meta: [
-        {
-          charSet: "utf-8",
-        },
-        {
-          name: "viewport",
-          content: "width=device-width, initial-scale=1",
-        },
+        { charSet: "utf-8" },
+        { name: "viewport", content: "width=device-width, initial-scale=1" },
       ],
-
       links: [
         {
           rel: "preconnect",
           href: "https://fonts.googleapis.com",
         },
-
         {
           rel: "preconnect",
           href: "https://fonts.gstatic.com",
           crossOrigin: "anonymous",
         },
-
         {
           rel: "stylesheet",
           href:
             "https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap",
         },
-
-        {
-          rel: "stylesheet",
-          href: appCss,
-        },
-
-        {
-          rel: "icon",
-          type: "image/x-icon",
-          href: "/favicon.ico",
-        },
+        { rel: "stylesheet", href: appCss },
+        { rel: "icon", type: "image/x-icon", href: "/favicon.ico" },
       ],
     }),
 
     shellComponent: RootShell,
-
     component: RootComponent,
-
     notFoundComponent: NotFoundComponent,
-
     errorComponent: ErrorComponent,
   });
 
-function RootShell({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+/* ---------------- SHELL ---------------- */
+
+function RootShell({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-
-        {/* PRE-PAINT THEME LOCK */}
+        {/* PRE-PAINT THEME LOCK (UNCHANGED - THIS IS GOOD) */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -155,7 +131,6 @@ function RootShell({
     var d = document.documentElement;
 
     d.classList.remove("light", "dark");
-
     d.classList.add(theme);
   } catch (e) {}
 })();
@@ -168,12 +143,13 @@ function RootShell({
 
       <body suppressHydrationWarning>
         {children}
-
         <Scripts />
       </body>
     </html>
   );
 }
+
+/* ---------------- OUTLET ---------------- */
 
 const PersistentOutlet = memo(function PersistentOutlet() {
   return (
@@ -183,10 +159,10 @@ const PersistentOutlet = memo(function PersistentOutlet() {
   );
 });
 
-function RootComponent() {
-  const { queryClient } =
-    Route.useRouteContext();
+/* ---------------- ROOT ---------------- */
 
+function RootComponent() {
+  const { queryClient } = Route.useRouteContext();
   const router = useRouter();
 
   const path = useRouterState({
@@ -198,34 +174,20 @@ function RootComponent() {
     path === "/login" ||
     path.startsWith("/offer/");
 
-  const [footerDescription, setFooterDescription] =
-    useState<string>();
+  const [footerDescription, setFooterDescription] = useState<string>();
 
-  /*
-    AUTH INVALIDATION
-    TARGETED ONLY
-  */
-
+  /* AUTH */
   useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
-      queryClient.invalidateQueries({
-        queryKey: ["auth"],
+    const { data: { subscription } } =
+      supabase.auth.onAuthStateChange(() => {
+        queryClient.invalidateQueries({ queryKey: ["auth"] });
+        router.invalidate({ sync: false });
       });
-
-      router.invalidate({
-        sync: false,
-      });
-    });
 
     return () => subscription.unsubscribe();
   }, [router, queryClient]);
 
-  /*
-    SITE CONFIG
-  */
-
+  /* SITE CONFIG (FIXED SYNC BEHAVIOR) */
   useEffect(() => {
     let canceled = false;
 
@@ -240,18 +202,19 @@ function RootComponent() {
 
       const config = mergeSiteConfig(data as any);
 
-      setFooterDescription(
-        config.metadata?.footer_description ?? ""
-      );
+      setFooterDescription(config.metadata?.footer_description ?? "");
 
-      const theme = config.theme || "dark";
+      // IMPORTANT FIX: single source of truth
+      const theme =
+        localStorage.getItem("theme") ||
+        config.theme ||
+        "dark";
 
       localStorage.setItem("theme", theme);
 
       const d = document.documentElement;
 
       d.classList.remove("light", "dark");
-
       d.classList.add(theme);
     };
 
@@ -268,22 +231,22 @@ function RootComponent() {
           filter: "id=eq.main",
         },
         (payload) => {
-          const config = mergeSiteConfig(
-            payload.new as any
-          );
+          const config = mergeSiteConfig(payload.new as any);
 
           setFooterDescription(
             config.metadata?.footer_description ?? ""
           );
 
-          const theme = config.theme || "dark";
+          const theme =
+            config.theme ||
+            localStorage.getItem("theme") ||
+            "dark";
 
           localStorage.setItem("theme", theme);
 
           const d = document.documentElement;
 
           d.classList.remove("light", "dark");
-
           d.classList.add(theme);
         }
       )
@@ -291,7 +254,6 @@ function RootComponent() {
 
     return () => {
       canceled = true;
-
       sub.unsubscribe();
     };
   }, []);
@@ -299,19 +261,11 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <CartProvider>
-
-        <SiteShell
-          bare={isBare}
-          footerDescription={footerDescription}
-        >
+        <SiteShell bare={isBare} footerDescription={footerDescription}>
           <PersistentOutlet />
         </SiteShell>
 
-        <Toaster
-          position="top-center"
-          richColors
-          theme="dark"
-        />
+        <Toaster position="top-center" richColors theme="dark" />
       </CartProvider>
     </QueryClientProvider>
   );
