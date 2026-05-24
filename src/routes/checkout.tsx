@@ -40,8 +40,7 @@ function Checkout() {
   const navigate = useNavigate();
   const submit = useServerFn(createCheckout);
   const { product } = Route.useLoaderData();
-  // Added removeItem and updateQuantity to destructured values
-  const { items, totalCents, removeItem, updateQuantity } = useCart();
+  const { items, totalCents, updateItemQuantity, removeItem } = useCart();
   
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -52,7 +51,6 @@ function Checkout() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     
-    // SAFEGUARD: Block empty checkout
     if (totalCents <= 0) {
       toast.error("Your cart is empty. Please add items to continue.");
       return;
@@ -94,21 +92,38 @@ function Checkout() {
     <section className="bg-background text-foreground">
       <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 md:grid-cols-5 md:py-20">
         <div className="md:col-span-3">
-          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Checkout</h1>
-          <form onSubmit={onSubmit} className="mt-8 space-y-5 border border-black/10 bg-background/50 p-6">
+          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Cart</h1>
+          <form onSubmit={onSubmit} className="mt-8 space-y-5 border border-black/10 dark:border-white/20 bg-background/50 p-6">
             <div className="space-y-2">
               <label htmlFor="name" className="text-sm font-medium">Full name</label>
-              <input id="name" value={name} onChange={(e) => setName(e.target.value)} required maxLength={120} placeholder="Alex Rivera" className="h-11 w-full border border-black/10 bg-background px-3 text-sm outline-none focus:border-black" />
+              <input 
+                id="name" 
+                value={name} 
+                onChange={(e) => setName(e.target.value)} 
+                required 
+                maxLength={120} 
+                placeholder="Alex Rivera" 
+                className="h-11 w-full border border-black/10 dark:border-white/20 bg-background px-3 text-sm outline-none focus:border-black dark:focus:border-white transition-colors" 
+              />
             </div>
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium">Email address</label>
-              <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required maxLength={255} placeholder="you@email.com" className="h-11 w-full border border-black/10 bg-background px-3 text-sm outline-none focus:border-black" />
+              <input 
+                id="email" 
+                type="email" 
+                value={email} 
+                onChange={(e) => setEmail(e.target.value)} 
+                required 
+                maxLength={255} 
+                placeholder="you@email.com" 
+                className="h-11 w-full border border-black/10 dark:border-white/20 bg-background px-3 text-sm outline-none focus:border-black dark:focus:border-white transition-colors" 
+              />
             </div>
             
             <button 
               type="submit" 
               disabled={loading || totalCents <= 0} 
-              className="inline-flex h-12 w-full items-center justify-center gap-2 border border-black bg-foreground text-base font-medium text-background transition-colors hover:bg-background hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex h-12 w-full items-center justify-center gap-2 border border-black dark:border-white bg-foreground text-background dark:bg-white dark:text-black text-base font-medium transition-colors hover:bg-background hover:text-foreground dark:hover:bg-black dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               <Lock className="h-4 w-4" /> 
@@ -118,7 +133,7 @@ function Checkout() {
         </div>
 
         <aside className="md:col-span-2">
-          <div className="border border-black/10 bg-background/50 p-6">
+          <div className="border border-black/10 dark:border-white/20 bg-background/50 p-6">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Order summary</h2>
             
             <div className="mt-4 space-y-4">
@@ -130,25 +145,24 @@ function Checkout() {
                     <div>
                       <p className="font-medium">{item.title}</p>
                       
-                      {/* Quantity and Edit Controls */}
-                      <div className="flex items-center gap-3 mt-2">
-                        <div className="flex items-center gap-2 border border-black/10">
+                      <div className="flex items-center gap-4 mt-2">
+                        <div className="flex items-center border border-black/10 dark:border-white/20">
                           <button 
                             type="button"
-                            onClick={() => updateQuantity(item.productId, item.variantSku, item.quantity - 1)}
-                            className="px-2 py-1 text-xs hover:bg-black/5"
+                            onClick={() => updateItemQuantity(item.productId, item.quantity - 1, item.variantSku)}
+                            className="px-2 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10"
                           >-</button>
-                          <span className="text-xs w-4 text-center">{item.quantity}</span>
+                          <span className="text-xs w-6 text-center">{item.quantity}</span>
                           <button 
                             type="button"
-                            onClick={() => updateQuantity(item.productId, item.variantSku, item.quantity + 1)}
-                            className="px-2 py-1 text-xs hover:bg-black/5"
+                            onClick={() => updateItemQuantity(item.productId, item.quantity + 1, item.variantSku)}
+                            className="px-2 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10"
                           >+</button>
                         </div>
                         <button 
                           type="button"
                           onClick={() => removeItem(item.productId, item.variantSku)}
-                          className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-black underline"
+                          className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground underline transition-colors"
                         >
                           Remove
                         </button>
