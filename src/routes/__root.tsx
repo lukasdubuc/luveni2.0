@@ -109,16 +109,6 @@ function RootComponent() {
   const [footerDescription, setFooterDescription] = useState<string | undefined>(undefined);
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
-  // Infrastructure: Smooth Transitions
-  useEffect(() => {
-    const unsub = router.subscribe("onResolved", () => {
-      if (document.startViewTransition) {
-        document.startViewTransition(() => {});
-      }
-    });
-    return () => unsub();
-  }, [router]);
-
   useEffect(() => {
     document.documentElement.classList.remove("light", "dark");
     document.documentElement.classList.add(theme);
@@ -167,8 +157,8 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <CartProvider>
-        {/* View Transition wrapper for non-choppy feel */}
-        <div style={{ viewTransitionName: 'root-content' }}>
+        {/* CSS-only animation for smoothness, no JS interference */}
+        <div className="animate-in fade-in duration-300">
           {isBare ? (
             <Outlet />
           ) : (
