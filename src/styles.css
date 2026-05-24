@@ -1,5 +1,4 @@
 @import url("https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap");
-
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
@@ -31,12 +30,12 @@
   --color-ring: var(--ring);
   --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
   --font-mono: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  --shadow-soft: none; --shadow-elevated: none; --shadow-glow: none;
 }
+
+html { background-color: var(--background); }
 
 :root {
   color-scheme: light;
-  --radius: 0rem;
   --background: #FFFFFF; --foreground: #000000;
   --card: #FFFFFF; --card-foreground: #000000;
   --popover: #FFFFFF; --popover-foreground: #000000;
@@ -70,19 +69,16 @@
     color: var(--foreground);
     font-family: var(--font-sans);
     font-size: 13px; font-weight: 400;
-    margin: 0; padding: 0; overflow-x: hidden;
+    margin: 0; padding: 0;
     transition: background-color 0.2s ease, color 0.2s ease;
   }
-  h1, h2, h3, h4, h5, h6 { font-family: var(--font-sans); font-weight: 400; line-height: 1.1; }
   a { text-decoration: none; color: inherit; }
   button { cursor: pointer; font-family: inherit; }
-  *:focus { outline: 1px solid rgba(0, 0, 0, 0.35); outline-offset: 2px; }
 }
 
 @layer utilities {
-  .text-tiny { font-size: 0.625rem; line-height: 1; }
-  .text-micro { font-size: 0.5rem; line-height: 1; }
-  .tight-mono { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: -0.05em; }
+  .text-tiny { font-size: 0.625rem; }
+  .text-micro { font-size: 0.5rem; }
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 }
