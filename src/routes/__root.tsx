@@ -10,7 +10,10 @@ import {
 } from "@tanstack/react-router";
 import { Toaster } from "sonner";
 import { useEffect, useState } from "react";
+
+// Import the CartProvider
 import { CartProvider } from "@/context/CartContext";
+
 import appCss from "../styles.css?url";
 import { SiteShell } from "@/components/site/SiteShell";
 import { supabase } from "@/integrations/supabase/client";
@@ -89,15 +92,9 @@ function RootShell({ children }: { children: React.ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        {/* Anti-flash script: Reads localStorage before page paint */}
         <script dangerouslySetInnerHTML={{
-          __html: `
-            (function() {
-              try {
-                var theme = localStorage.getItem('theme') || 'light';
-                document.documentElement.classList.add(theme);
-              } catch (e) {}
-            })()
-          `
+          __html: `(function(){try{var t=localStorage.getItem('theme')||'light';document.documentElement.classList.add(t)}catch(e){}})()`
         }} />
       </head>
       <body>
@@ -116,6 +113,7 @@ function RootComponent() {
   const [footerDescription, setFooterDescription] = useState<string | undefined>(undefined);
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
+  // Sync theme state with localStorage for persistence
   useEffect(() => {
     localStorage.setItem('theme', theme);
     document.documentElement.classList.remove("light", "dark");
