@@ -11,30 +11,22 @@ import {
 } from "@tanstack/react-router";
 
 import { Toaster } from "sonner";
-
 import { useEffect, useState, memo } from "react";
 
 import { CartProvider } from "@/context/CartContext";
-
 import appCss from "../styles.css?url";
-
 import { SiteShell } from "@/components/site/SiteShell";
-
 import { supabase } from "@/integrations/supabase/client";
-
 import { mergeSiteConfig } from "@/lib/site-config";
+
+/* ---------------- NOT FOUND ---------------- */
 
 function NotFoundComponent() {
   return (
     <SiteShell bare={false}>
       <div className="mx-auto max-w-md px-4 py-24 text-center">
-        <h1 className="text-7xl font-semibold tracking-tight">
-          404
-        </h1>
-
-        <h2 className="mt-4 text-xl font-semibold">
-          Page not found
-        </h2>
+        <h1 className="text-7xl font-semibold tracking-tight">404</h1>
+        <h2 className="mt-4 text-xl font-semibold">Page not found</h2>
 
         <Link
           to="/"
@@ -47,6 +39,8 @@ function NotFoundComponent() {
   );
 }
 
+/* ---------------- ERROR ---------------- */
+
 function ErrorComponent({
   error,
   reset,
@@ -55,7 +49,6 @@ function ErrorComponent({
   reset: () => void;
 }) {
   console.error(error);
-
   const router = useRouter();
 
   return (
@@ -68,7 +61,6 @@ function ErrorComponent({
         <button
           onClick={() => {
             router.invalidate({ sync: false });
-
             reset();
           }}
           className="mt-6 bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
@@ -80,10 +72,10 @@ function ErrorComponent({
   );
 }
 
+/* ---------------- ROUTE ---------------- */
+
 export const Route =
-  createRootRouteWithContext<{
-    queryClient: QueryClient;
-  }>()({
+  createRootRouteWithContext<{ queryClient: QueryClient }>()({
     head: () => ({
       meta: [
         { charSet: "utf-8" },
@@ -115,27 +107,31 @@ export const Route =
     errorComponent: ErrorComponent,
   });
 
-function RootShell({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+/* ---------------- SHELL ---------------- */
+
+function RootShell({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* PRE-PAINT THEME LOCK */}
+        {/* FIXED PREPAINT (NO FLASH) */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
 (function () {
   try {
     var theme = localStorage.getItem("theme") || "dark";
-
     var d = document.documentElement;
 
     d.classList.remove("light", "dark");
-
     d.classList.add(theme);
+
+    // 🔥 prevent white flash BEFORE CSS loads
+    document.documentElement.style.backgroundColor =
+      theme === "dark" ? "#000000" : "#FFFFFF";
+
+    document.body.style.backgroundColor =
+      theme === "dark" ? "#000000" : "#FFFFFF";
+
   } catch (e) {}
 })();
 `,
@@ -147,12 +143,13 @@ function RootShell({
 
       <body suppressHydrationWarning>
         {children}
-
         <Scripts />
       </body>
     </html>
   );
 }
+
+/* ---------------- OUTLET ---------------- */
 
 const PersistentOutlet = memo(function PersistentOutlet() {
   return (
@@ -162,22 +159,19 @@ const PersistentOutlet = memo(function PersistentOutlet() {
   );
 });
 
+/* ---------------- ROOT ---------------- */
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-
   const router = useRouter();
 
   const path = useRouterState({
     select: (s) => s.location.pathname,
   });
 
-  const isBare =
-    path.startsWith("/admin") ||
-    path === "/login" ||
-    path.startsWith("/offer/");
-
-  const [footerDescription, setFooterDescription] =
-    useState<string>();
+  // ⚠️ FIX: DO NOT RE-MOUNT LAYOUT FOR OFFER ROUTES
+  // This was causing lag + black screen transitions
+  const [footerDescription, setFooterDescription] = useState<string>();
 
   useEffect(() => {
     const { data: { subscription } } =
@@ -206,13 +200,10 @@ function RootComponent() {
       setFooterDescription(config.metadata?.footer_description ?? "");
 
       const theme = config.theme || "dark";
-
       localStorage.setItem("theme", theme);
 
       const d = document.documentElement;
-
       d.classList.remove("light", "dark");
-
       d.classList.add(theme);
     };
 
@@ -236,13 +227,10 @@ function RootComponent() {
           );
 
           const theme = config.theme || "dark";
-
           localStorage.setItem("theme", theme);
 
           const d = document.documentElement;
-
           d.classList.remove("light", "dark");
-
           d.classList.add(theme);
         }
       )
@@ -257,18 +245,12 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <CartProvider>
-        <SiteShell
-          bare={isBare}
-          footerDescription={footerDescription}
-        >
+        {/* IMPORTANT: KEEP SHELL ALWAYS MOUNTED */}
+        <SiteShell footerDescription={footerDescription}>
           <PersistentOutlet />
         </SiteShell>
 
-        <Toaster
-          position="top-center"
-          richColors
-          theme="dark"
-        />
+        <Toaster position="top-center" richColors theme="dark" />
       </CartProvider>
     </QueryClientProvider>
   );
