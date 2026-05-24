@@ -104,6 +104,7 @@ function OfferSlugPage() {
     allProducts: Product[];
   };
   const navigate = useNavigate();
+
   // ── Cart integration ─────────────────────────────────────────────────────
   const { addItem } = useCart();
   const [addedFeedback, setAddedFeedback] = useState(false);
@@ -116,9 +117,7 @@ function OfferSlugPage() {
 
   const prevProduct = currentIndex > 0 ? allProducts[currentIndex - 1] : null;
   const nextProduct =
-    currentIndex < allProducts.length - 1
-      ? allProducts[currentIndex + 1]
-      : null;
+    currentIndex < allProducts.length - 1 ? allProducts[currentIndex + 1] : null;
 
   const navigateCooldown = useRef(false);
 
@@ -206,11 +205,11 @@ function OfferSlugPage() {
 
   const [selection, setSelection] = useState<Record<string, string>>({});
   const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const [infoExpanded, setInfoExpanded] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
 
   useEffect(() => {
     setActiveImageIndex(0);
-    setInfoExpanded(false);
+    setOptionsOpen(false);
   }, [product?.id]);
 
   useEffect(() => {
@@ -245,16 +244,16 @@ function OfferSlugPage() {
 
   const selectedPrice = selectedVariant?.price_cents ?? product?.price_cents;
   const checkoutDisabled = variants.length > 0 && !selectedVariant;
-
-  const stockMessage = selectedVariant
-    ? selectedVariant.stock != null && selectedVariant.stock <= 0 ? "SOLD OUT" : "IN STOCK"
-    : variants.length > 0 ? "SELECT OPTIONS" : "IN STOCK";
-
   const isSoldOut = selectedVariant?.stock != null && selectedVariant.stock <= 0;
 
   // ── Add to cart handler ──────────────────────────────────────────────────
   const handleAddToCart = useCallback(() => {
     if (!product || checkoutDisabled || isSoldOut) return;
+    // If there are options and they're not open yet, open them first
+    if (optionKeys.length > 0 && !optionsOpen) {
+      setOptionsOpen(true);
+      return;
+    }
     addItem({
       productId: product.id,
       variantSku: selectedVariant?.sku,
@@ -263,8 +262,9 @@ function OfferSlugPage() {
       image_url: product.image_urls?.[0] || "",
     });
     setAddedFeedback(true);
+    setOptionsOpen(false);
     setTimeout(() => setAddedFeedback(false), 1200);
-  }, [product, selectedVariant, selectedPrice, checkoutDisabled, isSoldOut, addItem]);
+  }, [product, selectedVariant, selectedPrice, checkoutDisabled, isSoldOut, addItem, optionKeys.length, optionsOpen]);
 
   // ── Image swipe within gallery ───────────────────────────────────────────
   const imgTouchStartX = useRef<number | null>(null);
@@ -282,15 +282,19 @@ function OfferSlugPage() {
   // ── Not found ────────────────────────────────────────────────────────────
   if (!product) {
     return (
-      <section className="flex min-h-screen flex-col items-center justify-center bg-background text-foreground px-4"
-        style={{ fontFamily: "var(--font-mono, monospace)" }}>
+      <section
+        className="flex min-h-screen flex-col items-center justify-center bg-background text-foreground px-4"
+        style={{ fontFamily: "var(--font-mono, monospace)" }}
+      >
         <p className="text-[10px] font-bold uppercase tracking-[0.35em] opacity-40">404</p>
         <h1 className="mt-3 text-3xl font-black uppercase tracking-[-0.04em]">Offer Not Found</h1>
         <p className="mt-3 text-xs uppercase tracking-[0.2em] opacity-50">
           This product is unavailable or no longer exists.
         </p>
-        <a href="/shop"
-          className="mt-8 inline-flex h-12 items-center border border-foreground bg-foreground text-background px-10 text-xs font-bold uppercase tracking-[0.25em] transition hover:bg-background hover:text-foreground">
+        <a
+          href="/shop"
+          className="mt-8 inline-flex h-12 items-center border border-foreground bg-foreground text-background px-10 text-xs font-bold uppercase tracking-[0.25em] transition hover:bg-background hover:text-foreground"
+        >
           Back to Shop
         </a>
       </section>
@@ -302,65 +306,117 @@ function OfferSlugPage() {
       {prevProduct && <link rel="prefetch" href={`/offer/${prevProduct.slug}`} as="document" />}
       {nextProduct && <link rel="prefetch" href={`/offer/${nextProduct.slug}`} as="document" />}
       <style>{`
-        @keyframes pdp-zoom-in {
-          from { opacity: 0; transform: scale(0.94); }
+        @keyframes pdp-fade-in {
+          from { opacity: 0; transform: translateY(8px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pdp-img-in {
+          from { opacity: 0; transform: scale(0.96); }
           to   { opacity: 1; transform: scale(1); }
         }
+        .pdp-plus-btn:hover { opacity: 0.5; }
+        .pdp-plus-btn:active { transform: scale(0.92); }
+        .pdp-nav-btn:hover { opacity: 0.5 !important; }
       `}</style>
 
+      {/* ── Full-screen container ── */}
       <div
-        className="yeezy-pdp bg-background text-foreground"
+        className="bg-background text-foreground"
         style={{
           position: "fixed",
           inset: 0,
           display: "flex",
-          flexDirection: "column",
-          fontFamily: "var(--font-mono, 'Space Mono', monospace)",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
           overflow: "hidden",
           zIndex: 0,
         }}
       >
-        {/* ── Top bar ── */}
-        <div style={{
-          position: "absolute", top: 0, left: 0, right: 0, zIndex: 20,
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "0 1.5rem", height: "3rem", background: "transparent",
-        }}>
-          <a href="/shop" style={{
-            fontSize: "9px", fontWeight: 700, letterSpacing: "0.28em",
-            textTransform: "uppercase", color: "inherit", textDecoration: "none",
-            display: "flex", alignItems: "center", gap: "0.4rem",
-          }}>
-            <span style={{ fontSize: "11px" }}>←</span> SHOP
-          </a>
-          <span style={{
-            fontSize: "9px", fontWeight: 700, letterSpacing: "0.28em",
-            textTransform: "uppercase",
-            color: isSoldOut ? "#c00" : "inherit",
-            opacity: isSoldOut ? 1 : 0.4,
-          }}>
-            {stockMessage}
-          </span>
-        </div>
+        {/* ── Top-left: back arrow ── */}
+        <a
+          href="/shop"
+          style={{
+            position: "absolute", top: "1.25rem", left: "1.25rem", zIndex: 20,
+            color: "inherit", textDecoration: "none",
+            fontSize: "20px", fontWeight: 300, lineHeight: 1,
+            opacity: 0.7,
+            display: "flex", alignItems: "center",
+          }}
+          aria-label="Back to shop"
+        >
+          ‹
+        </a>
 
-        {/* ── Image area ── */}
+        {/* ── Top-right: cart count or stock status ── */}
         <div
           style={{
-            flex: "1 1 0", position: "relative", display: "flex",
-            alignItems: "center", justifyContent: "center",
-            overflow: "hidden", minHeight: 0,
+            position: "absolute", top: "1.25rem", right: "1.25rem", zIndex: 20,
+            fontSize: "11px", fontWeight: 400, letterSpacing: "0.02em",
+            color: isSoldOut ? "#c00" : "inherit",
+            opacity: isSoldOut ? 1 : 0.5,
           }}
+        >
+          {isSoldOut ? "SOLD OUT" : ""}
+        </div>
+
+        {/* ── Left nav arrow ── */}
+        <button
+          onClick={goToPrev}
+          disabled={!prevProduct}
+          aria-label="Previous product"
+          className="pdp-nav-btn"
+          style={{
+            position: "absolute", left: "1.25rem", top: "50%", transform: "translateY(-50%)",
+            zIndex: 10, background: "transparent", border: "none",
+            cursor: prevProduct ? "pointer" : "default",
+            padding: "0.75rem 0.5rem",
+            opacity: prevProduct ? 0.7 : 0.15,
+            transition: "opacity 0.2s",
+            fontSize: "22px", fontWeight: 300, color: "inherit", lineHeight: 1,
+          }}
+        >
+          ‹
+        </button>
+
+        {/* ── Right nav arrow ── */}
+        <button
+          onClick={goToNext}
+          disabled={!nextProduct}
+          aria-label="Next product"
+          className="pdp-nav-btn"
+          style={{
+            position: "absolute", right: "1.25rem", top: "50%", transform: "translateY(-50%)",
+            zIndex: 10, background: "transparent", border: "none",
+            cursor: nextProduct ? "pointer" : "default",
+            padding: "0.75rem 0.5rem",
+            opacity: nextProduct ? 0.7 : 0.15,
+            transition: "opacity 0.2s",
+            fontSize: "22px", fontWeight: 300, color: "inherit", lineHeight: 1,
+          }}
+        >
+          ›
+        </button>
+
+        {/* ── Center column: image + info ── */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "100%",
+            maxWidth: "480px",
+            padding: "3.5rem 2rem 2rem",
+            boxSizing: "border-box",
+            animation: "pdp-fade-in 0.4s ease both",
+          }}
+          key={product.slug}
           onTouchStart={handleImgTouchStart}
           onTouchEnd={handleImgTouchEnd}
         >
-          <div
-            key={product.slug}
-            style={{
-              position: "relative", width: "100%", height: "100%",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              animation: "pdp-zoom-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both",
-            }}
-          >
+          {/* Product image */}
+          <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "1.5rem" }}>
             {galleryImages[activeImageIndex] ? (
               <img
                 key={galleryImages[activeImageIndex]}
@@ -368,19 +424,19 @@ function OfferSlugPage() {
                 alt={`${product.title} — image ${activeImageIndex + 1}`}
                 loading="eager"
                 style={{
-                  maxWidth: "min(560px, 90%)",
-                  maxHeight: "calc(100% - 4rem)",
+                  maxWidth: "min(360px, 80vw)",
+                  maxHeight: "45vh",
                   objectFit: "contain",
                   display: "block",
-                  transition: "opacity 0.2s ease",
+                  animation: "pdp-img-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both",
                 }}
               />
             ) : (
               <div style={{
-                width: "min(560px, 80%)", aspectRatio: "1",
+                width: "min(360px, 80vw)", aspectRatio: "1",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 border: "1px solid rgba(128,128,128,0.15)",
-                fontSize: "9px", fontWeight: 700, letterSpacing: "0.3em",
+                fontSize: "9px", fontWeight: 500, letterSpacing: "0.3em",
                 textTransform: "uppercase", opacity: 0.3,
               }}>
                 IMAGE PENDING
@@ -388,148 +444,95 @@ function OfferSlugPage() {
             )}
           </div>
 
-          {/* ── Left nav arrow ── */}
-          <button onClick={goToPrev} disabled={!prevProduct} aria-label="Previous product"
-            style={{
-              position: "absolute", left: "1rem", top: "50%", transform: "translateY(-50%)",
-              zIndex: 10, background: "transparent", border: "none",
-              cursor: prevProduct ? "pointer" : "default",
-              padding: "0.75rem 0.5rem", display: "flex", alignItems: "center", justifyContent: "center",
-              opacity: prevProduct ? 1 : 0.15, transition: "opacity 0.2s",
-            }}>
-            <span style={{ fontSize: "22px", fontWeight: 300, color: "inherit", lineHeight: 1, fontFamily: "serif" }}>‹</span>
-          </button>
-
-          {/* ── Right nav arrow ── */}
-          <button onClick={goToNext} disabled={!nextProduct} aria-label="Next product"
-            style={{
-              position: "absolute", right: "1rem", top: "50%", transform: "translateY(-50%)",
-              zIndex: 10, background: "transparent", border: "none",
-              cursor: nextProduct ? "pointer" : "default",
-              padding: "0.75rem 0.5rem", display: "flex", alignItems: "center", justifyContent: "center",
-              opacity: nextProduct ? 1 : 0.15, transition: "opacity 0.2s",
-            }}>
-            <span style={{ fontSize: "22px", fontWeight: 300, color: "inherit", lineHeight: 1, fontFamily: "serif" }}>›</span>
-          </button>
-
-          {/* ── Image dot indicators ── */}
+          {/* Image dots */}
           {galleryImages.length > 1 && (
-            <div style={{
-              position: "absolute", bottom: "0.75rem", left: "50%",
-              transform: "translateX(-50%)", display: "flex", gap: "5px", zIndex: 10,
-            }}>
+            <div style={{ display: "flex", gap: "6px", marginBottom: "1.5rem" }}>
               {galleryImages.map((_, i) => (
-                <button key={i} onClick={() => setActiveImageIndex(i)} aria-label={`Image ${i + 1}`}
+                <button
+                  key={i}
+                  onClick={() => setActiveImageIndex(i)}
+                  aria-label={`Image ${i + 1}`}
                   style={{
-                    width: i === activeImageIndex ? "18px" : "6px", height: "6px",
-                    borderRadius: "3px", background: "currentColor",
-                    opacity: i === activeImageIndex ? 1 : 0.25,
+                    width: "6px", height: "6px",
+                    borderRadius: "50%",
+                    background: "currentColor",
+                    opacity: i === activeImageIndex ? 0.8 : 0.2,
                     border: "none", cursor: "pointer", padding: 0,
-                    transition: "all 0.25s ease",
+                    transition: "opacity 0.2s ease",
                   }}
                 />
               ))}
             </div>
           )}
 
-          {/* ── Product counter ── */}
-          {allProducts.length > 1 && (
-            <div style={{
-              position: "absolute", bottom: "0.75rem", right: "1.25rem",
-              fontSize: "8px", fontWeight: 700, letterSpacing: "0.2em",
-              color: "inherit", opacity: 0.35,
-              fontFamily: "var(--font-mono, monospace)",
-            }}>
-              {String(currentIndex + 1).padStart(2, "0")} / {String(allProducts.length).padStart(2, "0")}
-            </div>
-          )}
-        </div>
-
-        {/* ── Info panel ── */}
-        <div style={{
-          flexShrink: 0,
-          borderTop: "1px solid rgba(128,128,128,0.1)",
-          padding: "1rem 1.5rem 0",
-          maxHeight: infoExpanded ? "60vh" : "auto",
-          overflowY: infoExpanded ? "auto" : "visible",
-          transition: "max-height 0.3s ease",
-        }}>
-          {/* Title + price row */}
+          {/* Title */}
           <div style={{
-            display: "flex", alignItems: "baseline",
-            justifyContent: "space-between", gap: "1rem", marginBottom: "0.35rem",
+            fontSize: "clamp(0.85rem, 2vw, 1rem)",
+            fontWeight: 400,
+            letterSpacing: "0.02em",
+            color: "inherit",
+            textAlign: "center",
+            marginBottom: "0.4rem",
+            opacity: 0.9,
           }}>
-            <h1 style={{
-              fontSize: "clamp(1.1rem, 4vw, 1.75rem)", fontWeight: 900,
-              textTransform: "uppercase", letterSpacing: "-0.04em",
-              lineHeight: 1, color: "inherit", margin: 0,
-            }}>
-              {product.title}
-            </h1>
-            <span style={{
-              fontSize: "clamp(0.85rem, 2.5vw, 1.1rem)", fontWeight: 700,
-              letterSpacing: "0.1em", color: "inherit", whiteSpace: "nowrap", flexShrink: 0,
-            }}>
-              {formatPrice(selectedPrice)}
-            </span>
+            {product.title}
           </div>
 
-          {/* Description toggle */}
-          {product.description && (
-            <button onClick={() => setInfoExpanded((v) => !v)} style={{
-              background: "none", border: "none", padding: "0.25rem 0",
-              cursor: "pointer", fontSize: "8px", fontWeight: 700,
-              letterSpacing: "0.25em", textTransform: "uppercase",
-              color: "inherit", opacity: 0.4, display: "flex", alignItems: "center", gap: "0.3rem",
-              marginBottom: infoExpanded ? "0.75rem" : "0",
-            }}>
-              {infoExpanded ? "HIDE INFO ↑" : "INFO ↓"}
-            </button>
-          )}
+          {/* Price */}
+          <div style={{
+            fontSize: "clamp(0.85rem, 2vw, 1rem)",
+            fontWeight: 400,
+            letterSpacing: "0.02em",
+            color: "inherit",
+            textAlign: "center",
+            marginBottom: "1.5rem",
+            opacity: 0.9,
+          }}>
+            {formatPrice(selectedPrice)}
+          </div>
 
-          {infoExpanded && product.description && (
-            <p style={{
-              fontSize: "11px", lineHeight: 1.7, color: "inherit", opacity: 0.6,
-              textTransform: "uppercase", letterSpacing: "0.08em",
-              whiteSpace: "pre-line", marginBottom: "0.75rem", maxWidth: "560px",
+          {/* Variant options (shown when optionsOpen) */}
+          {optionsOpen && optionKeys.length > 0 && (
+            <div style={{
+              width: "100%", display: "flex", flexDirection: "column",
+              gap: "1rem", marginBottom: "1.25rem",
+              animation: "pdp-fade-in 0.25s ease both",
             }}>
-              {product.description}
-            </p>
-          )}
-
-          {/* Options */}
-          {optionKeys.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", paddingBottom: "0.75rem" }}>
               {optionKeys.map((option) => (
                 <div key={option}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-                    <span style={{ fontSize: "8px", fontWeight: 700, letterSpacing: "0.3em", textTransform: "uppercase", color: "inherit" }}>
-                      {normalizeOptionName(option)}
-                    </span>
-                    <span style={{ fontSize: "8px", fontWeight: 700, letterSpacing: "0.2em", textTransform: "uppercase", color: "inherit", opacity: 0.4 }}>
-                      {selection[option] || "SELECT"}
-                    </span>
+                  <div style={{
+                    fontSize: "9px", fontWeight: 500, letterSpacing: "0.2em",
+                    textTransform: "uppercase", opacity: 0.45,
+                    textAlign: "center", marginBottom: "0.5rem",
+                  }}>
+                    {normalizeOptionName(option)} — {selection[option] || "SELECT"}
                   </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", justifyContent: "center" }}>
                     {optionValues[option]?.map((value) => {
                       const selected = selection[option] === value;
                       const available = isOptionAvailable(option, value);
                       return (
-                        <button key={value} type="button"
+                        <button
+                          key={value}
+                          type="button"
                           onClick={() => setSelection((cur) => ({ ...cur, [option]: value }))}
-                          disabled={!available} aria-pressed={selected}
+                          disabled={!available}
+                          aria-pressed={selected}
                           style={{
                             minHeight: "2rem", minWidth: "2.5rem", padding: "0 0.75rem",
-                            border: selected ? "1px solid currentColor" : "1px solid currentColor",
-                            borderColor: selected ? "currentColor" : "rgba(128,128,128,0.2)",
+                            borderColor: selected ? "currentColor" : "rgba(128,128,128,0.25)",
+                            border: "1px solid",
                             background: selected ? "currentColor" : "transparent",
-                            color: "inherit", filter: selected ? "invert(1)" : "none",
-                            fontSize: "9px", fontWeight: 700, letterSpacing: "0.08em",
+                            color: "inherit",
+                            filter: selected ? "invert(1)" : "none",
+                            fontSize: "9px", fontWeight: 500, letterSpacing: "0.08em",
                             textTransform: "uppercase",
                             cursor: available ? "pointer" : "not-allowed",
-                            opacity: available ? 1 : 0.3, transition: "all 0.15s ease",
+                            opacity: available ? 1 : 0.3,
+                            transition: "all 0.15s ease",
                             fontFamily: "inherit",
-                          }}>
+                          }}
+                        >
                           {value}
                         </button>
                       );
@@ -539,46 +542,52 @@ function OfferSlugPage() {
               ))}
             </div>
           )}
-        </div>
 
-        {/* ── Footer CTA ── */}
-        <div style={{
-          flexShrink: 0, background: "currentColor", height: "3.5rem",
-          display: "flex", alignItems: "stretch",
-        }}>
+          {/* CTA: "+" button (or SOLD OUT / ADDED) */}
           {isSoldOut ? (
             <div style={{
-              flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "9px", fontWeight: 700, letterSpacing: "0.35em",
-              textTransform: "uppercase", color: "inherit", filter: "invert(1)",
-              opacity: 0.4, fontFamily: "inherit",
+              fontSize: "10px", fontWeight: 500, letterSpacing: "0.2em",
+              textTransform: "uppercase", opacity: 0.35,
             }}>
               SOLD OUT
             </div>
           ) : (
             <button
               onClick={handleAddToCart}
-              disabled={checkoutDisabled}
+              disabled={checkoutDisabled && optionsOpen}
+              className="pdp-plus-btn"
+              aria-label="Add to cart"
               style={{
-                flex: 1, display: "flex", alignItems: "center",
-                justifyContent: "space-between", padding: "0 1.5rem",
                 background: "transparent", border: "none",
-                cursor: checkoutDisabled ? "not-allowed" : "pointer",
-                opacity: checkoutDisabled ? 0.3 : 1,
+                cursor: (checkoutDisabled && optionsOpen) ? "not-allowed" : "pointer",
                 color: "inherit",
-                filter: "invert(1)",
+                fontSize: addedFeedback ? "10px" : "28px",
+                fontWeight: 200,
+                lineHeight: 1,
+                opacity: (checkoutDisabled && optionsOpen) ? 0.3 : 0.8,
+                transition: "opacity 0.2s, transform 0.15s, font-size 0.15s",
+                letterSpacing: addedFeedback ? "0.2em" : "0",
+                textTransform: "uppercase",
+                padding: "0.25rem",
+                fontFamily: "inherit",
               }}
             >
-              {addedFeedback ? "ADDED" : checkoutDisabled ? "SELECT OPTIONS" : "ADD TO CART"}
-              <span style={{
-                fontSize: "20px", color: "inherit", filter: "invert(1)",
-                lineHeight: 1, fontWeight: 300, fontFamily: "serif",
-              }}>
-                →
-              </span>
+              {addedFeedback ? "ADDED" : "+"}
             </button>
           )}
         </div>
+
+        {/* ── Bottom-right: product counter ── */}
+        {allProducts.length > 1 && (
+          <div style={{
+            position: "absolute", bottom: "1.25rem", right: "1.5rem",
+            fontSize: "9px", fontWeight: 400, letterSpacing: "0.15em",
+            color: "inherit", opacity: 0.3,
+            fontFamily: "inherit",
+          }}>
+            {String(currentIndex + 1).padStart(2, "0")} / {String(allProducts.length).padStart(2, "0")}
+          </div>
+        )}
       </div>
     </>
   );
