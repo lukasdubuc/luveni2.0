@@ -21,19 +21,15 @@ type CartContextType = {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: ReactNode }) {
+  // Start empty; the useEffect below will populate it from storage
   const [items, setItems] = useState<CartItem[]>([]);
 
-  // --- FIX: Run restore on initial mount ---
+  // Restore from localStorage on initial load
   useEffect(() => {
     restoreFromStorage();
   }, []);
 
-  // Debugging: Log whenever state changes
-  useEffect(() => {
-    console.log("Cart State Updated:", items);
-  }, [items]);
-
-  // Sync to localStorage
+  // Sync to localStorage whenever items change
   useEffect(() => {
     if (items.length > 0) {
       localStorage.setItem("cart_items", JSON.stringify(items));
@@ -48,7 +44,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
       try {
         const parsed = JSON.parse(saved);
         setItems(parsed);
-        console.log("Cart restored from storage");
       } catch (e) {
         console.error("Cart corruption during restore", e);
       }
@@ -57,7 +52,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const addItem = useCallback(
     (incoming: Omit<CartItem, "quantity"> & { quantity?: number }) => {
-      console.log("addItem triggered with:", incoming);
       setItems((prev) => {
         const idx = prev.findIndex(
           (i) => i.productId === incoming.productId && i.variantSku === incoming.variantSku,
@@ -65,10 +59,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
         if (idx > -1) {
           const next = [...prev];
           next[idx] = { ...next[idx], quantity: next[idx].quantity + (incoming.quantity ?? 1) };
-          console.log("Item updated quantity:", next[idx]);
           return next;
         }
-        console.log("Adding new item to cart");
         return [...prev, { ...incoming, quantity: incoming.quantity ?? 1 }];
       });
     },
