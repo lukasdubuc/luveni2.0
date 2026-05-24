@@ -43,11 +43,11 @@ function CheckoutPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground font-mono px-4 py-8 overflow-x-hidden">
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-xl font-bold uppercase tracking-widest mb-8">Checkout</h1>
+    <div className="min-h-screen bg-background text-foreground font-mono px-6 md:px-16 py-8 overflow-x-hidden">
+      <div className="max-w-7xl mx-auto">
+        <h1 className="text-xl font-bold uppercase tracking-widest mb-10">Checkout</h1>
 
-        <div className="grid md:grid-cols-2 gap-12">
+        <div className="grid md:grid-cols-[1fr_400px] gap-16">
 
           {/* ── LEFT: Form ── */}
           <form onSubmit={handleSubmit} className="space-y-8">
@@ -159,7 +159,7 @@ function CheckoutPage() {
                       {/* FIX 3: image + title together, no stray image_url text */}
                       <td className="py-3">
                         <div className="flex items-center gap-2">
-                          <div className="w-10 h-10 flex-shrink-0 overflow-hidden">
+                          <div className="w-20 h-20 flex-shrink-0 overflow-hidden">
                             <img src={item.image_url} alt={item.title} className="w-full h-full object-cover" />
                           </div>
                           <span className="text-xs">{item.title}</span>
