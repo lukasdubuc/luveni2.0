@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { createFileRoute } from '@tanstack/react-router';
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, Lock, Check } from "lucide-react";
+import { Loader2, Lock } from "lucide-react";
 import { z } from "zod";
 import { toast } from "sonner";
 import { offer } from "@/config/site";
@@ -39,34 +39,15 @@ const FormSchema = z.object({
 function Checkout() {
   const navigate = useNavigate();
   const submit = useServerFn(createCheckout);
-  const { product, variantSku } = Route.useLoaderData();
-  const { items, addItem, totalCents } = useCart();
+  const { product } = Route.useLoaderData();
+  const { items, totalCents } = useCart();
   
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Auto-add from URL only if cart is truly empty and product exists in URL
-  useEffect(() => {
-    const searchParams = new URLSearchParams(window.location.search);
-    if (product && searchParams.has("productId") && items.length === 0) {
-      addItem({
-        productId: product.id,
-        variantSku: variantSku ?? undefined,
-        title: product.title,
-        price_cents: product.price_cents,
-        quantity: 1
-      });
-    }
-  }, [product, variantSku, addItem, items.length]);
-
   const displayPrice = `$${(totalCents / 100).toFixed(0)}`;
   
-  // Logic to show fallback bullets if nothing is in cart yet
-  const displayBullets: string[] = items[0]?.title 
-    ? product?.bullet_points ?? offer.bullets 
-    : offer.bullets;
-
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     
@@ -123,7 +104,6 @@ function Checkout() {
               <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required maxLength={255} placeholder="you@email.com" className="h-11 w-full border border-black/10 bg-background px-3 text-sm outline-none focus:border-black" />
             </div>
             
-            {/* SAFEGUARD: Disable button if cart is empty */}
             <button 
               type="submit" 
               disabled={loading || totalCents <= 0} 
@@ -157,7 +137,6 @@ function Checkout() {
                 ))
               )}
             </div>
-            {/* ... rest of your UI */}
           </div>
         </aside>
       </div>
