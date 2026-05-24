@@ -7,7 +7,7 @@ import { createCheckout } from "@/lib/checkout.functions";
 import { useCart } from "@/context/CartContext";
 
 export const Route = createFileRoute("/checkout")({
-  meta: () => [{ title: "Checkout" }],
+  meta: () => [{ title: "Cart" }],
   component: Checkout,
 });
 
@@ -112,14 +112,20 @@ function Checkout() {
           
           <div className="space-y-6">
             {items.map((item) => (
-              <div key={`${item.productId}-${item.variantSku}`} className="flex justify-between items-start border-b border-black/10 pb-4">
-                {/* Product Name/Size */}
-                <div>
+              <div key={`${item.productId}-${item.variantSku}`} className="flex items-center gap-4 border-b border-black/10 pb-4">
+                
+                {/* Product Image */}
+                <div className="w-16 h-16 bg-gray-100 flex-shrink-0">
+                  <img src={item.image_url} alt={item.title} className="w-full h-full object-cover" />
+                </div>
+
+                {/* Product Details */}
+                <div className="flex-grow">
                   <p className="text-sm font-bold uppercase">{item.title}</p>
                   <p className="text-[10px] text-gray-500 uppercase tracking-widest">Qty: {item.quantity}</p>
                 </div>
 
-                {/* Price + Controls (Right Aligned) */}
+                {/* Price + Controls */}
                 <div className="text-right space-y-2">
                   <p className="text-sm font-bold">${((item.price_cents * item.quantity) / 100).toFixed(0)}</p>
                   <div className="flex items-center justify-end gap-3 text-xs">
