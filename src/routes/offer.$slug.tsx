@@ -323,8 +323,8 @@ function OfferSlugPage() {
           to   { opacity: 1; transform: translateY(0); }
         }
         @keyframes pdp-img-in {
-          from { opacity: 0; transform: scale(0.96); }
-          to   { opacity: 1; transform: scale(1); }
+          from { opacity: 0; }
+          to   { opacity: 1; }
         }
         .pdp-plus-btn:hover { opacity: 0.5; }
         .pdp-plus-btn:active { transform: scale(0.92); }
