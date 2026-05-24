@@ -564,4 +564,22 @@ function OfferSlugPage() {
                 justifyContent: "space-between", padding: "0 1.5rem",
                 background: "transparent", border: "none",
                 cursor: checkoutDisabled ? "not-allowed" : "pointer",
-                opacity: checkoutDisabled ?
+                opacity: checkoutDisabled ? 0.3 : 1,
+                color: "inherit",
+                filter: "invert(1)",
+              }}
+            >
+              {addedFeedback ? "ADDED" : checkoutDisabled ? "SELECT OPTIONS" : "ADD TO CART"}
+              <span style={{
+                fontSize: "20px", color: "inherit", filter: "invert(1)",
+                lineHeight: 1, fontWeight: 300, fontFamily: "serif",
+              }}>
+                →
+              </span>
+            </button>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
