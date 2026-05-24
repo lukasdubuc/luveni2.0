@@ -4,6 +4,9 @@ import { useState } from "react";
 import { createCheckout } from "@/lib/checkout.functions";
 
 export const Route = createFileRoute("/checkout")({
+  head: () => ({
+    meta: [{ title: "Cart" }],
+  }),
   component: CheckoutPage,
 });
 
@@ -47,7 +50,7 @@ function CheckoutPage() {
       <div className="max-w-7xl mx-auto">
         <h1 className="text-xl font-bold uppercase tracking-widest mb-10">Checkout</h1>
 
-        <div className="grid md:grid-cols-[1fr_400px] gap-16">
+        <div className="grid md:grid-cols-2 gap-16">
 
           {/* ── LEFT: Form ── */}
           <form onSubmit={handleSubmit} className="space-y-8">
