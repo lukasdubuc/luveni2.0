@@ -13,6 +13,7 @@ type CartContextType = {
   addItem: (item: Omit<CartItem, "quantity"> & { quantity?: number }) => void;
   removeItem: (productId: string, variantSku?: string) => void;
   clearCart: () => void;
+  restoreFromStorage: () => void;
   totalCents: number;
   count: number;
 };
@@ -20,18 +21,33 @@ type CartContextType = {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  // Initialize state. We use a function to avoid reading localStorage on every render.
-  const [items, setItems] = useState<CartItem[]>(() => {
+  // Start empty to ensure fresh cart on refresh
+  const [items, setItems] = useState<CartItem[]>([]);
+
+  // Function to pull saved cart from LocalStorage
+  const restoreFromStorage = useCallback(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("cart_items");
-      return saved ? JSON.parse(saved) : [];
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            setItems(parsed);
+          }
+        } catch (e) {
+          console.error("Failed to restore cart", e);
+        }
+      }
     }
-    return [];
-  });
+  }, []);
 
   // Sync state to localStorage whenever items change
   useEffect(() => {
-    localStorage.setItem("cart_items", JSON.stringify(items));
+    if (items.length > 0) {
+      localStorage.setItem("cart_items", JSON.stringify(items));
+    } else {
+      localStorage.removeItem("cart_items");
+    }
   }, [items]);
 
   const addItem = useCallback(
@@ -64,7 +80,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  const clearCart = useCallback(() => setItems([]), []);
+  const clearCart = useCallback(() => {
+    setItems([]);
+    localStorage.removeItem("cart_items");
+  }, []);
 
   const totalCents = items.reduce(
     (sum, i) => sum + i.price_cents * i.quantity,
@@ -74,7 +93,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   return (
     <CartContext.Provider
-      value={{ items, addItem, removeItem, clearCart, totalCents, count }}
+      value={{ 
+        items, 
+        addItem, 
+        removeItem, 
+        clearCart, 
+        restoreFromStorage, 
+        totalCents, 
+        count 
+      }}
     >
       {children}
     </CartContext.Provider>
