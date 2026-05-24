@@ -40,7 +40,8 @@ function Checkout() {
   const navigate = useNavigate();
   const submit = useServerFn(createCheckout);
   const { product } = Route.useLoaderData();
-  const { items, totalCents } = useCart();
+  // Added removeItem and updateQuantity to destructured values
+  const { items, totalCents, removeItem, updateQuantity } = useCart();
   
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -128,7 +129,30 @@ function Checkout() {
                   <div key={`${item.productId}-${item.variantSku}`} className="flex items-start justify-between gap-4">
                     <div>
                       <p className="font-medium">{item.title}</p>
-                      <p className="text-sm text-muted-foreground">Quantity: {item.quantity}</p>
+                      
+                      {/* Quantity and Edit Controls */}
+                      <div className="flex items-center gap-3 mt-2">
+                        <div className="flex items-center gap-2 border border-black/10">
+                          <button 
+                            type="button"
+                            onClick={() => updateQuantity(item.productId, item.variantSku, item.quantity - 1)}
+                            className="px-2 py-1 text-xs hover:bg-black/5"
+                          >-</button>
+                          <span className="text-xs w-4 text-center">{item.quantity}</span>
+                          <button 
+                            type="button"
+                            onClick={() => updateQuantity(item.productId, item.variantSku, item.quantity + 1)}
+                            className="px-2 py-1 text-xs hover:bg-black/5"
+                          >+</button>
+                        </div>
+                        <button 
+                          type="button"
+                          onClick={() => removeItem(item.productId, item.variantSku)}
+                          className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-black underline"
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
                     <div className="text-right">
                       <p className="text-lg font-semibold">${((item.price_cents * item.quantity) / 100).toFixed(0)}</p>
