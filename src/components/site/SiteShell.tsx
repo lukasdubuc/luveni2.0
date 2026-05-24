@@ -1,112 +1,45 @@
-@import "tailwindcss" source(none);
+import type { ReactNode } from "react";
 
-@source "../src";
+import { Header } from "./Header";
+import { Footer } from "./Footer";
 
-@import "tw-animate-css";
+export function SiteShell({
+  children,
+  footerDescription,
+  theme = "light",
+  bare = false,
+}: {
+  children: ReactNode;
 
-@custom-variant dark (&:is(.dark *));
+  footerDescription?: string;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-primary: var(--primary);
-  --color-border: var(--border);
+  theme?: "light" | "dark";
 
-  --font-sans:
-    "Helvetica Neue",
-    Helvetica,
-    Arial,
-    sans-serif;
+  bare?: boolean;
+}) {
+  return (
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
 
-  --font-mono:
-    "Space Mono",
-    ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    Monaco,
-    Consolas,
-    "Liberation Mono",
-    "Courier New",
-    monospace;
-}
+      {!bare && (
+        <Header theme={theme} />
+      )}
 
-/* SAFE EARLY PAINT */
+      <main
+        className="
+          route-container
+          w-full
+          flex-1
+        "
+      >
+        {children}
+      </main>
 
-html {
-  background-color: #FFFFFF;
-}
-
-html.dark {
-  background-color: #000000;
-}
-
-:root {
-  color-scheme: light;
-
-  --background: #FFFFFF;
-  --foreground: #000000;
-
-  --primary: #000000;
-
-  --border: rgba(0, 0, 0, 0.10);
-}
-
-:root.dark {
-  color-scheme: dark;
-
-  --background: #000000;
-  --foreground: #FFFFFF;
-
-  --primary: #FFFFFF;
-
-  --border: rgba(255, 255, 255, 0.15);
-}
-
-@layer base {
-
-  :where(*) {
-    border-radius: 0;
-    box-shadow: none;
-  }
-
-  html,
-  body,
-  #root {
-    min-height: 100%;
-  }
-
-  body {
-    margin: 0;
-    padding: 0;
-
-    background-color: var(--background);
-    color: var(--foreground);
-
-    font-family: var(--font-sans);
-
-    font-size: 13px;
-
-    text-transform: uppercase;
-
-    overflow-x: hidden;
-
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-
-  a {
-    text-decoration: none;
-    color: inherit;
-  }
-
-  button {
-    cursor: pointer;
-    font-family: inherit;
-  }
-}
-
-/* SAFE CONTAINMENT */
-
-.route-container {
-  contain: layout paint;
+      {!bare && (
+        <Footer
+          description={footerDescription}
+          theme={theme}
+        />
+      )}
+    </div>
+  );
 }
