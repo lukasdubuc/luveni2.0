@@ -135,7 +135,7 @@ function OfferSlugPage() {
     setTimeout(() => { navigateCooldown.current = false; }, 500);
   }, [nextProduct, navigate]);
 
-  // ── Wheel / swipe gesture ────────────────────────────────────────────────
+  // ── Wheel / swipe gesture (navigates between products — unchanged) ────────
   const touchStartY = useRef<number | null>(null);
   const touchStartX = useRef<number | null>(null);
 
@@ -169,7 +169,7 @@ function OfferSlugPage() {
     };
   }, [goToPrev, goToNext]);
 
-  // ── Keyboard navigation ──────────────────────────────────────────────────
+  // ── Keyboard navigation (unchanged) ──────────────────────────────────────
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft" || e.key === "ArrowUp") goToPrev();
@@ -266,7 +266,7 @@ function OfferSlugPage() {
     setTimeout(() => setAddedFeedback(false), 1200);
   }, [product, selectedVariant, selectedPrice, checkoutDisabled, isSoldOut, addItem, optionKeys.length, optionsOpen]);
 
-  // ── Image swipe within gallery ───────────────────────────────────────────
+  // ── Image swipe within gallery (horizontal swipe cycles images) ──────────
   const imgTouchStartX = useRef<number | null>(null);
   const handleImgTouchStart = (e: React.TouchEvent) => { imgTouchStartX.current = e.touches[0].clientX; };
   const handleImgTouchEnd = (e: React.TouchEvent) => {
@@ -278,6 +278,15 @@ function OfferSlugPage() {
     }
     imgTouchStartX.current = null;
   };
+
+  // ── Image arrow handlers (cycle gallery images, not products) ────────────
+  const goPrevImage = useCallback(() => {
+    setActiveImageIndex((i) => Math.max(i - 1, 0));
+  }, []);
+
+  const goNextImage = useCallback(() => {
+    setActiveImageIndex((i) => Math.min(i + 1, galleryImages.length - 1));
+  }, [galleryImages.length]);
 
   // ── Not found ────────────────────────────────────────────────────────────
   if (!product) {
@@ -316,7 +325,9 @@ function OfferSlugPage() {
         }
         .pdp-plus-btn:hover { opacity: 0.5; }
         .pdp-plus-btn:active { transform: scale(0.92); }
-        .pdp-nav-btn:hover { opacity: 0.5 !important; }
+        .pdp-img-nav-btn { background: transparent; border: none; cursor: pointer; padding: 0.5rem; color: inherit; line-height: 1; transition: opacity 0.2s; }
+        .pdp-img-nav-btn:hover { opacity: 0.4; }
+        .pdp-img-nav-btn:disabled { opacity: 0.15; cursor: default; }
       `}</style>
 
       {/* ── Full-screen container ── */}
@@ -348,7 +359,7 @@ function OfferSlugPage() {
           ‹
         </a>
 
-        {/* ── Top-right: cart count or stock status ── */}
+        {/* ── Top-right: sold out status ── */}
         <div
           style={{
             position: "absolute", top: "1.25rem", right: "1.25rem", zIndex: 20,
@@ -359,44 +370,6 @@ function OfferSlugPage() {
         >
           {isSoldOut ? "SOLD OUT" : ""}
         </div>
-
-        {/* ── Left nav arrow ── */}
-        <button
-          onClick={goToPrev}
-          disabled={!prevProduct}
-          aria-label="Previous product"
-          className="pdp-nav-btn"
-          style={{
-            position: "absolute", left: "1.25rem", top: "50%", transform: "translateY(-50%)",
-            zIndex: 10, background: "transparent", border: "none",
-            cursor: prevProduct ? "pointer" : "default",
-            padding: "0.75rem 0.5rem",
-            opacity: prevProduct ? 0.7 : 0.15,
-            transition: "opacity 0.2s",
-            fontSize: "22px", fontWeight: 300, color: "inherit", lineHeight: 1,
-          }}
-        >
-          ‹
-        </button>
-
-        {/* ── Right nav arrow ── */}
-        <button
-          onClick={goToNext}
-          disabled={!nextProduct}
-          aria-label="Next product"
-          className="pdp-nav-btn"
-          style={{
-            position: "absolute", right: "1.25rem", top: "50%", transform: "translateY(-50%)",
-            zIndex: 10, background: "transparent", border: "none",
-            cursor: nextProduct ? "pointer" : "default",
-            padding: "0.75rem 0.5rem",
-            opacity: nextProduct ? 0.7 : 0.15,
-            transition: "opacity 0.2s",
-            fontSize: "22px", fontWeight: 300, color: "inherit", lineHeight: 1,
-          }}
-        >
-          ›
-        </button>
 
         {/* ── Center column: image + info ── */}
         <div
@@ -412,36 +385,69 @@ function OfferSlugPage() {
             animation: "pdp-fade-in 0.4s ease both",
           }}
           key={product.slug}
-          onTouchStart={handleImgTouchStart}
-          onTouchEnd={handleImgTouchEnd}
         >
-          {/* Product image */}
-          <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "1.5rem" }}>
-            {galleryImages[activeImageIndex] ? (
-              <img
-                key={galleryImages[activeImageIndex]}
-                src={galleryImages[activeImageIndex]}
-                alt={`${product.title} — image ${activeImageIndex + 1}`}
-                loading="eager"
-                style={{
-                  maxWidth: "min(360px, 80vw)",
-                  maxHeight: "45vh",
-                  objectFit: "contain",
-                  display: "block",
-                  animation: "pdp-img-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both",
-                }}
-              />
-            ) : (
-              <div style={{
-                width: "min(360px, 80vw)", aspectRatio: "1",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                border: "1px solid rgba(128,128,128,0.15)",
-                fontSize: "9px", fontWeight: 500, letterSpacing: "0.3em",
-                textTransform: "uppercase", opacity: 0.3,
-              }}>
-                IMAGE PENDING
-              </div>
-            )}
+          {/* ── Image row: left arrow + image + right arrow ── */}
+          <div style={{
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "0.5rem",
+            marginBottom: "1.5rem",
+          }}
+            onTouchStart={handleImgTouchStart}
+            onTouchEnd={handleImgTouchEnd}
+          >
+            {/* Left image arrow */}
+            <button
+              className="pdp-img-nav-btn"
+              onClick={goPrevImage}
+              disabled={activeImageIndex === 0}
+              aria-label="Previous image"
+              style={{ fontSize: "22px", fontWeight: 300, opacity: activeImageIndex === 0 ? 0.15 : 0.7 }}
+            >
+              ‹
+            </button>
+
+            {/* Product image */}
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {galleryImages[activeImageIndex] ? (
+                <img
+                  key={galleryImages[activeImageIndex]}
+                  src={galleryImages[activeImageIndex]}
+                  alt={`${product.title} — image ${activeImageIndex + 1}`}
+                  loading="eager"
+                  style={{
+                    maxWidth: "min(320px, 70vw)",
+                    maxHeight: "45vh",
+                    objectFit: "contain",
+                    display: "block",
+                    animation: "pdp-img-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both",
+                  }}
+                />
+              ) : (
+                <div style={{
+                  width: "min(320px, 70vw)", aspectRatio: "1",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  border: "1px solid rgba(128,128,128,0.15)",
+                  fontSize: "9px", fontWeight: 500, letterSpacing: "0.3em",
+                  textTransform: "uppercase", opacity: 0.3,
+                }}>
+                  IMAGE PENDING
+                </div>
+              )}
+            </div>
+
+            {/* Right image arrow */}
+            <button
+              className="pdp-img-nav-btn"
+              onClick={goNextImage}
+              disabled={activeImageIndex === galleryImages.length - 1}
+              aria-label="Next image"
+              style={{ fontSize: "22px", fontWeight: 300, opacity: activeImageIndex === galleryImages.length - 1 ? 0.15 : 0.7 }}
+            >
+              ›
+            </button>
           </div>
 
           {/* Image dots */}
