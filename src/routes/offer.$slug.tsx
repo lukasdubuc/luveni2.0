@@ -299,11 +299,13 @@ function OfferSlugPage() {
           This product is unavailable.
         </p>
         
-          href="/shop"
-          className="mt-8 inline-flex h-12 items-center border border-foreground bg-foreground text-background px-10 text-xs font-bold uppercase tracking-[0.25em] transition hover:bg-background hover:text-foreground"
-        >
-          Back to Shop
-        </a>
+      <Link
+  to="/shop"
+  preload="intent"
+  className="mt-8 inline-flex h-12 items-center border border-foreground bg-foreground text-background px-10 text-xs font-bold uppercase tracking-[0.25em] transition hover:bg-background hover:text-foreground"
+>
+  Back to Shop
+</Link>
       </section>
     );
   }
