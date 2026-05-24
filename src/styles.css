@@ -38,13 +38,7 @@
 
 html {
   background-color: #000000;
-}
 
-html.light {
-  background-color: #FFFFFF;
-}
-
-:root {
   color-scheme: light;
 
   --background: #FFFFFF;
@@ -55,7 +49,19 @@ html.light {
   --border: rgba(0, 0, 0, 0.10);
 }
 
-:root.dark {
+/*
+  LIGHT MODE OVERRIDE
+*/
+
+html.light {
+  background-color: #FFFFFF;
+}
+
+/*
+  DARK MODE VARIABLES
+*/
+
+html.dark {
   color-scheme: dark;
 
   --background: #000000;
