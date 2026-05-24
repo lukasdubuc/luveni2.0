@@ -1,15 +1,13 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
-import { createFileRoute } from '@tanstack/react-router';
+import { useNavigate, createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, Lock } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { createCheckout } from "@/lib/checkout.functions";
 import { useCart } from "@/context/CartContext";
 
 export const Route = createFileRoute("/checkout")({
-  meta: () => [{ title: "Cart" }],
+  meta: () => [{ title: "Checkout" }],
   component: Checkout,
 });
 
@@ -18,30 +16,51 @@ function Checkout() {
   const submit = useServerFn(createCheckout);
   const { items, totalCents, updateItemQuantity, removeItem } = useCart();
   
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     firstName: "", lastName: "", email: "", address: "", apt: "", 
-    city: "", state: "", zip: "", country: "United States", phone: ""
+    city: "", state: "", zip: "", phone: ""
   });
-  const [loading, setLoading] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"card" | "usdc" | "yzy">("card");
 
-  useEffect(() => { document.title = "Cart"; }, []);
+  useEffect(() => { document.title = "Checkout"; }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (items.length === 0) {
+      toast.error("Your cart is empty");
+      return;
+    }
+    
     setLoading(true);
     try {
+      // Send the full cart array to the server
       const res = await submit({
-        data: { ...formData, paymentMethod, items },
+        data: { 
+          name: `${formData.firstName} ${formData.lastName}`, 
+          email: formData.email, 
+          items: items.map(i => ({ 
+            productId: i.productId, 
+            variantSku: i.variantSku, 
+            quantity: i.quantity 
+          })) 
+        },
       });
-      if (res?.redirectUrl) window.location.href = res.redirectUrl;
-      else if (res?.error) toast.error(res.error);
-    } catch { toast.error("Checkout failed."); } 
-    finally { setLoading(false); }
+      
+      if (res?.redirectUrl) {
+        window.location.href = res.redirectUrl;
+      } else if (res?.error) {
+        toast.error(res.error);
+      }
+    } catch { 
+      toast.error("Checkout failed. Please try again."); 
+    } finally { 
+      setLoading(false); 
+    }
   }
 
   const Input = ({ placeholder, name, type = "text" }: any) => (
     <input 
+      required
       placeholder={placeholder} type={type} 
       className="w-full border-b border-black dark:border-white/20 bg-transparent py-3 text-sm outline-none placeholder:text-gray-400"
       onChange={(e) => setFormData({...formData, [name]: e.target.value})}
@@ -55,16 +74,14 @@ function Checkout() {
         {/* LEFT: Forms */}
         <form onSubmit={onSubmit} className="space-y-12">
           
-          {/* Contact */}
           <div className="space-y-4">
             <h2 className="text-xs font-bold tracking-widest uppercase">Contact Information</h2>
-            <Input placeholder="Email Address" name="email" />
-            <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest">
-              <input type="checkbox" /> Subscribe to updates and notifications
+            <Input placeholder="Email Address" name="email" type="email" />
+            <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest cursor-pointer">
+              <input type="checkbox" className="accent-foreground" /> Subscribe to updates and notifications
             </label>
           </div>
 
-          {/* Shipping */}
           <div className="space-y-4">
             <h2 className="text-xs font-bold tracking-widest uppercase">Shipping Address</h2>
             <div className="grid grid-cols-2 gap-4">
@@ -83,24 +100,15 @@ function Checkout() {
               </div>
               <div className="col-span-1"><Input placeholder="Zip" name="zip" /></div>
             </div>
-            <Input placeholder="Phone Number" name="phone" />
+            <Input placeholder="Phone Number" name="phone" type="tel" />
           </div>
 
-          {/* Payment */}
-          <div className="space-y-4">
-            <h2 className="text-xs font-bold tracking-widest uppercase">Payment Details</h2>
-            <p className="text-[10px] text-gray-500 uppercase italic">Please enter your information above to select a payment method</p>
-            <div className="grid gap-2">
-              {[ { id: 'card', label: 'Credit / Debit Card' }, { id: 'usdc', label: 'USDC (Crypto)' }, { id: 'yzy', label: 'YZY (Crypto)' } ].map((m) => (
-                <button key={m.id} type="button" onClick={() => setPaymentMethod(m.id as any)} className={`border p-4 text-left ${paymentMethod === m.id ? 'border-black dark:border-white' : 'border-gray-200'}`}>
-                  {m.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <button type="submit" disabled={loading} className="w-full bg-foreground text-background py-4 font-bold uppercase tracking-widest hover:opacity-80 transition-opacity">
-            {loading ? <Loader2 className="animate-spin mx-auto" /> : "Complete Purchase"}
+          <button 
+            type="submit" 
+            disabled={loading || items.length === 0} 
+            className="w-full bg-foreground text-background py-4 font-bold uppercase tracking-widest hover:opacity-80 transition-opacity disabled:opacity-50"
+          >
+            {loading ? <Loader2 className="animate-spin mx-auto" /> : "Complete Purchase via Stripe"}
           </button>
         </form>
 
@@ -109,12 +117,18 @@ function Checkout() {
           <h2 className="text-xs font-bold tracking-widest uppercase">Order Summary</h2>
           <div className="space-y-6">
             {items.map((item) => (
-              <div key={`${item.productId}-${item.variantSku}`} className="flex justify-between items-start">
+              <div key={`${item.productId}-${item.variantSku}`} className="flex justify-between items-start border-b border-black/10 pb-4">
                 <div>
                   <p className="text-sm font-medium">{item.title}</p>
-                  <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
+                  {/* Cart Controls */}
+                  <div className="flex items-center gap-3 mt-2 text-xs">
+                    <button type="button" onClick={() => updateItemQuantity(item.productId, item.quantity - 1, item.variantSku)} className="hover:underline opacity-60"> - </button>
+                    <span>{item.quantity}</span>
+                    <button type="button" onClick={() => updateItemQuantity(item.productId, item.quantity + 1, item.variantSku)} className="hover:underline opacity-60"> + </button>
+                    <button type="button" onClick={() => removeItem(item.productId, item.variantSku)} className="hover:underline text-red-500 ml-4">Remove</button>
+                  </div>
                 </div>
-                <p className="text-sm">${((item.price_cents * item.quantity) / 100).toFixed(0)}</p>
+                <p className="text-sm font-medium">${((item.price_cents * item.quantity) / 100).toFixed(0)}</p>
               </div>
             ))}
           </div>
@@ -123,10 +137,6 @@ function Checkout() {
             <div className="flex justify-between text-sm uppercase tracking-widest">
               <span>Subtotal</span>
               <span>${(totalCents / 100).toFixed(0)}</span>
-            </div>
-            <div className="flex justify-between text-sm uppercase tracking-widest text-gray-500">
-              <span>Shipping</span>
-              <span>Calculated at next step</span>
             </div>
             <div className="flex justify-between text-lg font-bold pt-4">
               <span>Total</span>
