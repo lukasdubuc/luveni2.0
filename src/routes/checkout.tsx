@@ -9,6 +9,7 @@ function CheckoutPage() {
   const { items, updateItemQuantity, removeItem, totalCents } = useCart();
 
   return (
+    // Added overflow-x-hidden to fix mobile zoom issues
     <div className="min-h-screen bg-background text-foreground font-mono px-4 py-8 overflow-x-hidden">
       <div className="max-w-3xl mx-auto">
         <h1 className="text-xl font-bold uppercase tracking-widest mb-8">Checkout</h1>
@@ -17,17 +18,17 @@ function CheckoutPage() {
         <div className="md:hidden space-y-6">
           {items.map((item) => (
             <div key={`${item.productId}-${item.variantSku}`} className="flex gap-4 border-b border-border pb-4">
-              {/* Image - no border */}
+              {/* FIX 1: Image wrapper - border classes removed, overflow-hidden added */}
               <div className="w-20 h-20 flex-shrink-0 overflow-hidden">
                 <img src={item.image_url} alt={item.title} className="w-full h-full object-cover" />
               </div>
-
+              
               {/* Info */}
               <div className="flex flex-col flex-1 gap-1 min-w-0">
                 <h3 className="text-sm font-bold uppercase leading-tight">{item.title}</h3>
                 <p className="text-xs opacity-70">${(item.price_cents / 100).toFixed(2)} each</p>
-
-                {/* Controls */}
+                
+                {/* FIX 2: Controls - justify-between so qty left, price+remove right */}
                 <div className="flex items-center justify-between mt-2">
                   <div className="flex items-center border border-border">
                     <button onClick={() => updateItemQuantity(item.productId, item.quantity - 1, item.variantSku)} className="px-3 py-1 text-xs hover:bg-muted">-</button>
@@ -46,30 +47,38 @@ function CheckoutPage() {
 
         {/* --- DESKTOP VIEW (Only visible on medium screens and up) --- */}
         <div className="hidden md:block">
-          <table className="w-full text-left">
-            <thead>
-              <tr>
-                <th className="pb-4 uppercase text-xs tracking-widest">Product</th>
-                <th className="pb-4 uppercase text-xs tracking-widest">Quantity</th>
-                <th className="pb-4 uppercase text-xs tracking-widest">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={`${item.productId}-${item.variantSku}`} className="border-t border-border">
-                  <td className="py-4">{item.title}</td>
-                  <td className="py-4">
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => updateItemQuantity(item.productId, item.quantity - 1, item.variantSku)}>-</button>
-                      <span>{item.quantity}</span>
-                      <button onClick={() => updateItemQuantity(item.productId, item.quantity + 1, item.variantSku)}>+</button>
-                    </div>
-                  </td>
-                  <td className="py-4">${((item.price_cents * item.quantity) / 100).toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+           <table className="w-full text-left">
+             <thead>
+               <tr>
+                 <th className="pb-4 uppercase text-xs tracking-widest">Product</th>
+                 <th className="pb-4 uppercase text-xs tracking-widest">Quantity</th>
+                 <th className="pb-4 uppercase text-xs tracking-widest">Total</th>
+               </tr>
+             </thead>
+             <tbody>
+               {items.map((item) => (
+                 <tr key={`${item.productId}-${item.variantSku}`} className="border-t border-border">
+                   {/* FIX 3: Show image + title together, removes stray image_url text */}
+                   <td className="py-4">
+                     <div className="flex items-center gap-3">
+                       <div className="w-14 h-14 flex-shrink-0 overflow-hidden">
+                         <img src={item.image_url} alt={item.title} className="w-full h-full object-cover" />
+                       </div>
+                       <span className="text-sm">{item.title}</span>
+                     </div>
+                   </td>
+                   <td className="py-4">
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => updateItemQuantity(item.productId, item.quantity - 1, item.variantSku)}>-</button>
+                        <span>{item.quantity}</span>
+                        <button onClick={() => updateItemQuantity(item.productId, item.quantity + 1, item.variantSku)}>+</button>
+                      </div>
+                   </td>
+                   <td className="py-4">${((item.price_cents * item.quantity) / 100).toFixed(2)}</td>
+                 </tr>
+               ))}
+             </tbody>
+           </table>
         </div>
 
         {/* --- SUMMARY SECTION (Works for both) --- */}
