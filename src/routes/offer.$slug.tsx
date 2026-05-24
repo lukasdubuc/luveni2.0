@@ -325,9 +325,10 @@ function OfferSlugPage() {
         }
         .pdp-plus-btn:hover { opacity: 0.5; }
         .pdp-plus-btn:active { transform: scale(0.92); }
-        .pdp-img-nav-btn { background: transparent; border: none; cursor: pointer; padding: 0.5rem; color: inherit; line-height: 1; transition: opacity 0.2s; }
+        .pdp-img-nav-btn { background: transparent; border: none; cursor: pointer; padding: 0.75rem 1.25rem; color: inherit; line-height: 1; transition: opacity 0.2s; font-family: inherit; }
         .pdp-img-nav-btn:hover { opacity: 0.4; }
-        .pdp-img-nav-btn:disabled { opacity: 0.15; cursor: default; }
+        .pdp-img-nav-btn:disabled { opacity: 0.12; cursor: default; }
+        @media (max-width: 640px) { .pdp-img-nav-btn { font-size: 44px !important; padding: 0.5rem 0.875rem; } }
       `}</style>
 
       {/* ── Full-screen container ── */}
@@ -404,7 +405,7 @@ function OfferSlugPage() {
               onClick={goPrevImage}
               disabled={activeImageIndex === 0}
               aria-label="Previous image"
-              style={{ fontSize: "22px", fontWeight: 300, opacity: activeImageIndex === 0 ? 0.15 : 0.7 }}
+              style={{ fontSize: "38px", fontWeight: 200, opacity: activeImageIndex === 0 ? 0.12 : 0.75 }}
             >
               ‹
             </button>
