@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
 
 export type CartItem = {
   productId: string;
@@ -20,7 +20,19 @@ type CartContextType = {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>([]);
+  // Initialize state. We use a function to avoid reading localStorage on every render.
+  const [items, setItems] = useState<CartItem[]>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("cart_items");
+      return saved ? JSON.parse(saved) : [];
+    }
+    return [];
+  });
+
+  // Sync state to localStorage whenever items change
+  useEffect(() => {
+    localStorage.setItem("cart_items", JSON.stringify(items));
+  }, [items]);
 
   const addItem = useCallback(
     (incoming: Omit<CartItem, "quantity"> & { quantity?: number }) => {
