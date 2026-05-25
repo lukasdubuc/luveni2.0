@@ -177,13 +177,13 @@ function AdminPage() {
   }
 };
 
-      if (productsRes.data) setProducts(productsRes.data as Product[]);
+     if (productsRes.data) setProducts(productsRes.data as Product[]);
       if (ordersRes.data) setActiveOrders(ordersRes.data as Order[]);
       if (leadsRes.data) setActiveLeads(leadsRes.data as Lead[]);
       if (siteRes.data) {
         setSiteContent(prev => ({ ...prev, ...(siteRes.data as any) }));
       }
-      catch (e) {
+    } catch (e) {
       console.error("[Admin] Fetch error:", e);
     }
   };
