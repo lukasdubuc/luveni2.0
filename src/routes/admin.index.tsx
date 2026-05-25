@@ -150,22 +150,73 @@ function AdminPage() {
   };
 
   const handleSyncPrintful = async () => {
-    setIsSyncing(true);
-    try {
-      const res = await fetch("/api/printful-sync", { method: "POST" });
-      const data = await res.json();
-      if (data.synced !== undefined) {
-        toast.success(`Sync complete: ${data.synced} products processed.`);
-        await fetchData();
-      } else {
-        toast.error(data.message || "Sync failed");
-      }
-    } catch (e: any) {
-      toast.error(`Sync error: ${e.message}`);
-    } finally {
-      setIsSyncing(false);
+  setIsSyncing(true);
+
+  try {
+    const res = await fetch("/api/printful-sync", {
+      method: "POST",
+    });
+
+    const data = await res.json();
+
+    console.log(
+      "PRINTFUL SYNC RESPONSE:",
+      data
+    );
+
+    // Handle failed HTTP responses
+    if (!res.ok) {
+      console.error(
+        "PRINTFUL SYNC FAILED:",
+        data
+      );
+
+      toast.error(
+        data.error ||
+        data.message ||
+        "Sync failed"
+      );
+
+      return;
     }
-  };
+
+    // Show backend sync errors if present
+    if (
+      Array.isArray(data.errors) &&
+      data.errors.length > 0
+    ) {
+      console.error(
+        "PRINTFUL SYNC ERRORS:",
+        data.errors
+      );
+
+      toast.error(data.errors[0]);
+
+      return;
+    }
+
+    // Successful sync
+    toast.success(
+      `Sync complete: ${data.synced}/${data.total} products processed.`
+    );
+
+    // Refresh admin products
+    await fetchData();
+  } catch (e: any) {
+    console.error(
+      "PRINTFUL SYNC EXCEPTION:",
+      e
+    );
+
+    toast.error(
+      `Sync error: ${
+        e?.message || "Unknown error"
+      }`
+    );
+  } finally {
+    setIsSyncing(false);
+  }
+};
 
   const saveProduct = async () => {
     try {
