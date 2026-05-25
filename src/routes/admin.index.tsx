@@ -294,10 +294,15 @@ function AdminPage() {
   const syncFromPrintful = async () => {
     setPrintfulLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("printful-proxy", {
-        body: { action: "FETCH_CATALOG" },
+      const apiKey = import.meta.env.VITE_PRINTFUL_API_KEY;
+      if (!apiKey) throw new Error("VITE_PRINTFUL_API_KEY is not set in your Lovable secrets");
+
+      const res = await fetch("https://api.printful.com/sync/products", {
+        headers: { Authorization: `Bearer ${apiKey}` },
       });
-      if (error) throw error;
+      if (!res.ok) throw new Error(`Printful error ${res.status}: ${res.statusText}`);
+      const data = await res.json();
+
       const items: PrintfulCatalogItem[] = data?.result ?? [];
       if (items.length === 0) {
         toast.error("No Printful products found. Check your API key.");
@@ -317,10 +322,14 @@ function AdminPage() {
   const importPrintfulProduct = async (item: PrintfulCatalogItem) => {
     setPrintfulLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("printful-proxy", {
-        body: { action: "FETCH_PRODUCT", payload: { id: item.id } },
+      const apiKey = import.meta.env.VITE_PRINTFUL_API_KEY;
+      if (!apiKey) throw new Error("VITE_PRINTFUL_API_KEY is not set in your Lovable secrets");
+
+      const res = await fetch(`https://api.printful.com/sync/products/${item.id}`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
       });
-      if (error) throw error;
+      if (!res.ok) throw new Error(`Printful error ${res.status}: ${res.statusText}`);
+      const data = await res.json();
 
       const product = data?.result;
       if (!product) throw new Error("Empty product response");
@@ -333,9 +342,7 @@ function AdminPage() {
         price_cents: Math.round(parseFloat(v.retail_price ?? "0") * 100),
         external_sku: String(v.id),
         fulfillment_provider: "printful",
-        attributes: v.product?.name
-          ? parseVariantName(v.name ?? "")
-          : {},
+        attributes: parseVariantName(v.name ?? ""),
         stock: 999, // Printful is print-on-demand; no stock limits
       }));
 
