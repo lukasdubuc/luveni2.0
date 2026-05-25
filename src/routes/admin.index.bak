@@ -82,19 +82,20 @@ function AdminPage() {
   const [siteEdited, setSiteEdited] = useState(false);
   const [siteSaving, setSiteSaving] = useState(false);
 
-  // ── Product Form State ──────────────────────────────────────────────────
-  const [productFormOpen, setProductFormOpen] = useState(false);
-  const [productForm, setProductForm] = useState({
-    editingId: null as string | null,
-    title: "",
-    slug: "",
-    price_cents: "",
-    image_url: "",
-    description: "",
-    is_published: true,
-    source_url: "",
-  });
-
+ // Keep this exactly as is in your component:
+const [productForm, setProductForm] = useState({
+  editingId: null as string | null,
+  title: "",
+  slug: "",
+  price_cents: "",
+  image_url: "",
+  description: "",
+  is_published: true,
+  source_url: "",
+  // Add these two for the new functionality without breaking anything:
+  hasVariants: false,
+  variantsText: "[]",
+});
   // ── UI State ────────────────────────────────────────────────────────────
   const [revenueRange, setRevenueRange] = useState<"day" | "week" | "month" | "all">("month");
   const [searchQuery, setSearchQuery] = useState("");
