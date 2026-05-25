@@ -172,15 +172,20 @@ function AdminPage() {
         .filter(u => u);
 
       const payload = {
-        title: productForm.title,
-        slug: productForm.slug,
-        price_cents: parseInt(productForm.price_cents) || 0,
-        image_urls: imageUrls,
-        description: productForm.description,
-        is_published: productForm.is_published,
-        source_url: productForm.source_url,
-        updated_at: new Date().toISOString(),
-      };
+  title: productForm.title,
+  // Automatically generate slug if it's empty, or use the one provided
+  slug: productForm.slug || productForm.title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+  price_cents: parseInt(productForm.price_cents) || 0,
+  image_urls: imageUrls,
+  description: productForm.description,
+  is_published: productForm.is_published,
+  source_url: productForm.source_url || "",
+  
+  // ADD THIS LINE: This saves your variable JSON data to the database
+  variants: productForm.hasVariants ? JSON.parse(productForm.variantsText || "[]") : null,
+  
+  updated_at: new Date().toISOString(),
+};
 
       if (productForm.editingId) {
         const { error } = await supabase
