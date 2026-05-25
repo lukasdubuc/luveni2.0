@@ -194,7 +194,6 @@ function AdminPage() {
         image_urls: imageUrls,
         description: productForm.description,
         is_published: productForm.is_published,
-        source_url: productForm.source_url || "",
         variants: productForm.hasVariants ? JSON.parse(productForm.variantsText || "[]") : null,
         updated_at: new Date().toISOString(),
       };
@@ -294,8 +293,8 @@ function AdminPage() {
   const syncFromPrintful = async () => {
     setPrintfulLoading(true);
     try {
-      const apiKey = import.meta.env.VITE_PRINTFUL_API_KEY;
-      if (!apiKey) throw new Error("VITE_PRINTFUL_API_KEY is not set in your Lovable secrets");
+      const apiKey = import.meta.env.VITE_Printful_API_Key;
+      if (!apiKey) throw new Error("VITE_Printful_API_Key is not set in your Lovable secrets");
 
       const res = await fetch("https://api.printful.com/sync/products", {
         headers: { Authorization: `Bearer ${apiKey}` },
@@ -322,8 +321,8 @@ function AdminPage() {
   const importPrintfulProduct = async (item: PrintfulCatalogItem) => {
     setPrintfulLoading(true);
     try {
-      const apiKey = import.meta.env.VITE_PRINTFUL_API_KEY;
-      if (!apiKey) throw new Error("VITE_PRINTFUL_API_KEY is not set in your Lovable secrets");
+      const apiKey = import.meta.env.VITE_Printful_API_Key;
+      if (!apiKey) throw new Error("VITE_Printful_API_Key is not set in your Lovable secrets");
 
       const res = await fetch(`https://api.printful.com/sync/products/${item.id}`, {
         headers: { Authorization: `Bearer ${apiKey}` },
@@ -374,7 +373,6 @@ function AdminPage() {
         description: "",
         hasVariants: variants.length > 0,
         variantsText: JSON.stringify(variants, null, 2),
-        source_url: `https://www.printful.com/dashboard/sync/update/${item.id}`,
       }));
 
       setPrintfulPickerOpen(false);
