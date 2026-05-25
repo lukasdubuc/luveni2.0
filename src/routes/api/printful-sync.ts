@@ -4,24 +4,29 @@ export const Route = createFileRoute("/api/printful-sync")({
   server: {
     handlers: {
       POST: async () => {
+        // We import the server-side supabase client to handle database writes
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        
+        const apiKey = process.env.PRINTFUL_API_KEY;
+        if (!apiKey) return new Response("Missing API Key", { status: 500 });
 
-        // Fetch from Printful
+        // 1. Fetch from Printful
         const response = await fetch("https://api.printful.com/sync/products", {
-          headers: { "Authorization": `Bearer ${process.env.PRINTFUL_API_KEY}` }
+          headers: { "Authorization": `Bearer ${apiKey}` }
         });
 
         if (!response.ok) return new Response("Printful API Error", { status: 500 });
         const { result } = await response.json();
 
+        // 2. Defensive check
         if (!result || result.length === 0) {
           return new Response(JSON.stringify({ message: "No products found" }), { status: 200 });
         }
 
-        // Upsert logic
+        // 3. Sync to Supabase
         for (const p of result) {
           await supabaseAdmin.from("products").upsert({
-            name: p.name,
+            title: p.name,
             printful_id: p.id,
             is_archived: false,
           });
