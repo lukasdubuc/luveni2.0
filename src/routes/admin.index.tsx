@@ -248,17 +248,24 @@ function AdminPage() {
     }
   };
 
-  const handleArchiveOrder = async (id: string) => {
-    try {
-      const { error } = await supabase.from("orders").delete().eq("id", id);
-      if (error) throw error;
-      toast.success("Order archived.");
-      setSelectedRow(null);
-      await fetchData();
-    } catch (e: any) {
-      toast.error(`Archive failed: ${e.message}`);
+ const handleArchiveOrder = async (id: string) => {
+  try {
+    const res = await fetch("/api/archive-order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error ?? "Server error");
     }
-  };
+    toast.success("Order archived.");
+    setSelectedRow(null);
+    await fetchData();
+  } catch (e: any) {
+    toast.error(`Archive failed: ${e.message}`);
+  }
+};
 
   const resetProductForm = () => {
     setProductForm({
