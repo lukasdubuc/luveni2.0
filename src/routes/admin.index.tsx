@@ -47,7 +47,6 @@ type Lead = {
   created_at: string;
 };
 
-// ── NEW: Printful catalog item type ─────────────────────────────────────────
 type PrintfulCatalogItem = {
   id: number;
   name: string;
@@ -109,7 +108,7 @@ function AdminPage() {
     isSyncing: false,
   });
 
-  // ── NEW: Printful picker state ───────────────────────────────────────────
+  // ── Printful picker state ────────────────────────────────────────────────
   const [printfulCatalog, setPrintfulCatalog] = useState<PrintfulCatalogItem[]>([]);
   const [printfulPickerOpen, setPrintfulPickerOpen] = useState(false);
   const [printfulLoading, setPrintfulLoading] = useState(false);
@@ -118,14 +117,14 @@ function AdminPage() {
   const [revenueRange, setRevenueRange] = useState<"day" | "week" | "month" | "all">("day");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRow, setSelectedRow] = useState<any>(null);
+  const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
 
-  // ── Theme Application (instant + persistent) ───────────────────────────
+  // ── Theme Application ───────────────────────────────────────────────────
   const applyTheme = useCallback(async (theme: "light" | "dark") => {
     document.documentElement.classList.remove("light", "dark");
     document.documentElement.classList.add(theme);
     setIsDark(theme === "dark");
     setSiteContent(s => ({ ...s, theme }));
-
     try {
       const { error } = await supabase
         .from("site_config")
@@ -150,10 +149,7 @@ function AdminPage() {
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        window.location.href = "/login";
-        return;
-      }
+      if (!user) { window.location.href = "/login"; return; }
       setUserEmail(user.email || null);
       await fetchData();
     };
@@ -168,13 +164,10 @@ function AdminPage() {
         supabase.from("leads").select("*"),
         supabase.from("site_config").select("*").eq("id", "main").single(),
       ]);
-
       if (productsRes.data) setProducts(productsRes.data as Product[]);
       if (ordersRes.data) setActiveOrders(ordersRes.data as Order[]);
       if (leadsRes.data) setActiveLeads(leadsRes.data as Lead[]);
-      if (siteRes.data) {
-        setSiteContent(prev => ({ ...prev, ...(siteRes.data as any) }));
-      }
+      if (siteRes.data) setSiteContent(prev => ({ ...prev, ...(siteRes.data as any) }));
     } catch (e) {
       console.error("[Admin] Fetch error:", e);
     }
@@ -182,11 +175,7 @@ function AdminPage() {
 
   const saveProduct = async () => {
     try {
-      const imageUrls = productForm.image_url
-        .split(",")
-        .map(u => u.trim())
-        .filter(u => u);
-
+      const imageUrls = productForm.image_url.split(",").map(u => u.trim()).filter(u => u);
       const payload = {
         title: productForm.title,
         slug: productForm.slug || productForm.title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
@@ -197,12 +186,8 @@ function AdminPage() {
         variants: productForm.hasVariants ? JSON.parse(productForm.variantsText || "[]") : null,
         updated_at: new Date().toISOString(),
       };
-
       if (productForm.editingId) {
-        const { error } = await supabase
-          .from("products")
-          .update(payload)
-          .eq("id", productForm.editingId);
+        const { error } = await supabase.from("products").update(payload).eq("id", productForm.editingId);
         if (error) throw error;
         toast.success("Product updated.");
       } else {
@@ -210,7 +195,6 @@ function AdminPage() {
         if (error) throw error;
         toast.success("Product created.");
       }
-
       resetProductForm();
       await fetchData();
     } catch (e: any) {
@@ -220,10 +204,7 @@ function AdminPage() {
 
   const togglePublished = async (id: string, currentState: boolean) => {
     try {
-      const { error } = await supabase
-        .from("products")
-        .update({ is_published: !currentState })
-        .eq("id", id);
+      const { error } = await supabase.from("products").update({ is_published: !currentState }).eq("id", id);
       if (error) throw error;
       await fetchData();
     } catch (e: any) {
@@ -233,81 +214,67 @@ function AdminPage() {
 
   const archiveProduct = async (id: string) => {
     try {
-      // We use .update() instead of .delete() to keep order history intact
-      const { error } = await supabase
-        .from("products")
-        .update({ is_archived: true })
-        .eq("id", id);
-
+      const { error } = await supabase.from("products").update({ is_archived: true }).eq("id", id);
       if (error) throw error;
-
       toast.success("Product archived.");
-      await fetchData(); // Refresh the list
+      await fetchData();
     } catch (e: any) {
       toast.error(`Archive failed: ${e.message}`);
     }
   };
 
- const handleArchiveOrder = async (id: string) => {
-  try {
-    const { error } = await supabase.rpc("delete_order", { order_id: id });
-    if (error) throw error;
-    toast.success("Order deleted.");
-    setSelectedRow(null);
-    await fetchData();
-  } catch (e: any) {
-    toast.error(`Archive failed: ${e.message}`);
-  }
-};
+  const archiveSelectedProducts = async () => {
+    try {
+      const ids = Array.from(selectedProducts);
+      const { error } = await supabase.from("products").update({ is_archived: true }).in("id", ids);
+      if (error) throw error;
+      toast.success(`${ids.length} product${ids.length !== 1 ? "s" : ""} archived.`);
+      setSelectedProducts(new Set());
+      await fetchData();
+    } catch (e: any) {
+      toast.error(`Archive failed: ${e.message}`);
+    }
+  };
+
+  const handleArchiveOrder = async (id: string) => {
+    try {
+      const { error } = await supabase.rpc("delete_order", { order_id: id });
+      if (error) throw error;
+      toast.success("Order deleted.");
+      setSelectedRow(null);
+      await fetchData();
+    } catch (e: any) {
+      toast.error(`Archive failed: ${e.message}`);
+    }
+  };
 
   const resetProductForm = () => {
     setProductForm({
-      editingId: null,
-      title: "",
-      slug: "",
-      price_cents: "",
-      image_url: "",
-      description: "",
-      is_published: true,
-      source_url: "",
-      hasVariants: false,
-      variantsText: "[]",
-      isSyncing: false,
+      editingId: null, title: "", slug: "", price_cents: "", image_url: "",
+      description: "", is_published: true, source_url: "", hasVariants: false,
+      variantsText: "[]", isSyncing: false,
     });
     setProductFormOpen(false);
   };
 
   const startEditProduct = (p: Product) => {
     setProductForm({
-      editingId: p.id,
-      title: p.title,
-      slug: p.slug,
-      price_cents: String(p.price_cents),
-      image_url: (p.image_urls || []).join(", "),
-      description: p.description || "",
-      is_published: p.is_published,
-      source_url: "",
-      hasVariants: false,
-      variantsText: "[]",
-      isSyncing: false,
+      editingId: p.id, title: p.title, slug: p.slug,
+      price_cents: String(p.price_cents), image_url: (p.image_urls || []).join(", "),
+      description: p.description || "", is_published: p.is_published,
+      source_url: "", hasVariants: false, variantsText: "[]", isSyncing: false,
     });
     setProductFormOpen(true);
     setSection("products");
   };
 
-  // ── NEW: Sync from Printful ──────────────────────────────────────────────
   const syncFromPrintful = async () => {
     setPrintfulLoading(true);
     try {
-      // Calls your new /api/printful-sync route
       const res = await fetch("/api/printful-sync", { method: "POST" });
-
       if (!res.ok) throw new Error("Sync failed at API route");
-
       const data = await res.json();
       toast.success(`Sync complete: ${data.synced} products processed.`);
-
-      // Refresh your local list
       await fetchData();
     } catch (e: any) {
       toast.error("Sync failed: " + e.message);
@@ -316,64 +283,43 @@ function AdminPage() {
     }
   };
 
-  // ── NEW: Import a selected Printful product into the form ────────────────
   const importPrintfulProduct = async (item: PrintfulCatalogItem) => {
     setPrintfulLoading(true);
     try {
       const apiKey = import.meta.env.VITE_Printful_API_Key;
       if (!apiKey) throw new Error("VITE_Printful_API_Key is not set in your Lovable secrets");
-
       const res = await fetch(`https://api.printful.com/sync/products/${item.id}`, {
         headers: { Authorization: `Bearer ${apiKey}` },
       });
       if (!res.ok) throw new Error(`Printful error ${res.status}: ${res.statusText}`);
       const data = await res.json();
-
       const product = data?.result;
       if (!product) throw new Error("Empty product response");
-
       const syncVariants: any[] = product.sync_variants ?? [];
-
-      // Build variants array in the shape offer.$slug.tsx expects
       const variants = syncVariants.map((v: any) => ({
         sku: v.sku ?? String(v.id),
         price_cents: Math.round(parseFloat(v.retail_price ?? "0") * 100),
         external_sku: String(v.id),
         fulfillment_provider: "printful",
         attributes: parseVariantName(v.name ?? ""),
-        stock: 999, // Printful is print-on-demand; no stock limits
+        stock: 999,
       }));
-
-      // Collect all image URLs from sync variants
-      const imageUrls = Array.from(
-        new Set(
-          syncVariants
-            .map((v: any) => v.files?.find((f: any) => f.type === "preview")?.preview_url ?? "")
-            .filter(Boolean)
-        )
-      );
-      // Fallback to thumbnail if no preview images
+      const imageUrls = Array.from(new Set(
+        syncVariants.map((v: any) => v.files?.find((f: any) => f.type === "preview")?.preview_url ?? "").filter(Boolean)
+      ));
       if (imageUrls.length === 0 && item.thumbnail_url) imageUrls.push(item.thumbnail_url);
-
-      // Use the cheapest variant price as the base price
-      const basePriceCents =
-        variants.length > 0
-          ? Math.min(...variants.map(v => v.price_cents).filter(p => p > 0))
-          : 0;
-
+      const basePriceCents = variants.length > 0
+        ? Math.min(...variants.map(v => v.price_cents).filter(p => p > 0)) : 0;
       setProductForm(f => ({
         ...f,
         title: product.sync_product?.name ?? item.name,
-        slug: (product.sync_product?.name ?? item.name)
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-"),
+        slug: (product.sync_product?.name ?? item.name).toLowerCase().replace(/[^a-z0-9]+/g, "-"),
         price_cents: String(basePriceCents),
         image_url: imageUrls.join(", "),
         description: "",
         hasVariants: variants.length > 0,
         variantsText: JSON.stringify(variants, null, 2),
       }));
-
       setPrintfulPickerOpen(false);
       toast.success(`"${item.name}" imported — review and hit CREATE`);
     } catch (e: any) {
@@ -383,12 +329,10 @@ function AdminPage() {
     }
   };
 
-  // ── NEW: Parse "Size / Color" style variant names into attributes object ─
   const parseVariantName = (name: string): Record<string, string> => {
     const parts = name.split("/").map(p => p.trim());
     const result: Record<string, string> = {};
     parts.forEach((part, i) => {
-      // Heuristic: first part is often size, second is color
       if (i === 0) result["size"] = part;
       else if (i === 1) result["color"] = part;
       else result[`option_${i}`] = part;
@@ -411,23 +355,13 @@ function AdminPage() {
         theme: siteContent.theme || "light",
         updated_at: new Date().toISOString(),
       };
-
-      const { error: updateError } = await supabase
-        .from("site_config")
-        .update(payload)
-        .eq("id", "main");
-
-      if (updateError) {
-        console.error("[Admin] Update failed:", updateError);
-        throw updateError;
-      }
-
+      const { error: updateError } = await supabase.from("site_config").update(payload).eq("id", "main");
+      if (updateError) { console.error("[Admin] Update failed:", updateError); throw updateError; }
       toast.success("Site content saved.");
       setSiteEdited(false);
     } catch (e: any) {
       console.error("[Admin] Save catch:", e);
-      const msg = e.message || e.details || "Unknown error";
-      toast.error(`Failed: ${msg}`);
+      toast.error(`Failed: ${e.message || e.details || "Unknown error"}`);
     } finally {
       setSiteSaving(false);
     }
@@ -477,7 +411,6 @@ function AdminPage() {
           <div className="flex-1">
             <div className="md:hidden text-[10px] font-bold uppercase tracking-widest">ADMIN</div>
           </div>
-
           <div className="hidden md:flex items-center justify-center gap-8 flex-none">
             {["overview", "products", "orders", "leads", "settings"].map(s => (
               <button
@@ -493,12 +426,8 @@ function AdminPage() {
               </button>
             ))}
           </div>
-
           <div className="flex-1 flex justify-end">
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden"
-            >
+            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden">
               <Menu size={18} />
             </button>
             <div className="hidden md:block" />
@@ -507,21 +436,14 @@ function AdminPage() {
 
         {mobileMenuOpen && (
           <div className={`fixed inset-0 z-[100] flex flex-col items-center justify-center md:hidden ${isDark ? "bg-black" : "bg-white"}`}>
-            <button
-              onClick={() => setMobileMenuOpen(false)}
-              className={`absolute top-6 right-6 ${isDark ? "text-white" : "text-black"}`}
-            >
+            <button onClick={() => setMobileMenuOpen(false)} className={`absolute top-6 right-6 ${isDark ? "text-white" : "text-black"}`}>
               <X size={24} strokeWidth={1} />
             </button>
-
             <div className="flex flex-col gap-8 text-center">
               {["overview", "products", "orders", "leads", "settings"].map(s => (
                 <button
                   key={s}
-                  onClick={() => {
-                    setSection(s as any);
-                    setMobileMenuOpen(false);
-                  }}
+                  onClick={() => { setSection(s as any); setMobileMenuOpen(false); }}
                   className={`text-[14px] font-bold uppercase tracking-[0.3em] transition-colors ${
                     section === s
                       ? (isDark ? "text-white" : "text-black")
@@ -538,13 +460,13 @@ function AdminPage() {
 
       {/* MAIN CONTENT */}
       <main className="max-w-7xl mx-auto px-6 py-12 space-y-12">
+
         {/* OVERVIEW SECTION */}
         {section === "overview" && (
           <div className="space-y-12">
             <div>
               <h1 className="text-2xl font-bold uppercase tracking-tighter">Overview</h1>
             </div>
-
             <div className="flex gap-4">
               {["day", "week", "month", "all"].map(r => (
                 <button
@@ -560,18 +482,16 @@ function AdminPage() {
                 </button>
               ))}
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
               <Stat label="Revenue" value={fmt$(filteredRevenue)} sub={`${revenueRange.toUpperCase()} RANGE`} isDark={isDark} />
               <Stat label="Orders" value={activeOrders.length} sub={`${paidOrders.length} PAID`} isDark={isDark} />
               <Stat label="Conversion" value={`${convRate}%`} sub="VISIT TO PAID" isDark={isDark} />
               <Stat label="Avg Ticket" value={fmt$(avgTicket)} sub="PER CUSTOMER" isDark={isDark} />
             </div>
-
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Recent Orders</h2>
-                <button onClick={() => setSection("orders")} className={`text-[10px] font-bold uppercase tracking-widest hover:underline`}>View All</button>
+                <button onClick={() => setSection("orders")} className="text-[10px] font-bold uppercase tracking-widest hover:underline">View All</button>
               </div>
               <div className={`space-y-px ${isDark ? "divide-white/10" : ""}`}>
                 {activeOrders.slice(0, 5).map(o => (
@@ -594,60 +514,61 @@ function AdminPage() {
           </div>
         )}
 
-    {/* ORDERS SECTION */}
-{section === "orders" && (
-  <div className="space-y-8">
-    <div className="flex items-end justify-between">
-      <h1 className="text-2xl font-bold uppercase tracking-tighter">Orders</h1>
-      <input type="text" placeholder="SEARCH…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-        className={`text-[10px] font-bold uppercase border-b focus:outline-none pb-1 w-48 bg-transparent ${
-          isDark ? "border-white/20 text-white placeholder-white/30" : "border-black text-black placeholder-black/30"
-        }`} />
-    </div>
-    <div className="overflow-x-auto">
-      <table className="w-full text-left">
-        <thead>
-          <tr className={`text-[9px] font-bold uppercase tracking-widest border-b ${
-            isDark ? "text-white/50 border-white/10" : "text-gray-400 border-gray-100"
-          }`}>
-            <th className="pb-4">Customer</th>
-            <th className="pb-4">Amount</th>
-            <th className="pb-4">Status</th>
-            <th className="pb-4">Date</th>
-            <th className="pb-4"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {filteredOrders.map(o => (
-            <tr key={o.id} className={`transition-all ${isDark ? "hover:bg-white/5" : "hover:bg-gray-50/50"}`}>
-              <td className="py-6">
-                <p className="text-xs font-bold uppercase">{o.name || "—"}</p>
-                <p className={`text-[9px] uppercase ${isDark ? "text-white/50" : "text-gray-400"}`}>{o.email}</p>
-              </td>
-              <td className="py-6 text-xs font-bold">{fmt$(o.amount_cents)}</td>
-              <td className="py-6">
-                <span className={`text-[9px] font-bold uppercase px-2 py-1 rounded-full border ${STATUS_CONFIG[o.status]?.color || (isDark ? "text-white/50 border-white/10" : "text-gray-400 border-gray-100")}`}>
-                  {o.status}
-                </span>
-              </td>
-              <td className={`py-6 text-[10px] uppercase ${isDark ? "text-white/50" : "text-gray-400"}`}>{fmtDate(o.created_at)}</td>
-              <td className="py-6 text-right">
-                <button
-                  onClick={() => handleArchiveOrder(o.id)}
-                  className={`text-[9px] font-bold uppercase px-3 py-1 transition-all ${
-                    isDark ? "text-red-400 hover:bg-red-500/10" : "text-red-500 hover:bg-red-50"
-                  }`}
-                >
-                  DELETE
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  </div>
-)}
+        {/* ORDERS SECTION */}
+        {section === "orders" && (
+          <div className="space-y-8">
+            <div className="flex items-end justify-between">
+              <h1 className="text-2xl font-bold uppercase tracking-tighter">Orders</h1>
+              <input type="text" placeholder="SEARCH…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                className={`text-[10px] font-bold uppercase border-b focus:outline-none pb-1 w-48 bg-transparent ${
+                  isDark ? "border-white/20 text-white placeholder-white/30" : "border-black text-black placeholder-black/30"
+                }`} />
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className={`text-[9px] font-bold uppercase tracking-widest border-b ${
+                    isDark ? "text-white/50 border-white/10" : "text-gray-400 border-gray-100"
+                  }`}>
+                    <th className="pb-4">Customer</th>
+                    <th className="pb-4">Amount</th>
+                    <th className="pb-4">Status</th>
+                    <th className="pb-4">Date</th>
+                    <th className="pb-4"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredOrders.map(o => (
+                    <tr key={o.id} className={`transition-all ${isDark ? "hover:bg-white/5" : "hover:bg-gray-50/50"}`}>
+                      <td className="py-6">
+                        <p className="text-xs font-bold uppercase">{o.name || "—"}</p>
+                        <p className={`text-[9px] uppercase ${isDark ? "text-white/50" : "text-gray-400"}`}>{o.email}</p>
+                      </td>
+                      <td className="py-6 text-xs font-bold">{fmt$(o.amount_cents)}</td>
+                      <td className="py-6">
+                        <span className={`text-[9px] font-bold uppercase px-2 py-1 rounded-full border ${STATUS_CONFIG[o.status]?.color || (isDark ? "text-white/50 border-white/10" : "text-gray-400 border-gray-100")}`}>
+                          {o.status}
+                        </span>
+                      </td>
+                      <td className={`py-6 text-[10px] uppercase ${isDark ? "text-white/50" : "text-gray-400"}`}>{fmtDate(o.created_at)}</td>
+                      <td className="py-6 text-right">
+                        <button
+                          onClick={() => handleArchiveOrder(o.id)}
+                          className={`text-[9px] font-bold uppercase px-3 py-1 transition-all ${
+                            isDark ? "text-red-400 hover:bg-red-500/10" : "text-red-500 hover:bg-red-50"
+                          }`}
+                        >
+                          DELETE
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {/* PRODUCTS SECTION */}
         {section === "products" && (
           <div className="space-y-12">
@@ -804,13 +725,11 @@ function AdminPage() {
                     <div className={`absolute inset-0 z-10 pointer-events-none border-2 transition-all ${
                       isSelected ? isDark ? "border-white" : "border-black" : "border-transparent"
                     }`} />
-
                     {isSelected && (
                       <div className={`absolute top-2 right-2 z-20 w-4 h-4 flex items-center justify-center text-[8px] font-bold ${
                         isDark ? "bg-white text-black" : "bg-black text-white"
                       }`}>✓</div>
                     )}
-
                     <div className={`relative flex aspect-[2/3] items-center justify-center overflow-hidden bg-transparent p-3 sm:p-4 transition-all duration-300 ${
                       isSelected
                         ? isDark ? "bg-white/10" : "bg-gray-100"
@@ -822,7 +741,6 @@ function AdminPage() {
                         <span className={`text-[7px] uppercase tracking-[0.3em] ${isDark ? "text-white/20" : "text-black/20"}`}>No Image</span>
                       )}
                     </div>
-
                     <div className="px-2 text-center">
                       <p className={`mb-1 text-[9px] uppercase leading-tight tracking-[0.1em] truncate font-bold ${isDark ? "text-white" : "text-black"}`}>{p.title}</p>
                       <p className={`text-[9px] tracking-[0.05em] ${isDark ? "text-white/70" : "text-black/70"}`}>${(p.price_cents / 100).toFixed(0)}</p>
@@ -839,34 +757,6 @@ function AdminPage() {
                   </div>
                 );
               })}
-            </div>
-          </div>
-        )}
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-y-12">
-              {products.map(p => (
-                <div key={p.id} className="group relative">
-                  <div className={`relative flex aspect-[2/3] items-center justify-center overflow-hidden bg-transparent p-3 sm:p-4 group-hover:scale-105 transition-all duration-300 ${
-                    isDark ? "bg-white/5" : "bg-gray-50/50"
-                  }`}>
-                    {p.image_urls?.[0] ? (
-                      <img src={p.image_urls[0]} alt="" className="max-h-full max-w-full object-contain" />
-                    ) : (
-                      <span className={`text-[7px] uppercase tracking-[0.3em] ${isDark ? "text-white/20" : "text-black/20"}`}>No Image</span>
-                    )}
-                  </div>
-                  <div className="px-2 text-center">
-                    <p className={`mb-1 text-[9px] uppercase leading-tight tracking-[0.1em] truncate font-bold ${isDark ? "text-white" : "text-black"}`}>{p.title}</p>
-                    <p className={`text-[9px] tracking-[0.05em] ${isDark ? "text-white/70" : "text-black/70"}`}>${(p.price_cents / 100).toFixed(0)}</p>
-                    <div className="flex items-center justify-center gap-3 mt-3">
-                      <button onClick={() => togglePublished(p.id, p.is_published)}
-                        className={`w-2 h-2 rounded-full transition-all ${p.is_published ? "bg-green-500" : "bg-red-500"}`} />
-                      <button onClick={() => startEditProduct(p)} className={`${isDark ? "text-white/40 hover:text-white" : "text-black/30 hover:text-black"} transition-colors`}><Edit3 size={12} /></button>
-                      <button onClick={() => archiveProduct(p.id)} className={`${isDark ? "text-white/40 hover:text-red-400" : "text-black/30 hover:text-red-500"} transition-colors`}><Archive size={12} /></button>
-                    </div>
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
         )}
@@ -916,7 +806,6 @@ function AdminPage() {
         {section === "settings" && (
           <div className="max-w-2xl space-y-12">
             <h1 className="text-2xl font-bold uppercase tracking-tighter">Settings</h1>
-
             <div className="space-y-8">
               <div className="space-y-4">
                 <h2 className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Appearance</h2>
@@ -924,28 +813,19 @@ function AdminPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] uppercase tracking-widest">Theme</span>
                     <div className={`flex border overflow-hidden ${isDark ? "border-white/20" : "border-black/20"}`}>
-                      <button
-                        onClick={() => applyTheme("light")}
-                        className={`px-4 py-2 text-[9px] font-bold uppercase transition-all ${siteContent.theme === "light" ? (isDark ? "bg-white text-black" : "bg-black text-white") : (isDark ? "hover:bg-white/10" : "hover:bg-black/10")}`}
-                      >
+                      <button onClick={() => applyTheme("light")}
+                        className={`px-4 py-2 text-[9px] font-bold uppercase transition-all ${siteContent.theme === "light" ? (isDark ? "bg-white text-black" : "bg-black text-white") : (isDark ? "hover:bg-white/10" : "hover:bg-black/10")}`}>
                         LIGHT
                       </button>
-                      <button
-                        onClick={() => applyTheme("dark")}
-                        className={`px-4 py-2 text-[9px] font-bold uppercase transition-all ${siteContent.theme === "dark" ? (isDark ? "bg-white text-black" : "bg-black text-white") : (isDark ? "hover:bg-white/10" : "hover:bg-black/10")}`}
-                      >
+                      <button onClick={() => applyTheme("dark")}
+                        className={`px-4 py-2 text-[9px] font-bold uppercase transition-all ${siteContent.theme === "dark" ? (isDark ? "bg-white text-black" : "bg-black text-white") : (isDark ? "hover:bg-white/10" : "hover:bg-black/10")}`}>
                         DARK
                       </button>
                     </div>
                   </div>
                   {siteEdited && (
-                    <button
-                      onClick={saveSiteConfig}
-                      disabled={siteSaving}
-                      className={`w-full py-3 text-[10px] font-bold uppercase transition-all ${
-                        isDark ? "bg-white text-black hover:bg-gray-200" : "bg-black text-white hover:bg-gray-800"
-                      }`}
-                    >
+                    <button onClick={saveSiteConfig} disabled={siteSaving}
+                      className={`w-full py-3 text-[10px] font-bold uppercase transition-all ${isDark ? "bg-white text-black hover:bg-gray-200" : "bg-black text-white hover:bg-gray-800"}`}>
                       {siteSaving ? "SAVING…" : "APPLY CHANGES"}
                     </button>
                   )}
@@ -959,7 +839,8 @@ function AdminPage() {
                     <p className={`text-[10px] ${isDark ? "text-white/50" : "text-gray-400"}`}>Signed in as</p>
                     <p className="text-xs font-bold uppercase">{userEmail || "…"}</p>
                   </div>
-                  <button onClick={handleSignOut} className={`w-full text-[10px] font-bold uppercase px-4 py-3 hover:transition-all ${isDark ? "bg-red-500/10 text-red-400 hover:bg-red-500/20" : "bg-red-500/10 text-red-500 hover:bg-red-500/20"}`}>
+                  <button onClick={handleSignOut}
+                    className={`w-full text-[10px] font-bold uppercase px-4 py-3 hover:transition-all ${isDark ? "bg-red-500/10 text-red-400 hover:bg-red-500/20" : "bg-red-500/10 text-red-500 hover:bg-red-500/20"}`}>
                     LOGOUT
                   </button>
                 </div>
@@ -999,38 +880,30 @@ function AdminPage() {
               <button onClick={() => setSelectedRow(null)}><X size={18} /></button>
             </div>
             <div className="space-y-4">
-              {Object.entries(selectedRow).map(([k, v]) => {
-                return (
-                  k !== "_type" && (
-                    <div key={k} className={`flex justify-between py-2 border-b gap-4 ${isDark ? "border-white/10" : "border-gray-50"}`}>
-                      <span className={`text-[9px] font-bold uppercase flex-shrink-0 ${isDark ? "text-white/50" : "text-gray-400"}`}>{k}</span>
-                      <span className="text-[10px] font-bold uppercase truncate text-right">{String(v)}</span>
-                    </div>
-                  )
-                );
-              })}
+              {Object.entries(selectedRow).map(([k, v]) =>
+                k !== "_type" && (
+                  <div key={k} className={`flex justify-between py-2 border-b gap-4 ${isDark ? "border-white/10" : "border-gray-50"}`}>
+                    <span className={`text-[9px] font-bold uppercase flex-shrink-0 ${isDark ? "text-white/50" : "text-gray-400"}`}>{k}</span>
+                    <span className="text-[10px] font-bold uppercase truncate text-right">{String(v)}</span>
+                  </div>
+                )
+              )}
             </div>
             {selectedRow._type === "order" && (
               <button onClick={() => handleArchiveOrder(selectedRow.id)}
                 className={`w-full py-4 text-[10px] font-bold uppercase transition-all ${isDark ? "bg-red-500/10 text-red-400 hover:bg-red-500/20" : "bg-red-50 text-red-600 hover:bg-red-100"}`}>
-                ARCHIVE ORDER
+                DELETE ORDER
               </button>
             )}
           </div>
         </div>
       )}
 
-      {/* ── NEW: Printful product picker modal ── */}
+      {/* PRINTFUL PICKER MODAL */}
       {printfulPickerOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 animate-in fade-in duration-200">
-          <div
-            className={`absolute inset-0 backdrop-blur-sm ${isDark ? "bg-black/90" : "bg-white/90"}`}
-            onClick={() => setPrintfulPickerOpen(false)}
-          />
-          <div className={`relative w-full max-w-2xl border max-h-[85vh] flex flex-col ${
-            isDark ? "bg-black border-white/10" : "bg-white border-gray-200"
-          }`}>
-            {/* Modal header */}
+          <div className={`absolute inset-0 backdrop-blur-sm ${isDark ? "bg-black/90" : "bg-white/90"}`} onClick={() => setPrintfulPickerOpen(false)} />
+          <div className={`relative w-full max-w-2xl border max-h-[85vh] flex flex-col ${isDark ? "bg-black border-white/10" : "bg-white border-gray-200"}`}>
             <div className={`flex items-center justify-between px-8 py-6 border-b ${isDark ? "border-white/10" : "border-gray-100"}`}>
               <div>
                 <h3 className="text-sm font-bold uppercase tracking-widest">Select Printful Product</h3>
@@ -1038,12 +911,8 @@ function AdminPage() {
                   {printfulCatalog.length} product{printfulCatalog.length !== 1 ? "s" : ""} in your store
                 </p>
               </div>
-              <button onClick={() => setPrintfulPickerOpen(false)}>
-                <X size={18} />
-              </button>
+              <button onClick={() => setPrintfulPickerOpen(false)}><X size={18} /></button>
             </div>
-
-            {/* Product list */}
             <div className="overflow-y-auto flex-1 p-4">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 {printfulCatalog.map(item => (
@@ -1053,28 +922,18 @@ function AdminPage() {
                     onClick={() => importPrintfulProduct(item)}
                     disabled={printfulLoading}
                     className={`group text-left border p-3 transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
-                      isDark
-                        ? "border-white/10 hover:border-white/40 hover:bg-white/5"
-                        : "border-gray-100 hover:border-gray-400 hover:bg-gray-50/50"
+                      isDark ? "border-white/10 hover:border-white/40 hover:bg-white/5" : "border-gray-100 hover:border-gray-400 hover:bg-gray-50/50"
                     }`}
                   >
                     {item.thumbnail_url ? (
-                      <img
-                        src={item.thumbnail_url}
-                        alt={item.name}
-                        className="w-full aspect-square object-contain mb-3"
-                      />
+                      <img src={item.thumbnail_url} alt={item.name} className="w-full aspect-square object-contain mb-3" />
                     ) : (
                       <div className={`w-full aspect-square flex items-center justify-center mb-3 ${isDark ? "bg-white/5" : "bg-gray-50"}`}>
                         <span className={`text-[8px] uppercase tracking-widest ${isDark ? "text-white/20" : "text-black/20"}`}>No Image</span>
                       </div>
                     )}
-                    <p className={`text-[9px] font-bold uppercase leading-tight truncate ${isDark ? "text-white" : "text-black"}`}>
-                      {item.name}
-                    </p>
-                    <p className={`text-[8px] uppercase mt-1 ${isDark ? "text-white/30" : "text-black/30"}`}>
-                      ID {item.id}
-                    </p>
+                    <p className={`text-[9px] font-bold uppercase leading-tight truncate ${isDark ? "text-white" : "text-black"}`}>{item.name}</p>
+                    <p className={`text-[8px] uppercase mt-1 ${isDark ? "text-white/30" : "text-black/30"}`}>ID {item.id}</p>
                   </button>
                 ))}
               </div>
