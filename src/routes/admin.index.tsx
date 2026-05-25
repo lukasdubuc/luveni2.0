@@ -160,7 +160,7 @@ function AdminPage() {
     init();
   }, []);
 
-const fetchData = async () => {
+  const fetchData = async () => {
     try {
       const [productsRes, ordersRes, leadsRes, siteRes] = await Promise.all([
         supabase.from("products").select("*").neq("is_archived", true),
@@ -170,16 +170,6 @@ const fetchData = async () => {
       ]);
 
       if (productsRes.data) setProducts(productsRes.data as Product[]);
-      if (ordersRes.data) setActiveOrders(ordersRes.data as Order[]);
-      if (leadsRes.data) setActiveLeads(leadsRes.data as Lead[]);
-      if (siteRes.data) {
-        setSiteContent(prev => ({ ...prev, ...(siteRes.data as any) }));
-      }
-    } catch (e) {
-      console.error("[Admin] Fetch error:", e);
-    }
-  };
-     if (productsRes.data) setProducts(productsRes.data as Product[]);
       if (ordersRes.data) setActiveOrders(ordersRes.data as Order[]);
       if (leadsRes.data) setActiveLeads(leadsRes.data as Lead[]);
       if (siteRes.data) {
@@ -242,21 +232,21 @@ const fetchData = async () => {
   };
 
   const archiveProduct = async (id: string) => {
-  try {
-    // We use .update() instead of .delete() to keep order history intact
-    const { error } = await supabase
-      .from("products")
-      .update({ is_archived: true }) 
-      .eq("id", id);
-      
-    if (error) throw error;
-    
-    toast.success("Product archived.");
-    await fetchData(); // Refresh the list
-  } catch (e: any) {
-    toast.error(`Archive failed: ${e.message}`);
-  }
-};
+    try {
+      // We use .update() instead of .delete() to keep order history intact
+      const { error } = await supabase
+        .from("products")
+        .update({ is_archived: true })
+        .eq("id", id);
+
+      if (error) throw error;
+
+      toast.success("Product archived.");
+      await fetchData(); // Refresh the list
+    } catch (e: any) {
+      toast.error(`Archive failed: ${e.message}`);
+    }
+  };
 
   const handleArchiveOrder = async (id: string) => {
     try {
@@ -306,30 +296,21 @@ const fetchData = async () => {
   };
 
   // ── NEW: Sync from Printful ──────────────────────────────────────────────
- const syncFromPrintful = async () => {
+  const syncFromPrintful = async () => {
     setPrintfulLoading(true);
     try {
       // Calls your new /api/printful-sync route
       const res = await fetch("/api/printful-sync", { method: "POST" });
-      
+
       if (!res.ok) throw new Error("Sync failed at API route");
-      
+
       const data = await res.json();
       toast.success(`Sync complete: ${data.synced} products processed.`);
-      
+
       // Refresh your local list
-      await fetchData(); 
+      await fetchData();
     } catch (e: any) {
       toast.error("Sync failed: " + e.message);
-    } finally {
-      setPrintfulLoading(false);
-    }
-  };
-      setPrintfulCatalog(items);
-      setPrintfulPickerOpen(true);
-      toast.success(`Found ${items.length} Printful product${items.length !== 1 ? "s" : ""}`);
-    } catch (e: any) {
-      toast.error("Sync failed: " + (e.message ?? "unknown error"));
     } finally {
       setPrintfulLoading(false);
     }
