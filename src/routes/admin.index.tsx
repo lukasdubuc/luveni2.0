@@ -232,15 +232,21 @@ function AdminPage() {
   };
 
   const archiveProduct = async (id: string) => {
-    try {
-      const { error } = await supabase.from("products").delete().eq("id", id);
-      if (error) throw error;
-      toast.success("Product archived.");
-      await fetchData();
-    } catch (e: any) {
-      toast.error(`Archive failed: ${e.message}`);
-    }
-  };
+  try {
+    // We use .update() instead of .delete() to keep order history intact
+    const { error } = await supabase
+      .from("products")
+      .update({ is_archived: true }) 
+      .eq("id", id);
+      
+    if (error) throw error;
+    
+    toast.success("Product archived.");
+    await fetchData(); // Refresh the list
+  } catch (e: any) {
+    toast.error(`Archive failed: ${e.message}`);
+  }
+};
 
   const handleArchiveOrder = async (id: string) => {
     try {
