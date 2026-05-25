@@ -87,6 +87,7 @@ function AdminPage() {
 
   // ── Product Form State ──────────────────────────────────────────────────
   const [productFormOpen, setProductFormOpen] = useState(false);
+  // FIX: initial state includes all fields used by saveProduct and resetProductForm
   const [productForm, setProductForm] = useState({
     editingId: null as string | null,
     title: "",
@@ -96,6 +97,9 @@ function AdminPage() {
     description: "",
     is_published: true,
     source_url: "",
+    hasVariants: false,
+    variantsText: "[]",
+    isSyncing: false,
   });
 
   // ── UI State ────────────────────────────────────────────────────────────
@@ -172,20 +176,18 @@ function AdminPage() {
         .filter(u => u);
 
       const payload = {
-  title: productForm.title,
-  // Automatically generate slug if it's empty, or use the one provided
-  slug: productForm.slug || productForm.title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-  price_cents: parseInt(productForm.price_cents) || 0,
-  image_urls: imageUrls,
-  description: productForm.description,
-  is_published: productForm.is_published,
-  source_url: productForm.source_url || "",
-  
-  // ADD THIS LINE: This saves your variable JSON data to the database
-  variants: productForm.hasVariants ? JSON.parse(productForm.variantsText || "[]") : null,
-  
-  updated_at: new Date().toISOString(),
-};
+        title: productForm.title,
+        // Automatically generate slug if it's empty, or use the one provided
+        slug: productForm.slug || productForm.title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        price_cents: parseInt(productForm.price_cents) || 0,
+        image_urls: imageUrls,
+        description: productForm.description,
+        is_published: productForm.is_published,
+        source_url: productForm.source_url || "",
+        // Saves variant JSON data to the database
+        variants: productForm.hasVariants ? JSON.parse(productForm.variantsText || "[]") : null,
+        updated_at: new Date().toISOString(),
+      };
 
       if (productForm.editingId) {
         const { error } = await supabase
@@ -243,26 +245,28 @@ function AdminPage() {
     }
   };
 
- const resetProductForm = () => {
-  setProductForm({
-    editingId: null,
-    title: "",
-    slug: "",
-    price_cents: "",
-    image_url: "",
-    description: "",
-    is_published: true,
-    source_url: "",
-    // Include the new fields so they are reset when you close the form
-    hasVariants: false,
-    variantsText: "[]",
-    isSyncing: false,
-  });
-  setProductFormOpen(false);
-};
+  // FIX: removed the stray duplicate `setProductFormOpen(false)` that was
+  // outside the function body, causing a top-level statement error
+  const resetProductForm = () => {
+    setProductForm({
+      editingId: null,
+      title: "",
+      slug: "",
+      price_cents: "",
+      image_url: "",
+      description: "",
+      is_published: true,
+      source_url: "",
+      // Reset the Printful/variant fields too
+      hasVariants: false,
+      variantsText: "[]",
+      isSyncing: false,
+    });
     setProductFormOpen(false);
   };
 
+  // FIX: startEditProduct now includes hasVariants/variantsText/isSyncing
+  // so editing an existing product doesn't lose those fields from state shape
   const startEditProduct = (p: Product) => {
     setProductForm({
       editingId: p.id,
@@ -273,6 +277,9 @@ function AdminPage() {
       description: p.description || "",
       is_published: p.is_published,
       source_url: "",
+      hasVariants: false,
+      variantsText: "[]",
+      isSyncing: false,
     });
     setProductFormOpen(true);
     setSection("products");
@@ -395,7 +402,7 @@ function AdminPage() {
             >
               <X size={24} strokeWidth={1} />
             </button>
-            
+
             <div className="flex flex-col gap-8 text-center">
               {["overview", "products", "orders", "leads", "settings"].map(s => (
                 <button
@@ -405,8 +412,8 @@ function AdminPage() {
                     setMobileMenuOpen(false);
                   }}
                   className={`text-[14px] font-bold uppercase tracking-[0.3em] transition-colors ${
-                    section === s 
-                      ? (isDark ? "text-white" : "text-black") 
+                    section === s
+                      ? (isDark ? "text-white" : "text-black")
                       : (isDark ? "text-white/50 hover:text-white" : "text-black/50 hover:text-black")
                   }`}
                 >
@@ -552,7 +559,6 @@ function AdminPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <Input label="Title" value={productForm.title} onChange={v => setProductForm(f => ({ ...f, title: v }))} isDark={isDark} />
                   <Input label="Price (USD)" value={productForm.price_cents} onChange={v => setProductForm(f => ({ ...f, price_cents: v }))} type="number" isDark={isDark} />
-                                            
                 </div>
                 <Input label="Image URL(s)" value={productForm.image_url} onChange={v => setProductForm(f => ({ ...f, image_url: v }))} isDark={isDark} />
                 <div className="space-y-2">
