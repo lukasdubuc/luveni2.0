@@ -594,52 +594,60 @@ function AdminPage() {
           </div>
         )}
 
-        {/* ORDERS SECTION */}
-        {section === "orders" && (
-          <div className="space-y-8">
-            <div className="flex items-end justify-between">
-              <h1 className="text-2xl font-bold uppercase tracking-tighter">Orders</h1>
-              <input type="text" placeholder="SEARCH…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                className={`text-[10px] font-bold uppercase border-b focus:outline-none pb-1 w-48 bg-transparent ${
-                  isDark ? "border-white/20 text-white placeholder-white/30" : "border-black text-black placeholder-black/30"
-                }`} />
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className={`text-[9px] font-bold uppercase tracking-widest border-b ${
-                    isDark ? "text-white/50 border-white/10" : "text-gray-400 border-gray-100"
-                  }`}>
-                    <th className="pb-4">Customer</th>
-                    <th className="pb-4">Amount</th>
-                    <th className="pb-4">Status</th>
-                    <th className="pb-4">Date</th>
-                  </tr>
-                </thead>
-                <tbody className={isDark ? "divide-white/10" : "divide-gray-50"}>
-                  {filteredOrders.map(o => (
-                    <tr key={o.id} onClick={() => setSelectedRow({ ...o, _type: "order" })} className={`group hover:cursor-pointer transition-all ${
-                      isDark ? "hover:bg-white/5 divide-white/10" : "hover:bg-gray-50/50 divide-gray-50"
-                    }`}>
-                      <td className="py-6">
-                        <p className="text-xs font-bold uppercase">{o.name || "—"}</p>
-                        <p className={`text-[9px] uppercase ${isDark ? "text-white/50" : "text-gray-400"}`}>{o.email}</p>
-                      </td>
-                      <td className="py-6 text-xs font-bold">{fmt$(o.amount_cents)}</td>
-                      <td className="py-6">
-                        <span className={`text-[9px] font-bold uppercase px-2 py-1 rounded-full border ${STATUS_CONFIG[o.status]?.color || (isDark ? "text-white/50 border-white/10" : "text-gray-400 border-gray-100")}`}>
-                          {o.status}
-                        </span>
-                      </td>
-                      <td className={`py-6 text-[10px] uppercase ${isDark ? "text-white/50" : "text-gray-400"}`}>{fmtDate(o.created_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
+    {/* ORDERS SECTION */}
+{section === "orders" && (
+  <div className="space-y-8">
+    <div className="flex items-end justify-between">
+      <h1 className="text-2xl font-bold uppercase tracking-tighter">Orders</h1>
+      <input type="text" placeholder="SEARCH…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+        className={`text-[10px] font-bold uppercase border-b focus:outline-none pb-1 w-48 bg-transparent ${
+          isDark ? "border-white/20 text-white placeholder-white/30" : "border-black text-black placeholder-black/30"
+        }`} />
+    </div>
+    <div className="overflow-x-auto">
+      <table className="w-full text-left">
+        <thead>
+          <tr className={`text-[9px] font-bold uppercase tracking-widest border-b ${
+            isDark ? "text-white/50 border-white/10" : "text-gray-400 border-gray-100"
+          }`}>
+            <th className="pb-4">Customer</th>
+            <th className="pb-4">Amount</th>
+            <th className="pb-4">Status</th>
+            <th className="pb-4">Date</th>
+            <th className="pb-4"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {filteredOrders.map(o => (
+            <tr key={o.id} className={`transition-all ${isDark ? "hover:bg-white/5" : "hover:bg-gray-50/50"}`}>
+              <td className="py-6">
+                <p className="text-xs font-bold uppercase">{o.name || "—"}</p>
+                <p className={`text-[9px] uppercase ${isDark ? "text-white/50" : "text-gray-400"}`}>{o.email}</p>
+              </td>
+              <td className="py-6 text-xs font-bold">{fmt$(o.amount_cents)}</td>
+              <td className="py-6">
+                <span className={`text-[9px] font-bold uppercase px-2 py-1 rounded-full border ${STATUS_CONFIG[o.status]?.color || (isDark ? "text-white/50 border-white/10" : "text-gray-400 border-gray-100")}`}>
+                  {o.status}
+                </span>
+              </td>
+              <td className={`py-6 text-[10px] uppercase ${isDark ? "text-white/50" : "text-gray-400"}`}>{fmtDate(o.created_at)}</td>
+              <td className="py-6 text-right">
+                <button
+                  onClick={() => handleArchiveOrder(o.id)}
+                  className={`text-[9px] font-bold uppercase px-3 py-1 transition-all ${
+                    isDark ? "text-red-400 hover:bg-red-500/10" : "text-red-500 hover:bg-red-50"
+                  }`}
+                >
+                  DELETE
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
         {/* PRODUCTS SECTION */}
         {section === "products" && (
           <div className="space-y-12">
@@ -668,7 +676,6 @@ function AdminPage() {
                   <h2 className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>
                     {productForm.editingId ? "Edit Product" : "Create Product"}
                   </h2>
-                  {/* ── NEW: Sync from Printful button ── */}
                   <button
                     type="button"
                     onClick={syncFromPrintful}
@@ -696,7 +703,6 @@ function AdminPage() {
                     }`} rows={2} />
                 </div>
 
-                {/* ── NEW: Variants toggle ── */}
                 <div className="space-y-4">
                   <div className="flex items-center gap-4">
                     <button
@@ -717,7 +723,6 @@ function AdminPage() {
                     )}
                   </div>
 
-                  {/* ── NEW: Variants JSON editor — only shown when hasVariants is true ── */}
                   {productForm.hasVariants && (
                     <div className="space-y-2">
                       <label className={`text-[9px] font-bold uppercase ${isDark ? "text-white/50" : "text-gray-400"}`}>
@@ -757,6 +762,86 @@ function AdminPage() {
                 </div>
               </div>
             )}
+
+            {selectedProducts.size > 0 && (
+              <div className={`flex items-center justify-between px-4 py-3 ${isDark ? "bg-white/5" : "bg-gray-50"}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>
+                  {selectedProducts.size} selected
+                </span>
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => setSelectedProducts(new Set())}
+                    className={`text-[9px] font-bold uppercase ${isDark ? "text-white/40 hover:text-white" : "text-black/40 hover:text-black"}`}
+                  >
+                    CLEAR
+                  </button>
+                  <button
+                    onClick={archiveSelectedProducts}
+                    className={`text-[9px] font-bold uppercase px-4 py-2 ${isDark ? "bg-red-500/10 text-red-400 hover:bg-red-500/20" : "bg-red-50 text-red-600 hover:bg-red-100"}`}
+                  >
+                    ARCHIVE SELECTED
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-y-12">
+              {products.map(p => {
+                const isSelected = selectedProducts.has(p.id);
+                return (
+                  <div
+                    key={p.id}
+                    className="group relative cursor-pointer"
+                    onClick={() => {
+                      setSelectedProducts(prev => {
+                        const next = new Set(prev);
+                        if (next.has(p.id)) next.delete(p.id);
+                        else next.add(p.id);
+                        return next;
+                      });
+                    }}
+                  >
+                    <div className={`absolute inset-0 z-10 pointer-events-none border-2 transition-all ${
+                      isSelected ? isDark ? "border-white" : "border-black" : "border-transparent"
+                    }`} />
+
+                    {isSelected && (
+                      <div className={`absolute top-2 right-2 z-20 w-4 h-4 flex items-center justify-center text-[8px] font-bold ${
+                        isDark ? "bg-white text-black" : "bg-black text-white"
+                      }`}>✓</div>
+                    )}
+
+                    <div className={`relative flex aspect-[2/3] items-center justify-center overflow-hidden bg-transparent p-3 sm:p-4 transition-all duration-300 ${
+                      isSelected
+                        ? isDark ? "bg-white/10" : "bg-gray-100"
+                        : isDark ? "bg-white/5 group-hover:scale-105" : "bg-gray-50/50 group-hover:scale-105"
+                    }`}>
+                      {p.image_urls?.[0] ? (
+                        <img src={p.image_urls[0]} alt="" className="max-h-full max-w-full object-contain" />
+                      ) : (
+                        <span className={`text-[7px] uppercase tracking-[0.3em] ${isDark ? "text-white/20" : "text-black/20"}`}>No Image</span>
+                      )}
+                    </div>
+
+                    <div className="px-2 text-center">
+                      <p className={`mb-1 text-[9px] uppercase leading-tight tracking-[0.1em] truncate font-bold ${isDark ? "text-white" : "text-black"}`}>{p.title}</p>
+                      <p className={`text-[9px] tracking-[0.05em] ${isDark ? "text-white/70" : "text-black/70"}`}>${(p.price_cents / 100).toFixed(0)}</p>
+                      {(p as any).printful_id && (
+                        <p className={`text-[7px] uppercase tracking-widest mt-1 ${isDark ? "text-white/30" : "text-black/30"}`}>PRINTFUL</p>
+                      )}
+                      <div className="flex items-center justify-center gap-3 mt-3" onClick={e => e.stopPropagation()}>
+                        <button onClick={() => togglePublished(p.id, p.is_published)}
+                          className={`w-2 h-2 rounded-full transition-all ${p.is_published ? "bg-green-500" : "bg-red-500"}`} />
+                        <button onClick={() => startEditProduct(p)} className={`${isDark ? "text-white/40 hover:text-white" : "text-black/30 hover:text-black"} transition-colors`}><Edit3 size={12} /></button>
+                        <button onClick={() => archiveProduct(p.id)} className={`${isDark ? "text-white/40 hover:text-red-400" : "text-black/30 hover:text-red-500"} transition-colors`}><Archive size={12} /></button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-y-12">
               {products.map(p => (
