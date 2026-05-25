@@ -160,14 +160,22 @@ function AdminPage() {
     init();
   }, []);
 
-  const fetchData = async () => {
-    try {
-      const [productsRes, ordersRes, leadsRes, siteRes] = await Promise.all([
-        supabase.from("products").select("*"),
-        supabase.from("orders").select("*"),
-        supabase.from("leads").select("*"),
-        supabase.from("site_config").select("*").eq("id", "main").single(),
-      ]);
+ const fetchData = async () => {
+  try {
+    const [productsRes, ordersRes, leadsRes, siteRes] = await Promise.all([
+      // Added filter here to exclude archived items
+      supabase.from("products").select("*").neq("is_archived", true),
+      
+      supabase.from("orders").select("*"),
+      supabase.from("leads").select("*"),
+      supabase.from("site_config").select("*").eq("id", "main").single(),
+    ]);
+
+    // ... rest of your state setting logic
+  } catch (e) {
+    console.error("Error fetching data:", e);
+  }
+};
 
       if (productsRes.data) setProducts(productsRes.data as Product[]);
       if (ordersRes.data) setActiveOrders(ordersRes.data as Order[]);
