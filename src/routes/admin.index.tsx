@@ -243,17 +243,23 @@ function AdminPage() {
     }
   };
 
-  const resetProductForm = () => {
-    setProductForm({
-      editingId: null,
-      title: "",
-      slug: "",
-      price_cents: "",
-      image_url: "",
-      description: "",
-      is_published: true,
-      source_url: "",
-    });
+ const resetProductForm = () => {
+  setProductForm({
+    editingId: null,
+    title: "",
+    slug: "",
+    price_cents: "",
+    image_url: "",
+    description: "",
+    is_published: true,
+    source_url: "",
+    // Include the new fields so they are reset when you close the form
+    hasVariants: false,
+    variantsText: "[]",
+    isSyncing: false,
+  });
+  setProductFormOpen(false);
+};
     setProductFormOpen(false);
   };
 
