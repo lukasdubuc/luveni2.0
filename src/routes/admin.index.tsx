@@ -304,23 +304,25 @@ function AdminPage() {
   };
 
   // ── NEW: Sync from Printful ──────────────────────────────────────────────
-  const syncFromPrintful = async () => {
+ const syncFromPrintful = async () => {
     setPrintfulLoading(true);
     try {
-      const apiKey = import.meta.env.VITE_Printful_API_Key;
-      if (!apiKey) throw new Error("VITE_Printful_API_Key is not set in your Lovable secrets");
-
-      const res = await fetch("https://api.printful.com/sync/products", {
-        headers: { Authorization: `Bearer ${apiKey}` },
-      });
-      if (!res.ok) throw new Error(`Printful error ${res.status}: ${res.statusText}`);
+      // Calls your new /api/printful-sync route
+      const res = await fetch("/api/printful-sync", { method: "POST" });
+      
+      if (!res.ok) throw new Error("Sync failed at API route");
+      
       const data = await res.json();
-
-      const items: PrintfulCatalogItem[] = data?.result ?? [];
-      if (items.length === 0) {
-        toast.error("No Printful products found. Check your API key.");
-        return;
-      }
+      toast.success(`Sync complete: ${data.synced} products processed.`);
+      
+      // Refresh your local list
+      await fetchData(); 
+    } catch (e: any) {
+      toast.error("Sync failed: " + e.message);
+    } finally {
+      setPrintfulLoading(false);
+    }
+  };
       setPrintfulCatalog(items);
       setPrintfulPickerOpen(true);
       toast.success(`Found ${items.length} Printful product${items.length !== 1 ? "s" : ""}`);
