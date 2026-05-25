@@ -250,16 +250,9 @@ function AdminPage() {
 
  const handleArchiveOrder = async (id: string) => {
   try {
-    const res = await fetch("/api/archive-order", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    });
-    if (!res.ok) {
-      const data = await res.json();
-      throw new Error(data.error ?? "Server error");
-    }
-    toast.success("Order archived.");
+    const { error } = await supabase.rpc("delete_order", { order_id: id });
+    if (error) throw error;
+    toast.success("Order deleted.");
     setSelectedRow(null);
     await fetchData();
   } catch (e: any) {
