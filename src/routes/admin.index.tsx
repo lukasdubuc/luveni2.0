@@ -183,7 +183,7 @@ function AdminPage() {
       if (siteRes.data) {
         setSiteContent(prev => ({ ...prev, ...(siteRes.data as any) }));
       }
-    } catch (e) {
+      catch (e) {
       console.error("[Admin] Fetch error:", e);
     }
   };
