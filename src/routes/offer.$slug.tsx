@@ -135,7 +135,6 @@ function OfferSlugPage() {
   useEffect(() => {
     if (!product || allProducts.length === 0) return;
 
-    // Preload prev/next product images
     [prevProduct, nextProduct].forEach((p) => {
       if (p?.image_urls?.[0]) {
         const link = document.createElement("link");
@@ -146,7 +145,6 @@ function OfferSlugPage() {
       }
     });
 
-    // Prefetch prev/next product pages
     [prevProduct, nextProduct].forEach((p) => {
       if (p) {
         const link = document.createElement("link");
@@ -228,6 +226,7 @@ function OfferSlugPage() {
 
   const [selection, setSelection] = useState<Record<string, string>>({});
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  // optionsOpen now drives whether we're in "variant picking" mode
   const [optionsOpen, setOptionsOpen] = useState(false);
 
   useEffect(() => {
@@ -270,22 +269,15 @@ function OfferSlugPage() {
   const checkoutDisabled = variants.length > 0 && !selectedVariant;
   const isSoldOut = selectedVariant?.stock != null && selectedVariant.stock <= 0;
 
-  // ── Add to cart handler with Engine Safeguards ───────────────────────────
-  const handleAddToCart = useCallback(() => {
+  // ── Whether this product has variants at all ─────────────────────────────
+  const hasVariants = variants.length > 0 && optionKeys.length > 0;
+
+  // ── Add to cart (no-variant products, or after all variants are chosen) ──
+  const commitToCart = useCallback(() => {
     if (!product) return;
-    if (checkoutDisabled || isSoldOut) return;
-
-    if (optionKeys.length > 0 && !optionsOpen) {
-      setOptionsOpen(true);
-      setCurrentStep(0);
-      return;
-    }
-
-    // Find the variant being added
     const variant = variants.find((v) =>
       optionKeys.every((key) => v.attributes?.[key] === selection[key])
     );
-
     try {
       addItem({
         productId: product.id,
@@ -293,11 +285,10 @@ function OfferSlugPage() {
         title: variant?.sku ? `${product.title} (${variant.sku})` : product.title,
         price_cents: selectedPrice ?? product.price_cents,
         image_url: product.image_urls?.[0] || "",
-        // Integration metadata for Printful/Fulfillment engines
         metadata: {
           external_sku: variant?.external_sku,
           fulfillment_provider: variant?.fulfillment_provider || "printful",
-        }
+        },
       });
       setAddedFeedback(true);
       setOptionsOpen(false);
@@ -306,7 +297,31 @@ function OfferSlugPage() {
     } catch (e) {
       console.error("Cart Engine Critical Failure:", e);
     }
-  }, [product, variants, optionKeys, selection, selectedPrice, checkoutDisabled, isSoldOut, addItem, optionsOpen]);
+  }, [product, variants, optionKeys, selection, selectedPrice, addItem]);
+
+  // ── Main CTA click handler ───────────────────────────────────────────────
+  const handleAddToCart = useCallback(() => {
+    if (!product) return;
+    if (isSoldOut) return;
+
+    // No variants → add directly
+    if (!hasVariants) {
+      commitToCart();
+      return;
+    }
+
+    // Has variants but options panel not open yet → open at step 0
+    if (!optionsOpen) {
+      setOptionsOpen(true);
+      setCurrentStep(0);
+      return;
+    }
+
+    // Options open but last step already resolved → commit
+    if (currentStep === null) {
+      commitToCart();
+    }
+  }, [product, hasVariants, optionsOpen, currentStep, isSoldOut, commitToCart]);
 
   // ── Image swipe within gallery ──────────────────────────────────────────
   const imgTouchStartX = useRef<number | null>(null);
@@ -358,8 +373,12 @@ function OfferSlugPage() {
       {nextProduct && <link rel="prefetch" href={`/offer/${nextProduct.slug}`} as="document" />}
       <style>{`
         @keyframes pdp-fade-in {
-          from { opacity: 0; }
-          to   { opacity: 1; }
+          from { opacity: 0; transform: translateY(4px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pdp-option-in {
+          from { opacity: 0; transform: translateY(6px); }
+          to   { opacity: 1; transform: translateY(0); }
         }
         .pdp-plus-btn:hover { opacity: 0.5; }
         .pdp-plus-btn:active { transform: scale(0.92); }
@@ -501,83 +520,36 @@ function OfferSlugPage() {
               {formatPrice(selectedPrice)}
             </div>
 
-            {/* Variant options */}
-            {optionsOpen && optionKeys.length > 0 && (
-              <div style={{
-                width: "100%", display: "flex", flexDirection: "column",
-                gap: "1rem", marginBottom: "1.25rem",
-                animation: "pdp-fade-in 0.15s linear both",
-              }}>
-                {optionKeys.map((option, idx) => (
-                  <div key={option} style={{ display: idx === currentStep ? 'block' : 'none' }}>
-                    <div style={{
-                      fontSize: "9px", fontWeight: 500, letterSpacing: "0.2em",
-                      textTransform: "uppercase", opacity: 0.45,
-                      textAlign: "center", marginBottom: "0.5rem",
-                      color: "var(--foreground)",
-                    }}>
-                      {normalizeOptionName(option)} — {selection[option] || "SELECT"}
-                    </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", justifyContent: "center" }}>
-                      {optionValues[option]?.map((value) => {
-                        const selected = selection[option] === value;
-                        const available = isOptionAvailable(option, value);
-                        return (
-                          <button
-                            key={value}
-                            type="button"
-                            onClick={() => {
-                              setSelection((cur) => ({ ...cur, [option]: value }));
-                              if (idx < optionKeys.length - 1) setCurrentStep(idx + 1);
-                              else setCurrentStep(null);
-                            }}
-                            disabled={!available}
-                            aria-pressed={selected}
-                            style={{
-                              minHeight: "2rem", minWidth: "2.5rem", padding: "0 0.75rem",
-                              borderColor: selected ? "var(--foreground)" : "var(--border)",
-                              border: "1px solid",
-                              background: selected ? "var(--foreground)" : "transparent",
-                              color: selected ? "var(--background)" : "var(--foreground)",
-                              fontSize: "9px", fontWeight: 500, letterSpacing: "0.08em",
-                              textTransform: "uppercase",
-                              cursor: available ? "pointer" : "not-allowed",
-                              opacity: available ? 1 : 0.3,
-                              transition: "all 0.15s ease",
-                              fontFamily: "inherit",
-                            }}
-                          >
-                            {value}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* CTA */}
+            {/* ── CTA ZONE ─────────────────────────────────────────────────────
+                Three states:
+                1. Sold out          → static "SOLD OUT" text
+                2. No variants       → the classic "+" button (original behavior)
+                3. Has variants      → "+" opens inline option chips;
+                                       final selection fires add-to-cart with
+                                       same "ADDED" feedback animation
+            ──────────────────────────────────────────────────────────────── */}
             {isSoldOut ? (
+              /* ── State 1: Sold out ── */
               <div style={{
                 fontSize: "10px", fontWeight: 500, letterSpacing: "0.2em",
                 textTransform: "uppercase", opacity: 0.35, color: "var(--foreground)",
               }}>
                 SOLD OUT
               </div>
-            ) : (
+
+            ) : !hasVariants ? (
+              /* ── State 2: No variants — original "+" button, untouched ── */
               <button
                 onClick={handleAddToCart}
-                disabled={checkoutDisabled && optionsOpen}
                 className="pdp-plus-btn"
                 aria-label="Add to cart"
                 style={{
                   background: "transparent", border: "none",
-                  cursor: (checkoutDisabled && optionsOpen) ? "not-allowed" : "pointer",
+                  cursor: "pointer",
                   color: "var(--foreground)",
                   fontSize: addedFeedback ? "10px" : "28px",
                   fontWeight: 200, lineHeight: 1,
-                  opacity: (checkoutDisabled && optionsOpen) ? 0.3 : 0.8,
+                  opacity: 0.8,
                   transition: "opacity 0.2s, transform 0.15s, font-size 0.15s",
                   letterSpacing: addedFeedback ? "0.2em" : "0",
                   textTransform: "uppercase", padding: "0.25rem",
@@ -586,6 +558,173 @@ function OfferSlugPage() {
               >
                 {addedFeedback ? "ADDED" : "+"}
               </button>
+
+            ) : (
+              /* ── State 3: Has variants — options replace the "+" inline ── */
+              <div style={{
+                display: "flex", flexDirection: "column",
+                alignItems: "center", width: "100%",
+                animation: "pdp-fade-in 0.15s linear both",
+              }}>
+                {!optionsOpen ? (
+                  /* Before any selection: the "+" acts as the entry point */
+                  <button
+                    onClick={handleAddToCart}
+                    className="pdp-plus-btn"
+                    aria-label="Choose options"
+                    style={{
+                      background: "transparent", border: "none",
+                      cursor: "pointer",
+                      color: "var(--foreground)",
+                      fontSize: "28px",
+                      fontWeight: 200, lineHeight: 1,
+                      opacity: 0.8,
+                      transition: "opacity 0.2s, transform 0.15s",
+                      padding: "0.25rem",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    +
+                  </button>
+
+                ) : addedFeedback ? (
+                  /* "ADDED" confirmation — same style as the no-variant state */
+                  <div style={{
+                    fontSize: "10px", fontWeight: 500,
+                    letterSpacing: "0.2em", textTransform: "uppercase",
+                    color: "var(--foreground)", opacity: 0.8,
+                    animation: "pdp-fade-in 0.15s linear both",
+                    fontFamily: "inherit",
+                  }}>
+                    ADDED
+                  </div>
+
+                ) : (
+                  /* Options open: show current step's chips in the same spot the "+" was */
+                  <div style={{
+                    width: "100%", display: "flex", flexDirection: "column",
+                    alignItems: "center", gap: "1rem",
+                    animation: "pdp-option-in 0.15s linear both",
+                  }}>
+                    {optionKeys.map((option, idx) => {
+                      // Only render the active step
+                      if (idx !== currentStep && currentStep !== null) return null;
+                      // If currentStep is null all steps are done — show add trigger
+                      if (currentStep === null) return null;
+
+                      return (
+                        <div key={option} style={{
+                          display: "flex", flexDirection: "column",
+                          alignItems: "center", gap: "0.5rem",
+                          width: "100%",
+                        }}>
+                          {/* Option label — same tiny uppercase style as the rest of the page */}
+                          <div style={{
+                            fontSize: "9px", fontWeight: 500,
+                            letterSpacing: "0.2em", textTransform: "uppercase",
+                            opacity: 0.45, color: "var(--foreground)",
+                            fontFamily: "inherit",
+                          }}>
+                            {normalizeOptionName(option)}
+                          </div>
+
+                          {/* Value chips */}
+                          <div style={{
+                            display: "flex", flexWrap: "wrap",
+                            gap: "0.35rem", justifyContent: "center",
+                          }}>
+                            {optionValues[option]?.map((value) => {
+                              const selected = selection[option] === value;
+                              const available = isOptionAvailable(option, value);
+                              const isLast = idx === optionKeys.length - 1;
+
+                              return (
+                                <button
+                                  key={value}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelection((cur) => ({ ...cur, [option]: value }));
+
+                                    if (!isLast) {
+                                      // Advance to next step
+                                      setCurrentStep(idx + 1);
+                                    } else {
+                                      // Last option chosen → fire cart immediately
+                                      const updatedSelection = { ...selection, [option]: value };
+                                      const variant = variants.find((v) =>
+                                        optionKeys.every((k) => v.attributes?.[k] === updatedSelection[k])
+                                      );
+                                      try {
+                                        addItem({
+                                          productId: product.id,
+                                          variantSku: variant?.sku,
+                                          title: variant?.sku
+                                            ? `${product.title} (${variant.sku})`
+                                            : product.title,
+                                          price_cents: variant?.price_cents ?? selectedPrice ?? product.price_cents,
+                                          image_url: product.image_urls?.[0] || "",
+                                          metadata: {
+                                            external_sku: variant?.external_sku,
+                                            fulfillment_provider: variant?.fulfillment_provider || "printful",
+                                          },
+                                        });
+                                        setCurrentStep(null);
+                                        setAddedFeedback(true);
+                                        setTimeout(() => {
+                                          setAddedFeedback(false);
+                                          setOptionsOpen(false);
+                                        }, 1200);
+                                      } catch (e) {
+                                        console.error("Cart Engine Critical Failure:", e);
+                                      }
+                                    }
+                                  }}
+                                  disabled={!available}
+                                  aria-pressed={selected}
+                                  style={{
+                                    minHeight: "2rem", minWidth: "2.5rem",
+                                    padding: "0 0.75rem",
+                                    border: "1px solid",
+                                    borderColor: selected ? "var(--foreground)" : "var(--border)",
+                                    background: selected ? "var(--foreground)" : "transparent",
+                                    color: selected ? "var(--background)" : "var(--foreground)",
+                                    fontSize: "9px", fontWeight: 500,
+                                    letterSpacing: "0.08em", textTransform: "uppercase",
+                                    cursor: available ? "pointer" : "not-allowed",
+                                    opacity: available ? 1 : 0.3,
+                                    transition: "all 0.15s ease",
+                                    fontFamily: "inherit",
+                                  }}
+                                >
+                                  {value}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* If all steps resolved but cart hasn't fired (edge case) */}
+                    {currentStep === null && (
+                      <button
+                        onClick={commitToCart}
+                        className="pdp-plus-btn"
+                        style={{
+                          background: "transparent", border: "none",
+                          cursor: "pointer", color: "var(--foreground)",
+                          fontSize: "10px", fontWeight: 500,
+                          letterSpacing: "0.2em", textTransform: "uppercase",
+                          opacity: 0.8, fontFamily: "inherit",
+                          animation: "pdp-fade-in 0.15s linear both",
+                        }}
+                      >
+                        ADD TO CART
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
