@@ -103,6 +103,7 @@ function OfferSlugPage() {
   // ── Cart integration ─────────────────────────────────────────────────────
   const { addItem } = useCart();
   const [addedFeedback, setAddedFeedback] = useState(false);
+  const [currentStep, setCurrentStep] = useState<number | null>(null);
 
   // ── Product list navigation ──────────────────────────────────────────────
   const currentIndex = useMemo(
@@ -232,6 +233,7 @@ function OfferSlugPage() {
   useEffect(() => {
     setActiveImageIndex(0);
     setOptionsOpen(false);
+    setCurrentStep(null);
   }, [product?.id]);
 
   useEffect(() => {
@@ -274,6 +276,7 @@ function OfferSlugPage() {
     if (checkoutDisabled || isSoldOut) return;
     if (optionKeys.length > 0 && !optionsOpen) {
       setOptionsOpen(true);
+      setCurrentStep(0);
       return;
     }
     try {
@@ -286,6 +289,7 @@ function OfferSlugPage() {
       });
       setAddedFeedback(true);
       setOptionsOpen(false);
+      setCurrentStep(null);
       setTimeout(() => setAddedFeedback(false), 1200);
     } catch (e) {
       console.error("Cart Engine Critical Failure:", e);
@@ -492,8 +496,8 @@ function OfferSlugPage() {
                 gap: "1rem", marginBottom: "1.25rem",
                 animation: "pdp-fade-in 0.15s linear both",
               }}>
-                {optionKeys.map((option) => (
-                  <div key={option}>
+                {optionKeys.map((option, idx) => (
+                  <div key={option} style={{ display: idx === currentStep ? 'block' : 'none' }}>
                     <div style={{
                       fontSize: "9px", fontWeight: 500, letterSpacing: "0.2em",
                       textTransform: "uppercase", opacity: 0.45,
@@ -510,7 +514,11 @@ function OfferSlugPage() {
                           <button
                             key={value}
                             type="button"
-                            onClick={() => setSelection((cur) => ({ ...cur, [option]: value }))}
+                            onClick={() => {
+                              setSelection((cur) => ({ ...cur, [option]: value }));
+                              if (idx < optionKeys.length - 1) setCurrentStep(idx + 1);
+                              else setCurrentStep(null);
+                            }}
                             disabled={!available}
                             aria-pressed={selected}
                             style={{
