@@ -270,22 +270,34 @@ function OfferSlugPage() {
   const checkoutDisabled = variants.length > 0 && !selectedVariant;
   const isSoldOut = selectedVariant?.stock != null && selectedVariant.stock <= 0;
 
-  // ── Add to cart handler with Engine Safeguards ───────────────────────────
+ // ── Add to cart handler with Engine Safeguards ───────────────────────────
   const handleAddToCart = useCallback(() => {
     if (!product) return;
     if (checkoutDisabled || isSoldOut) return;
+    
     if (optionKeys.length > 0 && !optionsOpen) {
       setOptionsOpen(true);
       setCurrentStep(0);
       return;
     }
+    
+    // Find the variant being added
+    const variant = variants.find((v) => 
+      optionKeys.every((key) => v.attributes?.[key] === selection[key])
+    );
+
     try {
       addItem({
         productId: product.id,
-        variantSku: selectedVariant?.sku,
-        title: selectedVariant?.sku ? `${product.title} (${selectedVariant.sku})` : product.title,
+        variantSku: variant?.sku,
+        title: variant?.sku ? `${product.title} (${variant.sku})` : product.title,
         price_cents: selectedPrice ?? product.price_cents,
         image_url: product.image_urls?.[0] || "",
+        // Integration metadata for Printful/Fulfillment engines
+        metadata: {
+          external_sku: variant?.external_sku,
+          fulfillment_provider: variant?.fulfillment_provider || "printful",
+        }
       });
       setAddedFeedback(true);
       setOptionsOpen(false);
@@ -294,8 +306,7 @@ function OfferSlugPage() {
     } catch (e) {
       console.error("Cart Engine Critical Failure:", e);
     }
-  }, [product, selectedVariant, selectedPrice, checkoutDisabled, isSoldOut, addItem, optionKeys.length, optionsOpen]);
-
+  }, [product, variants, optionKeys, selection, selectedPrice, checkoutDisabled, isSoldOut, addItem, optionsOpen]);
   // ── Image swipe within gallery ──────────────────────────────────────────
   const imgTouchStartX = useRef<number | null>(null);
   const handleImgTouchStart = (e: React.TouchEvent) => { imgTouchStartX.current = e.touches[0].clientX; };
