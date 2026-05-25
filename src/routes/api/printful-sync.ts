@@ -7,9 +7,9 @@ export const Route = createFileRoute("/api/printful-sync")({
         // We import the server-side supabase client to handle database writes
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         
-        const apiKey = process.env.PRINTFUL_API_KEY;
+        
         if (!apiKey) return new Response("Missing API Key", { status: 500 });
-
+        const apiKey = process.env.Printful_API_Key;
         // 1. Fetch from Printful
         const response = await fetch("https://api.printful.com/sync/products", {
           headers: { "Authorization": `Bearer ${apiKey}` }
