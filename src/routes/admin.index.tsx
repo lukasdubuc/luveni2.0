@@ -160,7 +160,7 @@ function AdminPage() {
     init();
   }, []);
 
- const fetchData = async () => {
+const fetchData = async () => {
     try {
       const [productsRes, ordersRes, leadsRes, siteRes] = await Promise.all([
         supabase.from("products").select("*").neq("is_archived", true),
@@ -179,7 +179,6 @@ function AdminPage() {
       console.error("[Admin] Fetch error:", e);
     }
   };
-
      if (productsRes.data) setProducts(productsRes.data as Product[]);
       if (ordersRes.data) setActiveOrders(ordersRes.data as Order[]);
       if (leadsRes.data) setActiveLeads(leadsRes.data as Lead[]);
