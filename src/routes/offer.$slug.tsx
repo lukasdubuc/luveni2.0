@@ -158,7 +158,7 @@ function OfferSlugPage() {
     });
   }, [product, prevProduct, nextProduct]);
 
-  // ── Wheel / swipe gesture (navigates between products — unchanged) ────────
+  // ── Wheel / swipe gesture (navigates between products) ────────
   const touchStartY = useRef<number | null>(null);
   const touchStartX = useRef<number | null>(null);
 
@@ -192,7 +192,7 @@ function OfferSlugPage() {
     };
   }, [goToPrev, goToNext]);
 
-  // ── Keyboard navigation (unchanged) ──────────────────────────────────────
+  // ── Keyboard navigation ──────────────────────────────────────────────────
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft" || e.key === "ArrowUp") goToPrev();
@@ -270,19 +270,19 @@ function OfferSlugPage() {
   const checkoutDisabled = variants.length > 0 && !selectedVariant;
   const isSoldOut = selectedVariant?.stock != null && selectedVariant.stock <= 0;
 
- // ── Add to cart handler with Engine Safeguards ───────────────────────────
+  // ── Add to cart handler with Engine Safeguards ───────────────────────────
   const handleAddToCart = useCallback(() => {
     if (!product) return;
     if (checkoutDisabled || isSoldOut) return;
-    
+
     if (optionKeys.length > 0 && !optionsOpen) {
       setOptionsOpen(true);
       setCurrentStep(0);
       return;
     }
-    
+
     // Find the variant being added
-    const variant = variants.find((v) => 
+    const variant = variants.find((v) =>
       optionKeys.every((key) => v.attributes?.[key] === selection[key])
     );
 
@@ -307,6 +307,7 @@ function OfferSlugPage() {
       console.error("Cart Engine Critical Failure:", e);
     }
   }, [product, variants, optionKeys, selection, selectedPrice, checkoutDisabled, isSoldOut, addItem, optionsOpen]);
+
   // ── Image swipe within gallery ──────────────────────────────────────────
   const imgTouchStartX = useRef<number | null>(null);
   const handleImgTouchStart = (e: React.TouchEvent) => { imgTouchStartX.current = e.touches[0].clientX; };
