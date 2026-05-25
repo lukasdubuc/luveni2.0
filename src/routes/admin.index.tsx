@@ -47,6 +47,14 @@ type Lead = {
   created_at: string;
 };
 
+// ── NEW: Printful catalog item type ─────────────────────────────────────────
+type PrintfulCatalogItem = {
+  id: number;
+  name: string;
+  thumbnail_url: string;
+  sync_variants?: any[];
+};
+
 export const Route = createFileRoute("/admin/")({
   head: () => ({
     meta: [{ title: "Admin" }],
@@ -87,7 +95,6 @@ function AdminPage() {
 
   // ── Product Form State ──────────────────────────────────────────────────
   const [productFormOpen, setProductFormOpen] = useState(false);
-  // FIX: initial state includes all fields used by saveProduct and resetProductForm
   const [productForm, setProductForm] = useState({
     editingId: null as string | null,
     title: "",
@@ -101,6 +108,11 @@ function AdminPage() {
     variantsText: "[]",
     isSyncing: false,
   });
+
+  // ── NEW: Printful picker state ───────────────────────────────────────────
+  const [printfulCatalog, setPrintfulCatalog] = useState<PrintfulCatalogItem[]>([]);
+  const [printfulPickerOpen, setPrintfulPickerOpen] = useState(false);
+  const [printfulLoading, setPrintfulLoading] = useState(false);
 
   // ── UI State ────────────────────────────────────────────────────────────
   const [revenueRange, setRevenueRange] = useState<"day" | "week" | "month" | "all">("day");
@@ -177,14 +189,12 @@ function AdminPage() {
 
       const payload = {
         title: productForm.title,
-        // Automatically generate slug if it's empty, or use the one provided
         slug: productForm.slug || productForm.title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
         price_cents: parseInt(productForm.price_cents) || 0,
         image_urls: imageUrls,
         description: productForm.description,
         is_published: productForm.is_published,
         source_url: productForm.source_url || "",
-        // Saves variant JSON data to the database
         variants: productForm.hasVariants ? JSON.parse(productForm.variantsText || "[]") : null,
         updated_at: new Date().toISOString(),
       };
@@ -245,8 +255,6 @@ function AdminPage() {
     }
   };
 
-  // FIX: removed the stray duplicate `setProductFormOpen(false)` that was
-  // outside the function body, causing a top-level statement error
   const resetProductForm = () => {
     setProductForm({
       editingId: null,
@@ -257,7 +265,6 @@ function AdminPage() {
       description: "",
       is_published: true,
       source_url: "",
-      // Reset the Printful/variant fields too
       hasVariants: false,
       variantsText: "[]",
       isSyncing: false,
@@ -265,8 +272,6 @@ function AdminPage() {
     setProductFormOpen(false);
   };
 
-  // FIX: startEditProduct now includes hasVariants/variantsText/isSyncing
-  // so editing an existing product doesn't lose those fields from state shape
   const startEditProduct = (p: Product) => {
     setProductForm({
       editingId: p.id,
@@ -283,6 +288,108 @@ function AdminPage() {
     });
     setProductFormOpen(true);
     setSection("products");
+  };
+
+  // ── NEW: Sync from Printful ──────────────────────────────────────────────
+  const syncFromPrintful = async () => {
+    setPrintfulLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("printful-proxy", {
+        body: { action: "FETCH_CATALOG" },
+      });
+      if (error) throw error;
+      const items: PrintfulCatalogItem[] = data?.result ?? [];
+      if (items.length === 0) {
+        toast.error("No Printful products found. Check your API key.");
+        return;
+      }
+      setPrintfulCatalog(items);
+      setPrintfulPickerOpen(true);
+      toast.success(`Found ${items.length} Printful product${items.length !== 1 ? "s" : ""}`);
+    } catch (e: any) {
+      toast.error("Sync failed: " + (e.message ?? "unknown error"));
+    } finally {
+      setPrintfulLoading(false);
+    }
+  };
+
+  // ── NEW: Import a selected Printful product into the form ────────────────
+  const importPrintfulProduct = async (item: PrintfulCatalogItem) => {
+    setPrintfulLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("printful-proxy", {
+        body: { action: "FETCH_PRODUCT", payload: { id: item.id } },
+      });
+      if (error) throw error;
+
+      const product = data?.result;
+      if (!product) throw new Error("Empty product response");
+
+      const syncVariants: any[] = product.sync_variants ?? [];
+
+      // Build variants array in the shape offer.$slug.tsx expects
+      const variants = syncVariants.map((v: any) => ({
+        sku: v.sku ?? String(v.id),
+        price_cents: Math.round(parseFloat(v.retail_price ?? "0") * 100),
+        external_sku: String(v.id),
+        fulfillment_provider: "printful",
+        attributes: v.product?.name
+          ? parseVariantName(v.name ?? "")
+          : {},
+        stock: 999, // Printful is print-on-demand; no stock limits
+      }));
+
+      // Collect all image URLs from sync variants
+      const imageUrls = Array.from(
+        new Set(
+          syncVariants
+            .map((v: any) => v.files?.find((f: any) => f.type === "preview")?.preview_url ?? "")
+            .filter(Boolean)
+        )
+      );
+      // Fallback to thumbnail if no preview images
+      if (imageUrls.length === 0 && item.thumbnail_url) imageUrls.push(item.thumbnail_url);
+
+      // Use the cheapest variant price as the base price
+      const basePriceCents =
+        variants.length > 0
+          ? Math.min(...variants.map(v => v.price_cents).filter(p => p > 0))
+          : 0;
+
+      setProductForm(f => ({
+        ...f,
+        title: product.sync_product?.name ?? item.name,
+        slug: (product.sync_product?.name ?? item.name)
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-"),
+        price_cents: String(basePriceCents),
+        image_url: imageUrls.join(", "),
+        description: "",
+        hasVariants: variants.length > 0,
+        variantsText: JSON.stringify(variants, null, 2),
+        source_url: `https://www.printful.com/dashboard/sync/update/${item.id}`,
+      }));
+
+      setPrintfulPickerOpen(false);
+      toast.success(`"${item.name}" imported — review and hit CREATE`);
+    } catch (e: any) {
+      toast.error("Import failed: " + (e.message ?? "unknown error"));
+    } finally {
+      setPrintfulLoading(false);
+    }
+  };
+
+  // ── NEW: Parse "Size / Color" style variant names into attributes object ─
+  const parseVariantName = (name: string): Record<string, string> => {
+    const parts = name.split("/").map(p => p.trim());
+    const result: Record<string, string> = {};
+    parts.forEach((part, i) => {
+      // Heuristic: first part is often size, second is color
+      if (i === 0) result["size"] = part;
+      else if (i === 1) result["color"] = part;
+      else result[`option_${i}`] = part;
+    });
+    return result;
   };
 
   const saveSiteConfig = async () => {
@@ -553,14 +660,30 @@ function AdminPage() {
 
             {productFormOpen && (
               <div className={`p-8 space-y-8 animate-in slide-in-from-top duration-300 ${isDark ? "bg-white/5" : "bg-gray-50/50"}`}>
-                <h2 className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>
-                  {productForm.editingId ? "Edit Product" : "Create Product"}
-                </h2>
+                <div className="flex items-center justify-between">
+                  <h2 className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>
+                    {productForm.editingId ? "Edit Product" : "Create Product"}
+                  </h2>
+                  {/* ── NEW: Sync from Printful button ── */}
+                  <button
+                    type="button"
+                    onClick={syncFromPrintful}
+                    disabled={printfulLoading}
+                    className={`text-[9px] font-bold uppercase px-5 py-2 border transition-all ${
+                      isDark
+                        ? "border-white/20 hover:bg-white/10 text-white/70 hover:text-white"
+                        : "border-black/20 hover:bg-gray-100 text-black/60 hover:text-black"
+                    } disabled:opacity-30 disabled:cursor-not-allowed`}
+                  >
+                    {printfulLoading ? "SYNCING…" : "SYNC FROM PRINTFUL"}
+                  </button>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <Input label="Title" value={productForm.title} onChange={v => setProductForm(f => ({ ...f, title: v }))} isDark={isDark} />
-                  <Input label="Price (USD)" value={productForm.price_cents} onChange={v => setProductForm(f => ({ ...f, price_cents: v }))} type="number" isDark={isDark} />
+                  <Input label="Price (USD — cents, e.g. 2999)" value={productForm.price_cents} onChange={v => setProductForm(f => ({ ...f, price_cents: v }))} type="number" isDark={isDark} />
                 </div>
-                <Input label="Image URL(s)" value={productForm.image_url} onChange={v => setProductForm(f => ({ ...f, image_url: v }))} isDark={isDark} />
+                <Input label="Image URL(s) — comma separated" value={productForm.image_url} onChange={v => setProductForm(f => ({ ...f, image_url: v }))} isDark={isDark} />
                 <div className="space-y-2">
                   <label className={`text-[9px] font-bold uppercase ${isDark ? "text-white/50" : "text-gray-400"}`}>Description</label>
                   <textarea value={productForm.description} onChange={e => setProductForm(f => ({ ...f, description: e.target.value }))}
@@ -568,6 +691,50 @@ function AdminPage() {
                       isDark ? "border-white/20 text-white" : "border-gray-200 text-black"
                     }`} rows={2} />
                 </div>
+
+                {/* ── NEW: Variants toggle ── */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setProductForm(f => ({ ...f, hasVariants: !f.hasVariants }))}
+                      className={`text-[9px] font-bold uppercase px-4 py-2 border transition-all ${
+                        productForm.hasVariants
+                          ? isDark ? "bg-white text-black border-white" : "bg-black text-white border-black"
+                          : isDark ? "border-white/20 text-white/50 hover:text-white" : "border-black/20 text-black/50 hover:text-black"
+                      }`}
+                    >
+                      {productForm.hasVariants ? "HAS VARIANTS ✓" : "ADD VARIANTS"}
+                    </button>
+                    {productForm.hasVariants && (
+                      <span className={`text-[9px] uppercase ${isDark ? "text-white/30" : "text-black/30"}`}>
+                        Auto-filled by Printful sync, or paste JSON manually
+                      </span>
+                    )}
+                  </div>
+
+                  {/* ── NEW: Variants JSON editor — only shown when hasVariants is true ── */}
+                  {productForm.hasVariants && (
+                    <div className="space-y-2">
+                      <label className={`text-[9px] font-bold uppercase ${isDark ? "text-white/50" : "text-gray-400"}`}>
+                        Variants JSON
+                      </label>
+                      <textarea
+                        value={productForm.variantsText}
+                        onChange={e => setProductForm(f => ({ ...f, variantsText: e.target.value }))}
+                        className={`w-full bg-transparent border focus:border-current outline-none p-3 text-[9px] font-mono resize-y ${
+                          isDark ? "border-white/20 text-white/80" : "border-gray-200 text-black/80"
+                        }`}
+                        rows={8}
+                        spellCheck={false}
+                      />
+                      <p className={`text-[8px] uppercase tracking-widest ${isDark ? "text-white/20" : "text-black/20"}`}>
+                        Each variant: {"{ sku, price_cents, external_sku, fulfillment_provider, attributes: { size, color }, stock }"}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex items-center justify-between">
                   <button onClick={() => setProductForm(f => ({ ...f, is_published: !f.is_published }))}
                     className={`text-[10px] font-bold uppercase px-4 py-2 rounded-full border transition-all ${
@@ -760,6 +927,69 @@ function AdminPage() {
                 ARCHIVE ORDER
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── NEW: Printful product picker modal ── */}
+      {printfulPickerOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 animate-in fade-in duration-200">
+          <div
+            className={`absolute inset-0 backdrop-blur-sm ${isDark ? "bg-black/90" : "bg-white/90"}`}
+            onClick={() => setPrintfulPickerOpen(false)}
+          />
+          <div className={`relative w-full max-w-2xl border max-h-[85vh] flex flex-col ${
+            isDark ? "bg-black border-white/10" : "bg-white border-gray-200"
+          }`}>
+            {/* Modal header */}
+            <div className={`flex items-center justify-between px-8 py-6 border-b ${isDark ? "border-white/10" : "border-gray-100"}`}>
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-widest">Select Printful Product</h3>
+                <p className={`text-[9px] uppercase mt-1 ${isDark ? "text-white/40" : "text-black/40"}`}>
+                  {printfulCatalog.length} product{printfulCatalog.length !== 1 ? "s" : ""} in your store
+                </p>
+              </div>
+              <button onClick={() => setPrintfulPickerOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Product list */}
+            <div className="overflow-y-auto flex-1 p-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                {printfulCatalog.map(item => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => importPrintfulProduct(item)}
+                    disabled={printfulLoading}
+                    className={`group text-left border p-3 transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
+                      isDark
+                        ? "border-white/10 hover:border-white/40 hover:bg-white/5"
+                        : "border-gray-100 hover:border-gray-400 hover:bg-gray-50/50"
+                    }`}
+                  >
+                    {item.thumbnail_url ? (
+                      <img
+                        src={item.thumbnail_url}
+                        alt={item.name}
+                        className="w-full aspect-square object-contain mb-3"
+                      />
+                    ) : (
+                      <div className={`w-full aspect-square flex items-center justify-center mb-3 ${isDark ? "bg-white/5" : "bg-gray-50"}`}>
+                        <span className={`text-[8px] uppercase tracking-widest ${isDark ? "text-white/20" : "text-black/20"}`}>No Image</span>
+                      </div>
+                    )}
+                    <p className={`text-[9px] font-bold uppercase leading-tight truncate ${isDark ? "text-white" : "text-black"}`}>
+                      {item.name}
+                    </p>
+                    <p className={`text-[8px] uppercase mt-1 ${isDark ? "text-white/30" : "text-black/30"}`}>
+                      ID {item.id}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
