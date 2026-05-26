@@ -616,19 +616,23 @@ function AdminPage() {
               </div>
             )}
 
-            {/* PRODUCT GRID */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-y-12">
-              {products.map(p => (
-                <div key={p.id} className="group relative">
-                  <div className={`relative flex aspect-[2/3] items-center justify-center overflow-hidden bg-transparent p-3 sm:p-4 group-hover:scale-105 transition-all duration-300 ${
-                    isDark ? "bg-white/5" : "bg-gray-50/50"
-                  }`}>
-                    {(p.image_urls?.[1] ?? p.image_urls?.[0]) ? (
-                      <img src={p.image_urls[1] ?? p.image_urls[0]} alt={p.title || "Product"} className="max-h-full max-w-full object-contain" />
-                    ) : (
-                      <span className={`text-[7px] uppercase tracking-[0.3em] ${isDark ? "text-white/20" : "text-black/20"}`}>No Image</span>
-                    )}
-                  </div>
+           {/* PRODUCT GRID - UPDATED IMAGE LOGIC */}
+<div className={`relative flex aspect-[2/3] items-center justify-center overflow-hidden bg-transparent p-3 sm:p-4 group-hover:scale-105 transition-all duration-300 ${
+  isDark ? "bg-white/5" : "bg-gray-50/50"
+}`}>
+  {/* Specifically target the second image (index 1) */}
+  {p.image_urls?.[1] ? (
+    <img 
+      src={p.image_urls[1]} 
+      alt={p.title || "Product"} 
+      className="max-h-full max-w-full object-contain" 
+    />
+  ) : (
+    <span className={`text-[7px] uppercase tracking-[0.3em] ${isDark ? "text-white/20" : "text-black/20"}`}>
+      No Image
+    </span>
+  )}
+</div>
                   <div className="px-2 text-center">
                     <p className={`mb-1 text-[9px] uppercase leading-tight tracking-[0.1em] truncate font-bold ${isDark ? "text-white" : "text-black"}`}>{p.title}</p>
                     <p className={`text-[9px] tracking-[0.05em] ${isDark ? "text-white/70" : "text-black/70"}`}>${(p.price_cents / 100).toFixed(0)}</p>
