@@ -766,8 +766,7 @@ function OfferSlugPage() {
             setSelection((cur) => ({ ...cur, [option]: value }));
 
             // Optional: Keep gallery sync if you still want it
-            if (isColorOption(option)) jumpGalleryToColor(value);
-
+           
             if (!isLast) {
               setCurrentStep(idx + 1);
             } else {
