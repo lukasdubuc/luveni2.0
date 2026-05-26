@@ -859,7 +859,7 @@ function AdminPage() {
                         : "bg-gray-50/50"
                     }`}
                   >
-                    {p.image_urls?.[1] || p.image_urls?.[0] ? (
+                    {(p.image_urls?.[1] ?? p.image_urls?.[0]) ? (
                       <img
                         src={p.image_urls[1] ?? p.image_urls[0]}
                         alt={p.title || "Product"}
