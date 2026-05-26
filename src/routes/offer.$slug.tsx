@@ -251,10 +251,12 @@ function OfferSlugPage() {
     [product?.variants],
   );
 
-  const images: string[] = useMemo(
-    () => Array.isArray(product?.image_urls) ? product!.image_urls.filter(Boolean) : [],
-    [product?.image_urls],
-  );
+  const images: string[] = useMemo(() => {
+    if (!Array.isArray(product?.image_urls)) return [];
+    // Skip the first image — Printful always puts the logo/design mockup there
+    const all = product!.image_urls.filter(Boolean);
+    return all.length > 1 ? all.slice(1) : all;
+  }, [product?.image_urls]);
   const galleryImages = useMemo(() => (images.length > 0 ? images : [""]), [images]);
 
   const optionKeys = useMemo(
