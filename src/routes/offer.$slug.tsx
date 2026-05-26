@@ -985,9 +985,12 @@ function OfferSlugPage() {
                                       // This ensures visibility on both light + dark backgrounds.
                                       // On selection the outermost ring becomes the foreground accent.
                                       boxShadow: selected
-                                        ? "0 0 0 2px #fff, 0 0 0 3.5px #000, 0 0 0 5px #fff, 0 0 0 6.5px var(--foreground)"
-                                        : "0 0 0 2px #fff, 0 0 0 3.5px #000",
-                                      border: "none",
+                                        ? "0 0 0 3px #fff, 0 0 0 5px #000, 0 0 0 7px #fff, 0 0 0 9px var(--foreground)"
+                                        : "0 0 0 3px #fff, 0 0 0 5px #000, 0 0 0 7px #fff",
+                                      // Solid border guarantees the swatch edge is always
+                                      // visible: dark border on light bg, light border on dark bg.
+                                      // Uses currentColor so it inherits the theme foreground.
+                                      border: "1.5px solid currentColor",
                                       outline: "none",
                                       cursor: available ? "pointer" : "not-allowed",
                                       opacity: available ? 1 : 0.3,
