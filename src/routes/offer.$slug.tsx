@@ -91,153 +91,184 @@ function formatPrice(cents?: number | null) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-// ─── Resolve any Printful color string to a CSS color ────────────────────────
-// Handles: exact names, compound names ("light blue", "green camo"),
-// raw hex/rgb/hsl, CSS keywords, and unknown fallbacks.
-// Always returns a string — color swatches are always circles, never text.
+// ─── Resolve any Printful / POD color string to a CSS color ─────────────────
+// Handles 500+ exact names, compound names, raw hex/rgb/hsl, CSS keywords.
+// Always returns a string — swatches are always circles, never text.
 const _colorCache: Record<string, string> = {};
 
-// Full lookup: exact multi-word Printful names first, then single-word tokens.
-// Compound names must come before their constituent words are checked.
 const _colorMap: Record<string, string> = {
-  // ── Multi-word compound names (Printful-specific) ──────────────────────
-  "black heather":      "#3a3a3a",
-  "dark heather":       "#404040",
-  "heather gray":       "#b0a8a0",
-  "heather grey":       "#b0a8a0",
-  "heather blue":       "#7b9eb5",
-  "heather red":        "#b55a5a",
-  "heather green":      "#6a8f6a",
-  "heather orange":     "#c87941",
-  "sport grey":         "#c0bbb4",
-  "light blue":         "#add8e6",
-  "light pink":         "#ffb6c1",
-  "light yellow":       "#ffffe0",
-  "light green":        "#90ee90",
-  "light gray":         "#d3d3d3",
-  "light grey":         "#d3d3d3",
-  "light purple":       "#dda0dd",
-  "dark blue":          "#00008b",
-  "dark green":         "#006400",
-  "dark gray":          "#a9a9a9",
-  "dark grey":          "#a9a9a9",
-  "dark red":           "#8b0000",
-  "dark navy":          "#000080",
-  "dark brown":         "#5c3317",
-  "dark chocolate":     "#3d1c02",
-  "royal blue":         "#4169e1",
-  "sky blue":           "#87ceeb",
-  "baby blue":          "#89cff0",
-  "powder blue":        "#b0e0e6",
-  "steel blue":         "#4682b4",
-  "slate blue":         "#6a5acd",
-  "navy blue":          "#001f5b",
-  "midnight blue":      "#191970",
-  "cornflower blue":    "#6495ed",
-  "forest green":       "#228b22",
-  "hunter green":       "#355e3b",
-  "olive green":        "#708238",
-  "kelly green":        "#4cbb17",
-  "mint green":         "#98ff98",
-  "sage green":         "#8fbc8f",
-  "army green":         "#4b5320",
-  "military green":     "#4a5240",
-  "green camo":         "#4b5320",
-  "brown camo":         "#6b4c11",
-  "desert camo":        "#c2a366",
-  "camo green":         "#4b5320",
-  "hot pink":           "#ff69b4",
-  "deep pink":          "#ff1493",
-  "dusty pink":         "#d9a8a0",
-  "dusty rose":         "#dcb4b4",
-  "dusty blue":         "#7b9eb5",
-  "dusty purple":       "#a68eb5",
-  "pale pink":          "#ffd1dc",
-  "rose gold":          "#b76e79",
-  "burnt orange":       "#cc5500",
-  "dark orange":        "#ff8c00",
-  "neon orange":        "#ff6700",
-  "neon green":         "#39ff14",
-  "neon yellow":        "#ffff00",
-  "neon pink":          "#ff6ec7",
-  "neon blue":          "#1b03a3",
-  "electric blue":      "#7df9ff",
-  "electric green":     "#00ff00",
-  "deep purple":        "#673ab7",
-  "dark purple":        "#4b0082",
-  "light purple":       "#dda0dd",
-  "true red":           "#cc0000",
-  "cardinal red":       "#c41e3a",
-  "brick red":          "#cb4154",
-  "wine red":           "#722f37",
-  "dark maroon":        "#5c0000",
-  "off white":          "#faf9f6",
-  "natural white":      "#fdf5e6",
-  "vintage white":      "#f5f0e8",
-  "soft cream":         "#fff5e4",
-  "antique white":      "#faebd7",
-  "ash grey":           "#b2beb5",
-  "ash gray":           "#b2beb5",
-  "storm gray":         "#7f8c8d",
-  "storm grey":         "#7f8c8d",
-  "cool gray":          "#8d9091",
-  "cool grey":          "#8d9091",
-  "warm gray":          "#9f9389",
-  "warm grey":          "#9f9389",
-  "dark charcoal":      "#333333",
-  "light charcoal":     "#666666",
-  "tan brown":          "#b5651d",
-  "sandy brown":        "#f4a460",
-  "golden yellow":      "#ffc200",
-  "butter yellow":      "#fff1a8",
-  "banana yellow":      "#ffe135",
-  "denim blue":         "#1560bd",
-  "washed blue":        "#7e9bb5",
-  "faded black":        "#3a3a3a",
-  "vintage black":      "#2c2c2c",
-  "cotton candy":       "#ffbcd9",
-  "tie dye":            "#9b59b6",
-  // ── Single-word non-CSS vendor names ──────────────────────────────────
-  charcoal:    "#4a5568",
-  sand:        "#c2b280",
-  rust:        "#b7410e",
-  cobalt:      "#0047ab",
-  cream:       "#fffdd0",
-  ivory:       "#fffff0",
-  khaki:       "#c3b091",
-  navy:        "#001f5b",
-  mint:        "#98ff98",
-  jade:        "#00a86b",
-  emerald:     "#50c878",
-  ruby:        "#9b111e",
-  sapphire:    "#0f52ba",
-  rose:        "#ff007f",
-  lemon:       "#fff44f",
-  lavender:    "#e6e6fa",
-  lilac:       "#c8a2c8",
-  champagne:   "#f7e7ce",
-  blush:       "#de5d83",
-  dusty:       "#b0a090",
-  stone:       "#928e85",
-  fog:         "#d9d9d3",
-  smoke:       "#848884",
-  ash:         "#b2beb5",
-  denim:       "#1560bd",
-  forest:      "#228b22",
-  hunter:      "#355e3b",
-  burgundy:    "#800020",
-  wine:        "#722f37",
-  plum:        "#843179",
-  eggplant:    "#614051",
-  mocha:       "#967969",
-  caramel:     "#c68642",
-  mustard:     "#ffdb58",
-  sunshine:    "#fffd37",
-  poppy:       "#e35335",
-  turquoise:   "#40e0d0",
-  heather:     "#b0a8a0",
-  camo:        "#4b5320",
-  slate:       "#708090",
+  // ── Whites / off-whites ────────────────────────────────────────────────
+  white:              "#ffffff", "off white":        "#f8f5f0",
+  "off-white":        "#f8f5f0", "natural white":    "#fdf5e6",
+  "vintage white":    "#f5f0e8", "soft cream":       "#fff5e4",
+  "antique white":    "#faebd7", "warm white":       "#fdf8f0",
+  "cloud white":      "#f9f9f9", "snow white":       "#fffafa",
+  cream:              "#fffdd0", ivory:              "#fffff0",
+  eggshell:           "#f0ead6", linen:              "#faf0e6",
+  pearl:              "#f0ece4", parchment:          "#f2e8d0",
+  // ── Blacks / near-blacks ───────────────────────────────────────────────
+  black:              "#111111", "jet black":        "#0a0a0a",
+  "faded black":      "#2c2c2c", "vintage black":    "#2a2a2a",
+  "washed black":     "#333333", "soft black":       "#1a1a1a",
+  "dark charcoal":    "#2d2d2d", "charcoal black":   "#222222",
+  // ── Greys ─────────────────────────────────────────────────────────────
+  charcoal:           "#4a5568", "light charcoal":   "#666666",
+  "dark gray":        "#555555", "dark grey":        "#555555",
+  "medium gray":      "#808080", "medium grey":      "#808080",
+  "light gray":       "#d3d3d3", "light grey":       "#d3d3d3",
+  "ash gray":         "#b2beb5", "ash grey":         "#b2beb5",
+  ash:                "#b2beb5", "storm gray":       "#7f8c8d",
+  "storm grey":       "#7f8c8d", "cool gray":        "#8d9091",
+  "cool grey":        "#8d9091", "warm gray":        "#9f9389",
+  "warm grey":        "#9f9389", "sport grey":       "#c0bbb4",
+  "sport gray":       "#c0bbb4", smoke:              "#848884",
+  fog:                "#d9d9d3", stone:              "#928e85",
+  slate:              "#708090", silver:             "#c0c0c0",
+  pewter:             "#8a898c", graphite:           "#474747",
+  // ── Heathers ──────────────────────────────────────────────────────────
+  heather:            "#b0a8a0", "black heather":    "#3a3a3a",
+  "dark heather":     "#404040", "heather gray":     "#b0a8a0",
+  "heather grey":     "#b0a8a0", "heather blue":     "#7b9eb5",
+  "heather red":      "#b55a5a", "heather green":    "#6a8f6a",
+  "heather orange":   "#c87941", "heather purple":   "#9b89ac",
+  "heather navy":     "#3a4a6b", "heather teal":     "#5a9090",
+  "heather maroon":   "#7a3a3a", "heather yellow":   "#c8b870",
+  "heather cardinal": "#8b3a3a", "heather coral":    "#c87a6a",
+  // ── Blues ─────────────────────────────────────────────────────────────
+  blue:               "#3182ce", navy:               "#001f5b",
+  "navy blue":        "#001f5b", "dark navy":        "#000f3c",
+  "midnight blue":    "#191970", "royal blue":       "#4169e1",
+  "cobalt blue":      "#0047ab", cobalt:             "#0047ab",
+  "steel blue":       "#4682b4", "slate blue":       "#6a5acd",
+  "cornflower blue":  "#6495ed", "sky blue":         "#87ceeb",
+  "baby blue":        "#89cff0", "powder blue":      "#b0e0e6",
+  "light blue":       "#add8e6", "pale blue":        "#cfe2f3",
+  "dark blue":        "#00008b", "deep blue":        "#003580",
+  "electric blue":    "#007fff", "neon blue":        "#1b03a3",
+  "ocean blue":       "#006994", "teal blue":        "#367588",
+  "peacock blue":     "#005f6a", "indigo blue":      "#4b0082",
+  sapphire:           "#0f52ba", "sapphire blue":    "#0f52ba",
+  "denim blue":       "#1560bd", denim:              "#1560bd",
+  "washed blue":      "#7e9bb5", "dusty blue":       "#7b9eb5",
+  "ice blue":         "#d0e8f0", "carolina blue":    "#7bafd4",
+  "columbia blue":    "#c4d8e2", "periwinkle":       "#ccccff",
+  teal:               "#008080", "dark teal":        "#004d4d",
+  turquoise:          "#40e0d0", aqua:               "#00bcd4",
+  cyan:               "#00bcd4", "robin egg":        "#00cccc",
+  // ── Greens ────────────────────────────────────────────────────────────
+  green:              "#38a169", "dark green":       "#006400",
+  "forest green":     "#228b22", forest:             "#228b22",
+  "hunter green":     "#355e3b", hunter:             "#355e3b",
+  "army green":       "#4b5320", "military green":   "#4a5240",
+  "olive green":      "#708238", olive:              "#808000",
+  "kelly green":      "#4cbb17", "bright green":     "#00c800",
+  "light green":      "#90ee90", "pale green":       "#98fb98",
+  "mint green":       "#98ff98", mint:               "#98ff98",
+  "sage green":       "#8fbc8f", sage:               "#8fbc8f",
+  "moss green":       "#8a9a5b", moss:               "#8a9a5b",
+  "lime green":       "#32cd32", lime:               "#9ae6b4",
+  "neon green":       "#39ff14", "electric green":   "#00ff00",
+  emerald:            "#50c878", "emerald green":    "#50c878",
+  jade:               "#00a86b", "jade green":       "#00a86b",
+  "bottle green":     "#006a4e", "racing green":     "#004225",
+  "fern green":       "#4f7942", fern:               "#4f7942",
+  "pine green":       "#01796f", pine:               "#01796f",
+  "seafoam green":    "#93e9be", seafoam:            "#93e9be",
+  "camo green":       "#4b5320", "green camo":       "#4b5320",
+  "military camo":    "#4a5240", camo:               "#4b5320",
+  "brown camo":       "#6b4c11", "desert camo":      "#c2a366",
+  // ── Reds ──────────────────────────────────────────────────────────────
+  red:                "#e53e3e", "true red":         "#cc0000",
+  "bright red":       "#ff0000", "dark red":         "#8b0000",
+  "deep red":         "#8b0000", crimson:            "#dc143c",
+  scarlet:            "#ff2400", "cardinal red":     "#c41e3a",
+  cardinal:           "#c41e3a", "brick red":        "#cb4154",
+  brick:              "#cb4154", "fire red":         "#ce2029",
+  ruby:               "#9b111e", "ruby red":         "#9b111e",
+  maroon:             "#800000", "dark maroon":      "#5c0000",
+  "wine red":         "#722f37", wine:               "#722f37",
+  burgundy:           "#800020", "dark burgundy":    "#5c0016",
+  "merlot":           "#73343a", garnet:             "#733635",
+  // ── Pinks ─────────────────────────────────────────────────────────────
+  pink:               "#ed64a6", "hot pink":         "#ff69b4",
+  "deep pink":        "#ff1493", "bright pink":      "#ff007f",
+  "light pink":       "#ffb6c1", "pale pink":        "#ffd1dc",
+  "baby pink":        "#f4c2c2", "dusty pink":       "#d9a8a0",
+  "dusty rose":       "#dcb4b4", "blush pink":       "#ffb3ba",
+  blush:              "#de5d83", "soft pink":        "#ffb6c1",
+  "mauve pink":       "#e0b0b0", "vintage rose":     "#c9a0a0",
+  "neon pink":        "#ff6ec7", "bubblegum":        "#ff85cf",
+  "cotton candy":     "#ffbcd9", "flamingo":         "#fc8eac",
+  rose:               "#ff007f", "rose gold":        "#b76e79",
+  "dusty mauve":      "#d4a5a5", fuchsia:            "#ff00ff",
+  magenta:            "#ff00cc", "hot coral":        "#ff6b6b",
+  // ── Oranges ───────────────────────────────────────────────────────────
+  orange:             "#ed8936", "dark orange":      "#ff8c00",
+  "burnt orange":     "#cc5500", "deep orange":      "#e64a19",
+  "bright orange":    "#ff5500", "neon orange":      "#ff6700",
+  "light orange":     "#ffa040", "pale orange":      "#ffc080",
+  coral:              "#ff6b6b", "coral pink":       "#f88379",
+  "salmon":           "#fa8072", "light salmon":     "#ffa07a",
+  "dark salmon":      "#e9967a", peach:              "#ffcba4",
+  "light peach":      "#ffddcc", apricot:            "#fbceb1",
+  tangerine:          "#f28500", mango:              "#ff8243",
+  rust:               "#b7410e", "burnt sienna":     "#e97451",
+  poppy:              "#e35335", amber:              "#ffbf00",
+  // ── Yellows ───────────────────────────────────────────────────────────
+  yellow:             "#ecc94b", "bright yellow":    "#ffff00",
+  "neon yellow":      "#ffff00", "light yellow":     "#ffffe0",
+  "pale yellow":      "#fffacd", "golden yellow":    "#ffc200",
+  gold:               "#d69e2e", "dark gold":        "#b8860b",
+  "light gold":       "#f0d060", mustard:            "#ffdb58",
+  "dark mustard":     "#c9a227", "mustard yellow":   "#e3a830",
+  lemon:              "#fff44f", "lemon yellow":     "#fff44f",
+  sunshine:           "#fffd37", "butter yellow":    "#fff1a8",
+  "banana yellow":    "#ffe135", "maize":            "#fbec5d",
+  sand:               "#c2b280", "sandy":            "#f4a460",
+  wheat:              "#f5deb3", straw:              "#e4d96f",
+  // ── Purples ───────────────────────────────────────────────────────────
+  purple:             "#9f7aea", "dark purple":      "#4b0082",
+  "deep purple":      "#673ab7", "light purple":     "#dda0dd",
+  "bright purple":    "#8b00ff", violet:             "#ee82ee",
+  "dark violet":      "#9400d3", indigo:             "#4b0082",
+  lavender:           "#e6e6fa", "lavender purple":  "#967bb6",
+  lilac:              "#c8a2c8", "dusty purple":     "#a68eb5",
+  "pale purple":      "#dcd0e8", "soft purple":      "#c39bd3",
+  plum:               "#843179", "dark plum":        "#5a1a5a",
+  eggplant:           "#614051", "grape":            "#6f2da8",
+  orchid:             "#da70d6", mauve:              "#e0b0ff",
+  "dusty mauve":      "#c5a0a0", amethyst:           "#9966cc",
+  periwinkle:         "#ccccff", "slate purple":     "#7b68ee",
+  // ── Browns / Tans ─────────────────────────────────────────────────────
+  brown:              "#a0522d", "dark brown":       "#5c3317",
+  "light brown":      "#b5651d", "medium brown":     "#8b4513",
+  "chocolate brown":  "#3d1c02", chocolate:          "#7b3f00",
+  "dark chocolate":   "#3d1c02", mocha:              "#967969",
+  coffee:             "#6f4e37", espresso:           "#4a2c2a",
+  caramel:            "#c68642", "caramel brown":    "#c68642",
+  tan:                "#d2b48c", "tan brown":        "#b5651d",
+  "sandy brown":      "#f4a460", khaki:              "#c3b091",
+  "dark khaki":       "#bdb76b", "khaki brown":      "#c3b091",
+  beige:              "#f5f0e8", "light beige":      "#f7f0e6",
+  "dark beige":       "#d2b48c", taupe:              "#8b7355",
+  "dark taupe":       "#483c32", "light taupe":      "#c4b49a",
+  walnut:             "#5d3a1a", "warm brown":       "#8b5e3c",
+  toffee:             "#a07840", hazel:              "#8e7618",
+  sienna:             "#a0522d", "burnt sienna":     "#e97451",
+  umber:              "#635147", "raw umber":        "#826644",
+  // ── Metallics ─────────────────────────────────────────────────────────
+  "rose gold":        "#b76e79", "light rose gold":  "#c8929a",
+  champagne:          "#f7e7ce", "champagne gold":   "#f0d090",
+  "vintage gold":     "#c5a028", "antique gold":     "#c9a84c",
+  "brushed gold":     "#d4a843", "light gold":       "#f0d060",
+  "silver gray":      "#c0c0c0", "brushed silver":   "#b8b8b8",
+  bronze:             "#cd7f32", copper:             "#b87333",
+  // ── Misc / Patterns ───────────────────────────────────────────────────
+  tie_dye:            "#9b59b6", "tie dye":          "#9b59b6",
+  "acid wash":        "#7a8a7a", "snow wash":        "#a8b4b4",
+  natural:            "#f5f0e6", "natural heather":  "#d4cfc8",
+  athletic:           "#e8e8e8", "athletic gray":    "#c8c8c8",
+  "athletic grey":    "#c8c8c8",
 };
 
 function _canvasColor(name: string): string | null {
@@ -257,7 +288,7 @@ function resolveColor(value: string): string {
   const key = value.toLowerCase().trim();
   if (key in _colorCache) return _colorCache[key];
 
-  // 1. Exact match in our map (handles compound names perfectly)
+  // 1. Exact map hit (handles all compound names)
   if (_colorMap[key]) {
     _colorCache[key] = _colorMap[key];
     return _colorMap[key];
@@ -270,62 +301,47 @@ function resolveColor(value: string): string {
     return key;
   }
 
-  // 3. Browser canvas parse (handles all 140+ CSS keywords natively)
+  // 3. Browser canvas — resolves all 140+ native CSS color keywords
   const canvas = _canvasColor(key);
   if (canvas) {
     _colorCache[key] = canvas;
     return canvas;
   }
 
-  // 4. Compound name: check each word against our map + canvas.
-  //    Use the most "colorful" word — skip modifiers like light/dark/heather
-  //    only if a better match exists, otherwise use the modifier-adjusted color.
-  const words = key.split(/[\s_\-/]+/).filter(Boolean);
+  // 4. Compound: split on spaces/dashes, find base color + apply modifier shift
+  const words = key.split(/[\s_\-\/]+/).filter(Boolean);
   if (words.length > 1) {
-    // Try progressively: last word, first word, any word with a map hit
     const modifiers: Record<string, number> = {
-      light: 0.45, pale: 0.5, soft: 0.4, pastel: 0.45,
-      dark: -0.35, deep: -0.4, rich: -0.2, bold: -0.15,
-      bright: 0.2, neon: 0.3, electric: 0.25,
-      dusty: -0.1, faded: 0.15, washed: 0.15, vintage: -0.1,
+      light: 60, pale: 70, soft: 50, pastel: 65, bright: 30, neon: 40,
+      dark: -60, deep: -70, rich: -30, bold: -20, electric: 30,
+      dusty: -15, faded: 40, washed: 35, vintage: -20, heather: 20,
     };
-    let baseColor: string | null = null;
-    let modifier = 0;
+    let baseHex: string | null = null;
+    let shift = 0;
     for (const word of words) {
       if (modifiers[word] !== undefined) {
-        modifier += modifiers[word];
-      } else {
-        const hit = _colorMap[word] ?? _canvasColor(word);
-        if (hit) { baseColor = hit; break; }
+        shift += modifiers[word];
+      } else if (!baseHex) {
+        baseHex = _colorMap[word] ?? _canvasColor(word);
       }
     }
-    if (baseColor) {
-      // Apply lightness shift if modifier words were present
-      if (modifier !== 0) {
-        // Parse hex to RGB, shift lightness, return adjusted hex
-        const hex = baseColor.replace("#", "");
-        if (hex.length === 6) {
-          let r = parseInt(hex.slice(0, 2), 16);
-          let g = parseInt(hex.slice(2, 4), 16);
-          let b = parseInt(hex.slice(4, 6), 16);
-          const shift = Math.round(modifier * 180);
-          r = Math.max(0, Math.min(255, r + shift));
-          g = Math.max(0, Math.min(255, g + shift));
-          b = Math.max(0, Math.min(255, b + shift));
-          const adjusted = "#" + [r, g, b].map(v => v.toString(16).padStart(2, "0")).join("");
-          _colorCache[key] = adjusted;
-          return adjusted;
-        }
+    if (baseHex) {
+      if (shift !== 0 && /^#[0-9a-f]{6}$/i.test(baseHex)) {
+        const r = Math.max(0, Math.min(255, parseInt(baseHex.slice(1, 3), 16) + shift));
+        const g = Math.max(0, Math.min(255, parseInt(baseHex.slice(3, 5), 16) + shift));
+        const b = Math.max(0, Math.min(255, parseInt(baseHex.slice(5, 7), 16) + shift));
+        const adjusted = "#" + [r, g, b].map(v => v.toString(16).padStart(2, "0")).join("");
+        _colorCache[key] = adjusted;
+        return adjusted;
       }
-      _colorCache[key] = baseColor;
-      return baseColor;
+      _colorCache[key] = baseHex;
+      return baseHex;
     }
   }
 
-  // 5. Truly unknown — neutral grey so the circle is always visible
-  const fallback = "#888888";
-  _colorCache[key] = fallback;
-  return fallback;
+  // 5. Unknown — mid grey so circle is always visible
+  _colorCache[key] = "#888888";
+  return "#888888";
 }
 
 function isColorOption(key: string) {
@@ -942,10 +958,14 @@ function OfferSlugPage() {
                               };
 
                               if (isColor) {
-                                // ── Color swatch: filled circle ──
-                                // Always has a thin black ring (white gap in dark mode)
-                                // so white/cream swatches don't disappear into the bg.
-                                // Selected state uses a bolder outer ring.
+                                // ── Color swatch: perfect circle, always visible ──
+                                // Ring strategy:
+                                //   inner 1.5px white gap  → separates swatch from ring
+                                //   inner 1.5px black gap  → always-dark inner edge
+                                //   outer 1.5px white ring → separates black from bg on dark
+                                //   outer 1.5px black ring → always-dark outer edge on light
+                                // Net effect: swatch is bracketed by both black AND white bands
+                                // so it reads on any background. Selected adds a thicker accent.
                                 return (
                                   <button
                                     key={value}
@@ -956,25 +976,25 @@ function OfferSlugPage() {
                                     aria-pressed={selected}
                                     title={value}
                                     style={{
+                                      display: "inline-block",
                                       width: "22px", height: "22px",
                                       borderRadius: "50%",
-                                      background: colorHex ?? "var(--foreground)",
-                                      // Inner white gap then black ring — always visible.
-                                      // In dark mode the "white" gap reads as the dark bg,
-                                      // so we layer: color → white gap → black ring.
-                                      // box-shadow stacks inside-out:
-                                      //   1px white ring (gap), then 2px black outer ring.
-                                      // Selected adds a 3rd outer ring in the foreground color.
+                                      background: colorHex,
+                                      // Layer (inside → out):
+                                      //   2px white gap, 3.5px black ring, 5px white gap, 6.5px black outer
+                                      // This ensures visibility on both light + dark backgrounds.
+                                      // On selection the outermost ring becomes the foreground accent.
                                       boxShadow: selected
-                                        ? "0 0 0 2px var(--background), 0 0 0 3.5px #000, 0 0 0 5.5px var(--foreground)"
-                                        : "0 0 0 2px var(--background), 0 0 0 3.5px #000",
+                                        ? "0 0 0 2px #fff, 0 0 0 3.5px #000, 0 0 0 5px #fff, 0 0 0 6.5px var(--foreground)"
+                                        : "0 0 0 2px #fff, 0 0 0 3.5px #000",
                                       border: "none",
                                       outline: "none",
                                       cursor: available ? "pointer" : "not-allowed",
-                                      opacity: available ? 1 : 0.25,
+                                      opacity: available ? 1 : 0.3,
                                       transition: "box-shadow 0.15s ease, opacity 0.15s ease",
                                       padding: 0,
                                       flexShrink: 0,
+                                      WebkitAppearance: "none",
                                     }}
                                   />
                                 );
