@@ -94,24 +94,31 @@ function formatPrice(cents?: number | null) {
 // ─── Color → image mapping ────────────────────────────────────────────────────
 // Printful always puts the logo/design mockup at image_urls[0].
 // Color images follow in the same order colors appear in the variants array.
-// colorIndex 0 → image_urls[1], colorIndex 1 → image_urls[2], etc.
-// ─── Resolve Image Logic ──────────────────────────────────────────────────────
 
 /**
  * Maps a specific color value to a product image index.
- * Fallback order: Specific Color -> Generic Image -> Logo Mockup -> Empty String
+ * Logic: Finds the index of the selected color in the provided colorValues array,
+ * then maps that to the corresponding index in image_urls (offset by 1).
  */
 export function resolveVariantImage(
   imageUrls: string[],
   colorValue: string | undefined,
   colorValues: string[],
 ): string {
-  if (!colorValue || colorValues.length === 0) return imageUrls[1] ?? imageUrls[0] ?? "";
+  // Safety: If no color or empty list, return first available product image
+  if (!colorValue || colorValues.length === 0) {
+    return imageUrls[1] ?? imageUrls[0] ?? "";
+  }
   
   const colorIndex = colorValues.indexOf(colorValue);
-  if (colorIndex === -1) return imageUrls[1] ?? imageUrls[0] ?? "";
   
-  // +1 because imageUrls[0] is typically a logo/hero mockup
+  // If color not found in array, fallback to default product image
+  if (colorIndex === -1) {
+    return imageUrls[1] ?? imageUrls[0] ?? "";
+  }
+  
+  // +1 because imageUrls[0] is strictly the logo mockup
+  // Fallback chain: Exact match -> default variant image -> logo mockup -> empty string
   return imageUrls[colorIndex + 1] ?? imageUrls[1] ?? imageUrls[0] ?? "";
 }
 
@@ -119,7 +126,6 @@ export function resolveVariantImage(
 
 const _colorCache: Record<string, string> = {};
 
-// Map remains constant; added explicit typing for clarity
 const _colorMap: Record<string, string> = {
   white: "#ffffff", "off-white": "#f8f5f0", "off white": "#f8f5f0",
   black: "#111111", "jet black": "#0a0a0a", "vintage black": "#2a2a2a",
@@ -136,7 +142,7 @@ const _colorMap: Record<string, string> = {
  * Uses browser canvas to validate if a string is a valid CSS color.
  */
 function _canvasColor(name: string): string | null {
-  if (typeof document === 'undefined') return null; // SSR safety
+  if (typeof document === 'undefined') return null; 
   try {
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = 1;
@@ -194,7 +200,8 @@ export function resolveColor(value: string): string {
     }
   }
 
-  return (_colorCache[key] = "#888888"); // Default fallback
+  // Fallback for unknown colors
+  return (_colorCache[key] = "#888888"); 
 }
 
 export function isColorOption(key: string): boolean {
