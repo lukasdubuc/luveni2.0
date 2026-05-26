@@ -91,6 +91,36 @@ function formatPrice(cents?: number | null) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+// ─── Attempt to resolve a CSS color from a color name string ─────────────────
+// Returns null if the string isn't a recognisable color keyword or hex/rgb value.
+function resolveColor(value: string): string | null {
+  const lower = value.toLowerCase().trim();
+  // Common color keywords — extend as needed
+  const keywords: Record<string, string> = {
+    black: "#000000", white: "#ffffff", red: "#e53e3e", blue: "#3182ce",
+    navy: "#1a365d", green: "#38a169", yellow: "#ecc94b", orange: "#ed8936",
+    pink: "#ed64a6", purple: "#9f7aea", grey: "#a0aec0", gray: "#a0aec0",
+    brown: "#a0522d", tan: "#d2b48c", beige: "#f5f0e8", cream: "#fffdd0",
+    coral: "#ff6b6b", teal: "#319795", maroon: "#800000", olive: "#808000",
+    lavender: "#b794f4", gold: "#d69e2e", silver: "#cbd5e0", charcoal: "#4a5568",
+    ivory: "#fffff0", khaki: "#c3b091", cyan: "#00b5d8", magenta: "#d53f8c",
+    indigo: "#667eea", violet: "#805ad5", mint: "#68d391", rose: "#feb2b2",
+    salmon: "#fc8181", lemon: "#faf089", lime: "#9ae6b4", sky: "#90cdf4",
+    cobalt: "#2b6cb0", rust: "#c05621", slate: "#718096", sand: "#ecc94b",
+    jade: "#276749", emerald: "#276749", ruby: "#c53030", sapphire: "#2c5282",
+  };
+  if (keywords[lower]) return keywords[lower];
+  // Allow raw hex or rgb values too
+  if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(lower)) return lower;
+  if (/^rgb/i.test(lower)) return lower;
+  return null;
+}
+
+function isColorOption(key: string) {
+  const lower = key.toLowerCase();
+  return lower === "color" || lower === "colour";
+}
+
 // ─── Main Page Component ──────────────────────────────────────────────────────
 
 function OfferSlugPage() {
@@ -159,18 +189,33 @@ function OfferSlugPage() {
   // ── Wheel / swipe gesture (navigates between products) ────────
   const touchStartY = useRef<number | null>(null);
   const touchStartX = useRef<number | null>(null);
+  // Track whether the touch started on the image gallery area so we don't
+  // accidentally fire product navigation when the user is swiping images.
+  const touchOnGallery = useRef(false);
 
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
+      // FIX: Don't intercept wheel events that originate inside the image gallery
+      const target = e.target as HTMLElement;
+      if (target.closest("[data-gallery]")) return;
       if (Math.abs(e.deltaY) < 30) return;
       e.preventDefault();
       if (e.deltaY < 0) goToPrev(); else goToNext();
     };
     const handleTouchStart = (e: TouchEvent) => {
+      const target = e.target as HTMLElement;
+      touchOnGallery.current = !!target.closest("[data-gallery]");
       touchStartY.current = e.touches[0].clientY;
       touchStartX.current = e.touches[0].clientX;
     };
     const handleTouchEnd = (e: TouchEvent) => {
+      // FIX: Don't fire product navigation when touch started on the image gallery
+      if (touchOnGallery.current) {
+        touchStartY.current = null;
+        touchStartX.current = null;
+        touchOnGallery.current = false;
+        return;
+      }
       if (touchStartY.current === null || touchStartX.current === null) return;
       const deltaY = touchStartY.current - e.changedTouches[0].clientY;
       const deltaX = touchStartX.current - e.changedTouches[0].clientX;
@@ -218,15 +263,27 @@ function OfferSlugPage() {
   );
 
   const optionValues = useMemo(() => {
+    // FIX: build the map keyed per option so colors never bleed into sizes
     return optionKeys.reduce<Record<string, string[]>>((acc, key) => {
-      acc[key] = Array.from(new Set(variants.map((v) => v.attributes?.[key]).filter(Boolean))) as string[];
+      acc[key] = Array.from(
+        new Set(
+          variants
+            .map((v) => v.attributes?.[key])
+            .filter((val): val is string => val != null && val !== ""),
+        ),
+      );
       return acc;
     }, {});
   }, [optionKeys, variants]);
 
+  // FIX: filter out option keys that have only a single value — no need to ask
+  const visibleOptionKeys = useMemo(
+    () => optionKeys.filter((key) => (optionValues[key]?.length ?? 0) > 1),
+    [optionKeys, optionValues],
+  );
+
   const [selection, setSelection] = useState<Record<string, string>>({});
   const [activeImageIndex, setActiveImageIndex] = useState(0);
-  // optionsOpen now drives whether we're in "variant picking" mode
   const [optionsOpen, setOptionsOpen] = useState(false);
 
   useEffect(() => {
@@ -238,6 +295,7 @@ function OfferSlugPage() {
   useEffect(() => {
     if (!product || variants.length === 0) { setSelection({}); return; }
     const defaults: Record<string, string> = {};
+    // Auto-select every option (including single-value ones that are hidden)
     optionKeys.forEach((key) => {
       const firstValue = optionValues[key]?.[0];
       if (firstValue) defaults[key] = firstValue;
@@ -269,10 +327,11 @@ function OfferSlugPage() {
   const checkoutDisabled = variants.length > 0 && !selectedVariant;
   const isSoldOut = selectedVariant?.stock != null && selectedVariant.stock <= 0;
 
-  // ── Whether this product has variants at all ─────────────────────────────
-  const hasVariants = variants.length > 0 && optionKeys.length > 0;
+  // FIX: hasVariants now uses visibleOptionKeys — if all options are single-value,
+  // treat as no-variant product (add directly).
+  const hasVariants = variants.length > 0 && visibleOptionKeys.length > 0;
 
-  // ── Add to cart (no-variant products, or after all variants are chosen) ──
+  // ── Add to cart ──────────────────────────────────────────────────────────
   const commitToCart = useCallback(() => {
     if (!product) return;
     const variant = variants.find((v) =>
@@ -304,20 +363,17 @@ function OfferSlugPage() {
     if (!product) return;
     if (isSoldOut) return;
 
-    // No variants → add directly
     if (!hasVariants) {
       commitToCart();
       return;
     }
 
-    // Has variants but options panel not open yet → open at step 0
     if (!optionsOpen) {
       setOptionsOpen(true);
       setCurrentStep(0);
       return;
     }
 
-    // Options open but last step already resolved → commit
     if (currentStep === null) {
       commitToCart();
     }
@@ -336,11 +392,13 @@ function OfferSlugPage() {
     imgTouchStartX.current = null;
   };
 
-  const goPrevImage = useCallback(() => {
+  const goPrevImage = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
     setActiveImageIndex((i) => Math.max(i - 1, 0));
   }, []);
 
-  const goNextImage = useCallback(() => {
+  const goNextImage = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
     setActiveImageIndex((i) => Math.min(i + 1, galleryImages.length - 1));
   }, [galleryImages.length]);
 
@@ -440,15 +498,18 @@ function OfferSlugPage() {
             }}
             key={product.slug}
           >
-            {/* ── Image row ── */}
-            <div style={{
-              width: "100%", display: "flex",
-              alignItems: "center", justifyContent: "center",
-              gap: "0.5rem", marginBottom: "1.5rem",
-            }}
+            {/* ── Image row — FIX: data-gallery attribute stops wheel/touch from firing product nav ── */}
+            <div
+              data-gallery
+              style={{
+                width: "100%", display: "flex",
+                alignItems: "center", justifyContent: "center",
+                gap: "0.5rem", marginBottom: "1.5rem",
+              }}
               onTouchStart={handleImgTouchStart}
               onTouchEnd={handleImgTouchEnd}
             >
+              {/* FIX: goPrevImage / goNextImage now call e.stopPropagation() */}
               <button className="pdp-img-nav-btn" onClick={goPrevImage} disabled={activeImageIndex === 0} aria-label="Previous image"
                 style={{ fontSize: "38px", fontWeight: 200, opacity: activeImageIndex === 0 ? 0.12 : 0.75 }}>
                 ‹
@@ -520,16 +581,8 @@ function OfferSlugPage() {
               {formatPrice(selectedPrice)}
             </div>
 
-            {/* ── CTA ZONE ─────────────────────────────────────────────────────
-                Three states:
-                1. Sold out          → static "SOLD OUT" text
-                2. No variants       → the classic "+" button (original behavior)
-                3. Has variants      → "+" opens inline option chips;
-                                       final selection fires add-to-cart with
-                                       same "ADDED" feedback animation
-            ──────────────────────────────────────────────────────────────── */}
+            {/* ── CTA ZONE ── */}
             {isSoldOut ? (
-              /* ── State 1: Sold out ── */
               <div style={{
                 fontSize: "10px", fontWeight: 500, letterSpacing: "0.2em",
                 textTransform: "uppercase", opacity: 0.35, color: "var(--foreground)",
@@ -538,7 +591,6 @@ function OfferSlugPage() {
               </div>
 
             ) : !hasVariants ? (
-              /* ── State 2: No variants — original "+" button, untouched ── */
               <button
                 onClick={handleAddToCart}
                 className="pdp-plus-btn"
@@ -560,14 +612,12 @@ function OfferSlugPage() {
               </button>
 
             ) : (
-              /* ── State 3: Has variants — options replace the "+" inline ── */
               <div style={{
                 display: "flex", flexDirection: "column",
                 alignItems: "center", width: "100%",
                 animation: "pdp-fade-in 0.15s linear both",
               }}>
                 {!optionsOpen ? (
-                  /* Before any selection: the "+" acts as the entry point */
                   <button
                     onClick={handleAddToCart}
                     className="pdp-plus-btn"
@@ -588,7 +638,6 @@ function OfferSlugPage() {
                   </button>
 
                 ) : addedFeedback ? (
-                  /* "ADDED" confirmation — same style as the no-variant state */
                   <div style={{
                     fontSize: "10px", fontWeight: 500,
                     letterSpacing: "0.2em", textTransform: "uppercase",
@@ -600,17 +649,18 @@ function OfferSlugPage() {
                   </div>
 
                 ) : (
-                  /* Options open: show current step's chips in the same spot the "+" was */
                   <div style={{
                     width: "100%", display: "flex", flexDirection: "column",
                     alignItems: "center", gap: "1rem",
                     animation: "pdp-option-in 0.15s linear both",
                   }}>
-                    {optionKeys.map((option, idx) => {
-                      // Only render the active step
+                    {/* FIX: iterate visibleOptionKeys (multi-value only), not optionKeys */}
+                    {visibleOptionKeys.map((option, idx) => {
                       if (idx !== currentStep && currentStep !== null) return null;
-                      // If currentStep is null all steps are done — show add trigger
                       if (currentStep === null) return null;
+
+                      const isColor = isColorOption(option);
+                      const isLast = idx === visibleOptionKeys.length - 1;
 
                       return (
                         <div key={option} style={{
@@ -618,7 +668,7 @@ function OfferSlugPage() {
                           alignItems: "center", gap: "0.5rem",
                           width: "100%",
                         }}>
-                          {/* Option label — same tiny uppercase style as the rest of the page */}
+                          {/* FIX: only show the option type label (SIZE / COLOR), never the product name */}
                           <div style={{
                             fontSize: "9px", fontWeight: 500,
                             letterSpacing: "0.2em", textTransform: "uppercase",
@@ -631,69 +681,104 @@ function OfferSlugPage() {
                           {/* Value chips */}
                           <div style={{
                             display: "flex", flexWrap: "wrap",
-                            gap: "0.35rem", justifyContent: "center",
+                            gap: isColor ? "0.5rem" : "0.5rem",
+                            justifyContent: "center",
                           }}>
+                            {/* FIX: use optionValues[option] — correctly scoped per key */}
                             {optionValues[option]?.map((value) => {
                               const selected = selection[option] === value;
                               const available = isOptionAvailable(option, value);
-                              const isLast = idx === optionKeys.length - 1;
+                              const colorHex = isColor ? resolveColor(value) : null;
 
+                              const handleChipClick = () => {
+                                setSelection((cur) => ({ ...cur, [option]: value }));
+
+                                if (!isLast) {
+                                  setCurrentStep(idx + 1);
+                                } else {
+                                  // Last visible option chosen → fire cart immediately
+                                  const updatedSelection = { ...selection, [option]: value };
+                                  const variant = variants.find((v) =>
+                                    optionKeys.every((k) => v.attributes?.[k] === updatedSelection[k])
+                                  );
+                                  try {
+                                    addItem({
+                                      productId: product.id,
+                                      variantSku: variant?.sku,
+                                      title: variant?.sku
+                                        ? `${product.title} (${variant.sku})`
+                                        : product.title,
+                                      price_cents: variant?.price_cents ?? selectedPrice ?? product.price_cents,
+                                      image_url: product.image_urls?.[0] || "",
+                                      metadata: {
+                                        external_sku: variant?.external_sku,
+                                        fulfillment_provider: variant?.fulfillment_provider || "printful",
+                                      },
+                                    });
+                                    setCurrentStep(null);
+                                    setAddedFeedback(true);
+                                    setTimeout(() => {
+                                      setAddedFeedback(false);
+                                      setOptionsOpen(false);
+                                    }, 1200);
+                                  } catch (e) {
+                                    console.error("Cart Engine Critical Failure:", e);
+                                  }
+                                }
+                              };
+
+                              if (isColor && colorHex) {
+                                // ── Color swatch: filled circle, no border/text ──
+                                return (
+                                  <button
+                                    key={value}
+                                    type="button"
+                                    onClick={handleChipClick}
+                                    disabled={!available}
+                                    aria-label={value}
+                                    aria-pressed={selected}
+                                    title={value}
+                                    style={{
+                                      width: "22px", height: "22px",
+                                      borderRadius: "50%",
+                                      background: colorHex,
+                                      border: "none",
+                                      outline: selected
+                                        ? "2px solid var(--foreground)"
+                                        : "2px solid transparent",
+                                      outlineOffset: "2px",
+                                      cursor: available ? "pointer" : "not-allowed",
+                                      opacity: available ? 1 : 0.25,
+                                      transition: "outline 0.15s ease, opacity 0.15s ease",
+                                      padding: 0,
+                                      flexShrink: 0,
+                                    }}
+                                  />
+                                );
+                              }
+
+                              // ── Non-color (e.g. size): plain text, no border ──
                               return (
                                 <button
                                   key={value}
                                   type="button"
-                                  onClick={() => {
-                                    setSelection((cur) => ({ ...cur, [option]: value }));
-
-                                    if (!isLast) {
-                                      // Advance to next step
-                                      setCurrentStep(idx + 1);
-                                    } else {
-                                      // Last option chosen → fire cart immediately
-                                      const updatedSelection = { ...selection, [option]: value };
-                                      const variant = variants.find((v) =>
-                                        optionKeys.every((k) => v.attributes?.[k] === updatedSelection[k])
-                                      );
-                                      try {
-                                        addItem({
-                                          productId: product.id,
-                                          variantSku: variant?.sku,
-                                          title: variant?.sku
-                                            ? `${product.title} (${variant.sku})`
-                                            : product.title,
-                                          price_cents: variant?.price_cents ?? selectedPrice ?? product.price_cents,
-                                          image_url: product.image_urls?.[0] || "",
-                                          metadata: {
-                                            external_sku: variant?.external_sku,
-                                            fulfillment_provider: variant?.fulfillment_provider || "printful",
-                                          },
-                                        });
-                                        setCurrentStep(null);
-                                        setAddedFeedback(true);
-                                        setTimeout(() => {
-                                          setAddedFeedback(false);
-                                          setOptionsOpen(false);
-                                        }, 1200);
-                                      } catch (e) {
-                                        console.error("Cart Engine Critical Failure:", e);
-                                      }
-                                    }
-                                  }}
+                                  onClick={handleChipClick}
                                   disabled={!available}
                                   aria-pressed={selected}
                                   style={{
                                     minHeight: "2rem", minWidth: "2.5rem",
-                                    padding: "0 0.75rem",
-                                    border: "1px solid",
-                                    borderColor: selected ? "var(--foreground)" : "var(--border)",
-                                    background: selected ? "var(--foreground)" : "transparent",
-                                    color: selected ? "var(--background)" : "var(--foreground)",
-                                    fontSize: "9px", fontWeight: 500,
-                                    letterSpacing: "0.08em", textTransform: "uppercase",
+                                    padding: "0 0.5rem",
+                                    border: "none",
+                                    background: "transparent",
+                                    color: "var(--foreground)",
+                                    fontSize: "9px", fontWeight: selected ? 700 : 400,
+                                    letterSpacing: "0.12em", textTransform: "uppercase",
                                     cursor: available ? "pointer" : "not-allowed",
-                                    opacity: available ? 1 : 0.3,
+                                    opacity: available ? (selected ? 1 : 0.55) : 0.2,
                                     transition: "all 0.15s ease",
                                     fontFamily: "inherit",
+                                    textDecoration: selected ? "underline" : "none",
+                                    textUnderlineOffset: "3px",
                                   }}
                                 >
                                   {value}
@@ -705,7 +790,6 @@ function OfferSlugPage() {
                       );
                     })}
 
-                    {/* If all steps resolved but cart hasn't fired (edge case) */}
                     {currentStep === null && (
                       <button
                         onClick={commitToCart}
