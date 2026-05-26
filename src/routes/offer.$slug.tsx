@@ -91,33 +91,176 @@ function formatPrice(cents?: number | null) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-// ─── Resolve any color string to a renderable CSS value ──────────────────────
-// Uses the browser's own CSS parser so every valid CSS color name works
-// automatically — no hardcoded list needed, future colors included.
-// Falls back to a curated map for common non-standard names Printful uses
-// (e.g. "charcoal", "sand", "rust") that aren't native CSS keywords.
-const _colorCache: Record<string, string | null> = {};
-function resolveColor(value: string): string | null {
+// ─── Resolve any Printful color string to a CSS color ────────────────────────
+// Handles: exact names, compound names ("light blue", "green camo"),
+// raw hex/rgb/hsl, CSS keywords, and unknown fallbacks.
+// Always returns a string — color swatches are always circles, never text.
+const _colorCache: Record<string, string> = {};
+
+// Full lookup: exact multi-word Printful names first, then single-word tokens.
+// Compound names must come before their constituent words are checked.
+const _colorMap: Record<string, string> = {
+  // ── Multi-word compound names (Printful-specific) ──────────────────────
+  "black heather":      "#3a3a3a",
+  "dark heather":       "#404040",
+  "heather gray":       "#b0a8a0",
+  "heather grey":       "#b0a8a0",
+  "heather blue":       "#7b9eb5",
+  "heather red":        "#b55a5a",
+  "heather green":      "#6a8f6a",
+  "heather orange":     "#c87941",
+  "sport grey":         "#c0bbb4",
+  "light blue":         "#add8e6",
+  "light pink":         "#ffb6c1",
+  "light yellow":       "#ffffe0",
+  "light green":        "#90ee90",
+  "light gray":         "#d3d3d3",
+  "light grey":         "#d3d3d3",
+  "light purple":       "#dda0dd",
+  "dark blue":          "#00008b",
+  "dark green":         "#006400",
+  "dark gray":          "#a9a9a9",
+  "dark grey":          "#a9a9a9",
+  "dark red":           "#8b0000",
+  "dark navy":          "#000080",
+  "dark brown":         "#5c3317",
+  "dark chocolate":     "#3d1c02",
+  "royal blue":         "#4169e1",
+  "sky blue":           "#87ceeb",
+  "baby blue":          "#89cff0",
+  "powder blue":        "#b0e0e6",
+  "steel blue":         "#4682b4",
+  "slate blue":         "#6a5acd",
+  "navy blue":          "#001f5b",
+  "midnight blue":      "#191970",
+  "cornflower blue":    "#6495ed",
+  "forest green":       "#228b22",
+  "hunter green":       "#355e3b",
+  "olive green":        "#708238",
+  "kelly green":        "#4cbb17",
+  "mint green":         "#98ff98",
+  "sage green":         "#8fbc8f",
+  "army green":         "#4b5320",
+  "military green":     "#4a5240",
+  "green camo":         "#4b5320",
+  "brown camo":         "#6b4c11",
+  "desert camo":        "#c2a366",
+  "camo green":         "#4b5320",
+  "hot pink":           "#ff69b4",
+  "deep pink":          "#ff1493",
+  "dusty pink":         "#d9a8a0",
+  "dusty rose":         "#dcb4b4",
+  "dusty blue":         "#7b9eb5",
+  "dusty purple":       "#a68eb5",
+  "pale pink":          "#ffd1dc",
+  "rose gold":          "#b76e79",
+  "burnt orange":       "#cc5500",
+  "dark orange":        "#ff8c00",
+  "neon orange":        "#ff6700",
+  "neon green":         "#39ff14",
+  "neon yellow":        "#ffff00",
+  "neon pink":          "#ff6ec7",
+  "neon blue":          "#1b03a3",
+  "electric blue":      "#7df9ff",
+  "electric green":     "#00ff00",
+  "deep purple":        "#673ab7",
+  "dark purple":        "#4b0082",
+  "light purple":       "#dda0dd",
+  "true red":           "#cc0000",
+  "cardinal red":       "#c41e3a",
+  "brick red":          "#cb4154",
+  "wine red":           "#722f37",
+  "dark maroon":        "#5c0000",
+  "off white":          "#faf9f6",
+  "natural white":      "#fdf5e6",
+  "vintage white":      "#f5f0e8",
+  "soft cream":         "#fff5e4",
+  "antique white":      "#faebd7",
+  "ash grey":           "#b2beb5",
+  "ash gray":           "#b2beb5",
+  "storm gray":         "#7f8c8d",
+  "storm grey":         "#7f8c8d",
+  "cool gray":          "#8d9091",
+  "cool grey":          "#8d9091",
+  "warm gray":          "#9f9389",
+  "warm grey":          "#9f9389",
+  "dark charcoal":      "#333333",
+  "light charcoal":     "#666666",
+  "tan brown":          "#b5651d",
+  "sandy brown":        "#f4a460",
+  "golden yellow":      "#ffc200",
+  "butter yellow":      "#fff1a8",
+  "banana yellow":      "#ffe135",
+  "denim blue":         "#1560bd",
+  "washed blue":        "#7e9bb5",
+  "faded black":        "#3a3a3a",
+  "vintage black":      "#2c2c2c",
+  "cotton candy":       "#ffbcd9",
+  "tie dye":            "#9b59b6",
+  // ── Single-word non-CSS vendor names ──────────────────────────────────
+  charcoal:    "#4a5568",
+  sand:        "#c2b280",
+  rust:        "#b7410e",
+  cobalt:      "#0047ab",
+  cream:       "#fffdd0",
+  ivory:       "#fffff0",
+  khaki:       "#c3b091",
+  navy:        "#001f5b",
+  mint:        "#98ff98",
+  jade:        "#00a86b",
+  emerald:     "#50c878",
+  ruby:        "#9b111e",
+  sapphire:    "#0f52ba",
+  rose:        "#ff007f",
+  lemon:       "#fff44f",
+  lavender:    "#e6e6fa",
+  lilac:       "#c8a2c8",
+  champagne:   "#f7e7ce",
+  blush:       "#de5d83",
+  dusty:       "#b0a090",
+  stone:       "#928e85",
+  fog:         "#d9d9d3",
+  smoke:       "#848884",
+  ash:         "#b2beb5",
+  denim:       "#1560bd",
+  forest:      "#228b22",
+  hunter:      "#355e3b",
+  burgundy:    "#800020",
+  wine:        "#722f37",
+  plum:        "#843179",
+  eggplant:    "#614051",
+  mocha:       "#967969",
+  caramel:     "#c68642",
+  mustard:     "#ffdb58",
+  sunshine:    "#fffd37",
+  poppy:       "#e35335",
+  turquoise:   "#40e0d0",
+  heather:     "#b0a8a0",
+  camo:        "#4b5320",
+  slate:       "#708090",
+};
+
+function _canvasColor(name: string): string | null {
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 1;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.fillStyle = "#010101";
+    ctx.fillStyle = name;
+    const result = ctx.fillStyle;
+    return result !== "#010101" ? result : null;
+  } catch (_) { return null; }
+}
+
+function resolveColor(value: string): string {
   const key = value.toLowerCase().trim();
   if (key in _colorCache) return _colorCache[key];
 
-  // 1. Non-standard names Printful / print-on-demand vendors commonly send
-  const nonStandard: Record<string, string> = {
-    charcoal: "#4a5568", sand: "#c2b280", rust: "#b7410e", slate: "#708090",
-    cobalt: "#0047ab", cream: "#fffdd0", ivory: "#fffff0", khaki: "#c3b091",
-    navy: "#001f5b", mint: "#98ff98", jade: "#00a86b", emerald: "#50c878",
-    ruby: "#9b111e", sapphire: "#0f52ba", rose: "#ff007f", lemon: "#fff44f",
-    sky: "#87ceeb", lavender: "#e6e6fa", lilac: "#c8a2c8", champagne: "#f7e7ce",
-    blush: "#de5d83", dusty: "#b0a090", stone: "#928e85", fog: "#d9d9d3",
-    smoke: "#848884", ash: "#b2beb5", denim: "#1560bd", forest: "#228b22",
-    hunter: "#355e3b", burgundy: "#800020", wine: "#722f37", plum: "#843179",
-    eggplant: "#614051", mocha: "#967969", caramel: "#c68642", mustard: "#ffdb58",
-    sunshine: "#fffd37", poppy: "#e35335", fuchsia: "#ff00ff", aqua: "#00ffff",
-    turquoise: "#40e0d0", electric: "#7df9ff", neon: "#39ff14",
-  };
-  if (nonStandard[key]) {
-    _colorCache[key] = nonStandard[key];
-    return nonStandard[key];
+  // 1. Exact match in our map (handles compound names perfectly)
+  if (_colorMap[key]) {
+    _colorCache[key] = _colorMap[key];
+    return _colorMap[key];
   }
 
   // 2. Raw hex / rgb / hsl — pass straight through
@@ -127,29 +270,59 @@ function resolveColor(value: string): string | null {
     return key;
   }
 
-  // 3. Ask the browser: set fillStyle and read it back. If the browser knows
-  //    the color name it returns a normalised hex/rgb; if not, fillStyle is
-  //    unchanged from the sentinel "#000". Special-case "black" to avoid the
-  //    sentinel collision.
-  try {
-    const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = 1;
-    const ctx = canvas.getContext("2d");
-    if (ctx) {
-      ctx.fillStyle = "#010101"; // sentinel (not pure black)
-      ctx.fillStyle = key;
-      const parsed = ctx.fillStyle;
-      if (parsed !== "#010101") {
-        _colorCache[key] = parsed;
-        return parsed;
+  // 3. Browser canvas parse (handles all 140+ CSS keywords natively)
+  const canvas = _canvasColor(key);
+  if (canvas) {
+    _colorCache[key] = canvas;
+    return canvas;
+  }
+
+  // 4. Compound name: check each word against our map + canvas.
+  //    Use the most "colorful" word — skip modifiers like light/dark/heather
+  //    only if a better match exists, otherwise use the modifier-adjusted color.
+  const words = key.split(/[\s_\-/]+/).filter(Boolean);
+  if (words.length > 1) {
+    // Try progressively: last word, first word, any word with a map hit
+    const modifiers: Record<string, number> = {
+      light: 0.45, pale: 0.5, soft: 0.4, pastel: 0.45,
+      dark: -0.35, deep: -0.4, rich: -0.2, bold: -0.15,
+      bright: 0.2, neon: 0.3, electric: 0.25,
+      dusty: -0.1, faded: 0.15, washed: 0.15, vintage: -0.1,
+    };
+    let baseColor: string | null = null;
+    let modifier = 0;
+    for (const word of words) {
+      if (modifiers[word] !== undefined) {
+        modifier += modifiers[word];
+      } else {
+        const hit = _colorMap[word] ?? _canvasColor(word);
+        if (hit) { baseColor = hit; break; }
       }
     }
-  } catch (_) { /* SSR / canvas unavailable — fall through */ }
+    if (baseColor) {
+      // Apply lightness shift if modifier words were present
+      if (modifier !== 0) {
+        // Parse hex to RGB, shift lightness, return adjusted hex
+        const hex = baseColor.replace("#", "");
+        if (hex.length === 6) {
+          let r = parseInt(hex.slice(0, 2), 16);
+          let g = parseInt(hex.slice(2, 4), 16);
+          let b = parseInt(hex.slice(4, 6), 16);
+          const shift = Math.round(modifier * 180);
+          r = Math.max(0, Math.min(255, r + shift));
+          g = Math.max(0, Math.min(255, g + shift));
+          b = Math.max(0, Math.min(255, b + shift));
+          const adjusted = "#" + [r, g, b].map(v => v.toString(16).padStart(2, "0")).join("");
+          _colorCache[key] = adjusted;
+          return adjusted;
+        }
+      }
+      _colorCache[key] = baseColor;
+      return baseColor;
+    }
+  }
 
-  // 4. Unknown name — still show a circle using the foreground color
-  //    by returning the string itself (CSS will ignore unknown values gracefully
-  //    and the swatch border makes it clear something is selected).
-  //    Return a neutral mid-grey so the circle is always visible.
+  // 5. Truly unknown — neutral grey so the circle is always visible
   const fallback = "#888888";
   _colorCache[key] = fallback;
   return fallback;
@@ -769,7 +942,10 @@ function OfferSlugPage() {
                               };
 
                               if (isColor) {
-                                // ── Color swatch: filled circle, no border/text ──
+                                // ── Color swatch: filled circle ──
+                                // Always has a thin black ring (white gap in dark mode)
+                                // so white/cream swatches don't disappear into the bg.
+                                // Selected state uses a bolder outer ring.
                                 return (
                                   <button
                                     key={value}
@@ -783,14 +959,20 @@ function OfferSlugPage() {
                                       width: "22px", height: "22px",
                                       borderRadius: "50%",
                                       background: colorHex ?? "var(--foreground)",
+                                      // Inner white gap then black ring — always visible.
+                                      // In dark mode the "white" gap reads as the dark bg,
+                                      // so we layer: color → white gap → black ring.
+                                      // box-shadow stacks inside-out:
+                                      //   1px white ring (gap), then 2px black outer ring.
+                                      // Selected adds a 3rd outer ring in the foreground color.
+                                      boxShadow: selected
+                                        ? "0 0 0 2px var(--background), 0 0 0 3.5px #000, 0 0 0 5.5px var(--foreground)"
+                                        : "0 0 0 2px var(--background), 0 0 0 3.5px #000",
                                       border: "none",
-                                      outline: selected
-                                        ? "2px solid var(--foreground)"
-                                        : "2px solid transparent",
-                                      outlineOffset: "2px",
+                                      outline: "none",
                                       cursor: available ? "pointer" : "not-allowed",
                                       opacity: available ? 1 : 0.25,
-                                      transition: "outline 0.15s ease, opacity 0.15s ease",
+                                      transition: "box-shadow 0.15s ease, opacity 0.15s ease",
                                       padding: 0,
                                       flexShrink: 0,
                                     }}
