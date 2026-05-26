@@ -91,29 +91,68 @@ function formatPrice(cents?: number | null) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-// ─── Attempt to resolve a CSS color from a color name string ─────────────────
-// Returns null if the string isn't a recognisable color keyword or hex/rgb value.
+// ─── Resolve any color string to a renderable CSS value ──────────────────────
+// Uses the browser's own CSS parser so every valid CSS color name works
+// automatically — no hardcoded list needed, future colors included.
+// Falls back to a curated map for common non-standard names Printful uses
+// (e.g. "charcoal", "sand", "rust") that aren't native CSS keywords.
+const _colorCache: Record<string, string | null> = {};
 function resolveColor(value: string): string | null {
-  const lower = value.toLowerCase().trim();
-  // Common color keywords — extend as needed
-  const keywords: Record<string, string> = {
-    black: "#000000", white: "#ffffff", red: "#e53e3e", blue: "#3182ce",
-    navy: "#1a365d", green: "#38a169", yellow: "#ecc94b", orange: "#ed8936",
-    pink: "#ed64a6", purple: "#9f7aea", grey: "#a0aec0", gray: "#a0aec0",
-    brown: "#a0522d", tan: "#d2b48c", beige: "#f5f0e8", cream: "#fffdd0",
-    coral: "#ff6b6b", teal: "#319795", maroon: "#800000", olive: "#808000",
-    lavender: "#b794f4", gold: "#d69e2e", silver: "#cbd5e0", charcoal: "#4a5568",
-    ivory: "#fffff0", khaki: "#c3b091", cyan: "#00b5d8", magenta: "#d53f8c",
-    indigo: "#667eea", violet: "#805ad5", mint: "#68d391", rose: "#feb2b2",
-    salmon: "#fc8181", lemon: "#faf089", lime: "#9ae6b4", sky: "#90cdf4",
-    cobalt: "#2b6cb0", rust: "#c05621", slate: "#718096", sand: "#ecc94b",
-    jade: "#276749", emerald: "#276749", ruby: "#c53030", sapphire: "#2c5282",
+  const key = value.toLowerCase().trim();
+  if (key in _colorCache) return _colorCache[key];
+
+  // 1. Non-standard names Printful / print-on-demand vendors commonly send
+  const nonStandard: Record<string, string> = {
+    charcoal: "#4a5568", sand: "#c2b280", rust: "#b7410e", slate: "#708090",
+    cobalt: "#0047ab", cream: "#fffdd0", ivory: "#fffff0", khaki: "#c3b091",
+    navy: "#001f5b", mint: "#98ff98", jade: "#00a86b", emerald: "#50c878",
+    ruby: "#9b111e", sapphire: "#0f52ba", rose: "#ff007f", lemon: "#fff44f",
+    sky: "#87ceeb", lavender: "#e6e6fa", lilac: "#c8a2c8", champagne: "#f7e7ce",
+    blush: "#de5d83", dusty: "#b0a090", stone: "#928e85", fog: "#d9d9d3",
+    smoke: "#848884", ash: "#b2beb5", denim: "#1560bd", forest: "#228b22",
+    hunter: "#355e3b", burgundy: "#800020", wine: "#722f37", plum: "#843179",
+    eggplant: "#614051", mocha: "#967969", caramel: "#c68642", mustard: "#ffdb58",
+    sunshine: "#fffd37", poppy: "#e35335", fuchsia: "#ff00ff", aqua: "#00ffff",
+    turquoise: "#40e0d0", electric: "#7df9ff", neon: "#39ff14",
   };
-  if (keywords[lower]) return keywords[lower];
-  // Allow raw hex or rgb values too
-  if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(lower)) return lower;
-  if (/^rgb/i.test(lower)) return lower;
-  return null;
+  if (nonStandard[key]) {
+    _colorCache[key] = nonStandard[key];
+    return nonStandard[key];
+  }
+
+  // 2. Raw hex / rgb / hsl — pass straight through
+  if (/^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(key) ||
+      /^rgba?/.test(key) || /^hsla?/.test(key)) {
+    _colorCache[key] = key;
+    return key;
+  }
+
+  // 3. Ask the browser: set fillStyle and read it back. If the browser knows
+  //    the color name it returns a normalised hex/rgb; if not, fillStyle is
+  //    unchanged from the sentinel "#000". Special-case "black" to avoid the
+  //    sentinel collision.
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 1;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.fillStyle = "#010101"; // sentinel (not pure black)
+      ctx.fillStyle = key;
+      const parsed = ctx.fillStyle;
+      if (parsed !== "#010101") {
+        _colorCache[key] = parsed;
+        return parsed;
+      }
+    }
+  } catch (_) { /* SSR / canvas unavailable — fall through */ }
+
+  // 4. Unknown name — still show a circle using the foreground color
+  //    by returning the string itself (CSS will ignore unknown values gracefully
+  //    and the swatch border makes it clear something is selected).
+  //    Return a neutral mid-grey so the circle is always visible.
+  const fallback = "#888888";
+  _colorCache[key] = fallback;
+  return fallback;
 }
 
 function isColorOption(key: string) {
@@ -729,7 +768,7 @@ function OfferSlugPage() {
                                 }
                               };
 
-                              if (isColor && colorHex) {
+                              if (isColor) {
                                 // ── Color swatch: filled circle, no border/text ──
                                 return (
                                   <button
@@ -743,7 +782,7 @@ function OfferSlugPage() {
                                     style={{
                                       width: "22px", height: "22px",
                                       borderRadius: "50%",
-                                      background: colorHex,
+                                      background: colorHex ?? "var(--foreground)",
                                       border: "none",
                                       outline: selected
                                         ? "2px solid var(--foreground)"
