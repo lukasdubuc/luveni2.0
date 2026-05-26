@@ -1,11 +1,16 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Edit3, Archive, X, Menu, RefreshCw } from "lucide-react";
+import {
+  Edit3,
+  Archive,
+  Menu,
+  RefreshCw,
+} from "lucide-react";
 
 // ────────────────────────────────────────────────────────────────────────────
-// TYPES & ROUTE DEFINITION
+// TYPES
 // ────────────────────────────────────────────────────────────────────────────
 
 type SiteContent = {
@@ -45,31 +50,52 @@ type Lead = {
   created_at: string;
 };
 
+// ────────────────────────────────────────────────────────────────────────────
+// ROUTE
+// ────────────────────────────────────────────────────────────────────────────
+
 export const Route = createFileRoute("/admin/")({
   head: () => ({
-    meta: [{ title: "Admin" }],
+    meta: [
+      {
+        title: "Admin",
+      },
+    ],
   }),
   component: AdminPage,
 });
 
-function AdminPage() {
-  const navigate = useNavigate();
+// ────────────────────────────────────────────────────────────────────────────
+// PAGE
+// ────────────────────────────────────────────────────────────────────────────
 
+function AdminPage() {
   const [section, setSection] = useState<
     "overview" | "products" | "orders" | "leads" | "settings"
   >("overview");
 
   const [isDark, setIsDark] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // ── Data State ──────────────────────────────────────────────────────────
-  const [products, setProducts] = useState<Product[]>([]);
-  const [activeOrders, setActiveOrders] = useState<Order[]>([]);
-  const [activeLeads, setActiveLeads] = useState<Lead[]>([]);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] =
+    useState(false);
 
-  // ── Site Config State ───────────────────────────────────────────────────
-  const [siteContent, setSiteContent] = useState<SiteContent>({
+  // DATA
+  const [products, setProducts] = useState<
+    Product[]
+  >([]);
+
+  const [activeOrders, setActiveOrders] =
+    useState<Order[]>([]);
+
+  const [activeLeads, setActiveLeads] =
+    useState<Lead[]>([]);
+
+  const [userEmail, setUserEmail] = useState<
+    string | null
+  >(null);
+
+  // SITE CONTENT
+  const [siteContent] = useState<SiteContent>({
     hero_headline: "",
     hero_subheadline: "",
     hero_cta: "",
@@ -81,11 +107,9 @@ function AdminPage() {
     metadata: {},
   });
 
-  const [siteEdited, setSiteEdited] = useState(false);
-  const [siteSaving, setSiteSaving] = useState(false);
-
-  // ── Product Form State ──────────────────────────────────────────────────
-  const [productFormOpen, setProductFormOpen] = useState(false);
+  // PRODUCT FORM
+  const [productFormOpen, setProductFormOpen] =
+    useState(false);
 
   const [productForm, setProductForm] = useState({
     editingId: null as string | null,
@@ -98,24 +122,47 @@ function AdminPage() {
     source_url: "",
   });
 
-  // ── UI State ────────────────────────────────────────────────────────────
-  const [revenueRange, setRevenueRange] = useState<
-    "day" | "week" | "month" | "all"
-  >("day");
+  // UI
+  const [revenueRange, setRevenueRange] =
+    useState<"day" | "week" | "month" | "all">(
+      "day"
+    );
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedRow, setSelectedRow] = useState<any>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [searchQuery, setSearchQuery] =
+    useState("");
 
-  // ── Theme Detection ─────────────────────────────────────────────────────
+  const [isSyncing, setIsSyncing] =
+    useState(false);
+
+  // ────────────────────────────────────────────────────────────────────────
+  // THEME
+  // ────────────────────────────────────────────────────────────────────────
+
   useEffect(() => {
-    const isDarkMode =
-      document.documentElement.classList.contains("dark");
+    const root = document.documentElement;
 
-    setIsDark(isDarkMode);
+    const dark =
+      root.classList.contains("dark");
+
+    setIsDark(dark);
   }, []);
 
-  // ── Auth & Data Fetch ───────────────────────────────────────────────────
+  const applyTheme = (dark: boolean) => {
+    const root = document.documentElement;
+
+    if (dark) {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+
+    setIsDark(dark);
+  };
+
+  // ────────────────────────────────────────────────────────────────────────
+  // INIT
+  // ────────────────────────────────────────────────────────────────────────
+
   useEffect(() => {
     const init = async () => {
       const {
@@ -135,57 +182,92 @@ function AdminPage() {
     init();
   }, []);
 
+  // ────────────────────────────────────────────────────────────────────────
+  // FETCH
+  // ────────────────────────────────────────────────────────────────────────
+
   const fetchData = async () => {
     try {
-      const [productsRes, ordersRes, leadsRes, siteRes] =
-        await Promise.all([
-          supabase.from("products").select("*"),
-          supabase.from("orders").select("*"),
-          supabase.from("leads").select("*"),
-          supabase
-            .from("site_config")
-            .select("*")
-            .eq("id", "main")
-            .single(),
-        ]);
+      const [
+        productsRes,
+        ordersRes,
+        leadsRes,
+        siteRes,
+      ] = await Promise.all([
+        supabase
+          .from("products")
+          .select("*"),
+
+        supabase
+          .from("orders")
+          .select("*"),
+
+        supabase
+          .from("leads")
+          .select("*"),
+
+        supabase
+          .from("site_config")
+          .select("*")
+          .eq("id", "main")
+          .single(),
+      ]);
 
       if (productsRes.data) {
-        setProducts(productsRes.data as Product[]);
+        setProducts(
+          productsRes.data as Product[]
+        );
       }
 
       if (ordersRes.data) {
-        setActiveOrders(ordersRes.data as Order[]);
+        setActiveOrders(
+          ordersRes.data as Order[]
+        );
       }
 
       if (leadsRes.data) {
-        setActiveLeads(leadsRes.data as Lead[]);
+        setActiveLeads(
+          leadsRes.data as Lead[]
+        );
       }
 
-      if (siteRes.data) {
-        setSiteContent((prev) => ({
-          ...prev,
-          ...(siteRes.data as any),
-        }));
+      if (siteRes.data?.theme === "dark") {
+        applyTheme(true);
+      } else {
+        applyTheme(false);
       }
     } catch (e) {
-      console.error("[Admin] Fetch error:", e);
+      console.error(
+        "[ADMIN FETCH ERROR]",
+        e
+      );
     }
   };
+
+  // ────────────────────────────────────────────────────────────────────────
+  // PRINTFUL SYNC
+  // ────────────────────────────────────────────────────────────────────────
 
   const handleSyncPrintful = async () => {
     setIsSyncing(true);
 
     try {
-      const res = await fetch("/api/printful-sync", {
-        method: "POST",
-      });
+      const res = await fetch(
+        "/api/printful-sync",
+        {
+          method: "POST",
+        }
+      );
 
       const data = await res.json();
 
       if (!res.ok) {
         toast.error(
-          data.error || data.message || "Sync failed"
+          data.error ||
+            data.message ||
+            "Sync failed"
         );
+
         return;
       }
 
@@ -194,6 +276,7 @@ function AdminPage() {
         data.errors.length > 0
       ) {
         toast.error(data.errors[0]);
+
         return;
       }
 
@@ -204,113 +287,146 @@ function AdminPage() {
       await fetchData();
     } catch (e: any) {
       toast.error(
-        `Sync error: ${e?.message || "Unknown error"}`
+        `Sync error: ${
+          e?.message || "Unknown error"
+        }`
       );
     } finally {
       setIsSyncing(false);
     }
   };
 
+  // ────────────────────────────────────────────────────────────────────────
+  // PRODUCT SAVE
+  // ────────────────────────────────────────────────────────────────────────
+
   const saveProduct = async () => {
     try {
-      const imageUrls = productForm.image_url
-        .split(",")
-        .map((u) => u.trim())
-        .filter((u) => u);
+      const imageUrls =
+        productForm.image_url
+          .split(",")
+          .map((u) => u.trim())
+          .filter(Boolean);
 
       const payload = {
         title: productForm.title,
         slug: productForm.slug,
         price_cents:
-          parseInt(productForm.price_cents) || 0,
+          parseInt(
+            productForm.price_cents
+          ) || 0,
         image_urls: imageUrls,
-        description: productForm.description,
-        is_published: productForm.is_published,
-        source_url: productForm.source_url,
-        updated_at: new Date().toISOString(),
+        description:
+          productForm.description,
+        is_published:
+          productForm.is_published,
+        source_url:
+          productForm.source_url,
+        updated_at:
+          new Date().toISOString(),
       };
 
       if (productForm.editingId) {
-        const { error } = await supabase
-          .from("products")
-          .update(payload)
-          .eq("id", productForm.editingId);
+        const { error } =
+          await supabase
+            .from("products")
+            .update(payload)
+            .eq(
+              "id",
+              productForm.editingId
+            );
 
-        if (error) throw error;
+        if (error) {
+          throw error;
+        }
 
-        toast.success("Product updated.");
+        toast.success(
+          "Product updated."
+        );
       } else {
-        const { error } = await supabase
-          .from("products")
-          .insert([payload]);
+        const { error } =
+          await supabase
+            .from("products")
+            .insert([payload]);
 
-        if (error) throw error;
+        if (error) {
+          throw error;
+        }
 
-        toast.success("Product created.");
+        toast.success(
+          "Product created."
+        );
       }
 
       resetProductForm();
+
       await fetchData();
     } catch (e: any) {
-      toast.error(`Save failed: ${e.message}`);
+      toast.error(
+        `Save failed: ${e.message}`
+      );
     }
   };
+
+  // ────────────────────────────────────────────────────────────────────────
+  // PRODUCT ACTIONS
+  // ────────────────────────────────────────────────────────────────────────
 
   const togglePublished = async (
     id: string,
     currentState: boolean
   ) => {
     try {
-      const { error } = await supabase
-        .from("products")
-        .update({
-          is_published: !currentState,
-        })
-        .eq("id", id);
+      const { error } =
+        await supabase
+          .from("products")
+          .update({
+            is_published:
+              !currentState,
+          })
+          .eq("id", id);
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
 
       await fetchData();
     } catch (e: any) {
-      toast.error(`Toggle failed: ${e.message}`);
+      toast.error(
+        `Toggle failed: ${e.message}`
+      );
     }
   };
 
-  const archiveProduct = async (id: string) => {
+  const archiveProduct = async (
+    id: string
+  ) => {
     try {
-      const { error } = await supabase
-        .from("products")
-        .delete()
-        .eq("id", id);
+      const { error } =
+        await supabase
+          .from("products")
+          .delete()
+          .eq("id", id);
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
 
-      toast.success("Product archived.");
-
-      await fetchData();
-    } catch (e: any) {
-      toast.error(`Archive failed: ${e.message}`);
-    }
-  };
-
-  const handleArchiveOrder = async (id: string) => {
-    try {
-      const { error } = await supabase
-        .from("orders")
-        .delete()
-        .eq("id", id);
-
-      if (error) throw error;
-
-      toast.success("Order archived.");
-
-      setSelectedRow(null);
+      toast.success(
+        "Product archived."
+      );
 
       await fetchData();
     } catch (e: any) {
-      toast.error(`Archive failed: ${e.message}`);
+      toast.error(
+        `Archive failed: ${e.message}`
+      );
     }
   };
+
+  // ────────────────────────────────────────────────────────────────────────
+  // PRODUCT FORM HELPERS
+  // ────────────────────────────────────────────────────────────────────────
 
   const resetProductForm = () => {
     setProductForm({
@@ -327,118 +443,115 @@ function AdminPage() {
     setProductFormOpen(false);
   };
 
-  const startEditProduct = (p: Product) => {
+  const startEditProduct = (
+    p: Product
+  ) => {
     setProductForm({
       editingId: p.id,
       title: p.title,
       slug: p.slug,
-      price_cents: String(p.price_cents),
-      image_url: (p.image_urls || []).join(", "),
-      description: p.description || "",
-      is_published: p.is_published,
+      price_cents: String(
+        p.price_cents
+      ),
+      image_url:
+        (p.image_urls || []).join(
+          ", "
+        ),
+      description:
+        p.description || "",
+      is_published:
+        p.is_published,
       source_url: "",
     });
 
     setProductFormOpen(true);
+
     setSection("products");
   };
 
-  const saveSiteConfig = async (
-    updatedContent: SiteContent
-  ) => {
-    setSiteSaving(true);
-
-    try {
-      const payload: any = {
-        id: "main",
-        hero_headline:
-          updatedContent.hero_headline || "",
-        hero_subheadline:
-          updatedContent.hero_subheadline || "",
-        hero_cta: updatedContent.hero_cta || "",
-        price_display:
-          updatedContent.price_display || "",
-        price_original:
-          updatedContent.price_original || "",
-        launch_pricing_active:
-          updatedContent.launch_pricing_active ??
-          false,
-        guarantee_days: String(
-          updatedContent.guarantee_days || "30"
-        ),
-        theme: updatedContent.theme,
-        updated_at: new Date().toISOString(),
-      };
-
-      const { error: updateError } =
-        await supabase
-          .from("site_config")
-          .update(payload)
-          .eq("id", "main");
-
-      if (updateError) {
-        throw updateError;
-      }
-
-      toast.success("Site content saved.");
-      setSiteEdited(false);
-    } catch (e: any) {
-      toast.error(
-        `Failed: ${
-          e.message || e.details || "Unknown error"
-        }`
-      );
-    } finally {
-      setSiteSaving(false);
-    }
-  };
+  // ────────────────────────────────────────────────────────────────────────
+  // AUTH
+  // ────────────────────────────────────────────────────────────────────────
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
+
     window.location.href = "/login";
   };
 
-  const filteredLeads = activeLeads.filter((l) =>
-    l.email
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase())
-  );
+  // ────────────────────────────────────────────────────────────────────────
+  // FILTERS
+  // ────────────────────────────────────────────────────────────────────────
 
-  const paidOrders = activeOrders.filter(
-    (o) => o.status === "paid"
-  );
+  const filteredLeads =
+    activeLeads.filter((l) =>
+      l.email
+        .toLowerCase()
+        .includes(
+          searchQuery.toLowerCase()
+        )
+    );
 
-  const filteredRevenue = activeOrders
-    .filter((o) => {
-      const date = new Date(o.created_at);
-      const now = new Date();
+  const paidOrders =
+    activeOrders.filter(
+      (o) => o.status === "paid"
+    );
 
-      if (revenueRange === "day") {
-        return (
-          date.toDateString() === now.toDateString()
+  const filteredRevenue =
+    activeOrders
+      .filter((o) => {
+        const date = new Date(
+          o.created_at
         );
-      }
 
-      if (revenueRange === "week") {
-        return (
-          now.getTime() - date.getTime() <
-          7 * 24 * 60 * 60 * 1000
-        );
-      }
+        const now = new Date();
 
-      if (revenueRange === "month") {
-        return (
-          date.getMonth() === now.getMonth()
-        );
-      }
+        if (
+          revenueRange === "day"
+        ) {
+          return (
+            date.toDateString() ===
+            now.toDateString()
+          );
+        }
 
-      return true;
-    })
-    .reduce((sum, o) => sum + o.amount_cents, 0);
+        if (
+          revenueRange === "week"
+        ) {
+          return (
+            now.getTime() -
+              date.getTime() <
+            7 *
+              24 *
+              60 *
+              60 *
+              1000
+          );
+        }
+
+        if (
+          revenueRange === "month"
+        ) {
+          return (
+            date.getMonth() ===
+              now.getMonth() &&
+            date.getFullYear() ===
+              now.getFullYear()
+          );
+        }
+
+        return true;
+      })
+      .reduce(
+        (sum, o) =>
+          sum + o.amount_cents,
+        0
+      );
 
   const avgTicket =
     paidOrders.length > 0
-      ? filteredRevenue / paidOrders.length
+      ? filteredRevenue /
+        paidOrders.length
       : 0;
 
   const convRate =
@@ -450,15 +563,20 @@ function AdminPage() {
         )
       : 0;
 
-  const fmt$ = (cents: number) =>
-    `$${(cents / 100).toFixed(0)}`;
+  // ────────────────────────────────────────────────────────────────────────
+  // FORMATTERS
+  // ────────────────────────────────────────────────────────────────────────
 
-  const fmtDate = (d: string) =>
-    new Date(d).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+  const formatCurrency = (
+    cents: number
+  ) =>
+    `$${(
+      cents / 100
+    ).toFixed(0)}`;
+
+  // ────────────────────────────────────────────────────────────────────────
+  // UI
+  // ────────────────────────────────────────────────────────────────────────
 
   return (
     <div
@@ -468,12 +586,13 @@ function AdminPage() {
           : "bg-white text-black"
       }`}
     >
+      {/* NAV */}
       <nav
-        className={`sticky top-0 z-50 ${
+        className={`sticky top-0 z-50 border-b ${
           isDark
             ? "bg-black border-white/10"
             : "bg-white border-gray-100"
-        } border-b`}
+        }`}
       >
         <div className="flex items-center justify-between px-6 py-4">
           <div className="md:hidden text-[10px] font-bold uppercase tracking-widest">
@@ -491,7 +610,9 @@ function AdminPage() {
               <button
                 key={s}
                 onClick={() =>
-                  setSection(s as any)
+                  setSection(
+                    s as typeof section
+                  )
                 }
                 className={`text-[10px] font-bold uppercase tracking-widest transition-all ${
                   section === s
@@ -510,7 +631,9 @@ function AdminPage() {
 
           <button
             onClick={() =>
-              setMobileMenuOpen(!mobileMenuOpen)
+              setMobileMenuOpen(
+                !mobileMenuOpen
+              )
             }
             className="md:hidden"
           >
@@ -519,6 +642,7 @@ function AdminPage() {
         </div>
       </nav>
 
+      {/* MAIN */}
       <main className="max-w-7xl mx-auto px-6 py-12 space-y-12">
         {/* OVERVIEW */}
         {section === "overview" && (
@@ -537,7 +661,13 @@ function AdminPage() {
                 <button
                   key={r}
                   onClick={() =>
-                    setRevenueRange(r as any)
+                    setRevenueRange(
+                      r as
+                        | "day"
+                        | "week"
+                        | "month"
+                        | "all"
+                    )
                   }
                   className={`text-[9px] font-bold uppercase px-4 py-2 ${
                     revenueRange === r
@@ -557,21 +687,27 @@ function AdminPage() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
               <Stat
                 label="Revenue"
-                value={fmt$(filteredRevenue)}
+                value={formatCurrency(
+                  filteredRevenue
+                )}
                 sub={`${revenueRange} period`}
                 isDark={isDark}
               />
 
               <Stat
                 label="Orders"
-                value={paidOrders.length}
+                value={
+                  paidOrders.length
+                }
                 sub="successful payments"
                 isDark={isDark}
               />
 
               <Stat
                 label="Avg Ticket"
-                value={fmt$(avgTicket)}
+                value={formatCurrency(
+                  avgTicket
+                )}
                 sub="per paid order"
                 isDark={isDark}
               />
@@ -596,7 +732,9 @@ function AdminPage() {
 
               <div className="flex gap-4">
                 <button
-                  onClick={handleSyncPrintful}
+                  onClick={
+                    handleSyncPrintful
+                  }
                   disabled={isSyncing}
                   className="flex items-center gap-2 text-[10px] font-bold uppercase px-6 py-3 border"
                 >
@@ -633,6 +771,80 @@ function AdminPage() {
               </div>
             </div>
 
+            {/* PRODUCT FORM */}
+            {productFormOpen && (
+              <div
+                className={`p-8 space-y-8 ${
+                  isDark
+                    ? "bg-white/5"
+                    : "bg-gray-50/50"
+                }`}
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <Input
+                    label="Title"
+                    value={
+                      productForm.title
+                    }
+                    onChange={(v) =>
+                      setProductForm(
+                        (
+                          prev
+                        ) => ({
+                          ...prev,
+                          title: v,
+                        })
+                      )
+                    }
+                    isDark={isDark}
+                  />
+
+                  <Input
+                    label="Price"
+                    value={
+                      productForm.price_cents
+                    }
+                    onChange={(v) =>
+                      setProductForm(
+                        (
+                          prev
+                        ) => ({
+                          ...prev,
+                          price_cents:
+                            v,
+                        })
+                      )
+                    }
+                    isDark={isDark}
+                  />
+                </div>
+
+                <div className="flex gap-4">
+                  <button
+                    onClick={
+                      saveProduct
+                    }
+                    className={`px-6 py-3 text-[10px] font-bold uppercase ${
+                      isDark
+                        ? "bg-white text-black"
+                        : "bg-black text-white"
+                    }`}
+                  >
+                    SAVE
+                  </button>
+
+                  <button
+                    onClick={
+                      resetProductForm
+                    }
+                    className="px-6 py-3 text-[10px] font-bold uppercase"
+                  >
+                    CANCEL
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* PRODUCT GRID */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-y-12">
               {products.map((p) => (
@@ -641,7 +853,7 @@ function AdminPage() {
                   className="group relative"
                 >
                   <div
-                    className={`relative flex aspect-[2/3] items-center justify-center overflow-hidden p-3 sm:p-4 group-hover:scale-105 transition-all duration-300 ${
+                    className={`relative flex aspect-[2/3] items-center justify-center overflow-hidden p-3 sm:p-4 transition-all duration-300 ${
                       isDark
                         ? "bg-white/5"
                         : "bg-gray-50/50"
@@ -649,9 +861,12 @@ function AdminPage() {
                   >
                     {p.image_urls?.[1] ? (
                       <img
-                        src={p.image_urls[1]}
+                        src={
+                          p.image_urls[1]
+                        }
                         alt={
-                          p.title || "Product"
+                          p.title ||
+                          "Product"
                         }
                         className="max-h-full max-w-full object-contain"
                       />
@@ -670,7 +885,7 @@ function AdminPage() {
 
                   <div className="px-2 text-center">
                     <p
-                      className={`mb-1 text-[9px] uppercase leading-tight tracking-[0.1em] truncate font-bold ${
+                      className={`mb-1 text-[9px] uppercase truncate font-bold ${
                         isDark
                           ? "text-white"
                           : "text-black"
@@ -680,16 +895,15 @@ function AdminPage() {
                     </p>
 
                     <p
-                      className={`text-[9px] tracking-[0.05em] ${
+                      className={`text-[9px] ${
                         isDark
                           ? "text-white/70"
                           : "text-black/70"
                       }`}
                     >
-                      $
-                      {(
-                        p.price_cents / 100
-                      ).toFixed(0)}
+                      {formatCurrency(
+                        p.price_cents
+                      )}
                     </p>
 
                     <div className="flex items-center justify-center gap-3 mt-3">
@@ -709,7 +923,9 @@ function AdminPage() {
 
                       <button
                         onClick={() =>
-                          startEditProduct(p)
+                          startEditProduct(
+                            p
+                          )
                         }
                       >
                         <Edit3 size={12} />
@@ -717,10 +933,14 @@ function AdminPage() {
 
                       <button
                         onClick={() =>
-                          archiveProduct(p.id)
+                          archiveProduct(
+                            p.id
+                          )
                         }
                       >
-                        <Archive size={12} />
+                        <Archive
+                          size={12}
+                        />
                       </button>
                     </div>
                   </div>
@@ -729,10 +949,82 @@ function AdminPage() {
             </div>
           </div>
         )}
+
+        {/* SETTINGS */}
+        {section === "settings" && (
+          <div className="space-y-8 max-w-xl">
+            <h1 className="text-2xl font-bold uppercase tracking-tighter">
+              Settings
+            </h1>
+
+            <div
+              className={`p-6 space-y-6 ${
+                isDark
+                  ? "bg-white/5"
+                  : "bg-gray-50"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-widest">
+                  Theme
+                </span>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() =>
+                      applyTheme(false)
+                    }
+                    className={`px-4 py-2 text-[10px] font-bold uppercase ${
+                      !isDark
+                        ? "bg-black text-white"
+                        : "border"
+                    }`}
+                  >
+                    LIGHT
+                  </button>
+
+                  <button
+                    onClick={() =>
+                      applyTheme(true)
+                    }
+                    className={`px-4 py-2 text-[10px] font-bold uppercase ${
+                      isDark
+                        ? "bg-white text-black"
+                        : "border"
+                    }`}
+                  >
+                    DARK
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[10px] uppercase opacity-50">
+                  Signed in as
+                </p>
+
+                <p className="text-sm font-bold">
+                  {userEmail}
+                </p>
+              </div>
+
+              <button
+                onClick={handleSignOut}
+                className="w-full py-3 text-[10px] font-bold uppercase border border-red-500/30 text-red-500"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// COMPONENTS
+// ────────────────────────────────────────────────────────────────────────────
 
 function Stat({
   label,
