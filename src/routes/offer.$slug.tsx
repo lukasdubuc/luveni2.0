@@ -91,9 +91,10 @@ function formatPrice(cents?: number | null) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-// ─── Resolve color-matched image from Printful image_urls ────────────────────
-// Printful always puts the logo/design mockup at index 0.
-// Color variant images start at index 1, ordered to match the color option values.
+// ─── Color → image mapping ────────────────────────────────────────────────────
+// Printful always puts the logo/design mockup at image_urls[0].
+// Color images follow in the same order colors appear in the variants array.
+// colorIndex 0 → image_urls[1], colorIndex 1 → image_urls[2], etc.
 function resolveVariantImage(
   imageUrls: string[],
   colorValue: string | undefined,
@@ -101,14 +102,12 @@ function resolveVariantImage(
 ): string {
   if (!colorValue || colorValues.length === 0) return imageUrls[1] ?? imageUrls[0] ?? "";
   const colorIndex = colorValues.indexOf(colorValue);
-  // imageUrls[0] is always the logo mockup — color images start at index 1
-  const candidate = imageUrls[colorIndex + 1];
-  return candidate ?? imageUrls[1] ?? imageUrls[0] ?? "";
+  if (colorIndex === -1) return imageUrls[1] ?? imageUrls[0] ?? "";
+  // +1 because imageUrls[0] is always the logo mockup
+  return imageUrls[colorIndex + 1] ?? imageUrls[1] ?? imageUrls[0] ?? "";
 }
 
 // ─── Resolve any Printful / POD color string to a CSS color ─────────────────
-// Handles 500+ exact names, compound names, raw hex/rgb/hsl, CSS keywords.
-// Always returns a string — swatches are always circles, never text.
 const _colorCache: Record<string, string> = {};
 
 const _colorMap: Record<string, string> = {
@@ -302,27 +301,23 @@ function resolveColor(value: string): string {
   const key = value.toLowerCase().trim();
   if (key in _colorCache) return _colorCache[key];
 
-  // 1. Exact map hit (handles all compound names)
   if (_colorMap[key]) {
     _colorCache[key] = _colorMap[key];
     return _colorMap[key];
   }
 
-  // 2. Raw hex / rgb / hsl — pass straight through
   if (/^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(key) ||
       /^rgba?/.test(key) || /^hsla?/.test(key)) {
     _colorCache[key] = key;
     return key;
   }
 
-  // 3. Browser canvas — resolves all 140+ native CSS color keywords
   const canvas = _canvasColor(key);
   if (canvas) {
     _colorCache[key] = canvas;
     return canvas;
   }
 
-  // 4. Compound: split on spaces/dashes, find base color + apply modifier shift
   const words = key.split(/[\s_\-\/]+/).filter(Boolean);
   if (words.length > 1) {
     const modifiers: Record<string, number> = {
@@ -353,7 +348,6 @@ function resolveColor(value: string): string {
     }
   }
 
-  // 5. Unknown — mid grey so circle is always visible
   _colorCache[key] = "#888888";
   return "#888888";
 }
@@ -372,12 +366,10 @@ function OfferSlugPage() {
   };
   const navigate = useNavigate();
 
-  // ── Cart integration ─────────────────────────────────────────────────────
   const { addItem } = useCart();
   const [addedFeedback, setAddedFeedback] = useState(false);
   const [currentStep, setCurrentStep] = useState<number | null>(null);
 
-  // ── Product list navigation ──────────────────────────────────────────────
   const currentIndex = useMemo(
     () => allProducts.findIndex((p) => p.slug === product?.slug),
     [allProducts, product?.slug],
@@ -403,7 +395,6 @@ function OfferSlugPage() {
     setTimeout(() => { navigateCooldown.current = false; }, 500);
   }, [nextProduct, navigate]);
 
-  // ── Preload adjacent products and their images ──────────────────────────
   useEffect(() => {
     if (!product || allProducts.length === 0) return;
 
@@ -428,16 +419,12 @@ function OfferSlugPage() {
     });
   }, [product, prevProduct, nextProduct]);
 
-  // ── Wheel / swipe gesture (navigates between products) ────────
   const touchStartY = useRef<number | null>(null);
   const touchStartX = useRef<number | null>(null);
-  // Track whether the touch started on the image gallery area so we don't
-  // accidentally fire product navigation when the user is swiping images.
   const touchOnGallery = useRef(false);
 
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
-      // FIX: Don't intercept wheel events that originate inside the image gallery
       const target = e.target as HTMLElement;
       if (target.closest("[data-gallery]")) return;
       if (Math.abs(e.deltaY) < 30) return;
@@ -451,7 +438,6 @@ function OfferSlugPage() {
       touchStartX.current = e.touches[0].clientX;
     };
     const handleTouchEnd = (e: TouchEvent) => {
-      // FIX: Don't fire product navigation when touch started on the image gallery
       if (touchOnGallery.current) {
         touchStartY.current = null;
         touchStartX.current = null;
@@ -477,7 +463,6 @@ function OfferSlugPage() {
     };
   }, [goToPrev, goToNext]);
 
-  // ── Keyboard navigation ──────────────────────────────────────────────────
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft" || e.key === "ArrowUp") goToPrev();
@@ -487,19 +472,18 @@ function OfferSlugPage() {
     return () => window.removeEventListener("keydown", handleKey);
   }, [goToPrev, goToNext]);
 
-  // ── Variants & options ───────────────────────────────────────────────────
   const variants: ProductVariant[] = useMemo(
     () => (Array.isArray(product?.variants) ? product!.variants! : []),
     [product?.variants],
   );
 
-  const images: string[] = useMemo(() => {
-    if (!Array.isArray(product?.image_urls)) return [];
-    // Skip the first image — Printful always puts the logo/design mockup there
+  // Gallery: skip image_urls[0] (always the logo/design mockup), show all others
+  const galleryImages = useMemo(() => {
+    if (!Array.isArray(product?.image_urls)) return [""];
     const all = product!.image_urls.filter(Boolean);
-    return all.length > 1 ? all.slice(1) : all;
+    const withoutLogo = all.length > 1 ? all.slice(1) : all;
+    return withoutLogo.length > 0 ? withoutLogo : [""];
   }, [product?.image_urls]);
-  const galleryImages = useMemo(() => (images.length > 0 ? images : [""]), [images]);
 
   const optionKeys = useMemo(
     () => sortOptionKeys(Array.from(new Set(variants.flatMap((v) => Object.keys(v.attributes ?? {}))))),
@@ -507,7 +491,6 @@ function OfferSlugPage() {
   );
 
   const optionValues = useMemo(() => {
-    // FIX: build the map keyed per option so colors never bleed into sizes
     return optionKeys.reduce<Record<string, string[]>>((acc, key) => {
       acc[key] = Array.from(
         new Set(
@@ -520,10 +503,19 @@ function OfferSlugPage() {
     }, {});
   }, [optionKeys, variants]);
 
-  // FIX: filter out option keys that have only a single value — no need to ask
   const visibleOptionKeys = useMemo(
     () => optionKeys.filter((key) => (optionValues[key]?.length ?? 0) > 1),
     [optionKeys, optionValues],
+  );
+
+  // Derived color option key and ordered color values (matches Printful image order)
+  const colorOptionKey = useMemo(
+    () => optionKeys.find((k) => isColorOption(k)),
+    [optionKeys],
+  );
+  const colorValues = useMemo(
+    () => (colorOptionKey ? optionValues[colorOptionKey] ?? [] : []),
+    [colorOptionKey, optionValues],
   );
 
   const [selection, setSelection] = useState<Record<string, string>>({});
@@ -539,7 +531,6 @@ function OfferSlugPage() {
   useEffect(() => {
     if (!product || variants.length === 0) { setSelection({}); return; }
     const defaults: Record<string, string> = {};
-    // Auto-select every option (including single-value ones that are hidden)
     optionKeys.forEach((key) => {
       const firstValue = optionValues[key]?.[0];
       if (firstValue) defaults[key] = firstValue;
@@ -571,21 +562,19 @@ function OfferSlugPage() {
   const checkoutDisabled = variants.length > 0 && !selectedVariant;
   const isSoldOut = selectedVariant?.stock != null && selectedVariant.stock <= 0;
 
-  // FIX: hasVariants now uses visibleOptionKeys — if all options are single-value,
-  // treat as no-variant product (add directly).
   const hasVariants = variants.length > 0 && visibleOptionKeys.length > 0;
 
-  // ── Resolve color values for image mapping ───────────────────────────────
-  const colorOptionKey = useMemo(
-    () => optionKeys.find((k) => isColorOption(k)),
-    [optionKeys],
-  );
-  const colorValues = useMemo(
-    () => (colorOptionKey ? optionValues[colorOptionKey] ?? [] : []),
-    [colorOptionKey, optionValues],
-  );
+  // ── Jump gallery to the image matching the selected color ─────────────────
+  // colorIndex 0 → galleryImages[0] (which is image_urls[1]), etc.
+  const jumpGalleryToColor = useCallback((colorValue: string) => {
+    if (!colorOptionKey || colorValues.length === 0) return;
+    const colorIndex = colorValues.indexOf(colorValue);
+    if (colorIndex === -1) return;
+    // galleryImages already has logo stripped, so colorIndex maps directly
+    const target = Math.min(colorIndex, galleryImages.length - 1);
+    setActiveImageIndex(target);
+  }, [colorOptionKey, colorValues, galleryImages.length]);
 
-  // ── Add to cart ──────────────────────────────────────────────────────────
   const commitToCart = useCallback(() => {
     if (!product) return;
     const variant = variants.find((v) =>
@@ -616,7 +605,6 @@ function OfferSlugPage() {
     }
   }, [product, variants, optionKeys, selection, selectedPrice, colorOptionKey, colorValues, addItem]);
 
-  // ── Main CTA click handler ───────────────────────────────────────────────
   const handleAddToCart = useCallback(() => {
     if (!product) return;
     if (isSoldOut) return;
@@ -637,7 +625,6 @@ function OfferSlugPage() {
     }
   }, [product, hasVariants, optionsOpen, currentStep, isSoldOut, commitToCart]);
 
-  // ── Image swipe within gallery ──────────────────────────────────────────
   const imgTouchStartX = useRef<number | null>(null);
   const handleImgTouchStart = (e: React.TouchEvent) => { imgTouchStartX.current = e.touches[0].clientX; };
   const handleImgTouchEnd = (e: React.TouchEvent) => {
@@ -660,7 +647,6 @@ function OfferSlugPage() {
     setActiveImageIndex((i) => Math.min(i + 1, galleryImages.length - 1));
   }, [galleryImages.length]);
 
-  // ── Not found ────────────────────────────────────────────────────────────
   if (!product) {
     return (
       <section
@@ -705,7 +691,6 @@ function OfferSlugPage() {
         html, body { background-color: var(--background) !important; color: var(--foreground) !important; }
       `}</style>
 
-      {/* ── Full-screen storefront ── */}
       <div
         className="flex min-h-screen flex-col bg-background text-foreground"
         style={{ overflow: "hidden", zIndex: 0 }}
@@ -745,7 +730,7 @@ function OfferSlugPage() {
             {isSoldOut ? "SOLD OUT" : ""}
           </div>
 
-          {/* ── Center column: image + info ── */}
+          {/* ── Center column ── */}
           <div
             style={{
               display: "flex", flexDirection: "column",
@@ -756,7 +741,7 @@ function OfferSlugPage() {
             }}
             key={product.slug}
           >
-            {/* ── Image row — FIX: data-gallery attribute stops wheel/touch from firing product nav ── */}
+            {/* ── Image gallery ── */}
             <div
               data-gallery
               style={{
@@ -767,7 +752,6 @@ function OfferSlugPage() {
               onTouchStart={handleImgTouchStart}
               onTouchEnd={handleImgTouchEnd}
             >
-              {/* FIX: goPrevImage / goNextImage now call e.stopPropagation() */}
               <button className="pdp-img-nav-btn" onClick={goPrevImage} disabled={activeImageIndex === 0} aria-label="Previous image"
                 style={{ fontSize: "38px", fontWeight: 200, opacity: activeImageIndex === 0 ? 0.12 : 0.75 }}>
                 ‹
@@ -855,11 +839,9 @@ function OfferSlugPage() {
                 aria-label="Add to cart"
                 style={{
                   background: "transparent", border: "none",
-                  cursor: "pointer",
-                  color: "var(--foreground)",
+                  cursor: "pointer", color: "var(--foreground)",
                   fontSize: addedFeedback ? "10px" : "28px",
-                  fontWeight: 200, lineHeight: 1,
-                  opacity: 0.8,
+                  fontWeight: 200, lineHeight: 1, opacity: 0.8,
                   transition: "opacity 0.2s, transform 0.15s, font-size 0.15s",
                   letterSpacing: addedFeedback ? "0.2em" : "0",
                   textTransform: "uppercase", padding: "0.25rem",
@@ -882,14 +864,10 @@ function OfferSlugPage() {
                     aria-label="Choose options"
                     style={{
                       background: "transparent", border: "none",
-                      cursor: "pointer",
-                      color: "var(--foreground)",
-                      fontSize: "28px",
-                      fontWeight: 200, lineHeight: 1,
-                      opacity: 0.8,
-                      transition: "opacity 0.2s, transform 0.15s",
-                      padding: "0.25rem",
-                      fontFamily: "inherit",
+                      cursor: "pointer", color: "var(--foreground)",
+                      fontSize: "28px", fontWeight: 200, lineHeight: 1,
+                      opacity: 0.8, transition: "opacity 0.2s, transform 0.15s",
+                      padding: "0.25rem", fontFamily: "inherit",
                     }}
                   >
                     +
@@ -912,7 +890,6 @@ function OfferSlugPage() {
                     alignItems: "center", gap: "1rem",
                     animation: "pdp-option-in 0.15s linear both",
                   }}>
-                    {/* FIX: iterate visibleOptionKeys (multi-value only), not optionKeys */}
                     {visibleOptionKeys.map((option, idx) => {
                       if (idx !== currentStep && currentStep !== null) return null;
                       if (currentStep === null) return null;
@@ -923,10 +900,8 @@ function OfferSlugPage() {
                       return (
                         <div key={option} style={{
                           display: "flex", flexDirection: "column",
-                          alignItems: "center", gap: "0.5rem",
-                          width: "100%",
+                          alignItems: "center", gap: "0.5rem", width: "100%",
                         }}>
-                          {/* FIX: only show the option type label (SIZE / COLOR), never the product name */}
                           <div style={{
                             fontSize: "9px", fontWeight: 500,
                             letterSpacing: "0.2em", textTransform: "uppercase",
@@ -936,13 +911,10 @@ function OfferSlugPage() {
                             {normalizeOptionName(option)}
                           </div>
 
-                          {/* Value chips */}
                           <div style={{
                             display: "flex", flexWrap: "wrap",
-                            gap: isColor ? "0.5rem" : "0.5rem",
-                            justifyContent: "center",
+                            gap: "0.5rem", justifyContent: "center",
                           }}>
-                            {/* FIX: use optionValues[option] — correctly scoped per key */}
                             {optionValues[option]?.map((value) => {
                               const selected = selection[option] === value;
                               const available = isOptionAvailable(option, value);
@@ -951,10 +923,12 @@ function OfferSlugPage() {
                               const handleChipClick = () => {
                                 setSelection((cur) => ({ ...cur, [option]: value }));
 
+                                // Jump gallery to matching color image immediately
+                                if (isColor) jumpGalleryToColor(value);
+
                                 if (!isLast) {
                                   setCurrentStep(idx + 1);
                                 } else {
-                                  // Last visible option chosen → fire cart immediately
                                   const updatedSelection = { ...selection, [option]: value };
                                   const variant = variants.find((v) =>
                                     optionKeys.every((k) => v.attributes?.[k] === updatedSelection[k])
@@ -988,14 +962,6 @@ function OfferSlugPage() {
                               };
 
                               if (isColor) {
-                                // ── Color swatch: perfect circle, always visible ──
-                                // Ring strategy:
-                                //   inner 1.5px white gap  → separates swatch from ring
-                                //   inner 1.5px black gap  → always-dark inner edge
-                                //   outer 1.5px white ring → separates black from bg on dark
-                                //   outer 1.5px black ring → always-dark outer edge on light
-                                // Net effect: swatch is bracketed by both black AND white bands
-                                // so it reads on any background. Selected adds a thicker accent.
                                 return (
                                   <button
                                     key={value}
@@ -1010,30 +976,21 @@ function OfferSlugPage() {
                                       width: "22px", height: "22px",
                                       borderRadius: "50%",
                                       background: colorHex,
-                                      // Layer (inside → out):
-                                      //   2px white gap, 3.5px black ring, 5px white gap, 6.5px black outer
-                                      // This ensures visibility on both light + dark backgrounds.
-                                      // On selection the outermost ring becomes the foreground accent.
                                       boxShadow: selected
                                         ? "0 0 0 3px #fff, 0 0 0 5px #000, 0 0 0 7px #fff, 0 0 0 9px var(--foreground)"
                                         : "0 0 0 3px #fff, 0 0 0 5px #000, 0 0 0 7px #fff",
-                                      // Solid border guarantees the swatch edge is always
-                                      // visible: dark border on light bg, light border on dark bg.
-                                      // Uses currentColor so it inherits the theme foreground.
                                       border: "1.5px solid currentColor",
                                       outline: "none",
                                       cursor: available ? "pointer" : "not-allowed",
                                       opacity: available ? 1 : 0.3,
                                       transition: "box-shadow 0.15s ease, opacity 0.15s ease",
-                                      padding: 0,
-                                      flexShrink: 0,
+                                      padding: 0, flexShrink: 0,
                                       WebkitAppearance: "none",
                                     }}
                                   />
                                 );
                               }
 
-                              // ── Non-color (e.g. size): plain text, no border ──
                               return (
                                 <button
                                   key={value}
@@ -1043,16 +1000,13 @@ function OfferSlugPage() {
                                   aria-pressed={selected}
                                   style={{
                                     minHeight: "2rem", minWidth: "2.5rem",
-                                    padding: "0 0.5rem",
-                                    border: "none",
-                                    background: "transparent",
-                                    color: "var(--foreground)",
+                                    padding: "0 0.5rem", border: "none",
+                                    background: "transparent", color: "var(--foreground)",
                                     fontSize: "9px", fontWeight: selected ? 700 : 400,
                                     letterSpacing: "0.12em", textTransform: "uppercase",
                                     cursor: available ? "pointer" : "not-allowed",
                                     opacity: available ? (selected ? 1 : 0.55) : 0.2,
-                                    transition: "all 0.15s ease",
-                                    fontFamily: "inherit",
+                                    transition: "all 0.15s ease", fontFamily: "inherit",
                                     textDecoration: selected ? "underline" : "none",
                                     textUnderlineOffset: "3px",
                                   }}
