@@ -54,8 +54,12 @@ function ShopPage() {
 }
 
 const ProductCell = memo(({ product }: { product: Product }) => {
+  // Skip index 0 — Printful always puts the logo/design mockup there.
+  // Fall back to index 0 only if there's a single image (no real photo yet).
   const imageUrl =
-    Array.isArray(product.image_urls) && product.image_urls.length > 0
+    Array.isArray(product.image_urls) && product.image_urls.length > 1
+      ? product.image_urls[1]
+      : Array.isArray(product.image_urls) && product.image_urls.length === 1
       ? product.image_urls[0]
       : null;
   const hasDiscount =
