@@ -104,7 +104,7 @@ function AdminPage() {
   });
 
   // ── UI State ────────────────────────────────────────────────────────────
-  const [revenueRange, setRevenueRange] = useState<"day" | "week" | "month" | "all">("month");
+  const [revenueRange, setRevenueRange] = useState<"day" | "week" | "month" | "all">("day");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRow, setSelectedRow] = useState<any>(null);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -325,18 +325,19 @@ function AdminPage() {
     setSection("products");
   };
 
-  const saveSiteConfig = async () => {
+  const saveSiteConfig = async (updatedContent: SiteContent) => {
     setSiteSaving(true);
     try {
       const payload: any = {
         id: "main",
-        hero_headline: siteContent.hero_headline || "",
-        hero_subheadline: siteContent.hero_subheadline || "",
-        hero_cta: siteContent.hero_cta || "",
-        price_display: siteContent.price_display || "",
-        price_original: siteContent.price_original || "",
-        launch_pricing_active: siteContent.launch_pricing_active ?? false,
-        guarantee_days: String(siteContent.guarantee_days || "30"),
+        hero_headline: updatedContent.hero_headline || "",
+        hero_subheadline: updatedContent.hero_subheadline || "",
+        hero_cta: updatedContent.hero_cta || "",
+        price_display: updatedContent.price_display || "",
+        price_original: updatedContent.price_original || "",
+        launch_pricing_active: updatedContent.launch_pricing_active ?? false,
+        guarantee_days: String(updatedContent.guarantee_days || "30"),
+        theme: updatedContent.theme,
         updated_at: new Date().toISOString(),
       };
 
@@ -596,30 +597,25 @@ function AdminPage() {
                     <span className="text-[10px] uppercase tracking-widest">Theme</span>
                     <div className={`flex border overflow-hidden ${isDark ? "border-white/20" : "border-black/20"}`}>
                       <button 
-                        onClick={() => { setSiteContent(s => ({ ...s, theme: "light" })); setSiteEdited(true); }}
+                        onClick={() => { 
+                          setIsDark(false); 
+                          saveSiteConfig({ ...siteContent, theme: "light" }); 
+                        }}
                         className={`px-4 py-2 text-[9px] font-bold uppercase transition-all ${!isDark ? "bg-black text-white" : "hover:bg-white/10"}`}
                       >
                         LIGHT
                       </button>
                       <button 
-                        onClick={() => { setSiteContent(s => ({ ...s, theme: "dark" })); setSiteEdited(true); }}
+                        onClick={() => { 
+                          setIsDark(true); 
+                          saveSiteConfig({ ...siteContent, theme: "dark" }); 
+                        }}
                         className={`px-4 py-2 text-[9px] font-bold uppercase transition-all ${isDark ? "bg-white text-black" : "hover:bg-black/10"}`}
                       >
                         DARK
                       </button>
                     </div>
                   </div>
-                  {siteEdited && (
-                    <button 
-                      onClick={saveSiteConfig}
-                      disabled={siteSaving}
-                      className={`w-full py-3 text-[10px] font-bold uppercase transition-all ${
-                        isDark ? "bg-white text-black hover:bg-gray-200" : "bg-black text-white hover:bg-gray-800"
-                      }`}
-                    >
-                      {siteSaving ? "SAVING…" : "APPLY CHANGES"}
-                    </button>
-                  )}
                 </div>
               </div>
               <div className="space-y-4">
