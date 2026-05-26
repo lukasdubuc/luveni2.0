@@ -621,9 +621,9 @@ function AdminPage() {
   isDark ? "bg-white/5" : "bg-gray-50/50"
 }`}>
   {/* Specifically target the second image (index 1) */}
-  {p.image_urls?.[1] ? (
+  {p.image_urls?.[2] ? (
     <img 
-      src={p.image_urls[1]} 
+      src={p.image_urls[2]} 
       alt={p.title || "Product"} 
       className="max-h-full max-w-full object-contain" 
     />
