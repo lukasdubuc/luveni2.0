@@ -532,7 +532,7 @@ function AdminPage() {
     <div className={`relative flex aspect-[2/3] items-center justify-center overflow-hidden bg-transparent p-3 sm:p-4 group-hover:scale-105 transition-all duration-300 ${
       isDark ? "bg-white/5" : "bg-gray-50/50"
     }`}>
-     {/* Ignore Printful design mockup at index 0 and use first real product image */}
+   {/* Ignore Printful preview image at index 0 */}
 {p.image_urls?.[1] ? (
   <img
     src={p.image_urls[1]}
@@ -540,10 +540,14 @@ function AdminPage() {
     className="max-h-full max-w-full object-contain"
   />
 ) : (
-        <span className={`text-[7px] uppercase tracking-[0.3em] ${isDark ? "text-white/20" : "text-black/20"}`}>
-          No Image
-        </span>
-      )}
+  <span
+    className={`text-[7px] uppercase tracking-[0.3em] ${
+      isDark ? "text-white/20" : "text-black/20"
+    }`}
+  >
+    No Image
+  </span>
+)}
     </div>
     {/* ... rest of your card ... */}
   </div>
