@@ -734,24 +734,102 @@ function OfferSlugPage() {
                     alignItems: "center", gap: "1rem",
                     animation: "pdp-option-in 0.15s linear both",
                   }}>
-                    {visibleOptionKeys.map((option, idx) => {
-                      if (idx !== currentStep && currentStep !== null) return null;
-                      if (currentStep === null) return null;
+                  {visibleOptionKeys.map((option, idx) => {
+  if (idx !== currentStep && currentStep !== null) return null;
+  if (currentStep === null) return null;
 
-                      const isColor = isColorOption(option);
-                      const isLast = idx === visibleOptionKeys.length - 1;
+  const isLast = idx === visibleOptionKeys.length - 1;
 
-                      return (
-                        <div key={option} style={{
-                          display: "flex", flexDirection: "column",
-                          alignItems: "center", gap: "0.5rem", width: "100%",
-                        }}>
-                          <div style={{
-                            fontSize: "9px", fontWeight: 500,
-                            letterSpacing: "0.2em", textTransform: "uppercase",
-                            opacity: 0.45, color: "var(--foreground)",
-                            fontFamily: "inherit",
-                          }}>
+  return (
+    <div key={option} style={{
+      display: "flex", flexDirection: "column",
+      alignItems: "center", gap: "0.5rem", width: "100%",
+    }}>
+      <div style={{
+        fontSize: "9px", fontWeight: 500,
+        letterSpacing: "0.2em", textTransform: "uppercase",
+        opacity: 0.45, color: "var(--foreground)",
+        fontFamily: "inherit",
+      }}>
+        {normalizeOptionName(option)}
+      </div>
+
+      <div style={{
+        display: "flex", flexWrap: "wrap",
+        gap: "0.5rem", justifyContent: "center",
+      }}>
+        {optionValues[option]?.map((value) => {
+          const selected = selection[option] === value;
+          const available = isOptionAvailable(option, value);
+
+          const handleChipClick = () => {
+            setSelection((cur) => ({ ...cur, [option]: value }));
+
+            // Optional: Keep gallery sync if you still want it
+            if (isColorOption(option)) jumpGalleryToColor(value);
+
+            if (!isLast) {
+              setCurrentStep(idx + 1);
+            } else {
+              const updatedSelection = { ...selection, [option]: value };
+              const variant = variants.find((v) =>
+                optionKeys.every((k) => v.attributes?.[k] === updatedSelection[k])
+              );
+              try {
+                addItem({
+                  productId: product.id,
+                  variantSku: variant?.sku,
+                  title: product.title,
+                  price_cents: variant?.price_cents ?? selectedPrice ?? product.price_cents,
+                  image_url: resolveVariantImage(
+                    product.image_urls ?? [],
+                    updatedSelection[colorOptionKey ?? ""] ?? updatedSelection["color"] ?? updatedSelection["colour"],
+                    colorValues,
+                  ),
+                  metadata: {
+                    external_sku: variant?.external_sku,
+                    fulfillment_provider: variant?.fulfillment_provider || "printful",
+                  },
+                });
+                setCurrentStep(null);
+                setAddedFeedback(true);
+                setTimeout(() => {
+                  setAddedFeedback(false);
+                  setOptionsOpen(false);
+                }, 1200);
+              } catch (e) {
+                console.error("Cart Engine Critical Failure:", e);
+              }
+            }
+          };
+
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={handleChipClick}
+              disabled={!available}
+              aria-pressed={selected}
+              style={{
+                minHeight: "2rem", minWidth: "2.5rem",
+                padding: "0 0.5rem", border: "none",
+                background: "transparent", color: "var(--foreground)",
+                fontSize: "9px", fontWeight: selected ? 700 : 400,
+                letterSpacing: "0.12em", textTransform: "uppercase",
+                cursor: available ? "pointer" : "not-allowed",
+                opacity: available ? (selected ? 1 : 0.55) : 0.2,
+                transition: "all 0.15s ease", fontFamily: "inherit",
+                textDecoration: "none", // Underline removed
+              }}
+            >
+              {value}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+})}
                             {normalizeOptionName(option)}
                           </div>
 
