@@ -859,15 +859,10 @@ function AdminPage() {
                         : "bg-gray-50/50"
                     }`}
                   >
-                    {p.image_urls?.[1] ? (
+                    {p.image_urls?.[1] || p.image_urls?.[0] ? (
                       <img
-                        src={
-                          p.image_urls[1]
-                        }
-                        alt={
-                          p.title ||
-                          "Product"
-                        }
+                        src={p.image_urls[1] ?? p.image_urls[0]}
+                        alt={p.title || "Product"}
                         className="max-h-full max-w-full object-contain"
                       />
                     ) : (
