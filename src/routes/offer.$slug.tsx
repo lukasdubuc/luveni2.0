@@ -805,36 +805,7 @@ function OfferSlugPage() {
                                 }
                               };
 
-                              if (isColor) {
-                                return (
-                                  <button
-                                    key={value}
-                                    type="button"
-                                    onClick={handleChipClick}
-                                    disabled={!available}
-                                    aria-label={value}
-                                    aria-pressed={selected}
-                                    title={value}
-                                    style={{
-                                      display: "inline-block",
-                                      width: "22px", height: "22px",
-                                      borderRadius: "50%",
-                                      background: colorHex,
-                                      boxShadow: selected
-                                        ? "0 0 0 3px #fff, 0 0 0 5px #000, 0 0 0 7px #fff, 0 0 0 9px var(--foreground)"
-                                        : "0 0 0 3px #fff, 0 0 0 5px #000, 0 0 0 7px #fff",
-                                      border: "1.5px solid currentColor",
-                                      outline: "none",
-                                      cursor: available ? "pointer" : "not-allowed",
-                                      opacity: available ? 1 : 0.3,
-                                      transition: "box-shadow 0.15s ease, opacity 0.15s ease",
-                                      padding: 0, flexShrink: 0,
-                                      WebkitAppearance: "none",
-                                    }}
-                                  />
-                                );
-                              }
-
+        
                               return (
                                 <button
                                   key={value}
