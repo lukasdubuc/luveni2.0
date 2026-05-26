@@ -91,6 +91,21 @@ function formatPrice(cents?: number | null) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+// ─── Resolve color-matched image from Printful image_urls ────────────────────
+// Printful always puts the logo/design mockup at index 0.
+// Color variant images start at index 1, ordered to match the color option values.
+function resolveVariantImage(
+  imageUrls: string[],
+  colorValue: string | undefined,
+  colorValues: string[],
+): string {
+  if (!colorValue || colorValues.length === 0) return imageUrls[1] ?? imageUrls[0] ?? "";
+  const colorIndex = colorValues.indexOf(colorValue);
+  // imageUrls[0] is always the logo mockup — color images start at index 1
+  const candidate = imageUrls[colorIndex + 1];
+  return candidate ?? imageUrls[1] ?? imageUrls[0] ?? "";
+}
+
 // ─── Resolve any Printful / POD color string to a CSS color ─────────────────
 // Handles 500+ exact names, compound names, raw hex/rgb/hsl, CSS keywords.
 // Always returns a string — swatches are always circles, never text.
@@ -237,8 +252,8 @@ const _colorMap: Record<string, string> = {
   plum:               "#843179", "dark plum":        "#5a1a5a",
   eggplant:           "#614051", "grape":            "#6f2da8",
   orchid:             "#da70d6", mauve:              "#e0b0ff",
-  "dusty mauve":      "#c5a0a0", amethyst:           "#9966cc",
-  periwinkle:         "#ccccff", "slate purple":     "#7b68ee",
+  amethyst:           "#9966cc", periwinkle:         "#ccccff",
+  "slate purple":     "#7b68ee",
   // ── Browns / Tans ─────────────────────────────────────────────────────
   brown:              "#a0522d", "dark brown":       "#5c3317",
   "light brown":      "#b5651d", "medium brown":     "#8b4513",
@@ -254,13 +269,12 @@ const _colorMap: Record<string, string> = {
   "dark taupe":       "#483c32", "light taupe":      "#c4b49a",
   walnut:             "#5d3a1a", "warm brown":       "#8b5e3c",
   toffee:             "#a07840", hazel:              "#8e7618",
-  sienna:             "#a0522d", "burnt sienna":     "#e97451",
-  umber:              "#635147", "raw umber":        "#826644",
+  sienna:             "#a0522d", umber:              "#635147",
+  "raw umber":        "#826644",
   // ── Metallics ─────────────────────────────────────────────────────────
-  "rose gold":        "#b76e79", "light rose gold":  "#c8929a",
-  champagne:          "#f7e7ce", "champagne gold":   "#f0d090",
-  "vintage gold":     "#c5a028", "antique gold":     "#c9a84c",
-  "brushed gold":     "#d4a843", "light gold":       "#f0d060",
+  "light rose gold":  "#c8929a", champagne:          "#f7e7ce",
+  "champagne gold":   "#f0d090", "vintage gold":     "#c5a028",
+  "antique gold":     "#c9a84c", "brushed gold":     "#d4a843",
   "silver gray":      "#c0c0c0", "brushed silver":   "#b8b8b8",
   bronze:             "#cd7f32", copper:             "#b87333",
   // ── Misc / Patterns ───────────────────────────────────────────────────
@@ -561,6 +575,16 @@ function OfferSlugPage() {
   // treat as no-variant product (add directly).
   const hasVariants = variants.length > 0 && visibleOptionKeys.length > 0;
 
+  // ── Resolve color values for image mapping ───────────────────────────────
+  const colorOptionKey = useMemo(
+    () => optionKeys.find((k) => isColorOption(k)),
+    [optionKeys],
+  );
+  const colorValues = useMemo(
+    () => (colorOptionKey ? optionValues[colorOptionKey] ?? [] : []),
+    [colorOptionKey, optionValues],
+  );
+
   // ── Add to cart ──────────────────────────────────────────────────────────
   const commitToCart = useCallback(() => {
     if (!product) return;
@@ -571,9 +595,13 @@ function OfferSlugPage() {
       addItem({
         productId: product.id,
         variantSku: variant?.sku,
-        title: variant?.sku ? `${product.title} (${variant.sku})` : product.title,
+        title: product.title,
         price_cents: selectedPrice ?? product.price_cents,
-        image_url: product.image_urls?.[0] || "",
+        image_url: resolveVariantImage(
+          product.image_urls ?? [],
+          selection[colorOptionKey ?? ""] ?? selection["color"] ?? selection["colour"],
+          colorValues,
+        ),
         metadata: {
           external_sku: variant?.external_sku,
           fulfillment_provider: variant?.fulfillment_provider || "printful",
@@ -586,7 +614,7 @@ function OfferSlugPage() {
     } catch (e) {
       console.error("Cart Engine Critical Failure:", e);
     }
-  }, [product, variants, optionKeys, selection, selectedPrice, addItem]);
+  }, [product, variants, optionKeys, selection, selectedPrice, colorOptionKey, colorValues, addItem]);
 
   // ── Main CTA click handler ───────────────────────────────────────────────
   const handleAddToCart = useCallback(() => {
@@ -935,11 +963,13 @@ function OfferSlugPage() {
                                     addItem({
                                       productId: product.id,
                                       variantSku: variant?.sku,
-                                      title: variant?.sku
-                                        ? `${product.title} (${variant.sku})`
-                                        : product.title,
+                                      title: product.title,
                                       price_cents: variant?.price_cents ?? selectedPrice ?? product.price_cents,
-                                      image_url: product.image_urls?.[0] || "",
+                                      image_url: resolveVariantImage(
+                                        product.image_urls ?? [],
+                                        updatedSelection[colorOptionKey ?? ""] ?? updatedSelection["color"] ?? updatedSelection["colour"],
+                                        colorValues,
+                                      ),
                                       metadata: {
                                         external_sku: variant?.external_sku,
                                         fulfillment_provider: variant?.fulfillment_provider || "printful",
