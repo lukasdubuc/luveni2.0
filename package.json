@@ -5,7 +5,7 @@
   "type": "module",
  "scripts": {
   "dev": "vite dev",
-  "build": "tanstack-router generate && vite build",
+  "build": "node node_modules/@tanstack/router-generator/dist/bin/index.js generate && vite build",
   "build:dev": "vite build --mode development",
   "preview": "vite preview",
   "lint": "eslint .",
