@@ -39,16 +39,21 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
     meta: [{ charSet: "utf-8" }, { name: "viewport", content: "width=device-width, initial-scale=1" }],
-    links: [{ rel: "stylesheet", href: appCss }, { rel: "icon", type: "image/x-icon", href: "/favicon.ico" }],
+    // Removed link here
   }),
-  shellComponent: RootShell, component: RootComponent, notFoundComponent: NotFoundComponent, errorComponent: ErrorComponent,
+  shellComponent: RootShell,
+  // ...
 });
-
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Hoisted before HeadContent so it runs before stylesheet paint */}
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        {/* ADD FAVICON HERE */}
+        <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+        
+        {/* Hoisted before HeadContent */}
         <script dangerouslySetInnerHTML={{ __html: `
           (function() {
             try {
