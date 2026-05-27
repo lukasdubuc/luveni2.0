@@ -1,6 +1,3 @@
-[run]
-build = "npm run build"
-
 [install]
 minimumReleaseAge = 86400
 minimumReleaseAgeExcludes = ["@lovable.dev/vite-tanstack-config"]
