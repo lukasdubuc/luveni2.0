@@ -3,7 +3,7 @@
   "private": true,
   "sideEffects": false,
   "type": "module",
-  {
+  }
   "scripts": {
     "dev": "bun dev",
     "build": "bun run build",
