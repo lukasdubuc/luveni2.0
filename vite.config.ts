@@ -1,15 +1,18 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
+import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 
-// vite.config.ts
 export default defineConfig({
   plugins: [
     TanStackRouterVite({
-      // Explicitly tell the router to only look in src/routes
       routesDirectory: './src/routes',
     }),
-    // ...
   ],
-})
-    // Keep this clean. The plugin handles the route tree automatically.
+  tanstackStart: {
+    server: { 
+      entry: "server", 
+      host: "0.0.0.0", 
+      port: 8080, 
+      allowedHosts: true 
+    },
   },
 });
