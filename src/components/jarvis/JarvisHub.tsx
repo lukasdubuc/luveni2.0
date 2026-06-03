@@ -395,7 +395,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: 20,
     width: '56px',
     height: '56px',
-    borderRadius: '9999px', // Upgraded to standard capsule radius for reliable rounded border renders
+    borderRadius: '9999px', // Safe pill capsule border shapes
     background: 'rgba(13, 13, 30, 0.4)',
     backdropFilter: 'blur(16px)',
     WebkitBackdropFilter: 'blur(16px)',
