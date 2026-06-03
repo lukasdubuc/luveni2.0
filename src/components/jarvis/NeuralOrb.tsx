@@ -104,15 +104,7 @@ void main() {
 `;
 
 const STATE_NUM: Record<OrbState, number> = {
-  idle:0, listening:1, thinking:2, speaking:3, error:4,
-};
-
-const STATE_LABEL: Record<OrbState, string> = {
-  idle:      'STANDBY',
-  listening: 'LISTENING',
-  thinking:  'PROCESSING',
-  speaking:  'RESPONDING',
-  error:     'ERROR',
+  idle: 0, listening: 1, thinking: 2, speaking: 3, error: 4,
 };
 
 function loadThree(): Promise<void> {
@@ -141,7 +133,7 @@ export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbPr
   const audioRef = useRef(0);
 
   const ctx = useRef<{
-    renderer: any; uniforms: any; clock: any; raf: number;
+    renderer: any; uniforms: any; clock: any;
     geometry?: any; material?: any;
   } | null>(null);
 
@@ -150,10 +142,11 @@ export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbPr
   // ── Boot WebGL ──────────────────────────────────────────────
   useEffect(() => {
     if (!mountRef.current) return;
-    let dead = false;
+    let active = true;
+    let rafId: number | null = null;
 
     loadThree()
-      .then(() => { if (!dead && mountRef.current) boot(); })
+      .then(() => { if (active && mountRef.current) boot(); })
       .catch(e => console.error('[NeuralOrb]', e));
 
     function boot() {
@@ -162,8 +155,13 @@ export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbPr
 
       el.querySelector('canvas')?.remove();
 
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      // Cap DPR to 1.5 to reduce fragment shader calculations on high-res displays
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      const renderer = new THREE.WebGLRenderer({ 
+        antialias: true, 
+        alpha: true,
+        powerPreference: "high-performance"
+      });
       renderer.setPixelRatio(dpr);
       renderer.setSize(size, size);
       renderer.setClearColor(0x000000, 0);
@@ -182,7 +180,8 @@ export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbPr
       const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
       camera.position.z = 3.0;
 
-      const geo = new THREE.SphereGeometry(1.0, 64, 64);
+      // Lowered from 64x64 to 48x48 to optimize GPU overhead
+      const geo = new THREE.SphereGeometry(1.0, 48, 48);
 
       const uniforms = {
         uTime:  { value: 0 },
@@ -205,31 +204,34 @@ export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbPr
       const clock = new THREE.Clock();
 
       const tick = () => {
-        const id = requestAnimationFrame(tick);
+        // Halt processing immediately if the component is unmounted
+        if (!active) return;
+        
+        rafId = requestAnimationFrame(tick);
+        
         const t  = clock.getElapsedTime();
         uniforms.uTime.value  = t;
         uniforms.uAudio.value = audioRef.current;
 
-        if (ctx.current) {
-          ctx.current.raf = id;
-        }
         renderer.render(scene, camera);
       };
       tick();
 
-      ctx.current = { renderer, uniforms, clock, raf: 0, geometry: geo, material: mat };
+      ctx.current = { renderer, uniforms, clock, geometry: geo, material: mat };
     }
 
     return () => {
-      dead = true;
+      active = false;
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
       if (ctx.current) {
-        cancelAnimationFrame(ctx.current.raf);
         ctx.current.geometry?.dispose();
         ctx.current.material?.dispose();
-        ctx.current.renderer.dispose();
-        mountRef.current?.querySelector('canvas')?.remove();
+        ctx.current.renderer?.dispose();
         ctx.current = null;
       }
+      mountRef.current?.querySelector('canvas')?.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [size]);
@@ -239,8 +241,6 @@ export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbPr
     if (!ctx.current) return;
     ctx.current.uniforms.uState.value = STATE_NUM[state];
   }, [state]);
-
-  const isSystemActive = state !== 'idle';
 
   return (
     <div className="relative w-full h-[60vh] flex flex-col items-center justify-center overflow-visible">
@@ -255,7 +255,7 @@ export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbPr
         }
       `}} />
 
-      {/* ── 1. Glowing WebGL Orb ── */}
+      {/* ── Glowing WebGL Orb ── */}
       <div
         ref={mountRef}
         style={{
@@ -266,31 +266,6 @@ export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbPr
           overflow:  'visible',
         }}
       />
-
-      {/* ── 2. Backdrop-filter glassmorphism system info readout ── */}
-      <div
-        style={{
-          display:         isSystemActive ? 'block' : 'none',
-          position:        'absolute',
-          bottom:          '5%',
-          padding:         '8px 16px',
-          background:      'rgba(255, 255, 255, 0.02)',
-          border:          '1px solid rgba(255, 255, 255, 0.08)',
-          borderRadius:    '4px',
-          backdropFilter:  'blur(10px)',
-          WebkitBackdropFilter: 'blur(10px)',
-          fontFamily:      'Consolas, "Andale Mono", "Courier New", monospace',
-          fontSize:        '10px',
-          color:           'rgba(255, 255, 255, 0.7)',
-          letterSpacing:   '0.15em',
-          textTransform:   'uppercase',
-          textAlign:       'center',
-          boxShadow:       '0 4px 24px rgba(0, 0, 0, 0.2)',
-        }}
-      >
-        SYS_STATUS: ACTIVE // FEED_IN: {audioLevel.toFixed(3)} // STATE: {STATE_LABEL[state]}
-      </div>
-
     </div>
   );
 }
