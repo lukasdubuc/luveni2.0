@@ -49,67 +49,6 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
   const rafRef = useRef<number>(0);
   const stateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Keep references to mute and orb states to prevent stale closures in Web Speech VAD callbacks
-  const isMutedRef = useRef(isMuted);
-  const orbStateRef = useRef(orbState);
-  const audioLevelRef = useRef(audioLevel);
-
-  useEffect(() => {
-    isMutedRef.current = isMuted;
-  }, [isMuted]);
-
-  useEffect(() => {
-    orbStateRef.current = orbState;
-  }, [orbState]);
-
-  useEffect(() => {
-    audioLevelRef.current = audioLevel;
-  }, [audioLevel]);
-
-  // Page-specific theme fix: Apply black background to body and HTML root on mount,
-  // and restore original styles on unmount to prevent affecting any other pages on the site.
-  useEffect(() => {
-    if (typeof document !== 'undefined') {
-      const originalHtmlBg = document.documentElement.style.background;
-      const originalHtmlBgColor = document.documentElement.style.backgroundColor;
-      const originalBodyBg = document.body.style.background;
-      const originalBodyBgColor = document.body.style.backgroundColor;
-      
-      // Store original meta theme-color
-      const metaTheme = document.querySelector('meta[name="theme-color"]');
-      const originalMetaThemeColor = metaTheme ? metaTheme.getAttribute('content') : null;
-
-      // Apply Jarvis black styles
-      document.documentElement.style.background = '#000000';
-      document.documentElement.style.backgroundColor = '#000000';
-      document.body.style.background = '#000000';
-      document.body.style.backgroundColor = '#000000';
-
-      // Set meta theme-color for mobile browser safe areas
-      let targetMetaTheme = metaTheme;
-      if (!targetMetaTheme) {
-        targetMetaTheme = document.createElement('meta');
-        targetMetaTheme.setAttribute('name', 'theme-color');
-        document.head.appendChild(targetMetaTheme);
-      }
-      targetMetaTheme.setAttribute('content', '#000000');
-
-      return () => {
-        // Restore original backgrounds and colors when leaving the page
-        document.documentElement.style.background = originalHtmlBg;
-        document.documentElement.style.backgroundColor = originalHtmlBgColor;
-        document.body.style.background = originalBodyBg;
-        document.body.style.backgroundColor = originalBodyBgColor;
-        
-        if (originalMetaThemeColor) {
-          targetMetaTheme?.setAttribute('content', originalMetaThemeColor);
-        } else if (!metaTheme && targetMetaTheme) {
-          targetMetaTheme.remove();
-        }
-      };
-    }
-  }, []);
-
   const { ask } = useGemini(geminiApiKey);
 
   // Smooth state transition to debounce VAD state-flickers (fixes flashing text)
@@ -129,10 +68,9 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     }
   }, []);
 
-  // Optimized animation rendering loop runs statically once on mount using values from the audio ref
   useEffect(() => {
     const tick = () => {
-      smoothLevel.current += (audioLevelRef.current - smoothLevel.current) * 0.25;
+      smoothLevel.current += (audioLevel - smoothLevel.current) * 0.25;
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
@@ -140,7 +78,7 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
       cancelAnimationFrame(rafRef.current);
       if (stateTimeoutRef.current) clearTimeout(stateTimeoutRef.current);
     };
-  }, []);
+  }, [audioLevel]);
 
   useEffect(() => {
     const checkTelemetry = async () => {
@@ -177,13 +115,22 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     return () => clearInterval(interval);
   }, [geminiApiKey, isReady]);
 
+  const { speak, cancel } = useSpeechOutput({
+    onStart: () => changeOrbState('speaking'),
+    onBoundary: (lvl) => { setAudioLevel(lvl); },
+    onEnd: () => {
+      setAudioLevel(0);
+      changeOrbState('idle');
+    },
+  });
+
   const handleTranscript = useCallback(
     async (text: string) => {
-      if (isMutedRef.current) return; // Drop processing if mic receives transcripts while muting
+      if (isMuted) return; // Drop processing if mic receives transcripts while muting
       setLastLine(text);
       changeOrbState('thinking');
       setAudioLevel(0);
-      cancel(); // Silences active output immediately if you interrupt Jarvis
+      cancel();
       try {
         const reply = await ask(text);
         setLastLine(reply);
@@ -193,84 +140,26 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
         speak('I encountered an issue reaching the neural network, sir.');
       }
     },
-    [ask, cancel, speak, changeOrbState]
+    [ask, cancel, speak, changeOrbState, isMuted]
   );
 
-  // Maintain reference safety for hook event listeners to prevent loop crashes
-  const onTranscriptRef = useRef(handleTranscript);
-  const onStateChangeRef = useRef<(s: OrbState) => void>(() => {});
-  const onLevelChangeRef = useRef<(lvl: number) => void>(() => {});
-
-  useEffect(() => {
-    onTranscriptRef.current = handleTranscript;
-  }, [handleTranscript]);
-
-  useEffect(() => {
-    onStateChangeRef.current = (s) => {
-      if (isMutedRef.current) return;
-      if (s === 'idle' && orbStateRef.current === 'speaking') return;
+  useVoiceInput({
+    onTranscript: (text) => {
+      if (isMuted) return; // Drop transcript triggers instantly when muted
+      handleTranscript(text);
+    },
+    onStateChange: (s) => {
+      if (isMuted) return; // Drop any asynchronous engine state updates if muted
+      if (s === 'idle' && orbState === 'speaking') return;
       changeOrbState(s);
-    };
-  }, [changeOrbState]);
-
-  useEffect(() => {
-    onLevelChangeRef.current = (lvl) => {
-      if (isMutedRef.current) {
-        setAudioLevel(0);
+    },
+    onLevelChange: (lvl) => {
+      if (isMuted) {
+        setAudioLevel(0); // Zero out visual feedback pulses immediately
         return;
       }
       setAudioLevel(lvl);
-    };
-  }, []);
-
-  const stableOnTranscript = useCallback((text: string) => {
-    if (isMutedRef.current) return;
-    onTranscriptRef.current(text);
-  }, []);
-
-  const stableOnStateChange = useCallback((s: OrbState) => {
-    if (isMutedRef.current) return;
-    onStateChangeRef.current(s);
-  }, []);
-
-  const stableOnLevelChange = useCallback((lvl: number) => {
-    onLevelChangeRef.current(lvl);
-  }, []);
-
-  // Stabilized callbacks for the Speech Output hook
-  const onSpeechStartRef = useRef<() => void>(() => {});
-  const onSpeechBoundaryRef = useRef<(lvl: number) => void>(() => {});
-  const onSpeechEndRef = useRef<() => void>(() => {});
-
-  useEffect(() => {
-    onSpeechStartRef.current = () => changeOrbState('speaking');
-  }, [changeOrbState]);
-
-  useEffect(() => {
-    onSpeechBoundaryRef.current = (lvl) => setAudioLevel(lvl);
-  }, []);
-
-  useEffect(() => {
-    onSpeechEndRef.current = () => {
-      setAudioLevel(0);
-      changeOrbState('idle');
-    };
-  }, [changeOrbState]);
-
-  const stableOnSpeechStart = useCallback(() => onSpeechStartRef.current(), []);
-  const stableOnSpeechBoundary = useCallback((lvl: number) => onSpeechBoundaryRef.current(lvl), []);
-  const stableOnSpeechEnd = useCallback(() => onSpeechEndRef.current(), []);
-
-  const { speak, cancel } = useSpeechOutput({
-    onStart: stableOnSpeechStart,
-    onBoundary: stableOnSpeechBoundary,
-    onEnd: stableOnSpeechEnd,
-  });
-
-  useVoiceInput({
-    onTranscript: stableOnTranscript,
-    onStateChange: stableOnStateChange,
-    onLevelChange: stableOnLevelChange,
+    },
     enabled: isReady && !isMuted,
   });
 
@@ -278,7 +167,7 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     if (!isReady) {
       setIsReady(true);
       setIsMuted(false);
-      // Intro code removed - starts listening immediately
+      // Intro code removed - starts listening immediately on initialization
     } else {
       const nextMuted = !isMuted;
       setIsMuted(nextMuted);
@@ -312,6 +201,16 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
 
   return (
     <div style={styles.root}>
+      {/* Scope-safe CSS style override for the HTML/Body background. 
+          Prevents mobile rubber-banding white borders locally on Safari/Chrome 
+          without manual DOM mutation side-effects. */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        html, body {
+          background-color: #000000 !important;
+          background: #000000 !important;
+        }
+      ` }} />
+
       <div style={styles.scanlines} />
       <div style={styles.topLabel}>J·A·R·V·I·S — LUVENI</div>
 
