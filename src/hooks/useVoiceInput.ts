@@ -13,7 +13,7 @@ interface UseVoiceInputOptions {
   vadThreshold?: number;
   silenceMs?: number;
   enabled?: boolean;
-  preventListening?: boolean; // Added parameter
+  preventListening?: boolean;
 }
 
 export function useVoiceInput({
@@ -23,13 +23,11 @@ export function useVoiceInput({
   vadThreshold = DEFAULT_VAD_THRESHOLD,
   silenceMs = DEFAULT_SILENCE_MS,
   enabled = true,
-  preventListening = false, // Default fallback
+  preventListening = false,
 }: UseVoiceInputOptions) {
   const onTranscriptRef = useRef(onTranscript);
   const onStateChangeRef = useRef(onStateChange);
   const onLevelChangeRef = useRef(onLevelChange);
-  
-  // Guard reference to avoid rebuilding audio context when state changes
   const preventListeningRef = useRef(preventListening);
 
   useEffect(() => {
@@ -146,7 +144,6 @@ export function useVoiceInput({
         
         onLevelChangeRef.current(level);
 
-        // Only begin recognition if VAD is not flagged as locked/prevented
         if (!preventListeningRef.current && avg > vadThreshold && stateRef.current === 'idle') {
           startRecognition();
         }
