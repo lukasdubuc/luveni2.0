@@ -4,13 +4,13 @@
 
 import { useRef, useCallback } from 'react';
 import type { JarvisMessage } from '../types/jarvis';
+import { supabase } from "@/integrations/supabase/client";
 import {
-  GEMINI_ENDPOINT,
   JARVIS_SYSTEM_PROMPT,
   DEFAULT_MAX_HISTORY,
 } from '../lib/jarvis-config';
 
-export function useGemini(apiKey: string) {
+export function useGemini() {
   const history = useRef<JarvisMessage[]>([]);
 
   const ask = useCallback(
@@ -79,40 +79,44 @@ export function useGemini(apiKey: string) {
 - Note: Refer strictly to these variables if the user asks for the current time, date, or day.
 `;
 
-      // 5. Local Storage Override (Bypasses Lovable build caching entirely)
-      const overrideKey = typeof window !== 'undefined' ? localStorage.getItem('JARVIS_GEMINI_KEY') : null;
-      
-      // If a valid local override starting with AIzaSy exists, use it. Otherwise, use the prop.
-      const activeKey = (overrideKey && overrideKey.startsWith('AIzaSy')) ? overrideKey : apiKey;
+      const systemPrompt = `${JARVIS_SYSTEM_PROMPT}\n${timeContext}`;
+      const mappedHistory = history.current.map(({ role, parts }) => ({ role, parts }));
 
-      const payload = {
-        systemInstruction: { 
-          parts: [{ text: `${JARVIS_SYSTEM_PROMPT}\n${timeContext}` }] 
-        },
-        contents: history.current.map(({ role, parts }) => ({ role, parts })),
-        generationConfig: { maxOutputTokens: 220, temperature: 0.75 },
+      // Helper to attempt Edge Function execution securely
+      const invokeEdgeFunction = async (name: string) => {
+        try {
+          const { data, error } = await supabase.functions.invoke(name, {
+            body: {
+              message: userText,
+              history: mappedHistory,
+              systemPrompt: systemPrompt
+            }
+          });
+          if (error) throw error;
+          return data;
+        } catch (err) {
+          console.warn(`[Jarvis] Failed invoking edge function '${name}':`, err);
+          return null;
+        }
       };
 
-      const res = await fetch(GEMINI_ENDPOINT(activeKey), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      // 5. Invoke standard Lovable backend 'gemini' proxy first [1]
+      let data = await invokeEdgeFunction('gemini');
 
-      if (!res.ok) {
-        const errText = await res.text();
-        console.error('[Jarvis] Gemini API payload failure:', {
-          status: res.status,
-          errorResponse: errText,
-          sentPayload: payload,
-        });
-        throw new Error(`Gemini error ${res.status}: ${errText}`);
+      // Fallback to 'chat-with-gemini' if the primary function is named differently
+      if (!data) {
+        console.log('[Jarvis] Primary proxy failed. Attempting fallback route...');
+        data = await invokeEdgeFunction('chat-with-gemini');
       }
 
-      const data = await res.json();
-      
+      if (!data) {
+        throw new Error("Unable to reach any secure backend Edge Functions. Verify your functions are deployed.");
+      }
+
       const reply: string =
-        data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Standing by, sir.';
+        data?.text || 
+        data?.reply || 
+        (typeof data === 'string' ? data : 'Standing by, sir.');
 
       // 6. Append model turn to history
       history.current.push({
@@ -123,7 +127,7 @@ export function useGemini(apiKey: string) {
 
       return reply;
     },
-    [apiKey]
+    []
   );
 
   const reset = useCallback(() => {
