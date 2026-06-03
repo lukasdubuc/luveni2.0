@@ -6,7 +6,7 @@ export const DEFAULT_VAD_THRESHOLD = 22;
 export const DEFAULT_SILENCE_MS = 1100;
 export const DEFAULT_MAX_HISTORY = 12;
 
-// Uses the highly intelligent 2.0-flash model with 1,500 free daily requests on your key
+// Central model endpoint pointing to the high-quota 2.0-flash model
 export const GEMINI_ENDPOINT = (apiKey: string) =>
   `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
