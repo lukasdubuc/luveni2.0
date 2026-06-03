@@ -27,50 +27,35 @@ export function useGemini(apiKey: string) {
         history.current = history.current.slice(-DEFAULT_MAX_HISTORY * 2);
       }
 
+      // Generate a highly structured context payload for current time, date, and timezone
       const now = new Date();
       const timeContext = `
-[SYSTEM CONTEXT]
+[SYSTEM TIME & DATE CONTEXT]
 - Current Local Time: ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
 - Current Date: ${now.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+- Current Year: ${now.getFullYear()}
+- Current Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}
+- Note: Always refer strictly to these metrics if the user asks for the current time, date, or day.
 `;
 
-      // Helper function to handle fallback requests if web tools fail
-      const executeRequest = async (useWebGrounding: boolean) => {
-        const payload: any = {
-          systemInstruction: { parts: [{ text: `${JARVIS_SYSTEM_PROMPT}\n${timeContext}` }] },
-          contents: history.current.map(({ role, parts }) => ({ role, parts })),
-          generationConfig: { maxOutputTokens: 220, temperature: 0.75 },
-        };
-
-        if (useWebGrounding) {
-          payload.tools = [{ googleSearch: {} }];
-        }
-
-        return await fetch(GEMINI_ENDPOINT(apiKey), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
+      const payload = {
+        // Prepend context to the base system prompt
+        systemInstruction: { 
+          parts: [{ text: `${JARVIS_SYSTEM_PROMPT}\n${timeContext}` }] 
+        },
+        contents: history.current.map(({ role, parts }) => ({ role, parts })),
+        generationConfig: { maxOutputTokens: 220, temperature: 0.75 },
       };
 
-      let res;
-      try {
-        // Attempt request with real-time Google Search grounding
-        res = await executeRequest(true);
-        
-        // If web grounding is unsupported, fallback to standard generation
-        if (!res.ok && (res.status === 400 || res.status === 403)) {
-          console.warn('[Jarvis] Google Search grounding failed or unsupported. Falling back...');
-          res = await executeRequest(false);
-        }
-      } catch (err) {
-        console.warn('[Jarvis] Network error during grounding request. Falling back...', err);
-        res = await executeRequest(false);
-      }
+      const res = await fetch(GEMINI_ENDPOINT(apiKey), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
 
       if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Gemini API Error [${res.status}]: ${errText}`);
+        const err = await res.text();
+        throw new Error(`Gemini ${res.status}: ${err}`);
       }
 
       const data = await res.json();
