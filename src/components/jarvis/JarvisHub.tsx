@@ -1,6 +1,5 @@
 // ─────────────────────────────────────────────────────────────
 //  J.A.R.V.I.S — Luveni GM  |  components/jarvis/JarvisHub.tsx
-//  Main entry — wires orb + voice input + Gemini + TTS
 // ─────────────────────────────────────────────────────────────
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -35,21 +34,21 @@ const STATE_COLOR: Record<OrbState, string> = {
 
 export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
   const [orbState, setOrbState]     = useState<OrbState>('idle');
-  const [audioLevel, setAudioLevel] = useState(0);
+  const [audioLevel, setAudioLevel] = useState(0); // State for actual visual representation
   const [lastLine, setLastLine]     = useState('');
   const [isReady, setIsReady]       = useState(false);
-  const [isMuted, setIsMuted]       = useState(true); // Starts muted on load
+  const [isMuted, setIsMuted]       = useState(true);
+  
   const [telemetry, setTelemetry]   = useState({
     core: false,
     vision: false,
     memory: false
   });
   
-  const smoothLevel = useRef(0);
-  const rafRef = useRef<number>(0);
+  const targetLevelRef = useRef(0); // Target level specified by microphone/VAD
+  const smoothLevelRef = useRef(0); // Current calculated smoothed value
   const stateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Keep references to mute and orb states to prevent stale closures in Web Speech VAD callbacks
   const isMutedRef = useRef(isMuted);
   const orbStateRef = useRef(orbState);
 
@@ -63,7 +62,6 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
 
   const { ask } = useGemini(geminiApiKey);
 
-  // Smooth state transition to debounce VAD state-flickers (fixes flashing text)
   const changeOrbState = useCallback((newState: OrbState) => {
     if (stateTimeoutRef.current) {
       clearTimeout(stateTimeoutRef.current);
@@ -71,7 +69,6 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     }
 
     if (newState === 'idle') {
-      // Debounce falling back to Standby to bridge visual gaps in voice engine detection
       stateTimeoutRef.current = setTimeout(() => {
         setOrbState('idle');
       }, 750);
@@ -80,19 +77,27 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     }
   }, []);
 
-  // Decoupled organic tick loop: interpolates refs and updates React state at a clean 60fps
+  // Single mount animation frame loop to handle visual transitions smoothly
   useEffect(() => {
+    let rafId: number;
     const tick = () => {
-      smoothLevel.current += (audioLevel - smoothLevel.current) * 0.14;
-      setAudioLevel(smoothLevel.current);
-      rafRef.current = requestAnimationFrame(tick);
+      // Interpolate smooth value toward the latest target level
+      smoothLevelRef.current += (targetLevelRef.current - smoothLevelRef.current) * 0.15;
+      
+      // Prevent infinite float adjustments around zero
+      if (Math.abs(smoothLevelRef.current) < 0.001) {
+        smoothLevelRef.current = 0;
+      }
+      
+      setAudioLevel(smoothLevelRef.current);
+      rafId = requestAnimationFrame(tick);
     };
-    rafRef.current = requestAnimationFrame(tick);
+    rafId = requestAnimationFrame(tick);
     return () => {
-      cancelAnimationFrame(rafRef.current);
+      cancelAnimationFrame(rafId);
       if (stateTimeoutRef.current) clearTimeout(stateTimeoutRef.current);
     };
-  }, [audioLevel]);
+  }, []);
 
   useEffect(() => {
     const checkTelemetry = async () => {
@@ -132,20 +137,20 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
   const { speak, cancel } = useSpeechOutput({
     onStart: () => changeOrbState('speaking'),
     onBoundary: (lvl) => { 
-      smoothLevel.current = lvl; // Decoupled ref mutation (reverted back to original high-performance)
+      targetLevelRef.current = lvl; 
     },
     onEnd: () => {
-      smoothLevel.current = 0;
+      targetLevelRef.current = 0;
       changeOrbState('idle');
     },
   });
 
   const handleTranscript = useCallback(
     async (text: string) => {
-      if (isMutedRef.current) return; // Safely read mute state from ref
+      if (isMutedRef.current) return;
       setLastLine(text);
       changeOrbState('thinking');
-      smoothLevel.current = 0; // Stop pulsing immediately on transition
+      targetLevelRef.current = 0;
       cancel();
       try {
         const reply = await ask(text);
@@ -171,10 +176,10 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     },
     onLevelChange: (lvl) => {
       if (isMutedRef.current) {
-        smoothLevel.current = 0;
+        targetLevelRef.current = 0;
         return;
       }
-      smoothLevel.current = lvl; // Decoupled ref mutation (reverted back to original high-performance)
+      targetLevelRef.current = lvl;
     },
     enabled: isReady && !isMuted,
   });
@@ -183,30 +188,27 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     if (!isReady) {
       setIsReady(true);
       setIsMuted(false);
-      // Intro code removed - starts listening immediately on initialization
     } else {
       const nextMuted = !isMuted;
       setIsMuted(nextMuted);
       
       if (nextMuted) {
-        cancel(); // Silence active TTS output immediately
+        cancel();
         setAudioLevel(0);
-        smoothLevel.current = 0;
+        targetLevelRef.current = 0;
+        smoothLevelRef.current = 0;
         
-        // Hard-reset transition state back to Standby
         if (stateTimeoutRef.current) {
           clearTimeout(stateTimeoutRef.current);
           stateTimeoutRef.current = null;
         }
         setOrbState('idle');
       } else {
-        // Force clean start when unmuting
         setOrbState('idle');
       }
     }
   };
 
-  // Conversational display mapping (Idle VAD states map to LISTENING instead of STANDBY when active)
   const displayLabel = (isReady && !isMuted && orbState === 'idle') 
     ? STATE_LABEL['listening'] 
     : STATE_LABEL[orbState];
@@ -217,9 +219,6 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
 
   return (
     <div style={styles.root}>
-      {/* Scope-safe CSS style override for the HTML/Body background. 
-          Prevents mobile rubber-banding white borders locally on Safari/Chrome 
-          without manual DOM mutation side-effects. */}
       <style dangerouslySetInnerHTML={{ __html: `
         html, body {
           background-color: #000000 !important;
@@ -250,11 +249,12 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
       </div>
 
       <div style={styles.orbWrap}>
-        <NeuralOrb state={orbState} audioLevel={smoothLevel.current} size={400} />
+        {/* Pass the reactive state variable "audioLevel" instead of "smoothLevel.current" */}
+        <NeuralOrb state={orbState} audioLevel={audioLevel} size={400} />
         <motion.div 
           animate={{
-            boxShadow: `0 0 ${100 + smoothLevel.current * 200}px ${STATE_COLOR[orbState].replace('rgba(', 'rgba(').replace(/,[^,]+\)$/, ',0.4)')}`,
-            scale: 1.05 + smoothLevel.current * 0.15
+            boxShadow: `0 0 ${100 + audioLevel * 200}px ${STATE_COLOR[orbState].replace('rgba(', 'rgba(').replace(/,[^,]+\)$/, ',0.4)')}`,
+            scale: 1.05 + audioLevel * 0.15
           }}
           style={styles.glowRing} 
         />
@@ -281,17 +281,16 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
         </AnimatePresence>
       </div>
 
-      {/* Merged Initialize & Mute Action Controller */}
       <motion.button
         whileHover={{ scale: 1.06, backgroundColor: 'rgba(255,255,255,0.03)' }}
         whileTap={{ scale: 0.95 }}
         style={{
           ...styles.circularControlBtn,
           borderColor: !isReady 
-            ? 'rgba(180,100,255,0.4)' // Purple for Uninitialized
+            ? 'rgba(180,100,255,0.4)'
             : isMuted 
-              ? 'rgba(255,80,80,0.4)'    // Red for Muted
-              : 'rgba(0,255,255,0.4)',  // Cyan for Active
+              ? 'rgba(255,80,80,0.4)'
+              : 'rgba(0,255,255,0.4)',
           boxShadow: !isReady
             ? '0 0 20px rgba(180,100,255,0.08)'
             : isMuted
@@ -302,17 +301,14 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
         aria-label={!isReady ? "Initialize J.A.R.V.I.S." : isMuted ? "Unmute J.A.R.V.I.S." : "Mute J.A.R.V.I.S."}
       >
         {!isReady ? (
-          /* Sleek Initialize/Power Icon */
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{ width: 22, height: 22, color: 'rgba(180,100,255,0.95)' }}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9" />
           </svg>
         ) : isMuted ? (
-          /* Muted State Icon (Slashed Mic) */
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{ width: 22, height: 22, color: 'rgba(255,80,80,0.95)' }}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M2.25 2.25l19.5 19.5M15.364 15.364l4.656-4.656m0 0l2.25 2.25m-2.25-2.25l2.25-2.25m-4.5 4.5l-2.25-2.25M9 10.5v1.5a3 3 0 003 3v0M12 4.5c.828 0 1.5.672 1.5 1.5V9M12 21v-3" />
           </svg>
         ) : (
-          /* Active State Icon (Mic On) */
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{ width: 22, height: 22, color: 'rgba(0,255,255,0.95)' }}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V6a3 3 0 016 0v6.75a3 3 0 01-3 3z" />
           </svg>
@@ -328,7 +324,7 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
 
 const styles: Record<string, React.CSSProperties> = {
   root: {
-    position: 'fixed', // Force coverage over elastic boundaries
+    position: 'fixed',
     inset: 0,
     background: '#000000',
     display: 'flex',
