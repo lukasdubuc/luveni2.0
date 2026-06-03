@@ -1,9 +1,6 @@
 // ─────────────────────────────────────────────────────────────
 //  J.A.R.V.I.S — Luveni GM  |  hooks/useVoiceInput.ts
 // ─────────────────────────────────────────────────────────────
-//  Continuous VAD — no tap required after first mic grant.
-//  Flow: silence → voice detected → SpeechRecognition → transcript
-// ─────────────────────────────────────────────────────────────
 
 import { useRef, useCallback, useEffect } from 'react';
 import type { OrbState } from '../types/jarvis';
@@ -26,6 +23,17 @@ export function useVoiceInput({
   silenceMs = DEFAULT_SILENCE_MS,
   enabled = true,
 }: UseVoiceInputOptions) {
+  // Use Callback Refs to decouple parent re-renders from the audio lifecycle
+  const onTranscriptRef = useRef(onTranscript);
+  const onStateChangeRef = useRef(onStateChange);
+  const onLevelChangeRef = useRef(onLevelChange);
+
+  useEffect(() => {
+    onTranscriptRef.current = onTranscript;
+    onStateChangeRef.current = onStateChange;
+    onLevelChangeRef.current = onLevelChange;
+  }, [onTranscript, onStateChange, onLevelChange]);
+
   const audioCtxRef   = useRef<AudioContext | null>(null);
   const analyserRef   = useRef<AnalyserNode | null>(null);
   const streamRef     = useRef<MediaStream | null>(null);
@@ -41,13 +49,10 @@ export function useVoiceInput({
     silTimerRef.current = null;
   };
 
-  const setOrbState = useCallback(
-    (s: OrbState) => {
-      stateRef.current = s;
-      onStateChange(s);
-    },
-    [onStateChange]
-  );
+  const setOrbState = useCallback((s: OrbState) => {
+    stateRef.current = s;
+    onStateChangeRef.current(s);
+  }, []);
 
   const stopRecognition = useCallback(() => {
     if (recogRef.current) {
@@ -98,14 +103,14 @@ export function useVoiceInput({
       if (stateRef.current === 'listening') {
         const text = bufferRef.current.trim();
         bufferRef.current = '';
-        if (text) onTranscript(text);
+        if (text) onTranscriptRef.current(text);
         setOrbState('idle');
       }
     };
 
     recogRef.current = recog;
     recog.start();
-  }, [onTranscript, setOrbState, stopRecognition]);
+  }, [setOrbState, stopRecognition]);
 
   const initMic = useCallback(async () => {
     if (activeRef.current) return;
@@ -128,12 +133,10 @@ export function useVoiceInput({
         if (!analyserRef.current) return;
         analyserRef.current.getByteFrequencyData(data);
         
-        // Use a broader range for visual reactivity
         const avg = data.slice(0, 150).reduce((a, b) => a + b, 0) / 150;
-        
-        // Sensitive level mapping for 80,000 particles
         const level = Math.min(1, Math.max(0, (avg - 8) / 75));
-        onLevelChange(level);
+        
+        onLevelChangeRef.current(level);
 
         if (avg > vadThreshold && stateRef.current === 'idle') {
           startRecognition();
@@ -161,7 +164,7 @@ export function useVoiceInput({
       console.error('[Jarvis] Mic Init Error:', err);
       setOrbState('error');
     }
-  }, [onLevelChange, setOrbState, startRecognition, stopRecognition, vadThreshold, silenceMs]);
+  }, [setOrbState, startRecognition, stopRecognition, vadThreshold, silenceMs]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -172,6 +175,9 @@ export function useVoiceInput({
       stopRecognition();
       streamRef.current?.getTracks().forEach((t) => t.stop());
       audioCtxRef.current?.close();
+      audioCtxRef.current = null;
+      analyserRef.current = null;
+      streamRef.current = null;
       activeRef.current = false;
     };
   }, [enabled, initMic, stopRecognition]);
