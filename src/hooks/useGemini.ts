@@ -119,4 +119,18 @@ export function useGemini(apiKey: string) {
       // 6. Append model turn to history
       history.current.push({
         role: 'model',
-        parts: [{ text: reply }]
+        parts: [{ text: reply }],
+        timestamp: Date.now(),
+      });
+
+      return reply;
+    },
+    [apiKey]
+  );
+
+  const reset = useCallback(() => {
+    history.current = [];
+  }, []);
+
+  return { ask, reset, history: history.current };
+}
