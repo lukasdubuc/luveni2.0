@@ -2,7 +2,7 @@
 //  J.A.R.V.I.S — Luveni GM  |  components/jarvis/NeuralOrb.tsx
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import type { OrbState } from '../../types/jarvis';
 
 interface NeuralOrbProps {
@@ -137,11 +137,8 @@ function loadThree(): Promise<void> {
 
 // ── Component ─────────────────────────────────────────────────
 export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbProps) {
-  const mountRef   = useRef<HTMLDivElement>(null);
-  const audioRef   = useRef(0);
-  
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
+  const mountRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef(0);
 
   const ctx = useRef<{
     renderer: any; uniforms: any; clock: any; raf: number;
@@ -199,7 +196,7 @@ export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbPr
         uniforms,
         transparent: true,
         depthWrite:  false,
-        blending:    THREE.AdditiveBlending, // Sums light emissions perfectly matching the reference image glow
+        blending:    THREE.AdditiveBlending,
       });
 
       const mesh = new THREE.Mesh(geo, mat);
@@ -243,7 +240,7 @@ export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbPr
     ctx.current.uniforms.uState.value = STATE_NUM[state];
   }, [state]);
 
-  const isSystemActive = isInitialized && !isMuted;
+  const isSystemActive = state !== 'idle';
 
   return (
     <div className="relative w-full h-[60vh] flex flex-col items-center justify-center overflow-visible">
@@ -255,13 +252,6 @@ export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbPr
         @keyframes subtlePulse {
           0%, 100% { transform: scale(1); }
           50% { transform: scale(1.04); }
-        }
-        .ethereal-button {
-          transition: box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s ease;
-        }
-        .ethereal-button:hover {
-          box-shadow: 0 0 16px rgba(255, 255, 255, 0.45);
-          border-color: rgba(255, 255, 255, 0.6);
         }
       `}} />
 
@@ -277,53 +267,7 @@ export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbPr
         }}
       />
 
-      {/* ── 2. Single Standby/State Text Line (Now positioned tightly to button) ── */}
-      <div style={{
-        marginTop:     12, // Tightened margin-top
-        fontSize:      11,
-        fontWeight:    500,
-        letterSpacing: '0.4em',
-        color:         '#ffffff',
-        opacity:       0.25,
-        textTransform: 'uppercase',
-        lineHeight:    1,
-        textAlign:     'center',
-        overflow:      'visible',
-      }}>
-        {!isInitialized || isMuted ? 'STANDBY' : STATE_LABEL[state]}
-      </div>
-
-      {/* ── 3. Main Hairline-Bordered Initialize Button (Now positioned tightly to text) ── */}
-      <button
-        onClick={() => {
-          if (!isInitialized) {
-            setIsInitialized(true);
-            setIsMuted(false);
-          } else {
-            setIsMuted(!isMuted);
-          }
-        }}
-        className="ethereal-button"
-        style={{
-          marginTop:       12, // Tightened margin-top
-          padding:         '12px 32px',
-          background:      'transparent',
-          border:          '1px solid rgba(255,255,255,0.3)',
-          color:           '#ffffff',
-          opacity:         1,
-          cursor:          'pointer',
-          outline:         'none',
-          fontSize:        '11px',
-          fontWeight:      600,
-          letterSpacing:   '0.2em',
-          textTransform:   'uppercase',
-          borderRadius:    '2px',
-        }}
-      >
-        {!isInitialized || isMuted ? 'INITIALISE' : 'DEACTIVATE'}
-      </button>
-
-      {/* ── 4. Backdrop-filter glassmorphism system info readout (Hidden by default) ── */}
+      {/* ── 2. Backdrop-filter glassmorphism system info readout ── */}
       <div
         style={{
           display:         isSystemActive ? 'block' : 'none',
