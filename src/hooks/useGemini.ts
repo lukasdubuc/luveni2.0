@@ -79,6 +79,13 @@ export function useGemini(apiKey: string) {
 - Note: Refer strictly to these variables if the user asks for the current time, date, or day.
 `;
 
+      // 5. Local Storage Override (Bypasses parent database/cache sync issues completely)
+      const overrideKey = typeof window !== 'undefined' ? localStorage.getItem('JARVIS_GEMINI_KEY') : null;
+      
+      // Accept any valid key starting with either "AIzaSy" or your custom partner "AQ." prefix
+      const isKeyValid = (k: string | null) => !!k && (k.startsWith('AIzaSy') || k.startsWith('AQ.'));
+      const activeKey = isKeyValid(overrideKey) ? overrideKey! : apiKey;
+
       const payload = {
         systemInstruction: { 
           parts: [{ text: `${JARVIS_SYSTEM_PROMPT}\n${timeContext}` }] 
@@ -87,8 +94,8 @@ export function useGemini(apiKey: string) {
         generationConfig: { maxOutputTokens: 220, temperature: 0.75 },
       };
 
-      // Perform direct fetch to Google using the exact key passed to the hook
-      const res = await fetch(GEMINI_ENDPOINT(apiKey), {
+      // Perform direct fetch to Google using the active resolved key
+      const res = await fetch(GEMINI_ENDPOINT(activeKey), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -109,21 +116,7 @@ export function useGemini(apiKey: string) {
       const reply: string =
         data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Standing by, sir.';
 
-      // 5. Append model turn to history
+      // 6. Append model turn to history
       history.current.push({
         role: 'model',
-        parts: [{ text: reply }],
-        timestamp: Date.now(),
-      });
-
-      return reply;
-    },
-    [apiKey]
-  );
-
-  const reset = useCallback(() => {
-    history.current = [];
-  }, []);
-
-  return { ask, reset, history: history.current };
-}
+        parts: [{ text: reply }]
