@@ -11,7 +11,7 @@ interface NeuralOrbProps {
   size?:      number;
 }
 
-// ── Vertex Shader ─────────────────────────────────────────────
+// ── Vertex Shader (GLSL ES 1.00 Compliant Particle System) ──
 const VERT = `
 precision highp float;
 attribute vec3  aBasePos;
@@ -25,6 +25,7 @@ uniform float uAudio;
 uniform float uState;
 uniform float uTransition;
 uniform float uPixelRatio;
+uniform float uMuted;
 
 varying vec3  vColor;
 varying float vAlpha;
@@ -34,7 +35,7 @@ float hash(float n){ return fract(sin(n)*43758.5453); }
 
 float noise(vec3 p){
   vec3 i=floor(p); vec3 f=fract(p);
-  f=f*f*(3.0-2.0*f);
+  f=f*f*(vec3(3.0)-2.0*f); // Promoted scalar subtraction for GLSL ES 1.00 compatibility
   float n=i.x+i.y*57.0+i.z*113.0;
   return mix(
     mix(mix(hash(n),hash(n+1.0),f.x),mix(hash(n+57.0),hash(n+58.0),f.x),f.y),
@@ -92,8 +93,14 @@ void main(){
   else            col=mix(gS,gE,tr);
 
   float bright=1.5+abs(n)*1.0+audio*2.0;
-  vColor=col*bright;
-  vAlpha=0.2+aLayer*0.2+audio*0.3;
+
+  // Render transitions: state calculations vs soft, translucent white cloud
+  vec3 activeColor = col * bright;
+  vec3 standbyColor = vec3(0.88, 0.92, 1.0) * (0.6 + abs(n) * 0.4);
+  vec3 mixedColor = mix(activeColor, standbyColor, uMuted);
+
+  vColor = mixedColor;
+  vAlpha = mix(0.2+aLayer*0.2+audio*0.3, 0.08+aLayer*0.12, uMuted);
 
   vec4 mv=modelViewMatrix*vec4(pos,1.0);
   gl_Position=projectionMatrix*mv;
@@ -111,7 +118,7 @@ varying float vAlpha;
 varying float vAudio;
 
 void main(){
-  vec2 uv=gl_PointCoord*2.0-1.0;
+  vec2 uv=gl_PointCoord*2.0-vec2(1.0); // Promoted scalar subtraction for GLSL ES 1.00 compatibility
   float d=dot(uv,uv);
   if(d>1.0) discard;
   float soft=exp(-d*0.8);
@@ -159,39 +166,19 @@ function loadThree(): Promise<void> {
   });
 }
 
-function IconUnmuted() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-      stroke="rgba(0,212,255,0.95)" strokeWidth="1.7"
-      strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-      <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
-      <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
-    </svg>
-  );
-}
-
-function IconMuted() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-      stroke="rgba(160,170,190,0.65)" strokeWidth="1.7"
-      strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-      <line x1="23" y1="9" x2="17" y2="15"/>
-      <line x1="17" y1="9" x2="23" y2="15"/>
-    </svg>
-  );
-}
-
 // ── Component ─────────────────────────────────────────────────
-export default function NeuralOrb({ state, audioLevel, size = 500 }: NeuralOrbProps) {
+export default function NeuralOrb({ state, audioLevel, size = 330 }: NeuralOrbProps) {
   const mountRef   = useRef<HTMLDivElement>(null);
   const audioRef   = useRef(0);
   const isMutedRef = useRef(true);
+  
+  // State-driven initialization structures
+  const [isInitialized, setIsInitialized] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
 
   const ctx = useRef<{
     renderer: any; uniforms: any; clock: any; raf: number; tStart: number;
+    geometry?: any; material?: any;
   } | null>(null);
 
   useEffect(() => { audioRef.current   = audioLevel; }, [audioLevel]);
@@ -210,35 +197,29 @@ export default function NeuralOrb({ state, audioLevel, size = 500 }: NeuralOrbPr
       const THREE = (window as any).THREE;
       const el    = mountRef.current!;
 
-      // Remove any leftover canvas from a previous mount
       el.querySelector('canvas')?.remove();
 
-      const dpr = window.devicePixelRatio || 1;
+      // HD Screen optimization
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-      // Tell Three to render at native resolution
       renderer.setPixelRatio(dpr);
-      // Logical CSS size — Three internally multiplies by dpr for the backing store
       renderer.setSize(size, size);
       renderer.setClearColor(0x000000, 0);
 
       const canvas = renderer.domElement as HTMLCanvasElement;
-
-      // ── Critical: force the CSS display size to match exactly ──
-      // Without this, on retina screens the canvas DOM element is
-      // size*dpr pixels wide/tall which breaks our wrapper clip.
       canvas.style.width        = `${size}px`;
       canvas.style.height       = `${size}px`;
       canvas.style.display      = 'block';
-      // No borderRadius or clipPath on the canvas itself —
-      // the parent wrapper handles the circle clipping.
+      canvas.style.overflow     = 'visible';
       el.appendChild(canvas);
 
       const scene  = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
       camera.position.z = 3.2;
 
-      const N  = 80000;
+      // Particle count scaled up to 150,000
+      const N  = 150000;
       const bp = new Float32Array(N * 3);
       const ph = new Float32Array(N);
       const ra = new Float32Array(N);
@@ -258,7 +239,7 @@ export default function NeuralOrb({ state, audioLevel, size = 500 }: NeuralOrbPr
         ph[i] = Math.random() * Math.PI * 2;
         ra[i] = r;
         la[i] = ln;
-        hu[i] = (bp[i*3+1] / r + 1) * 0.5;
+        hu[i] = (bp[i*3+1] / r + 1.0) * 0.5;
       }
 
       const geo = new THREE.BufferGeometry();
@@ -275,6 +256,7 @@ export default function NeuralOrb({ state, audioLevel, size = 500 }: NeuralOrbPr
         uState:      { value: 0 },
         uTransition: { value: 1 },
         uPixelRatio: { value: dpr },
+        uMuted:      { value: !isInitialized || isMutedRef.current ? 1.0 : 0.0 }
       };
 
       const mat = new THREE.ShaderMaterial({
@@ -298,6 +280,11 @@ export default function NeuralOrb({ state, audioLevel, size = 500 }: NeuralOrbPr
         const t  = clock.getElapsedTime();
         uniforms.uTime.value  = t;
         uniforms.uAudio.value = isMutedRef.current ? 0 : audioRef.current;
+
+        // Smooth transition lerp logic between colors
+        const targetMuted = isMutedRef.current ? 1.0 : 0.0;
+        uniforms.uMuted.value += (targetMuted - uniforms.uMuted.value) * 0.08;
+
         if (ctx.current) {
           uniforms.uTransition.value = Math.min(1, (t - ctx.current.tStart) / TDUR);
           ctx.current.raf = id;
@@ -306,13 +293,15 @@ export default function NeuralOrb({ state, audioLevel, size = 500 }: NeuralOrbPr
       };
       tick();
 
-      ctx.current = { renderer, uniforms, clock, raf: 0, tStart: 0 };
+      ctx.current = { renderer, uniforms, clock, raf: 0, tStart: 0, geometry: geo, material: mat };
     }
 
     return () => {
       dead = true;
       if (ctx.current) {
         cancelAnimationFrame(ctx.current.raf);
+        ctx.current.geometry?.dispose();
+        ctx.current.material?.dispose();
         ctx.current.renderer.dispose();
         mountRef.current?.querySelector('canvas')?.remove();
         ctx.current = null;
@@ -333,8 +322,7 @@ export default function NeuralOrb({ state, audioLevel, size = 500 }: NeuralOrbPr
     }
   }, [state]);
 
-  // ── Sizes ──────────────────────────────────────────────────
-  const btnSize = 64; // fixed clean size regardless of orb size
+  const btnSize = 64;
 
   return (
     <div style={{
@@ -342,22 +330,30 @@ export default function NeuralOrb({ state, audioLevel, size = 500 }: NeuralOrbPr
       flexDirection: 'column',
       alignItems:    'center',
       userSelect:    'none',
-      // No gap here — we control spacing with explicit margins below
+      overflow:      'visible',
     }}>
+      {/* Dynamic Keyframe Pulsing Style */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes pulseBorder {
+          0%, 100% {
+            box-shadow: 0 0 12px rgba(239,68,68,0.2), inset 0 0 10px rgba(239,68,68,0.05);
+            border-color: rgba(239,68,68,0.4);
+          }
+          50% {
+            box-shadow: 0 0 24px rgba(239,68,68,0.45), inset 0 0 14px rgba(239,68,68,0.1);
+            border-color: rgba(239,68,68,0.7);
+          }
+        }
+      `}} />
 
-      {/* ── Orb wrapper: clips canvas into a perfect circle ── */}
+      {/* ── Orb wrapper (Clipping removed to respect dynamic dimensions) ── */}
       <div
         ref={mountRef}
         style={{
           width:        size,
           height:       size,
-          borderRadius: '50%',
-          // overflow:hidden is what actually clips — no white bg,
-          // because the canvas already has alpha:true + clearColor(0,0,0,0)
-          overflow:     'hidden',
+          overflow:     'visible',
           flexShrink:   0,
-          // No background here — transparent so page bg shows through
-          // until WebGL boots. Avoids the white circle flash.
           background:   'transparent',
         }}
       />
@@ -369,32 +365,46 @@ export default function NeuralOrb({ state, audioLevel, size = 500 }: NeuralOrbPr
         fontSize:      11,
         fontWeight:    500,
         letterSpacing: '0.38em',
-        color:         LABEL_COLOUR[state],
+        color:         !isInitialized ? 'rgba(160,170,190,0.5)' : LABEL_COLOUR[state],
         textTransform: 'uppercase',
         transition:    'color 0.4s ease',
         lineHeight:    1,
         textAlign:     'center',
+        overflow:      'visible',
       }}>
-        {STATE_LABEL[state]}
+        {!isInitialized ? 'OFFLINE' : isMuted ? 'STANDBY' : STATE_LABEL[state]}
       </div>
 
-      {/* ── Spacer between label and button ── */}
+      {/* ── Spacer ── */}
       <div style={{ height: 32 }} />
 
-      {/* ── Single mute / unmute button ── */}
+      {/* ── Single circular state-driven button ── */}
       <button
-        onClick={() => setIsMuted(m => !m)}
-        aria-label={isMuted ? 'Unmute Jarvis' : 'Mute Jarvis'}
-        title={isMuted ? 'Go live with Jarvis' : 'Mute Jarvis'}
+        onClick={() => {
+          if (!isInitialized) {
+            setIsInitialized(true);
+            setIsMuted(true);
+          } else if (isMuted) {
+            setIsMuted(false);
+          } else {
+            setIsMuted(true);
+          }
+        }}
+        aria-label={!isInitialized ? 'Start Jarvis' : isMuted ? 'Unmute Jarvis' : 'Mute Jarvis'}
+        title={!isInitialized ? 'Start Jarvis' : isMuted ? 'Go live with Jarvis' : 'Mute Jarvis'}
         style={{
           width:           btnSize,
           height:          btnSize,
           borderRadius:    '50%',
-          border:          isMuted
-            ? '1.5px solid rgba(160,170,200,0.2)'
+          border:          !isInitialized
+            ? '1.5px solid rgba(160,170,200,0.3)'
+            : isMuted
+            ? '1.5px solid rgba(239,68,68,0.4)'
             : '1.5px solid rgba(0,212,255,0.55)',
-          background:      isMuted
-            ? 'rgba(12,18,32,0.85)'
+          background:      !isInitialized
+            ? 'rgba(12,18,32,0.6)'
+            : isMuted
+            ? 'rgba(239,68,68,0.12)'
             : 'rgba(0,212,255,0.07)',
           backdropFilter:  'blur(14px)',
           WebkitBackdropFilter: 'blur(14px)',
@@ -403,32 +413,64 @@ export default function NeuralOrb({ state, audioLevel, size = 500 }: NeuralOrbPr
           alignItems:      'center',
           justifyContent:  'center',
           transition:      'all 0.35s cubic-bezier(0.4,0,0.2,1)',
-          boxShadow:       isMuted
+          boxShadow:       !isInitialized
             ? 'none'
+            : isMuted
+            ? '0 0 16px rgba(239,68,68,0.2)'
             : '0 0 24px rgba(0,212,255,0.3), inset 0 0 14px rgba(0,212,255,0.05)',
+          animation:       isInitialized && isMuted ? 'pulseBorder 2.2s infinite ease-in-out' : 'none',
           outline:         'none',
           flexShrink:      0,
           padding:         0,
+          overflow:        'visible',
         }}
       >
-        {isMuted ? <IconMuted /> : <IconUnmuted />}
+        {!isInitialized ? (
+          // State A (Disconnected/Standby): Minimal gray/white outline
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+            stroke="rgba(160,170,190,0.8)" strokeWidth="1.8"
+            strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+        ) : isMuted ? (
+          // State B (Initialized & Muted): Pulse outline with Muted Icon
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+            stroke="rgba(239,68,68,0.9)" strokeWidth="1.8"
+            strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+            <line x1="23" y1="9" x2="17" y2="15"/>
+            <line x1="17" y1="9" x2="23" y2="15"/>
+          </svg>
+        ) : (
+          // State C (Initialized & Active/Listening): Electric Blue Listening Icon
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+            stroke="rgba(0,212,255,0.95)" strokeWidth="1.8"
+            strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+          </svg>
+        )}
       </button>
 
-      {/* ── Hint label under button ── */}
+      {/* ── Hint label ── */}
       <div style={{
         marginTop:     10,
         fontFamily:    '"SF Mono","Fira Code","Courier New",monospace',
         fontSize:      9,
         letterSpacing: '0.28em',
-        color:         isMuted
-          ? 'rgba(100,120,145,0.5)'
+        color:         !isInitialized
+          ? 'rgba(160,170,190,0.5)'
+          : isMuted
+          ? 'rgba(239,68,68,0.55)'
           : 'rgba(0,212,255,0.45)',
         textTransform: 'uppercase',
         transition:    'color 0.35s ease',
         lineHeight:    1,
         textAlign:     'center',
+        overflow:      'visible',
       }}>
-        {isMuted ? 'MUTED  ·  CLICK TO GO LIVE' : 'LIVE  ·  CLICK TO MUTE'}
+        {!isInitialized ? 'OFFLINE  ·  CLICK TO START' : isMuted ? 'MUTED  ·  CLICK TO GO LIVE' : 'LIVE  ·  CLICK TO MUTE'}
       </div>
 
     </div>
