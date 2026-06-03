@@ -4,13 +4,13 @@
 
 import { useRef, useCallback } from 'react';
 import type { JarvisMessage } from '../types/jarvis';
+import { supabase } from "@/integrations/supabase/client"; // Imports your project Supabase client
 import {
-  GEMINI_ENDPOINT,
   JARVIS_SYSTEM_PROMPT,
   DEFAULT_MAX_HISTORY,
 } from '../lib/jarvis-config';
 
-export function useGemini(apiKey: string) {
+export function useGemini() {
   const history = useRef<JarvisMessage[]>([]);
 
   const ask = useCallback(
@@ -79,36 +79,31 @@ export function useGemini(apiKey: string) {
 - Note: Refer strictly to these variables if the user asks for the current time, date, or day.
 `;
 
-      const payload = {
-        systemInstruction: { 
-          parts: [{ text: `${JARVIS_SYSTEM_PROMPT}\n${timeContext}` }] 
-        },
-        contents: history.current.map(({ role, parts }) => ({ role, parts })),
-        generationConfig: { maxOutputTokens: 220, temperature: 0.75 },
-      };
+      const systemPrompt = `${JARVIS_SYSTEM_PROMPT}\n${timeContext}`;
+      const mappedHistory = history.current.map(({ role, parts }) => ({ role, parts }));
 
-      const res = await fetch(GEMINI_ENDPOINT(apiKey), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+      // 5. Invoke the secure backend Supabase Edge Function
+      // Lovable projects pre-configure 'chat-with-gemini' or 'gemini' [1].
+      const { data, error } = await supabase.functions.invoke('chat-with-gemini', {
+        body: {
+          message: userText,
+          history: mappedHistory,
+          systemPrompt: systemPrompt
+        }
       });
 
-      if (!res.ok) {
-        const errText = await res.text();
-        console.error('[Jarvis] Gemini API payload failure:', {
-          status: res.status,
-          errorResponse: errText,
-          sentPayload: payload,
-        });
-        throw new Error(`Gemini error ${res.status}: ${errText}`);
+      if (error) {
+        console.error('[Jarvis] Supabase Edge Function invocation failure:', error);
+        throw new Error(`Edge Function error: ${error.message}`);
       }
 
-      const data = await res.json();
-      
+      // Handle raw string or JSON object returns defensively
       const reply: string =
-        data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Standing by, sir.';
+        data?.text || 
+        data?.reply || 
+        (typeof data === 'string' ? data : 'Standing by, sir.');
 
-      // 5. Append model turn to history
+      // 6. Append model turn to history
       history.current.push({
         role: 'model',
         parts: [{ text: reply }],
@@ -117,7 +112,7 @@ export function useGemini(apiKey: string) {
 
       return reply;
     },
-    [apiKey]
+    [] // Removed apiKey dependency since we query via secure session context instead
   );
 
   const reset = useCallback(() => {
