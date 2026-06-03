@@ -9,8 +9,8 @@ interface NeuralOrbProps {
   state:          OrbState;
   audioLevel:     number;
   size?:          number;
-  isMuted?:       boolean;                  // Optional control from parent
-  onMuteToggle?:  (muted: boolean) => void; // Optional callback
+  isMuted?:       boolean;                  // Controlled from parent
+  onMuteToggle?:  (muted: boolean) => void; // Parent callback
 }
 
 // ── Vertex Shader (Passes normals & view vectors for edge glow) ──
@@ -55,43 +55,56 @@ void main() {
   vec3 normal = normalize(vNormal);
   vec3 viewDir = normalize(vViewPosition);
 
-  float fresnel = pow(smoothstep(0.0, 1.0, 1.0 - max(dot(normal, viewDir), 0.0)), 2.8);
+  // 1. Double Fresnel: one for soft inner rim, one for ultra-sharp outer glass edge
+  float fresnel = pow(smoothstep(0.0, 1.0, 1.0 - max(dot(normal, viewDir), 0.0)), 2.5);
+  float outerRim = pow(smoothstep(0.0, 1.0, 1.0 - max(dot(normal, viewDir), 0.0)), 8.0);
 
-  float t = uTime * 0.75;
-  vec3 p1 = rotationMatrix(vec3(1.0, 0.5, 0.2), t * 0.15) * vPosition;
-  vec3 p2 = rotationMatrix(vec3(-0.4, 1.0, 0.4), -t * 0.12) * vPosition;
-  vec3 p3 = rotationMatrix(vec3(0.3, -0.3, 1.0), t * 0.22) * vPosition;
+  // 2. Multi-axial organic noise waves
+  float t = uTime * 0.65;
+  vec3 p1 = rotationMatrix(vec3(1.0, 0.4, 0.2), t * 0.12) * vPosition;
+  vec3 p2 = rotationMatrix(vec3(-0.3, 1.0, 0.5), -t * 0.10) * vPosition;
+  vec3 p3 = rotationMatrix(vec3(0.4, -0.4, 1.0), t * 0.18) * vPosition;
 
-  float n1 = sin(p1.x * 4.0 + p1.y * 2.5 + t) * cos(p1.z * 3.5 - t * 0.6);
-  float n2 = cos(p2.y * 3.8 + p2.z * 1.8 - t * 0.8) * sin(p2.x * 2.8 + t * 0.5);
-  float n3 = sin(p3.z * 4.5 + p3.x * 3.2 + t * 1.1);
+  float n1 = sin(p1.x * 5.0 + p1.y * 3.0 + t) * cos(p1.z * 4.0 - t * 0.5);
+  float n2 = cos(p2.y * 4.5 + p2.z * 2.0 - t * 0.7) * sin(p2.x * 3.2 + t * 0.4);
+  float n3 = sin(p3.z * 5.0 + p3.x * 3.5 + t * 0.9);
 
-  float thickness = 0.05 + uAudio * 0.12;
-  float line1 = 1.0 - smoothstep(0.0, thickness, abs(n1 + n2 * 0.3 - 0.1));
-  float line2 = 1.0 - smoothstep(0.0, thickness + 0.02, abs(n2 + n3 * 0.4 + 0.15));
-  float line3 = 1.0 - smoothstep(0.0, thickness * 1.1, abs(n3 * 0.6 + n1 * 0.5 - 0.25));
+  // 3. Render thin, high-contrast wispy ribbons matching the reference image
+  float thickness = 0.03 + uAudio * 0.10;
+  float line1 = pow(1.0 - smoothstep(0.0, thickness * 0.7, abs(n1 + n2 * 0.25 - 0.08)), 3.0);
+  float line2 = pow(1.0 - smoothstep(0.0, (thickness + 0.015) * 0.7, abs(n2 + n3 * 0.3 + 0.12)), 3.0);
+  float line3 = pow(1.0 - smoothstep(0.0, thickness * 0.75, abs(n3 * 0.5 + n1 * 0.4 - 0.20)), 3.0);
 
-  vec3 magenta    = vec3(0.95, 0.04, 0.62);
-  vec3 deepBlue   = vec3(0.05, 0.22, 0.98);
-  vec3 royalPurple = vec3(0.52, 0.02, 0.88);
-  vec3 neonCyan   = vec3(0.0, 0.92, 1.0);
+  // 4. Color Palette 
+  vec3 magenta     = vec3(0.95, 0.05, 0.55);
+  vec3 deepBlue    = vec3(0.02, 0.20, 0.95);
+  vec3 royalPurple = vec3(0.45, 0.02, 0.85);
+  vec3 neonCyan    = vec3(0.0, 0.95, 1.0);
 
+  // Dynamic mixing based on coordinate rotation
   vec3 col1 = mix(magenta, royalPurple, sin(t + p1.z) * 0.5 + 0.5);
   vec3 col2 = mix(deepBlue, neonCyan, cos(t - p2.x) * 0.5 + 0.5);
-  vec3 col3 = mix(royalPurple, magenta, sin(t * 1.4) * 0.5 + 0.5);
-  vec3 rimColor = mix(royalPurple, neonCyan, fresnel);
+  vec3 col3 = mix(royalPurple, magenta, sin(t * 1.3) * 0.5 + 0.5);
 
+  // Asymmetric Rim Color (gradient shifts along diagonal vector for cyan-to-magenta edge matching image)
+  float colorShift = dot(normal, vec3(0.6, -0.6, 0.5)) * 0.5 + 0.5;
+  vec3 rimColor = mix(royalPurple, neonCyan, colorShift);
+
+  // 5. Final Output Compilation
   vec3 finalColor = vec3(0.0);
-  finalColor += line1 * col1 * 2.8;
-  finalColor += line2 * col2 * 2.4;
-  finalColor += line3 * col3 * 2.0;
-  finalColor += fresnel * rimColor * 2.8;
+  finalColor += line1 * col1 * 3.0;
+  finalColor += line2 * col2 * 2.6;
+  finalColor += line3 * col3 * 2.2;
+  finalColor += fresnel * rimColor * 2.6;
+  finalColor += outerRim * neonCyan * 3.2; // Crispy outer glowing edge
 
-  float alpha = fresnel * 0.65 + line1 * 0.9 + line2 * 0.9 + line3 * 0.9;
-  alpha = clamp(alpha, 0.0, 0.95);
+  // 6. Opacity Mapping
+  float alpha = fresnel * 0.70 + line1 * 0.95 + line2 * 0.95 + line3 * 0.95;
+  alpha = clamp(alpha, 0.0, 0.98);
 
-  float centerDarkness = 1.0 - smoothstep(0.15, 0.85, dot(normal, viewDir));
-  finalColor = mix(finalColor, vec3(0.02, 0.01, 0.06), centerDarkness * 0.4);
+  // 7. Translucent Glass Core (makes center dark but keeps glowing threads visible on the surface)
+  float centerDarkness = 1.0 - smoothstep(0.2, 0.85, dot(normal, viewDir));
+  finalColor = mix(finalColor, vec3(0.01, 0.0, 0.03), centerDarkness * 0.65);
 
   gl_FragColor = vec4(finalColor, alpha);
 }
@@ -131,7 +144,6 @@ export default function NeuralOrb({
   const mountRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef(0);
 
-  // Fallback state if the parent component does not manage mute status
   const [internalMuted, setInternalMuted] = useState(true);
   const muted = isMuted !== undefined ? isMuted : internalMuted;
 
@@ -142,7 +154,7 @@ export default function NeuralOrb({
 
   useEffect(() => { audioRef.current = audioLevel; }, [audioLevel]);
 
-  // ── Boot WebGL ──────────────────────────────────────────────
+  // ── WebGL Initialization ─────────────────────────────────────
   useEffect(() => {
     if (!mountRef.current) return;
     let active = true;
@@ -230,7 +242,6 @@ export default function NeuralOrb({
         geometry?.dispose();
         material?.dispose();
         renderer?.dispose();
-        // Force context loss to prevent WebGL memory leaks
         renderer?.forceContextLoss?.();
         ctx.current = null;
       }
@@ -253,12 +264,11 @@ export default function NeuralOrb({
     }
   };
 
-  // Determine styling based on the active state
   const isListening = state === 'listening';
 
   return (
-    <div className="relative w-full h-[70vh] flex flex-col items-center justify-center overflow-visible select-none">
-      {/* ── Global Typography & Keyframes ── */}
+    <div className="relative w-full h-[65vh] flex flex-col items-center justify-center overflow-visible select-none">
+      {/* ── Typography & Keyframes ── */}
       <style dangerouslySetInnerHTML={{__html: `
         html, body, .jarvis-root {
           font-family: 'Helvetica Neue', Arial, sans-serif !important;
@@ -269,9 +279,10 @@ export default function NeuralOrb({
         }
       `}} />
 
-      {/* ── Glowing WebGL Orb Container ── */}
+      {/* ── Glowing WebGL Orb ── */}
       <div
         ref={mountRef}
+        className="transition-transform duration-300"
         style={{
           position:  'relative',
           width:     `${size}px`,
@@ -282,11 +293,11 @@ export default function NeuralOrb({
       />
 
       {/* ── Stable Standby/Listening Status Text ── */}
-      <div className="mt-4 flex flex-col items-center justify-center h-8">
+      <div className="mt-6 flex flex-col items-center justify-center h-8">
         <span 
-          className={`text-xs tracking-[0.3em] uppercase font-medium transition-all duration-300 ease-in-out ${
+          className={`text-xs tracking-[0.3em] uppercase font-semibold transition-all duration-300 ease-in-out ${
             isListening 
-              ? 'text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.4)] opacity-100' 
+              ? 'text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.5)] opacity-100' 
               : 'text-purple-400/80 opacity-90'
           }`}
         >
@@ -294,28 +305,28 @@ export default function NeuralOrb({
         </span>
       </div>
 
-      {/* ── Persistent Circular Control Button ── */}
+      {/* ── Clean Glassmorphic Circular Control Button ── */}
       <button
         onClick={handleMuteClick}
-        className="mt-6 relative z-10 flex items-center justify-center w-14 h-14 rounded-full border bg-black/50 backdrop-blur-md transition-all duration-300 outline-none focus:outline-none focus:ring-1 focus:ring-cyan-500/50 group"
+        className="mt-6 relative z-10 flex items-center justify-center w-14 h-14 rounded-full border bg-[#0d0d1e]/80 backdrop-blur-xl transition-all duration-300 outline-none focus:outline-none group"
         style={{
           borderColor: muted ? 'rgba(239, 68, 68, 0.25)' : 'rgba(6, 182, 212, 0.25)',
           boxShadow: muted 
-            ? '0 0 15px rgba(239, 68, 68, 0.05)' 
-            : '0 0 15px rgba(6, 182, 212, 0.05)'
+            ? '0 0 15px rgba(239, 68, 68, 0.08)' 
+            : '0 0 15px rgba(6, 182, 212, 0.08)'
         }}
       >
         {/* Glow Layer */}
         <div 
           className={`absolute inset-0 rounded-full transition-all duration-300 opacity-0 group-hover:opacity-100 ${
             muted 
-              ? 'bg-red-500/5 shadow-[0_0_20px_rgba(239,68,68,0.2)]' 
-              : 'bg-cyan-500/5 shadow-[0_0_20px_rgba(6,182,212,0.2)]'
+              ? 'bg-red-500/5 shadow-[0_0_20px_rgba(239,68,68,0.25)]' 
+              : 'bg-cyan-500/5 shadow-[0_0_20px_rgba(6,182,212,0.25)]'
           }`}
         />
 
         {muted ? (
-          /* Unmute state action (cross-slashed/muted speaker icon representing click to unmute) */
+          /* Red Unmute (Microphone Slashed) Icon */
           <svg 
             xmlns="http://www.w3.org/2000/svg" 
             fill="none" 
@@ -324,10 +335,10 @@ export default function NeuralOrb({
             stroke="currentColor" 
             className="w-5 h-5 text-red-400/90 group-hover:text-red-300 transition-colors duration-200"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 9.75L19.5 12m0 0l2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6L4.5 9H1.5v6h3l4.5 3.75V3.75z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M2.25 2.25l19.5 19.5M15.364 15.364l4.656-4.656m0 0l2.25 2.25m-2.25-2.25l2.25-2.25m-4.5 4.5l-2.25-2.25M9 10.5v1.5a3 3 0 003 3v0M12 4.5c.828 0 1.5.672 1.5 1.5V9M12 21v-3" />
           </svg>
         ) : (
-          /* Mute state action (active speaker sound waves icon representing click to mute) */
+          /* Cyan Mute (Active Microphone) Icon */
           <svg 
             xmlns="http://www.w3.org/2000/svg" 
             fill="none" 
@@ -336,7 +347,7 @@ export default function NeuralOrb({
             stroke="currentColor" 
             className="w-5 h-5 text-cyan-400/90 group-hover:text-cyan-300 transition-colors duration-200"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V6a3 3 0 016 0v6.75a3 3 0 01-3 3z" />
           </svg>
         )}
       </button>
