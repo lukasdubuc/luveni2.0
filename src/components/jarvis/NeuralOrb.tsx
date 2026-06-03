@@ -138,14 +138,6 @@ const STATE_LABEL: Record<OrbState, string> = {
   error:     'ERROR',
 };
 
-const LABEL_COLOUR: Record<OrbState, string> = {
-  idle:      'rgba(0,180,255,0.55)',
-  listening: 'rgba(0,230,255,0.92)',
-  thinking:  'rgba(200,140,255,0.92)',
-  speaking:  'rgba(0,255,160,0.92)',
-  error:     'rgba(255,80,100,0.92)',
-};
-
 function loadThree(): Promise<void> {
   if ((window as any).THREE) return Promise.resolve();
   return new Promise((resolve, reject) => {
@@ -208,9 +200,12 @@ export default function NeuralOrb({ state, audioLevel, size = 330 }: NeuralOrbPr
       renderer.setClearColor(0x000000, 0);
 
       const canvas = renderer.domElement as HTMLCanvasElement;
-      canvas.style.width        = `${size}px`;
-      canvas.style.height       = `${size}px`;
+      canvas.style.width        = `100%`;
+      canvas.style.height       = `100%`;
       canvas.style.display      = 'block';
+      canvas.style.position     = 'absolute';
+      canvas.style.top          = '0';
+      canvas.style.left         = '0';
       canvas.style.overflow     = 'visible';
       el.appendChild(canvas);
 
@@ -322,52 +317,66 @@ export default function NeuralOrb({ state, audioLevel, size = 330 }: NeuralOrbPr
     }
   }, [state]);
 
-  const btnSize = 64;
+  const isSystemActive = isInitialized && !isMuted;
 
   return (
-    <div style={{
-      display:       'flex',
-      flexDirection: 'column',
-      alignItems:    'center',
-      userSelect:    'none',
-      overflow:      'visible',
-    }}>
-      {/* Dynamic Keyframe Pulsing Style */}
+    <div 
+      className="relative w-full h-[60vh] flex flex-col items-center justify-center overflow-visible"
+      style={{
+        fontFamily: "'Helvetica Neue', Arial, sans-serif",
+        color: '#ffffff',
+        userSelect: 'none',
+      }}
+    >
+      {/* ── Global Typography & CSS Overrides ── */}
       <style dangerouslySetInnerHTML={{__html: `
-        @keyframes pulseBorder {
+        html, body, .jarvis-root {
+          font-family: 'Helvetica Neue', Arial, sans-serif !important;
+        }
+        @keyframes subtlePulse {
           0%, 100% {
-            box-shadow: 0 0 12px rgba(239,68,68,0.2), inset 0 0 10px rgba(239,68,68,0.05);
-            border-color: rgba(239,68,68,0.4);
+            transform: scale(1);
           }
           50% {
-            box-shadow: 0 0 24px rgba(239,68,68,0.45), inset 0 0 14px rgba(239,68,68,0.1);
-            border-color: rgba(239,68,68,0.7);
+            transform: scale(1.05);
           }
+        }
+        .ethereal-button {
+          transition: box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s ease;
+        }
+        .ethereal-button:hover {
+          box-shadow: 0 0 16px rgba(255, 255, 255, 0.45);
+          border-color: rgba(255, 255, 255, 0.6);
         }
       `}} />
 
-      {/* ── Orb wrapper (Clipping removed to respect dynamic dimensions) ── */}
+      {/* ── Orb wrapper (Clipping removed, styled to support floating gradient effects) ── */}
       <div
         ref={mountRef}
         style={{
-          width:        size,
-          height:       size,
+          position:     'relative',
+          width:        `${size}px`,
+          height:       `${size}px`,
+          borderRadius: '50%',
+          background:   'radial-gradient(circle, rgba(138,43,226,1) 0%, rgba(0,0,255,1) 50%, rgba(255,0,255,1) 100%)',
+          mixBlendMode: 'screen',
+          filter:       'blur(40px)',
+          animation:    'subtlePulse 4.2s infinite ease-in-out',
           overflow:     'visible',
           flexShrink:   0,
-          background:   'transparent',
         }}
       />
 
-      {/* ── State label ── */}
+      {/* ── Secondary state label (Crisp white with low opacity) ── */}
       <div style={{
-        marginTop:     20,
-        fontFamily:    '"SF Mono","Fira Code","Courier New",monospace',
+        marginTop:     28,
         fontSize:      11,
         fontWeight:    500,
-        letterSpacing: '0.38em',
-        color:         !isInitialized ? 'rgba(160,170,190,0.5)' : LABEL_COLOUR[state],
+        letterSpacing: '0.4em',
+        color:         '#ffffff',
+        opacity:       0.25,
         textTransform: 'uppercase',
-        transition:    'color 0.4s ease',
+        transition:    'opacity 0.4s ease',
         lineHeight:    1,
         textAlign:     'center',
         overflow:      'visible',
@@ -375,102 +384,77 @@ export default function NeuralOrb({ state, audioLevel, size = 330 }: NeuralOrbPr
         {!isInitialized ? 'OFFLINE' : isMuted ? 'STANDBY' : STATE_LABEL[state]}
       </div>
 
-      {/* ── Spacer ── */}
-      <div style={{ height: 32 }} />
-
-      {/* ── Single circular state-driven button ── */}
+      {/* ── Hairline-Bordered Button (Full opacity crisp text) ── */}
       <button
         onClick={() => {
           if (!isInitialized) {
             setIsInitialized(true);
-            setIsMuted(true);
-          } else if (isMuted) {
             setIsMuted(false);
           } else {
-            setIsMuted(true);
+            setIsMuted(!isMuted);
           }
         }}
-        aria-label={!isInitialized ? 'Start Jarvis' : isMuted ? 'Unmute Jarvis' : 'Mute Jarvis'}
-        title={!isInitialized ? 'Start Jarvis' : isMuted ? 'Go live with Jarvis' : 'Mute Jarvis'}
+        className="ethereal-button"
         style={{
-          width:           btnSize,
-          height:          btnSize,
-          borderRadius:    '50%',
-          border:          !isInitialized
-            ? '1.5px solid rgba(160,170,200,0.3)'
-            : isMuted
-            ? '1.5px solid rgba(239,68,68,0.4)'
-            : '1.5px solid rgba(0,212,255,0.55)',
-          background:      !isInitialized
-            ? 'rgba(12,18,32,0.6)'
-            : isMuted
-            ? 'rgba(239,68,68,0.12)'
-            : 'rgba(0,212,255,0.07)',
-          backdropFilter:  'blur(14px)',
-          WebkitBackdropFilter: 'blur(14px)',
+          marginTop:       24,
+          padding:         '12px 32px',
+          background:      'transparent',
+          border:          '1px solid rgba(255,255,255,0.3)',
+          color:           '#ffffff',
+          opacity:         1,
           cursor:          'pointer',
           display:         'flex',
           alignItems:      'center',
           justifyContent:  'center',
-          transition:      'all 0.35s cubic-bezier(0.4,0,0.2,1)',
-          boxShadow:       !isInitialized
-            ? 'none'
-            : isMuted
-            ? '0 0 16px rgba(239,68,68,0.2)'
-            : '0 0 24px rgba(0,212,255,0.3), inset 0 0 14px rgba(0,212,255,0.05)',
-          animation:       isInitialized && isMuted ? 'pulseBorder 2.2s infinite ease-in-out' : 'none',
           outline:         'none',
-          flexShrink:      0,
-          padding:         0,
-          overflow:        'visible',
+          fontSize:        '11px',
+          fontWeight:      600,
+          letterSpacing:   '0.2em',
+          textTransform:   'uppercase',
+          borderRadius:    '2px',
         }}
       >
-        {!isInitialized ? (
-          // State A (Disconnected/Standby): Minimal gray/white outline
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-            stroke="rgba(160,170,190,0.8)" strokeWidth="1.8"
-            strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="5 3 19 12 5 21 5 3"/>
-          </svg>
-        ) : isMuted ? (
-          // State B (Initialized & Muted): Pulse outline with Muted Icon
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-            stroke="rgba(239,68,68,0.9)" strokeWidth="1.8"
-            strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-            <line x1="23" y1="9" x2="17" y2="15"/>
-            <line x1="17" y1="9" x2="23" y2="15"/>
-          </svg>
-        ) : (
-          // State C (Initialized & Active/Listening): Electric Blue Listening Icon
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-            stroke="rgba(0,212,255,0.95)" strokeWidth="1.8"
-            strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
-            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
-          </svg>
-        )}
+        {!isInitialized ? 'INITIALISE JARVIS' : isMuted ? 'UNMUTE JARVIS' : 'MUTE JARVIS'}
       </button>
 
-      {/* ── Hint label ── */}
+      {/* ── Secondary status hint (Crisp white with very low opacity) ── */}
       <div style={{
-        marginTop:     10,
-        fontFamily:    '"SF Mono","Fira Code","Courier New",monospace',
+        marginTop:     14,
         fontSize:      9,
-        letterSpacing: '0.28em',
-        color:         !isInitialized
-          ? 'rgba(160,170,190,0.5)'
-          : isMuted
-          ? 'rgba(239,68,68,0.55)'
-          : 'rgba(0,212,255,0.45)',
+        fontWeight:    400,
+        letterSpacing: '0.25em',
+        color:         '#ffffff',
+        opacity:       0.15,
         textTransform: 'uppercase',
-        transition:    'color 0.35s ease',
         lineHeight:    1,
         textAlign:     'center',
         overflow:      'visible',
       }}>
-        {!isInitialized ? 'OFFLINE  ·  CLICK TO START' : isMuted ? 'MUTED  ·  CLICK TO GO LIVE' : 'LIVE  ·  CLICK TO MUTE'}
+        {!isInitialized ? 'CLICK TO BOOT SYSTEM' : isMuted ? 'CLICK TO GO LIVE' : 'CLICK TO SUSPEND AUDIO'}
+      </div>
+
+      {/* ── System Status (Glassmorphism backdrop & monospaced status) ── */}
+      <div
+        style={{
+          display:         isSystemActive ? 'block' : 'none',
+          position:        'absolute',
+          bottom:          '-40px',
+          padding:         '8px 16px',
+          background:      'rgba(255, 255, 255, 0.02)',
+          border:          '1px solid rgba(255, 255, 255, 0.08)',
+          borderRadius:    '4px',
+          backdropFilter:  'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+          fontFamily:      'Consolas, "Andale Mono", "Courier New", monospace',
+          fontSize:        '10px',
+          color:           'rgba(255, 255, 255, 0.7)',
+          letterSpacing:   '0.15em',
+          textTransform:   'uppercase',
+          textAlign:       'center',
+          boxShadow:       '0 4px 24px rgba(0, 0, 0, 0.2)',
+        }}
+      >
+        SYS_STATUS: ACTIVE // FEED_IN: {audioLevel.toFixed(3)} // STATE: {STATE_LABEL[state]}
       </div>
 
     </div>
