@@ -39,7 +39,6 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
   const [lastLine, setLastLine]     = useState('');
   const [isReady, setIsReady]       = useState(false);
   const [isMuted, setIsMuted]       = useState(true); // Starts muted on load
-  const [isBooting, setIsBooting]   = useState(false); // One-time gate to avoid browser thread conflict on launch
   const [telemetry, setTelemetry]   = useState({
     core: false,
     vision: false,
@@ -49,9 +48,8 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
   const smoothLevel = useRef(0);
   const rafRef = useRef<number>(0);
   const stateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const bootTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // References to keep mute and state values fresh inside Web Speech API callbacks
+  // Keep references to mute and orb states to prevent stale closures in Web Speech callbacks
   const isMutedRef = useRef(isMuted);
   const orbStateRef = useRef(orbState);
 
@@ -63,17 +61,46 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     orbStateRef.current = orbState;
   }, [orbState]);
 
-  // Warm up Web Speech voices on initial mount to help the browser load high-quality profiles
+  // Page-specific theme fix: Apply black background to body and HTML root on mount,
+  // and restore original styles on unmount to prevent affecting any other pages on the site.
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.getVoices();
-      const handleVoicesChanged = () => {
-        window.speechSynthesis.getVoices();
-      };
-      window.speechSynthesis.addEventListener('voiceschanged', handleVoicesChanged);
+    if (typeof document !== 'undefined') {
+      const originalHtmlBg = document.documentElement.style.background;
+      const originalHtmlBgColor = document.documentElement.style.backgroundColor;
+      const originalBodyBg = document.body.style.background;
+      const originalBodyBgColor = document.body.style.backgroundColor;
+      
+      // Store original meta theme-color
+      const metaTheme = document.querySelector('meta[name="theme-color"]');
+      const originalMetaThemeColor = metaTheme ? metaTheme.getAttribute('content') : null;
+
+      // Apply Jarvis black styles
+      document.documentElement.style.background = '#000000';
+      document.documentElement.style.backgroundColor = '#000000';
+      document.body.style.background = '#000000';
+      document.body.style.backgroundColor = '#000000';
+
+      // Set meta theme-color for mobile browser safe areas
+      let targetMetaTheme = metaTheme;
+      if (!targetMetaTheme) {
+        targetMetaTheme = document.createElement('meta');
+        targetMetaTheme.setAttribute('name', 'theme-color');
+        document.head.appendChild(targetMetaTheme);
+      }
+      targetMetaTheme.setAttribute('content', '#000000');
+
       return () => {
-        window.speechSynthesis.removeEventListener('voiceschanged', handleVoicesChanged);
-        if (bootTimeoutRef.current) clearTimeout(bootTimeoutRef.current);
+        // Restore original backgrounds and colors when leaving the page
+        document.documentElement.style.background = originalHtmlBg;
+        document.documentElement.style.backgroundColor = originalHtmlBgColor;
+        document.body.style.background = originalBodyBg;
+        document.body.style.backgroundColor = originalBodyBgColor;
+        
+        if (originalMetaThemeColor) {
+          targetMetaTheme?.setAttribute('content', originalMetaThemeColor);
+        } else if (!metaTheme && targetMetaTheme) {
+          targetMetaTheme.remove();
+        }
       };
     }
   }, []);
@@ -150,23 +177,16 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     onEnd: () => {
       setAudioLevel(0);
       changeOrbState('idle');
-      
-      // Release boot gate when intro finishes speaking
-      setIsBooting(false);
-      if (bootTimeoutRef.current) {
-        clearTimeout(bootTimeoutRef.current);
-        bootTimeoutRef.current = null;
-      }
     },
   });
 
   const handleTranscript = useCallback(
     async (text: string) => {
-      if (isMutedRef.current) return; 
+      if (isMutedRef.current) return; // Drop processing if mic receives transcripts while muting
       setLastLine(text);
       changeOrbState('thinking');
       setAudioLevel(0);
-      cancel(); // Interrupts active speech output immediately when the user starts speaking
+      cancel(); // Silences active output immediately if you interrupt Jarvis
       try {
         const reply = await ask(text);
         setLastLine(reply);
@@ -181,39 +201,29 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
 
   useVoiceInput({
     onTranscript: (text) => {
-      if (isMutedRef.current) return;
+      if (isMutedRef.current) return; // Drop transcript triggers instantly when muted
       handleTranscript(text);
     },
     onStateChange: (s) => {
-      if (isMutedRef.current) return;
+      if (isMutedRef.current) return; // Drop any asynchronous engine state updates if muted
       if (s === 'idle' && orbStateRef.current === 'speaking') return;
       changeOrbState(s);
     },
     onLevelChange: (lvl) => {
       if (isMutedRef.current) {
-        setAudioLevel(0);
+        setAudioLevel(0); // Zero out visual feedback pulses immediately
         return;
       }
       setAudioLevel(lvl);
     },
-    // Keep mic fully active and interruptible, except for the tiny window of the initial boot greeting
-    enabled: isReady && !isMuted && !isBooting,
+    enabled: isReady && !isMuted,
   });
 
   const handleActionClick = () => {
     if (!isReady) {
       setIsReady(true);
       setIsMuted(false);
-      setIsBooting(true); // Temporarily keep mic off during boot greeting to avoid resource collision
-      
-      // Boot greeting - triggered directly inside user gesture click handler to unlock TTS
-      speak("System online. J.A.R.V.I.S is fully operational and listening, sir.");
-      
-      if (bootTimeoutRef.current) clearTimeout(bootTimeoutRef.current);
-      // Safety fallback release of booting state after 4.5 seconds in case the onEnd event drops
-      bootTimeoutRef.current = setTimeout(() => {
-        setIsBooting(false);
-      }, 4500);
+      // Intro code removed - starts listening immediately
     } else {
       const nextMuted = !isMuted;
       setIsMuted(nextMuted);
