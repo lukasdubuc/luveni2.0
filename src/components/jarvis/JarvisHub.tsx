@@ -49,6 +49,23 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
   const rafRef = useRef<number>(0);
   const stateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Keep references to mute and orb states to prevent stale closures in Web Speech VAD callbacks
+  const isMutedRef = useRef(isMuted);
+  const orbStateRef = useRef(orbState);
+  const audioLevelRef = useRef(audioLevel);
+
+  useEffect(() => {
+    isMutedRef.current = isMuted;
+  }, [isMuted]);
+
+  useEffect(() => {
+    orbStateRef.current = orbState;
+  }, [orbState]);
+
+  useEffect(() => {
+    audioLevelRef.current = audioLevel;
+  }, [audioLevel]);
+
   const { ask } = useGemini(geminiApiKey);
 
   // Smooth state transition to debounce VAD state-flickers (fixes flashing text)
@@ -126,7 +143,7 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
 
   const handleTranscript = useCallback(
     async (text: string) => {
-      if (isMuted) return; // Drop processing if mic receives transcripts while muting
+      if (isMutedRef.current) return; // Safely read mute state from ref
       setLastLine(text);
       changeOrbState('thinking');
       setAudioLevel(0);
@@ -140,22 +157,22 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
         speak('I encountered an issue reaching the neural network, sir.');
       }
     },
-    [ask, cancel, speak, changeOrbState, isMuted]
+    [ask, cancel, speak, changeOrbState]
   );
 
   useVoiceInput({
     onTranscript: (text) => {
-      if (isMuted) return; // Drop transcript triggers instantly when muted
+      if (isMutedRef.current) return; // Fixed: uses the fresh ref instead of stale state
       handleTranscript(text);
     },
     onStateChange: (s) => {
-      if (isMuted) return; // Drop any asynchronous engine state updates if muted
-      if (s === 'idle' && orbState === 'speaking') return;
+      if (isMutedRef.current) return; // Fixed: uses the fresh ref instead of stale state
+      if (s === 'idle' && orbStateRef.current === 'speaking') return;
       changeOrbState(s);
     },
     onLevelChange: (lvl) => {
-      if (isMuted) {
-        setAudioLevel(0); // Zero out visual feedback pulses immediately
+      if (isMutedRef.current) { // Fixed: uses the fresh ref instead of stale state
+        setAudioLevel(0); 
         return;
       }
       setAudioLevel(lvl);
