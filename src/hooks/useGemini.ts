@@ -26,7 +26,6 @@ export function useGemini(apiKey: string) {
       const maxItems = DEFAULT_MAX_HISTORY * 2;
       if (history.current.length > maxItems) {
         history.current = history.current.slice(-maxItems);
-        // If slicing left us starting with a model turn, discard it to preserve schema rules
         if (history.current[0]?.role === 'model') {
           history.current.shift();
         }
@@ -44,7 +43,6 @@ export function useGemini(apiKey: string) {
           if (lastTurn.role !== turn.role) {
             cleanHistory.push(turn);
           } else {
-            // Overwrite consecutive user queries with the latest one
             if (turn.role === 'user') {
               cleanHistory[cleanHistory.length - 1] = turn;
             }
@@ -53,15 +51,32 @@ export function useGemini(apiKey: string) {
       }
       history.current = cleanHistory;
 
-      // 4. Inject Dynamic time context
+      // 4. Universally-compatible Date & Time construction (No RangeError risks)
       const now = new Date();
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      
+      const dayName = days[now.getDay()];
+      const monthName = months[now.getMonth()];
+      const dateNum = now.getDate();
+      const year = now.getFullYear();
+      
+      let hours = now.getHours();
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12; // convert 0 to 12
+      
+      const timeString = `${hours}:${minutes} ${ampm}`;
+      const dateString = `${dayName}, ${monthName} ${dateNum}, ${year}`;
+
       const timeContext = `
 [SYSTEM TIME & DATE CONTEXT]
-- Current Local Time: ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-- Current Date: ${now.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-- Current Year: ${now.getFullYear()}
+- Current Local Time: ${timeString}
+- Current Date: ${dateString}
+- Current Year: ${year}
 - Current Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}
-- Note: Always refer strictly to these metrics if the user asks for the current time, date, or day.
+- Note: Refer strictly to these variables if the user asks for the current time, date, or day.
 `;
 
       const payload = {
@@ -80,20 +95,16 @@ export function useGemini(apiKey: string) {
 
       if (!res.ok) {
         const errText = await res.text();
-        // In-depth telemetry logger to inspect physical payload errors in developer tools
-        console.error('[Jarvis] Gemini API detailed payload failure:', {
+        console.error('[Jarvis] Gemini API payload failure:', {
           status: res.status,
-          statusText: res.statusText,
           errorResponse: errText,
           sentPayload: payload,
-          apiEndpoint: GEMINI_ENDPOINT(apiKey)
         });
         throw new Error(`Gemini error ${res.status}: ${errText}`);
       }
 
       const data = await res.json();
       
-      // Use logical OR (||) fallback to catch falsy empty strings ("") safely
       const reply: string =
         data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Standing by, sir.';
 
