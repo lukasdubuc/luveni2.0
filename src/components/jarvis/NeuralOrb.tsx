@@ -31,7 +31,7 @@ void main() {
 }
 `;
 
-// ── Overhauled Fluid-Glass Fragment Shader ──
+// ── Overhauled Volumetric Liquid-Glass Fragment Shader ──
 const FRAG = `
 precision highp float;
 uniform float uTime;
