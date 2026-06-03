@@ -63,6 +63,7 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     return () => clearTimeout(timer);
   }, [lastLine]);
 
+  // useGemini now securely connects to your backend Edge Function
   const { ask } = useGemini(geminiApiKey);
 
   const changeOrbState = useCallback((newState: OrbState) => {
@@ -104,7 +105,6 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
       let visionOnline = false;
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
-        // Corrected comparison operator (===)
         visionOnline = devices.some(d => d.kind === 'audioinput') && isReady;
       } catch (e) {
         visionOnline = false;
@@ -133,7 +133,6 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     return () => clearInterval(interval);
   }, [geminiApiKey, isReady]);
 
-  
   const { speak, cancel } = useSpeechOutput({
     onStart: () => changeOrbState('speaking'),
     onBoundary: (lvl) => { 
@@ -191,7 +190,7 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
       targetLevelRef.current = lvl;
     },
     enabled: isReady && !isMuted,
-    // Safely block the mic during speaker output to prevent acoustic feedback loops
+    // Prevents feedback loop by blocking listening during speaker output
     preventListening: orbState === 'speaking' || orbState === 'thinking',
   });
 
@@ -234,15 +233,14 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     }
   };
 
-  // Safe manual Tap-To-Interrupt handler when clicking the Neural Orb
   const handleOrbClick = () => {
     if (!isReady || isMuted) return;
     
     if (orbState === 'speaking' || orbState === 'thinking') {
-      cancel(); // Silences speech immediately
+      cancel(); 
       targetLevelRef.current = 0;
       smoothLevelRef.current = 0;
-      changeOrbState('idle'); // Returns to Standby, immediately opening the mic
+      changeOrbState('idle'); 
     }
   };
 
@@ -297,7 +295,6 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
         })}
       </div>
 
-      {/* Added cursor and handleOrbClick to enable smooth Tap-To-Interrupt on the visual orb */}
       <div 
         style={{ ...styles.orbWrap, cursor: (isReady && !isMuted && (orbState === 'speaking' || orbState === 'thinking')) ? 'pointer' : 'default' }} 
         onClick={handleOrbClick}
