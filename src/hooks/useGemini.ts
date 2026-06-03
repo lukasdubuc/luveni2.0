@@ -15,19 +15,43 @@ export function useGemini(apiKey: string) {
 
   const ask = useCallback(
     async (userText: string): Promise<string> => {
-      // Append user turn
+      // 1. Append user query
       history.current.push({
         role: 'user',
         parts: [{ text: userText }],
         timestamp: Date.now(),
       });
 
-      // Keep rolling window
+      // Keep rolling history limits
       if (history.current.length > DEFAULT_MAX_HISTORY * 2) {
         history.current = history.current.slice(-DEFAULT_MAX_HISTORY * 2);
       }
 
-      // Generate a highly structured context payload for current time, date, and timezone
+      // 2. Self-Healing Normalizer: Force strict alternating "user" -> "model" turns.
+      // This protects the conversation flow from breaking if previous requests failed or timed out.
+      const cleanHistory: JarvisMessage[] = [];
+      for (const turn of history.current) {
+        if (cleanHistory.length === 0) {
+          // First turn in conversation history must always be 'user'
+          if (turn.role === 'user') {
+            cleanHistory.push(turn);
+          }
+        } else {
+          const lastTurn = cleanHistory[cleanHistory.length - 1];
+          if (lastTurn.role !== turn.role) {
+            cleanHistory.push(turn);
+          } else {
+            // If two consecutive turns have the same role, merge them or keep the latest user turn
+            if (turn.role === 'user') {
+              cleanHistory[cleanHistory.length - 1] = turn;
+            }
+          }
+        }
+      }
+      
+      // Update our internal history reference with the clean, validated structure
+      history.current = cleanHistory;
+
       const now = new Date();
       const timeContext = `
 [SYSTEM TIME & DATE CONTEXT]
@@ -39,7 +63,6 @@ export function useGemini(apiKey: string) {
 `;
 
       const payload = {
-        // Prepend context to the base system prompt
         systemInstruction: { 
           parts: [{ text: `${JARVIS_SYSTEM_PROMPT}\n${timeContext}` }] 
         },
@@ -62,7 +85,7 @@ export function useGemini(apiKey: string) {
       const reply: string =
         data?.candidates?.[0]?.content?.parts?.[0]?.text ?? 'Standing by, sir.';
 
-      // Append assistant turn
+      // 3. Append completed response to history
       history.current.push({
         role: 'model',
         parts: [{ text: reply }],
