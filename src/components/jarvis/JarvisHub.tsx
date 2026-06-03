@@ -49,6 +49,11 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
   const smoothLevelRef = useRef(0);
   const stateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  const orbStateRef = useRef(orbState);
+  useEffect(() => {
+    orbStateRef.current = orbState;
+  }, [orbState]);
+
   // Clear chat text after 15 seconds
   useEffect(() => {
     if (!lastLine) return;
@@ -99,7 +104,7 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
       let visionOnline = false;
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
-        visionOnline = devices.some(d => d.kind === 'audioinput') && isReady;
+        visionOnline = devices.some(d => d.kind: 'audioinput') && isReady;
       } catch (e) {
         visionOnline = false;
       }
@@ -134,7 +139,9 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     },
     onEnd: () => {
       targetLevelRef.current = 0;
-      changeOrbState('idle');
+      if (orbStateRef.current === 'speaking') {
+        changeOrbState('idle');
+      }
     },
   });
 
@@ -164,6 +171,13 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     },
     onStateChange: (s) => {
       if (isMuted) return;
+
+      if (s === 'listening') {
+        cancel(); 
+        targetLevelRef.current = 0;
+        smoothLevelRef.current = 0;
+      }
+
       if (s === 'idle' && orbState === 'speaking') return;
       changeOrbState(s);
     },
@@ -175,10 +189,10 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
       targetLevelRef.current = lvl;
     },
     enabled: isReady && !isMuted,
+    // Safely block the mic during speaker output to prevent acoustic feedback loops
     preventListening: orbState === 'speaking' || orbState === 'thinking',
   });
 
-  // Defensive Web Speech Warm-Up helper
   const warmUpMobileSpeech = () => {
     try {
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -218,6 +232,18 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     }
   };
 
+  // Safe manual Tap-To-Interrupt handler when clicking the Neural Orb
+  const handleOrbClick = () => {
+    if (!isReady || isMuted) return;
+    
+    if (orbState === 'speaking' || orbState === 'thinking') {
+      cancel(); // Silences speech immediately
+      targetLevelRef.current = 0;
+      smoothLevelRef.current = 0;
+      changeOrbState('idle'); // Returns to Standby, immediately opening the mic
+    }
+  };
+
   const displayLabel = (isReady && !isMuted && orbState === 'idle') 
     ? STATE_LABEL['listening'] 
     : STATE_LABEL[orbState];
@@ -233,7 +259,6 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
           background-color: #000000 !important;
           background: #000000 !important;
         }
-        /* Mobile-first and specific desktop override configurations */
         @media (min-width: 769px) {
           .jarvis-transcript {
             font-size: 12px !important;
@@ -270,7 +295,11 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
         })}
       </div>
 
-      <div style={styles.orbWrap}>
+      {/* Added cursor and handleOrbClick to enable smooth Tap-To-Interrupt on the visual orb */}
+      <div 
+        style={{ ...styles.orbWrap, cursor: (isReady && !isMuted && (orbState === 'speaking' || orbState === 'thinking')) ? 'pointer' : 'default' }} 
+        onClick={handleOrbClick}
+      >
         <NeuralOrb state={orbState} audioLevel={audioLevel} size={400} />
         <motion.div 
           animate={{
