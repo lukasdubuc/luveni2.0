@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_users: {
+        Row: {
+          created_at: string | null
+          email: string
+          id: string
+          role: string
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          id?: string
+          role?: string
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          id?: string
+          role?: string
+        }
+        Relationships: []
+      }
       leads: {
         Row: {
           created_at: string
@@ -35,6 +56,33 @@ export type Database = {
           id?: string
           metadata?: Json | null
           source?: string | null
+        }
+        Relationships: []
+      }
+      memories: {
+        Row: {
+          content: string
+          created_at: string | null
+          embedding: string | null
+          id: string
+          metadata: Json | null
+          user_id: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          embedding?: string | null
+          id?: string
+          metadata?: Json | null
+          user_id?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          embedding?: string | null
+          id?: string
+          metadata?: Json | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -91,63 +139,101 @@ export type Database = {
           },
         ]
       }
+      page_events: {
+        Row: {
+          country: string | null
+          created_at: string | null
+          event_type: string
+          id: string
+          path: string
+          product_id: string | null
+          referrer: string | null
+          session_id: string | null
+        }
+        Insert: {
+          country?: string | null
+          created_at?: string | null
+          event_type: string
+          id?: string
+          path: string
+          product_id?: string | null
+          referrer?: string | null
+          session_id?: string | null
+        }
+        Update: {
+          country?: string | null
+          created_at?: string | null
+          event_type?: string
+          id?: string
+          path?: string
+          product_id?: string | null
+          referrer?: string | null
+          session_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "page_events_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
-          bullet_points: string[]
+          api_synced_at: string | null
           created_at: string
           currency: string
           description: string | null
-          external_sku: string | null
-          fulfillment_notes: string | null
-          fulfillment_provider: string | null
+          display_order: number | null
+          fulfillment_type: string | null
           id: string
           image_urls: string[]
-          is_featured: boolean | null
+          is_archived: boolean | null
           is_published: boolean
           price_cents: number
           price_cents_discounted: number | null
+          printful_id: string | null
           slug: string
-          source_url: string | null
           title: string
           updated_at: string
           variants: Json
         }
         Insert: {
-          bullet_points?: string[]
+          api_synced_at?: string | null
           created_at?: string
           currency?: string
           description?: string | null
-          external_sku?: string | null
-          fulfillment_notes?: string | null
-          fulfillment_provider?: string | null
+          display_order?: number | null
+          fulfillment_type?: string | null
           id?: string
           image_urls?: string[]
-          is_featured?: boolean | null
+          is_archived?: boolean | null
           is_published?: boolean
           price_cents?: number
           price_cents_discounted?: number | null
+          printful_id?: string | null
           slug: string
-          source_url?: string | null
           title: string
           updated_at?: string
           variants?: Json
         }
         Update: {
-          bullet_points?: string[]
+          api_synced_at?: string | null
           created_at?: string
           currency?: string
           description?: string | null
-          external_sku?: string | null
-          fulfillment_notes?: string | null
-          fulfillment_provider?: string | null
+          display_order?: number | null
+          fulfillment_type?: string | null
           id?: string
           image_urls?: string[]
-          is_featured?: boolean | null
+          is_archived?: boolean | null
           is_published?: boolean
           price_cents?: number
           price_cents_discounted?: number | null
+          printful_id?: string | null
           slug?: string
-          source_url?: string | null
           title?: string
           updated_at?: string
           variants?: Json
@@ -222,6 +308,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      delete_order: { Args: { order_id: string }; Returns: undefined }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

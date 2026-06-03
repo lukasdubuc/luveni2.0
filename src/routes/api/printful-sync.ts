@@ -1,9 +1,56 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { createClient } from "@supabase/supabase-js";
 
 export const Route = createFileRoute("/api/printful-sync")({
   server: {
     handlers: {
-      POST: async () => {
+      POST: async ({ request }) => {
+        // ───────────────────────────────────────────────────────────
+        // 0. Require an authenticated admin caller
+        // ───────────────────────────────────────────────────────────
+        const authHeader = request.headers.get("authorization");
+        if (!authHeader?.startsWith("Bearer ")) {
+          return new Response(JSON.stringify({ error: "Unauthorized" }), {
+            status: 401,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
+        const SUPABASE_URL = process.env.SUPABASE_URL;
+        const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY;
+        if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+          return new Response(JSON.stringify({ error: "Server misconfigured" }), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
+        const token = authHeader.slice("Bearer ".length);
+        const userClient = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+          global: { headers: { Authorization: `Bearer ${token}` } },
+          auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+        });
+
+        const { data: claimsData, error: claimsErr } = await userClient.auth.getClaims(token);
+        const userId = claimsData?.claims?.sub;
+        if (claimsErr || !userId) {
+          return new Response(JSON.stringify({ error: "Unauthorized" }), {
+            status: 401,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
+        const { data: isAdmin, error: roleErr } = await userClient.rpc("has_role", {
+          _user_id: userId,
+          _role: "admin",
+        });
+        if (roleErr || !isAdmin) {
+          return new Response(JSON.stringify({ error: "Forbidden" }), {
+            status: 403,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
         const { supabaseAdmin } = await import(
           "@/integrations/supabase/client.server"
         );
@@ -347,13 +394,64 @@ export const Route = createFileRoute("/api/printful-sync")({
         }
 
         // ───────────────────────────────────────────────────────────
-        // 4. Response
+        // 4. Tombstone products no longer in Printful
+        //    Any product in Supabase with a printful_id that did NOT
+        //    appear in the live Printful catalog gets unpublished and
+        //    archived automatically. This covers:
+        //      • Products deleted from Printful
+        //      • Products moved to draft in Printful
+        //      • Products removed from the store
+        // ───────────────────────────────────────────────────────────
+        const livePrintfulIds = result.map((item: any) => String(item.id));
+
+        const { data: existingProducts, error: fetchErr } = await supabaseAdmin
+          .from("products")
+          .select("id, printful_id, title")
+          .not("printful_id", "is", null);
+
+        let tombstoned = 0;
+        const tombstoneErrors: string[] = [];
+
+        if (!fetchErr && existingProducts) {
+          const stale = existingProducts.filter(
+            (p: any) => !livePrintfulIds.includes(p.printful_id)
+          );
+
+          for (const p of stale) {
+            const { error: archiveErr } = await supabaseAdmin
+              .from("products")
+              .update({
+                is_published: false,
+                is_archived: true,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", p.id);
+
+            if (archiveErr) {
+              tombstoneErrors.push(
+                `Tombstone ${p.printful_id} (${p.title}): ${archiveErr.message}`
+              );
+            } else {
+              tombstoned++;
+              console.log(
+                `TOMBSTONED: ${p.title} (printful_id: ${p.printful_id})`
+              );
+            }
+          }
+        } else if (fetchErr) {
+          console.error("TOMBSTONE FETCH ERROR:", fetchErr);
+          tombstoneErrors.push(`Tombstone fetch failed: ${fetchErr.message}`);
+        }
+
+        // ───────────────────────────────────────────────────────────
+        // 5. Response
         // ───────────────────────────────────────────────────────────
         return new Response(
           JSON.stringify({
             synced,
             total: result.length,
-            errors,
+            tombstoned,
+            errors: [...errors, ...tombstoneErrors],
           }),
           {
             status: 200,

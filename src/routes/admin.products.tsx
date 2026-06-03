@@ -3,8 +3,10 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Plus, Trash2, Pencil, Loader2, Eye, EyeOff, ChevronDown, ChevronUp } from "lucide-react";
+import { requireAdmin } from "@/lib/admin-guard";
 
 export const Route = createFileRoute("/admin/products")({
+  beforeLoad: requireAdmin,
   component: ProductsPage,
 });
 

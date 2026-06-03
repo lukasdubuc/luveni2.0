@@ -14,7 +14,13 @@ export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
-const AUTHORIZED_EMAIL = "lukasdubuc@gmail.com";
+async function isAdminUser(userId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc("has_role", {
+    _user_id: userId,
+    _role: "admin",
+  });
+  return !error && data === true;
+}
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -24,8 +30,8 @@ function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user?.email?.toLowerCase() === AUTHORIZED_EMAIL.toLowerCase()) {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (user && (await isAdminUser(user.id))) {
         navigate({ to: "/admin", replace: true } as any);
       }
     });
@@ -51,7 +57,7 @@ function LoginPage() {
         });
         if (error) throw error;
 
-        if (data.user?.email?.toLowerCase() !== AUTHORIZED_EMAIL.toLowerCase()) {
+        if (!data.user || !(await isAdminUser(data.user.id))) {
           await supabase.auth.signOut();
           toast.error("Access restricted to authorised personnel only.");
           return;

@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { fetchProducts, useProducts } from "@/lib/useProducts";
-import { useMemo, memo } from "react";
+import { useMemo, memo, useEffect } from "react";
+import { trackEvent } from "@/lib/track";
 
 type Product = {
   id: string;
@@ -33,6 +34,10 @@ function ShopPage() {
       ? (clientProducts as Product[])
       : ((loader?.products as Product[]) ?? []);
   }, [clientProducts, loader?.products]);
+
+  useEffect(() => {
+    trackEvent("page_view");
+  }, []);
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-inherit font-mono selection:bg-current selection:text-current">
@@ -75,6 +80,7 @@ const ProductCell = memo(({ product }: { product: Product }) => {
       params={{ slug: product.slug }}
       preload="intent"
       viewTransition
+      onClick={() => trackEvent("product_click", { product_id: product.id })}
       className="group relative z-0 block border-none bg-transparent outline-none transition-transform duration-300 ease-in-out hover:z-10 hover:scale-105 hover:border-transparent focus:outline-none focus-visible:outline-none"
       style={{ willChange: "transform" }}
     >

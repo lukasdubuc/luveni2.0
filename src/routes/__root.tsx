@@ -38,30 +38,45 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
-    meta: [{ charSet: "utf-8" }, { name: "viewport", content: "width=device-width, initial-scale=1" }],
-    // Removed link here
+    meta: [
+      { charSet: "utf-8" }, 
+      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { property: "og:image", content: "/shop-preview.jpg" },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+    ],
+    links: [{ rel: "stylesheet", href: appCss }, { rel: "icon", type: "image/x-icon", href: "/favicon.ico" }],
   }),
-  shellComponent: RootShell,
-  // ...
+  shellComponent: RootShell, component: RootComponent, notFoundComponent: NotFoundComponent, errorComponent: ErrorComponent,
 });
+
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        {/* ADD FAVICON HERE */}
-        <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-        
-        {/* Hoisted before HeadContent */}
+        {/* ── DARK MODE FLASH FIX ──────────────────────────────────────────
+            Runs synchronously before HeadContent (and therefore before the
+            stylesheet is applied), so the browser never paints the wrong
+            background colour.
+            FIX: only add 'dark' when the saved theme is dark; otherwise
+            remove it. Your CSS uses :root.dark {...} not :root.light,
+            so adding 'light' as a class was a no-op and .dark should only
+            be present when actually in dark mode.
+        ─────────────────────────────────────────────────────────────── */}
         <script dangerouslySetInnerHTML={{ __html: `
           (function() {
             try {
-              var t = localStorage.getItem('theme') || 'light';
+              var t = localStorage.getItem('theme');
               var d = document.documentElement;
-              d.classList.add(t);
-              d.style.backgroundColor = t === 'dark' ? '#000000' : '#FFFFFF';
-              d.style.colorScheme = t;
+              if (t === 'dark') {
+                d.classList.add('dark');
+                d.style.backgroundColor = '#000000';
+                d.style.colorScheme = 'dark';
+              } else {
+                d.classList.remove('dark');
+                d.style.backgroundColor = '#FFFFFF';
+                d.style.colorScheme = 'light';
+              }
             } catch (e) {}
           })()
         ` }} />
@@ -76,12 +91,14 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
   const path = useRouterState({ select: (s) => s.location.pathname });
- const isBare = path.startsWith("/admin") || path === "/login" || path.startsWith("/offer");
+  const isBare = path.startsWith("/admin") || path === "/login" || path.startsWith("/offer");
   const [footerDescription, setFooterDescription] = useState<string | undefined>(undefined);
+  // ── FIX: read the class the blocking script already stamped on <html>
+  //    instead of re-reading localStorage. This means the initial render
+  //    matches the DOM exactly, so there is no hydration mismatch or flash.
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window === "undefined") return "light";
-    try { return (localStorage.getItem("theme") as "light" | "dark") || "light"; }
-    catch { return "light"; }
+    return document.documentElement.classList.contains("dark") ? "dark" : "light";
   });
 
   useEffect(() => {

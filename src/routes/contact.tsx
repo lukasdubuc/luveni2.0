@@ -10,10 +10,10 @@ import { site } from "@/config/site";
 export const Route = createFileRoute("/contact")({
   head: () => ({
     meta: [
-      { title: `Contact — ${site.brand}` },
-      { name: "description", content: `Get in touch with the ${site.brand} team. We read every message.` },
+      { title: `Contact ${site.brand}` },
+      { name: "description", content: `Get in touch with the ${site.brand} team. We are here to assist with your order or inquiries.` },
       { property: "og:title", content: `Contact — ${site.brand}` },
-      { property: "og:description", content: `Get in touch with the ${site.brand} team.` },
+      { property: "og:description", content: `Connect with ${site.brand} for order support and inquiries.` },
     ],
   }),
   component: Contact,
@@ -22,7 +22,7 @@ export const Route = createFileRoute("/contact")({
 const Schema = z.object({
   name: z.string().trim().min(1).max(120),
   email: z.string().trim().email().max(255),
-  message: z.string().trim().min(5, "Tell us a bit more").max(2000),
+  message: z.string().trim().min(5, "Please enter a longer message").max(2000),
 });
 
 function Contact() {
@@ -50,7 +50,7 @@ function Contact() {
       if (res?.ok) {
         setSent(true);
         setForm({ name: "", email: "", message: "" });
-        toast.success("Thanks — we'll be in touch.");
+        toast.success("Message received. We'll be in touch shortly.");
       } else {
         toast.error(res?.error ?? "Something went wrong.");
       }
@@ -63,29 +63,29 @@ function Contact() {
     <section className="bg-background text-foreground">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-16 md:grid-cols-2 md:py-24">
         <div>
-          <p className="text-sm font-medium uppercase tracking-wider text-accent">Contact</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">Say hello.</h1>
+          <p className="text-sm font-medium uppercase tracking-wider text-accent"></p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">Get in touch.</h1>
           <p className="mt-3 text-muted-foreground">
-            Questions about the offer, custom pricing, or feedback? Send a note —
-            we usually reply within 24 hours.
+            Have questions about your order, sizing, or our current collection? 
+            Send us a note—our team prioritizes every inquiry and will respond within 24 hours.
           </p>
           <div className="mt-8 flex items-center gap-3 border border-black/10 bg-background/50 p-4">
             <span className="grid h-10 w-10 place-items-center border border-black/10 bg-background text-foreground">
               <Mail className="h-5 w-5" />
             </span>
             <div className="text-sm">
-              <p className="text-muted-foreground">Or email us directly</p>
-              <a href={`mailto:${site.supportEmail}`} className="font-medium underline">
-                {site.supportEmail}
+              <p className="text-muted-foreground">Direct support</p>
+              <a href="mailto:luveni.apparel@gmail.com" className="font-medium underline">
+                luveni.apparel@gmail.com
               </a>
             </div>
           </div>
         </div>
         {sent ? (
           <div className="border border-black/10 bg-background/50 p-8 text-center">
-            <p className="text-base font-medium text-foreground">Message sent.</p>
+            <p className="text-base font-medium text-foreground">Message received.</p>
             <p className="mt-2 text-sm text-muted-foreground">
-              We'll get back to you soon. In the meantime, you can browse the site.
+              Thank you for reaching out. A member of our team will assist you shortly.
             </p>
           </div>
         ) : (

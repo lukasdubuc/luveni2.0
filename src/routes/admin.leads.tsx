@@ -2,8 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Search, RefreshCw, Download } from "lucide-react";
+import { requireAdmin } from "@/lib/admin-guard";
 
 export const Route = createFileRoute("/admin/leads")({
+  beforeLoad: requireAdmin,
   component: LeadsPage,
 });
 

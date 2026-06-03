@@ -6,10 +6,12 @@ const Schema = z.object({
   name: z.string().trim().min(1).max(120),
   items: z.array(z.object({
     productId: z.string().uuid(),
-    variantSku: z.string().optional(),
-    quantity: z.number().min(1)
-  })),
+    variantSku: z.string().max(100).optional(),
+    quantity: z.number().int().min(1).max(100)
+  })).min(1).max(20),
 });
+
+const MAX_ORDER_TOTAL_CENTS = 1_000_000; // $10,000 cap to prevent abusive orders
 
 export const createCheckout = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => Schema.parse(input))
@@ -63,6 +65,10 @@ export const createCheckout = createServerFn({ method: "POST" })
           },
         },
       });
+    }
+
+    if (totalCents > MAX_ORDER_TOTAL_CENTS) {
+      return { ok: false as const, error: "Order total exceeds the allowed maximum." };
     }
 
     // 4. Create Order

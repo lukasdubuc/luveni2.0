@@ -1,5 +1,66 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+const sendDiscordAlert = async (
+  orderId: string,
+  totalCents: number,
+  email: string
+) => {
+  const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
+  if (!webhookUrl) return;
+
+  await fetch(webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      embeds: [{
+        title: "💰 New Order",
+        color: 0x1a1a1a,
+        fields: [
+          { name: "Order ID", value: `\`${orderId}\``, inline: true },
+          { name: "Total", value: `**$${(totalCents / 100).toFixed(2)}**`, inline: true },
+          { name: "Customer", value: email, inline: false },
+        ],
+        timestamp: new Date().toISOString(),
+        footer: { text: "Luveni · New Order" },
+      }],
+    }),
+  });
+};
+
+const sendReceiptEmail = async (
+  orderId: string,
+  email: string,
+  totalCents: number
+) => {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return;
+
+  await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: "Luveni Orders <orders@luveni.com>",
+      to: process.env.BUSINESS_EMAIL,
+      subject: `New Order — $${(totalCents / 100).toFixed(2)}`,
+      html: `
+        <div style="font-family:monospace;max-width:480px;margin:0 auto;padding:32px;color:#111">
+          <h2 style="font-size:14px;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:24px">New Order Received</h2>
+          <table style="width:100%;font-size:13px;border-collapse:collapse">
+            <tr><td style="padding:8px 0;opacity:0.5;width:40%">ORDER ID</td><td>${orderId}</td></tr>
+            <tr><td style="padding:8px 0;opacity:0.5">CUSTOMER</td><td>${email}</td></tr>
+            <tr><td style="padding:8px 0;opacity:0.5">TOTAL</td><td style="font-weight:bold">$${(totalCents / 100).toFixed(2)}</td></tr>
+            <tr><td style="padding:8px 0;opacity:0.5">TIME</td><td>${new Date().toLocaleString()}</td></tr>
+          </table>
+          <p style="margin-top:32px;font-size:12px;opacity:0.4">Luveni · Automated Order Notification</p>
+        </div>
+      `,
+    }),
+  });
+};
+
 export const Route = createFileRoute("/api/public/stripe-webhook")({
   server: {
     handlers: {
@@ -35,7 +96,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
         try {
           const session = event.data.object as import("stripe").Stripe.Checkout.Session;
           const orderId = session.metadata?.order_id;
-          
+
           if (!orderId) {
             console.log(`Skipping event ${event.type}: No order_id found in metadata.`);
             return new Response(JSON.stringify({ received: true, ignored: true }), { status: 200 });
@@ -47,7 +108,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
               .from("orders")
               .select("printful_id")
               .eq("id", orderId)
-              .single();
+              .single<{ printful_id: string | null }>();
 
             // Update internal status
             await supabaseAdmin
@@ -55,12 +116,26 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
               .update({ status: "paid", provider_ref: session.id })
               .eq("id", orderId);
 
+            // Fire both notifications simultaneously
+            await Promise.all([
+              sendDiscordAlert(
+                orderId,
+                session.amount_total ?? 0,
+                session.customer_details?.email ?? "unknown"
+              ),
+              sendReceiptEmail(
+                orderId,
+                session.customer_details?.email ?? "unknown",
+                session.amount_total ?? 0
+              ),
+            ]);
+
             // Conditional Printful Trigger
             if (order?.printful_id) {
               console.log(`Triggering Printful fulfillment for order ${orderId}`);
               // API call logic would go here
             }
-              
+
           } else if (
             event.type === "checkout.session.expired" ||
             event.type === "checkout.session.async_payment_failed"

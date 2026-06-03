@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCart } from "@/context/CartContext";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createCheckout } from "@/lib/checkout.functions";
+import { trackEvent } from "@/lib/track";
 
 export const Route = createFileRoute("/checkout")({
   head: () => ({
@@ -18,6 +19,10 @@ function CheckoutPage() {
   const [subscribe, setSubscribe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    trackEvent("checkout_start");
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -6,7 +6,8 @@ export type CartItem = {
   title: string;
   price_cents: number;
   quantity: number;
-  image_url: string; // <--- ADDED THIS
+  image_url: string;
+  metadata?: Record<string, any>;
 };
 
 type CartContextType = {

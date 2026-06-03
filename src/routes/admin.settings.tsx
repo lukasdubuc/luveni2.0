@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { requireAdmin } from "@/lib/admin-guard";
 
 export const Route = createFileRoute("/admin/settings")({
+  beforeLoad: requireAdmin,
   component: SettingsPage,
 });
 
