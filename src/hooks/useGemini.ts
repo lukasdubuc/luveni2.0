@@ -22,12 +22,12 @@ export function useGemini(apiKey: string) {
         timestamp: Date.now(),
       });
 
-      // Keep rolling window limits
+      // Keep rolling window
       if (history.current.length > DEFAULT_MAX_HISTORY * 2) {
         history.current = history.current.slice(-DEFAULT_MAX_HISTORY * 2);
       }
 
-      // 1. Construct dynamic context (Time, Date, Day)
+      // Prepend live date and time metrics to system context
       const now = new Date();
       const timeContext = `
 [SYSTEM CONTEXT]
@@ -36,16 +36,10 @@ export function useGemini(apiKey: string) {
 `;
 
       const payload = {
-        // Prepend the dynamic temporal details to the base system prompt
-        systemInstruction: { 
-          parts: [{ text: `${JARVIS_SYSTEM_PROMPT}\n${timeContext}` }] 
-        },
+        systemInstruction: { parts: [{ text: `${JARVIS_SYSTEM_PROMPT}\n${timeContext}` }] },
         contents: history.current.map(({ role, parts }) => ({ role, parts })),
-        generationConfig: { 
-          maxOutputTokens: 220, 
-          temperature: 0.7 
-        },
-        // 2. Enable Google Search Grounding for live web queries
+        generationConfig: { maxOutputTokens: 220, temperature: 0.75 },
+        // Enable live web grounding
         tools: [
           { googleSearch: {} }
         ]
@@ -66,7 +60,7 @@ export function useGemini(apiKey: string) {
       const reply: string =
         data?.candidates?.[0]?.content?.parts?.[0]?.text ?? 'Standing by, sir.';
 
-      // Append assistant response to history
+      // Append assistant turn
       history.current.push({
         role: 'model',
         parts: [{ text: reply }],
