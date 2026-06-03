@@ -80,9 +80,11 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     }
   }, []);
 
+  // Decoupled organic tick loop: interpolates refs and updates React state at a clean 60fps
   useEffect(() => {
     const tick = () => {
-      smoothLevel.current += (audioLevel - smoothLevel.current) * 0.25;
+      smoothLevel.current += (audioLevel - smoothLevel.current) * 0.14;
+      setAudioLevel(smoothLevel.current);
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
@@ -129,9 +131,11 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
 
   const { speak, cancel } = useSpeechOutput({
     onStart: () => changeOrbState('speaking'),
-    onBoundary: (lvl) => { setAudioLevel(lvl); },
+    onBoundary: (lvl) => { 
+      smoothLevel.current = lvl; // Decoupled ref mutation (reverted back to original high-performance)
+    },
     onEnd: () => {
-      setAudioLevel(0);
+      smoothLevel.current = 0;
       changeOrbState('idle');
     },
   });
@@ -141,7 +145,7 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
       if (isMutedRef.current) return; // Safely read mute state from ref
       setLastLine(text);
       changeOrbState('thinking');
-      setAudioLevel(0);
+      smoothLevel.current = 0; // Stop pulsing immediately on transition
       cancel();
       try {
         const reply = await ask(text);
@@ -157,20 +161,20 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
 
   useVoiceInput({
     onTranscript: (text) => {
-      if (isMutedRef.current) return; // Fixed: uses the fresh ref instead of stale state
+      if (isMutedRef.current) return;
       handleTranscript(text);
     },
     onStateChange: (s) => {
-      if (isMutedRef.current) return; // Fixed: uses the fresh ref instead of stale state
+      if (isMutedRef.current) return;
       if (s === 'idle' && orbStateRef.current === 'speaking') return;
       changeOrbState(s);
     },
     onLevelChange: (lvl) => {
-      if (isMutedRef.current) { // Fixed: uses the fresh ref instead of stale state
-        setAudioLevel(0); 
+      if (isMutedRef.current) {
+        smoothLevel.current = 0;
         return;
       }
-      setAudioLevel(lvl);
+      smoothLevel.current = lvl; // Decoupled ref mutation (reverted back to original high-performance)
     },
     enabled: isReady && !isMuted,
   });
@@ -213,6 +217,16 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
 
   return (
     <div style={styles.root}>
+      {/* Scope-safe CSS style override for the HTML/Body background. 
+          Prevents mobile rubber-banding white borders locally on Safari/Chrome 
+          without manual DOM mutation side-effects. */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        html, body {
+          background-color: #000000 !important;
+          background: #000000 !important;
+        }
+      ` }} />
+
       <div style={styles.scanlines} />
       <div style={styles.topLabel}>J·A·R·V·I·S — LUVENI</div>
 
@@ -314,8 +328,8 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
 
 const styles: Record<string, React.CSSProperties> = {
   root: {
-    position: 'fixed', // Fixed instead of relative to cleanly cover entire mobile viewport boundaries
-    inset: 0,          // Cover safe areas and rubber-banding zones without DOM-manipulation side effects
+    position: 'fixed', // Force coverage over elastic boundaries
+    inset: 0,
     background: '#000000',
     display: 'flex',
     flexDirection: 'column',
@@ -326,7 +340,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: "'Courier New', Courier, monospace",
     color: '#fff',
     userSelect: 'none',
-    zIndex: 9999,      // Sits safely above default layout elements
+    zIndex: 9999,
   },
   scanlines: {
     position: 'absolute',
