@@ -22,15 +22,33 @@ export function useGemini(apiKey: string) {
         timestamp: Date.now(),
       });
 
-      // Keep rolling window
+      // Keep rolling window limits
       if (history.current.length > DEFAULT_MAX_HISTORY * 2) {
         history.current = history.current.slice(-DEFAULT_MAX_HISTORY * 2);
       }
 
+      // 1. Construct dynamic context (Time, Date, Day)
+      const now = new Date();
+      const timeContext = `
+[SYSTEM CONTEXT]
+- Current Local Time: ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+- Current Date: ${now.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+`;
+
       const payload = {
-        systemInstruction: { parts: [{ text: JARVIS_SYSTEM_PROMPT }] },
+        // Prepend the dynamic temporal details to the base system prompt
+        systemInstruction: { 
+          parts: [{ text: `${JARVIS_SYSTEM_PROMPT}\n${timeContext}` }] 
+        },
         contents: history.current.map(({ role, parts }) => ({ role, parts })),
-        generationConfig: { maxOutputTokens: 220, temperature: 0.75 },
+        generationConfig: { 
+          maxOutputTokens: 220, 
+          temperature: 0.7 
+        },
+        // 2. Enable Google Search Grounding for live web queries
+        tools: [
+          { googleSearch: {} }
+        ]
       };
 
       const res = await fetch(GEMINI_ENDPOINT(apiKey), {
@@ -48,7 +66,7 @@ export function useGemini(apiKey: string) {
       const reply: string =
         data?.candidates?.[0]?.content?.parts?.[0]?.text ?? 'Standing by, sir.';
 
-      // Append assistant turn
+      // Append assistant response to history
       history.current.push({
         role: 'model',
         parts: [{ text: reply }],
