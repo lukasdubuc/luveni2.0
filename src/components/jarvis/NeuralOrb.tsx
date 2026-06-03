@@ -2,17 +2,13 @@
 //  J.A.R.V.I.S — Luveni GM  |  components/jarvis/NeuralOrb.tsx
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import type { OrbState } from '../../types/jarvis';
 
 interface NeuralOrbProps {
-  state:          OrbState;
-  audioLevel:     number;
-  size?:          number;
-  initialized?:   boolean;                  // Controlled from parent
-  onInitialize?:  () => void;               // Parent callback to boot audio
-  isMuted?:       boolean;                  // Controlled from parent
-  onMuteToggle?:  (muted: boolean) => void; // Parent callback to mute/unmute
+  state:      OrbState;
+  audioLevel: number;
+  size?:      number;
 }
 
 // ── Vertex Shader (Passes normals & view vectors for edge glow) ──
@@ -31,7 +27,7 @@ void main() {
 }
 `;
 
-// ── Overhauled Volumetric Liquid-Glass Fragment Shader ──
+// ── Volumetric Liquid-Glass Fragment Shader ──
 const FRAG = `
 precision highp float;
 uniform float uTime;
@@ -159,20 +155,9 @@ function loadThree(): Promise<void> {
   });
 }
 
-export default function NeuralOrb({
-  state,
-  audioLevel,
-  size = 380,
-  initialized = false,
-  onInitialize,
-  isMuted,
-  onMuteToggle,
-}: NeuralOrbProps) {
+export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef(0);
-
-  const [internalMuted, setInternalMuted] = useState(true);
-  const muted = isMuted !== undefined ? isMuted : internalMuted;
 
   const ctx = useRef<{
     renderer: any; uniforms: any; clock: any;
@@ -274,130 +259,24 @@ export default function NeuralOrb({
       }
       mountRef.current?.querySelector('canvas')?.remove();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [size]);
 
-  // ── State Updates ──────────────────────────────────────────
+  // ── State updates ──────────────────────────────────────────
   useEffect(() => {
     if (!ctx.current) return;
     ctx.current.uniforms.uState.value = STATE_NUM[state];
   }, [state]);
 
-  const handleActionClick = () => {
-    if (!initialized) {
-      if (onInitialize) onInitialize();
-    } else {
-      const nextMuted = !muted;
-      if (onMuteToggle) {
-        onMuteToggle(nextMuted);
-      } else {
-        setInternalMuted(nextMuted);
-      }
-    }
-  };
-
-  const isListening = state === 'listening';
-
   return (
-    <div className="relative w-full flex flex-col items-center justify-center overflow-visible select-none py-4">
-      {/* ── Keyframes ── */}
-      <style dangerouslySetInnerHTML={{__html: `
-        @keyframes subtlePulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.025); }
-        }
-      `}} />
-
-      {/* ── Overhauled Volumetric WebGL Orb Container ── */}
-      <div
-        ref={mountRef}
-        style={{
-          position:  'relative',
-          width:     `${size}px`,
-          height:    `${size}px`,
-          animation: 'subtlePulse 4.2s infinite ease-in-out',
-          overflow:  'visible',
-        }}
-      />
-
-      {/* ── Unified Non-Flashing Status Text ── */}
-      <div className="mt-8 flex flex-col items-center justify-center h-8">
-        <span 
-          className={`text-xs tracking-[0.4em] font-mono uppercase font-semibold transition-all duration-300 ease-in-out ${
-            isListening 
-              ? 'text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.4)] opacity-100' 
-              : 'text-purple-400 opacity-80'
-          }`}
-        >
-          {isListening ? 'LISTENING' : 'STANDBY'}
-        </span>
-      </div>
-
-      {/* ── Merged Initialize & Mute Button ── */}
-      <button
-        onClick={handleActionClick}
-        className="mt-6 relative z-10 flex items-center justify-center w-14 h-14 rounded-full border bg-black/40 backdrop-blur-xl transition-all duration-300 outline-none focus:outline-none group"
-        style={{
-          borderColor: !initialized 
-            ? 'rgba(168, 85, 247, 0.3)'   // Uninitialized Purple border
-            : muted 
-              ? 'rgba(239, 68, 68, 0.3)'   // Muted Red border
-              : 'rgba(6, 182, 212, 0.3)',  // Active Cyan border
-          boxShadow: !initialized
-            ? '0 0 15px rgba(168, 85, 247, 0.05)'
-            : muted 
-              ? '0 0 15px rgba(239, 68, 68, 0.05)' 
-              : '0 0 15px rgba(6, 182, 212, 0.05)'
-        }}
-      >
-        {/* Glow Hover Layer */}
-        <div 
-          className={`absolute inset-0 rounded-full transition-all duration-300 opacity-0 group-hover:opacity-100 ${
-            !initialized
-              ? 'bg-purple-500/5 shadow-[0_0_20px_rgba(168,85,247,0.2)]'
-              : muted 
-                ? 'bg-red-500/5 shadow-[0_0_20px_rgba(239,68,68,0.2)]' 
-                : 'bg-cyan-500/5 shadow-[0_0_20px_rgba(6,182,212,0.2)]'
-          }`}
-        />
-
-        {!initialized ? (
-          /* Uninitialized / Unmute Action (Microphone off, ready to initialize) */
-          <svg 
-            xmlns="http://www.w3.org/2000/svg" 
-            fill="none" 
-            viewBox="0 0 24 24" 
-            strokeWidth={1.5} 
-            stroke="currentColor" 
-            className="w-5 h-5 text-purple-400 group-hover:text-purple-300 transition-colors duration-200"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M2.25 2.25l19.5 19.5M15.364 15.364l4.656-4.656m0 0l2.25 2.25m-2.25-2.25l2.25-2.25m-4.5 4.5l-2.25-2.25M9 10.5v1.5a3 3 0 003 3v0M12 4.5c.828 0 1.5.672 1.5 1.5V9M12 21v-3" />
-          </svg>
-        ) : muted ? (
-          /* Initialized but Muted state (Red Mic Off) */
-          <svg 
-            xmlns="http://www.w3.org/2000/svg" 
-            fill="none" 
-            viewBox="0 0 24 24" 
-            strokeWidth={1.5} 
-            stroke="currentColor" 
-            className="w-5 h-5 text-red-400/90 group-hover:text-red-300 transition-colors duration-200"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M2.25 2.25l19.5 19.5M15.364 15.364l4.656-4.656m0 0l2.25 2.25m-2.25-2.25l2.25-2.25m-4.5 4.5l-2.25-2.25M9 10.5v1.5a3 3 0 003 3v0M12 4.5c.828 0 1.5.672 1.5 1.5V9M12 21v-3" />
-          </svg>
-        ) : (
-          /* Active state / Unmuted (Cyan Mic On) */
-          <svg 
-            xmlns="http://www.w3.org/2000/svg" 
-            fill="none" 
-            viewBox="0 0 24 24" 
-            strokeWidth={1.5} 
-            stroke="currentColor" 
-            className="w-5 h-5 text-cyan-400/90 group-hover:text-cyan-300 transition-colors duration-200"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V6a3 3 0 016 0v6.75a3 3 0 01-3 3z" />
-          </svg>
-        )}
-      </button>
-    </div>
+    <div
+      ref={mountRef}
+      style={{
+        position:  'relative',
+        width:     `${size}px`,
+        height:    `${size}px`,
+        overflow:  'visible',
+      }}
+    />
   );
 }
