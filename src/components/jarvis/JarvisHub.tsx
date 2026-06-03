@@ -34,7 +34,7 @@ const STATE_COLOR: Record<OrbState, string> = {
 
 export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
   const [orbState, setOrbState]     = useState<OrbState>('idle');
-  const [audioLevel, setAudioLevel] = useState(0); // State for actual visual representation
+  const [audioLevel, setAudioLevel] = useState(0);
   const [lastLine, setLastLine]     = useState('');
   const [isReady, setIsReady]       = useState(false);
   const [isMuted, setIsMuted]       = useState(true);
@@ -45,8 +45,8 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     memory: false
   });
   
-  const targetLevelRef = useRef(0); // Target level specified by microphone/VAD
-  const smoothLevelRef = useRef(0); // Current calculated smoothed value
+  const targetLevelRef = useRef(0);
+  const smoothLevelRef = useRef(0);
   const stateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const isMutedRef = useRef(isMuted);
@@ -59,6 +59,16 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
   useEffect(() => {
     orbStateRef.current = orbState;
   }, [orbState]);
+
+  // Fix 1: Auto-hide the chat text 15 seconds after updates occur
+  useEffect(() => {
+    if (!lastLine) return;
+    const timer = setTimeout(() => {
+      setLastLine('');
+    }, 15000); // 15 seconds
+    
+    return () => clearTimeout(timer);
+  }, [lastLine]);
 
   const { ask } = useGemini(geminiApiKey);
 
@@ -77,18 +87,13 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     }
   }, []);
 
-  // Single mount animation frame loop to handle visual transitions smoothly
   useEffect(() => {
     let rafId: number;
     const tick = () => {
-      // Interpolate smooth value toward the latest target level
       smoothLevelRef.current += (targetLevelRef.current - smoothLevelRef.current) * 0.15;
-      
-      // Prevent infinite float adjustments around zero
       if (Math.abs(smoothLevelRef.current) < 0.001) {
         smoothLevelRef.current = 0;
       }
-      
       setAudioLevel(smoothLevelRef.current);
       rafId = requestAnimationFrame(tick);
     };
@@ -182,6 +187,8 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
       targetLevelRef.current = lvl;
     },
     enabled: isReady && !isMuted,
+    // Fix 2: Explicitly block audio polling while processing or speaking
+    preventListening: orbState === 'speaking' || orbState === 'thinking',
   });
 
   const handleActionClick = () => {
@@ -249,7 +256,6 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
       </div>
 
       <div style={styles.orbWrap}>
-        {/* Pass the reactive state variable "audioLevel" instead of "smoothLevel.current" */}
         <NeuralOrb state={orbState} audioLevel={audioLevel} size={400} />
         <motion.div 
           animate={{
@@ -408,10 +414,12 @@ const styles: Record<string, React.CSSProperties> = {
   },
   transcript: {
     textAlign: 'center',
-    fontSize: 16,
+    // Fix 4: Set to 12px with tight futuristic letter spacing to match the standby text above
+    fontSize: 12, 
     color: '#fff',
-    letterSpacing: 1.5,
+    letterSpacing: 4,
     fontWeight: 'lighter',
+    lineHeight: 1.6,
   },
   circularControlBtn: {
     marginTop: 20,
