@@ -49,15 +49,6 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
   const rafRef = useRef<number>(0);
   const stateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Use refs to prevent closures inside custom hooks from referencing stale state values
-  const isReadyRef = useRef(isReady);
-  const isMutedRef = useRef(isMuted);
-
-  useEffect(() => {
-    isReadyRef.current = isReady;
-    isMutedRef.current = isMuted;
-  }, [isReady, isMuted]);
-
   const { ask } = useGemini(geminiApiKey);
 
   // Smooth state transition to debounce VAD state-flickers (fixes flashing text)
@@ -129,8 +120,7 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     onBoundary: (lvl) => { setAudioLevel(lvl); },
     onEnd: () => {
       setAudioLevel(0);
-      // Automatically transition back to active conversational listening instead of standby/idle
-      changeOrbState(isReadyRef.current && !isMutedRef.current ? 'listening' : 'idle');
+      changeOrbState('idle');
     },
   });
 
@@ -177,10 +167,6 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     if (!isReady) {
       setIsReady(true);
       setIsMuted(false);
-      
-      // Instantly transition orb state to matching speaking animation for the greeting
-      changeOrbState('speaking');
-      speak("System online. J.A.R.V.I.S is fully operational and listening, sir.");
     } else {
       const nextMuted = !isMuted;
       setIsMuted(nextMuted);
@@ -197,12 +183,8 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
         }
         setOrbState('idle');
       } else {
-        // Force active listening state when unmuting
-        if (stateTimeoutRef.current) {
-          clearTimeout(stateTimeoutRef.current);
-          stateTimeoutRef.current = null;
-        }
-        setOrbState('listening');
+        // Force clean start when unmuting
+        setOrbState('idle');
       }
     }
   };
