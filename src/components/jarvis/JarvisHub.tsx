@@ -52,7 +52,6 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
   // Keep references to mute and orb states to prevent stale closures in Web Speech VAD callbacks
   const isMutedRef = useRef(isMuted);
   const orbStateRef = useRef(orbState);
-  const audioLevelRef = useRef(audioLevel);
 
   useEffect(() => {
     isMutedRef.current = isMuted;
@@ -61,10 +60,6 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
   useEffect(() => {
     orbStateRef.current = orbState;
   }, [orbState]);
-
-  useEffect(() => {
-    audioLevelRef.current = audioLevel;
-  }, [audioLevel]);
 
   const { ask } = useGemini(geminiApiKey);
 
@@ -218,16 +213,6 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
 
   return (
     <div style={styles.root}>
-      {/* Scope-safe CSS style override for the HTML/Body background. 
-          Prevents mobile rubber-banding white borders locally on Safari/Chrome 
-          without manual DOM mutation side-effects. */}
-      <style dangerouslySetInnerHTML={{ __html: `
-        html, body {
-          background-color: #000000 !important;
-          background: #000000 !important;
-        }
-      ` }} />
-
       <div style={styles.scanlines} />
       <div style={styles.topLabel}>J·A·R·V·I·S — LUVENI</div>
 
@@ -329,8 +314,8 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
 
 const styles: Record<string, React.CSSProperties> = {
   root: {
-    position: 'relative',
-    minHeight: '100vh',
+    position: 'fixed', // Fixed instead of relative to cleanly cover entire mobile viewport boundaries
+    inset: 0,          // Cover safe areas and rubber-banding zones without DOM-manipulation side effects
     background: '#000000',
     display: 'flex',
     flexDirection: 'column',
@@ -341,6 +326,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: "'Courier New', Courier, monospace",
     color: '#fff',
     userSelect: 'none',
+    zIndex: 9999,      // Sits safely above default layout elements
   },
   scanlines: {
     position: 'absolute',
