@@ -38,7 +38,7 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
   const [audioLevel, setAudioLevel] = useState(0);
   const [lastLine, setLastLine]     = useState('');
   const [isReady, setIsReady]       = useState(false);
-  const [isMuted, setIsMuted]       = useState(true); // Default to muted/locked on load
+  const [isMuted, setIsMuted]       = useState(true); // Starts muted on load
   const [telemetry, setTelemetry]   = useState({
     core: false,
     vision: false,
@@ -126,6 +126,7 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
 
   const handleTranscript = useCallback(
     async (text: string) => {
+      if (isMuted) return; // Drop processing if mic receives transcripts while muting
       setLastLine(text);
       changeOrbState('thinking');
       setAudioLevel(0);
@@ -139,33 +140,65 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
         speak('I encountered an issue reaching the neural network, sir.');
       }
     },
-    [ask, cancel, speak, changeOrbState]
+    [ask, cancel, speak, changeOrbState, isMuted]
   );
 
   useVoiceInput({
-    onTranscript: handleTranscript,
+    onTranscript: (text) => {
+      if (isMuted) return; // Drop transcript triggers instantly when muted
+      handleTranscript(text);
+    },
     onStateChange: (s) => {
+      if (isMuted) return; // Drop any asynchronous engine state updates if muted
       if (s === 'idle' && orbState === 'speaking') return;
       changeOrbState(s);
     },
-    onLevelChange: (lvl) => { setAudioLevel(lvl); },
-    enabled: isReady && !isMuted, // Stop VAD processes completely when muted
+    onLevelChange: (lvl) => {
+      if (isMuted) {
+        setAudioLevel(0); // Zero out visual feedback pulses immediately
+        return;
+      }
+      setAudioLevel(lvl);
+    },
+    enabled: isReady && !isMuted,
   });
 
   const handleActionClick = () => {
     if (!isReady) {
       setIsReady(true);
       setIsMuted(false);
+      // Boot greeting - triggered directly inside user gesture click handler to unlock TTS
+      speak("System online. J.A.R.V.I.S is fully operational and listening, sir.");
     } else {
       const nextMuted = !isMuted;
       setIsMuted(nextMuted);
+      
       if (nextMuted) {
-        cancel(); // Silence active TTS output immediately upon muting
+        cancel(); // Silence active TTS output immediately
         setAudioLevel(0);
-        changeOrbState('idle');
+        smoothLevel.current = 0;
+        
+        // Hard-reset transition state back to Standby
+        if (stateTimeoutRef.current) {
+          clearTimeout(stateTimeoutRef.current);
+          stateTimeoutRef.current = null;
+        }
+        setOrbState('idle');
+      } else {
+        // Force clean start when unmuting
+        setOrbState('idle');
       }
     }
   };
+
+  // Conversational display mapping (Idle VAD states map to LISTENING instead of STANDBY when active)
+  const displayLabel = (isReady && !isMuted && orbState === 'idle') 
+    ? STATE_LABEL['listening'] 
+    : STATE_LABEL[orbState];
+
+  const displayColor = (isReady && !isMuted && orbState === 'idle') 
+    ? STATE_COLOR['listening'] 
+    : STATE_COLOR[orbState];
 
   return (
     <div style={styles.root}>
@@ -184,7 +217,7 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
                 color:       isOnline ? 'rgba(0,255,140,0.7)'  : 'rgba(255,255,255,0.2)',
               }}
             >
-              <span style={{ fontSize: 7, marginRight: 5 }}>{isOnline ? '●' : '○'}</span>
+              <span style={{ fontSize: 7, marginRight: 6 }}>{isOnline ? '●' : '○'}</span>
               {a.name.toUpperCase()}
             </div>
           );
@@ -202,8 +235,8 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
         />
       </div>
 
-      <div style={{ ...styles.stateLabel, color: STATE_COLOR[orbState] }}>
-        {STATE_LABEL[orbState]}
+      <div style={{ ...styles.stateLabel, color: displayColor }}>
+        {displayLabel}
       </div>
 
       <div style={styles.transcriptContainer}>
@@ -223,7 +256,7 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
         </AnimatePresence>
       </div>
 
-      {/* Merged Initialize / Mute Action Controller (Always remains in same shape and spot) */}
+      {/* Merged Initialize & Mute Action Controller */}
       <motion.button
         whileHover={{ scale: 1.06, backgroundColor: 'rgba(255,255,255,0.03)' }}
         whileTap={{ scale: 0.95 }}
@@ -311,9 +344,12 @@ const styles: Record<string, React.CSSProperties> = {
   badge: {
     fontSize: 9,
     letterSpacing: 2,
-    padding: '3px 10px',
+    padding: '4px 14px',
     border: '1px solid',
-    borderRadius: 2,
+    borderRadius: 9999, // Made badges pill-shaped circle capsules
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   orbWrap: {
     position: 'relative',
@@ -359,7 +395,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: 20,
     width: '56px',
     height: '56px',
-    borderRadius: '50%',
+    borderRadius: '9999px', // Upgraded to standard capsule radius for reliable rounded border renders
     background: 'rgba(13, 13, 30, 0.4)',
     backdropFilter: 'blur(16px)',
     WebkitBackdropFilter: 'blur(16px)',
