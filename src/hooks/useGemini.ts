@@ -15,24 +15,27 @@ export function useGemini(apiKey: string) {
 
   const ask = useCallback(
     async (userText: string): Promise<string> => {
-      // 1. Append user query
+      // 1. Append user turn
       history.current.push({
         role: 'user',
         parts: [{ text: userText }],
         timestamp: Date.now(),
       });
 
-      // Keep rolling history limits
-      if (history.current.length > DEFAULT_MAX_HISTORY * 2) {
-        history.current = history.current.slice(-DEFAULT_MAX_HISTORY * 2);
+      // 2. Enforce sliding window limits (ensuring we always start with a user turn)
+      const maxItems = DEFAULT_MAX_HISTORY * 2;
+      if (history.current.length > maxItems) {
+        history.current = history.current.slice(-maxItems);
+        // If slicing left us starting with a model turn, discard it to preserve schema rules
+        if (history.current[0]?.role === 'model') {
+          history.current.shift();
+        }
       }
 
-      // 2. Self-Healing Normalizer: Force strict alternating "user" -> "model" turns.
-      // This protects the conversation flow from breaking if previous requests failed or timed out.
+      // 3. Self-Healing Normalizer: Collapses consecutive identical roles
       const cleanHistory: JarvisMessage[] = [];
       for (const turn of history.current) {
         if (cleanHistory.length === 0) {
-          // First turn in conversation history must always be 'user'
           if (turn.role === 'user') {
             cleanHistory.push(turn);
           }
@@ -41,17 +44,16 @@ export function useGemini(apiKey: string) {
           if (lastTurn.role !== turn.role) {
             cleanHistory.push(turn);
           } else {
-            // If two consecutive turns have the same role, merge them or keep the latest user turn
+            // Overwrite consecutive user queries with the latest one
             if (turn.role === 'user') {
               cleanHistory[cleanHistory.length - 1] = turn;
             }
           }
         }
       }
-      
-      // Update our internal history reference with the clean, validated structure
       history.current = cleanHistory;
 
+      // 4. Inject Dynamic time context
       const now = new Date();
       const timeContext = `
 [SYSTEM TIME & DATE CONTEXT]
@@ -77,15 +79,25 @@ export function useGemini(apiKey: string) {
       });
 
       if (!res.ok) {
-        const err = await res.text();
-        throw new Error(`Gemini ${res.status}: ${err}`);
+        const errText = await res.text();
+        // In-depth telemetry logger to inspect physical payload errors in developer tools
+        console.error('[Jarvis] Gemini API detailed payload failure:', {
+          status: res.status,
+          statusText: res.statusText,
+          errorResponse: errText,
+          sentPayload: payload,
+          apiEndpoint: GEMINI_ENDPOINT(apiKey)
+        });
+        throw new Error(`Gemini error ${res.status}: ${errText}`);
       }
 
       const data = await res.json();
+      
+      // Use logical OR (||) fallback to catch falsy empty strings ("") safely
       const reply: string =
-        data?.candidates?.[0]?.content?.parts?.[0]?.text ?? 'Standing by, sir.';
+        data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Standing by, sir.';
 
-      // 3. Append completed response to history
+      // 5. Append model turn to history
       history.current.push({
         role: 'model',
         parts: [{ text: reply }],
