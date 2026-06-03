@@ -60,13 +60,12 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     orbStateRef.current = orbState;
   }, [orbState]);
 
-  // Fix 1: Auto-hide the chat text 15 seconds after updates occur
+  // Clear chat text after 15 seconds
   useEffect(() => {
     if (!lastLine) return;
     const timer = setTimeout(() => {
       setLastLine('');
-    }, 15000); // 15 seconds
-    
+    }, 15000);
     return () => clearTimeout(timer);
   }, [lastLine]);
 
@@ -187,11 +186,22 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
       targetLevelRef.current = lvl;
     },
     enabled: isReady && !isMuted,
-    // Fix 2: Explicitly block audio polling while processing or speaking
     preventListening: orbState === 'speaking' || orbState === 'thinking',
   });
 
+  // Mobile Web Speech Warm-Up helper
+  const warmUpMobileSpeech = () => {
+    if ('speechSynthesis' in window) {
+      const u = new SpeechSynthesisUtterance('');
+      u.volume = 0;
+      window.speechSynthesis.speak(u);
+    }
+  };
+
   const handleActionClick = () => {
+    // Warm up the mobile speech context synchronously on user tap
+    warmUpMobileSpeech();
+
     if (!isReady) {
       setIsReady(true);
       setIsMuted(false);
@@ -226,10 +236,24 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
 
   return (
     <div style={styles.root}>
+      {/* Global CSS Stylesheet containing responsive media queries */}
       <style dangerouslySetInnerHTML={{ __html: `
         html, body {
           background-color: #000000 !important;
           background: #000000 !important;
+        }
+        /* Mobile-first and specific desktop override configurations */
+        @media (min-width: 769px) {
+          .jarvis-transcript {
+            font-size: 12px !important;
+            letter-spacing: 10px !important;
+          }
+        }
+        @media (max-width: 768px) {
+          .jarvis-transcript {
+            font-size: 16px !important;
+            letter-spacing: 1.5px !important;
+          }
         }
       ` }} />
 
@@ -275,6 +299,7 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
           {lastLine && (
             <motion.div
               key={lastLine}
+              className="jarvis-transcript" // Overrides fontSize and letterSpacing responsively
               initial={{ opacity: 0, y: 20, filter: 'blur(15px)', scale: 0.95 }}
               animate={{ opacity: 1, y: 0, filter: 'blur(0px)', scale: 1 }}
               exit={{ opacity: 0, y: -20, filter: 'blur(15px)', scale: 1.05 }}
@@ -414,10 +439,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   transcript: {
     textAlign: 'center',
-    // Fix 4: Set to 12px with tight futuristic letter spacing to match the standby text above
-    fontSize: 12, 
+    // Removed static size values to allow desktop/mobile overrides in stylesheet
     color: '#fff',
-    letterSpacing: 4,
     fontWeight: 'lighter',
     lineHeight: 1.6,
   },
