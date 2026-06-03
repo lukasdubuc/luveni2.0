@@ -1,6 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
 import JarvisHub from '../components/jarvis/JarvisHub';
-import { CartProvider } from '@/hooks/use-cart'; // Import the site's CartProvider
 
 // 1. Register the route path
 export const Route = createFileRoute('/admin/jarvis')({
@@ -22,10 +21,5 @@ function JarvisPage() {
     );
   }
 
-  // Wrap JarvisHub in the CartProvider so that internal hooks can query cart state
-  return (
-    <CartProvider>
-      <JarvisHub geminiApiKey={apiKey} />
-    </CartProvider>
-  );
+  return <JarvisHub geminiApiKey={apiKey} />;
 }
