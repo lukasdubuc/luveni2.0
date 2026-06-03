@@ -1,82 +1,199 @@
 // ─────────────────────────────────────────────────────────────
-//  J.A.R.V.I.S — Luveni GM  |  hooks/useGemini.ts
+//  J.A.R.V.I.S — Luveni GM  |  hooks/useVoiceInput.ts
 // ─────────────────────────────────────────────────────────────
 
-import { useRef, useCallback } from 'react';
-import type { JarvisMessage } from '../types/jarvis';
-import {
-  GEMINI_ENDPOINT,
-  JARVIS_SYSTEM_PROMPT,
-  DEFAULT_MAX_HISTORY,
-} from '../lib/jarvis-config';
+import { useRef, useCallback, useEffect } from 'react';
+import type { OrbState } from '../types/jarvis';
+import { DEFAULT_VAD_THRESHOLD, DEFAULT_SILENCE_MS } from '../lib/jarvis-config';
 
-export function useGemini(apiKey: string) {
-  const history = useRef<JarvisMessage[]>([]);
+interface UseVoiceInputOptions {
+  onTranscript: (text: string) => void;
+  onStateChange: (state: OrbState) => void;
+  onLevelChange: (level: number) => void;
+  vadThreshold?: number;
+  silenceMs?: number;
+  enabled?: boolean;
+  preventListening?: boolean;
+}
 
-  const ask = useCallback(
-    async (userText: string): Promise<string> => {
-      // Append user turn
-      history.current.push({
-        role: 'user',
-        parts: [{ text: userText }],
-        timestamp: Date.now(),
-      });
+export function useVoiceInput({
+  onTranscript,
+  onStateChange,
+  onLevelChange,
+  vadThreshold = DEFAULT_VAD_THRESHOLD,
+  silenceMs = DEFAULT_SILENCE_MS,
+  enabled = true,
+  preventListening = false,
+}: UseVoiceInputOptions) {
+  const onTranscriptRef = useRef(onTranscript);
+  const onStateChangeRef = useRef(onStateChange);
+  const onLevelChangeRef = useRef(onLevelChange);
+  const preventListeningRef = useRef(preventListening);
 
-      // Keep rolling window
-      if (history.current.length > DEFAULT_MAX_HISTORY * 2) {
-        history.current = history.current.slice(-DEFAULT_MAX_HISTORY * 2);
-      }
+  useEffect(() => {
+    onTranscriptRef.current = onTranscript;
+    onStateChangeRef.current = onStateChange;
+    onLevelChangeRef.current = onLevelChange;
+  }, [onTranscript, onStateChange, onLevelChange]);
 
-      // Generate a highly structured context payload for current time, date, and timezone
-      const now = new Date();
-      const timeContext = `
-[SYSTEM TIME & DATE CONTEXT]
-- Current Local Time: ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-- Current Date: ${now.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-- Current Year: ${now.getFullYear()}
-- Current Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}
-- Note: Always refer strictly to these metrics if the user asks for the current time, date, or day.
-`;
+  useEffect(() => {
+    preventListeningRef.current = preventListening;
+  }, [preventListening]);
 
-      const payload = {
-        // Prepend context to the base system prompt
-        systemInstruction: { 
-          parts: [{ text: `${JARVIS_SYSTEM_PROMPT}\n${timeContext}` }] 
-        },
-        contents: history.current.map(({ role, parts }) => ({ role, parts })),
-        generationConfig: { maxOutputTokens: 220, temperature: 0.75 },
-      };
+  const audioCtxRef   = useRef<AudioContext | null>(null);
+  const analyserRef   = useRef<AnalyserNode | null>(null);
+  const streamRef     = useRef<MediaStream | null>(null);
+  const recogRef      = useRef<SpeechRecognition | null>(null);
+  const silTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stateRef      = useRef<OrbState>('idle');
+  const bufferRef     = useRef<string>('');
+  const rafRef        = useRef<number>(0);
+  const activeRef     = useRef(false);
 
-      const res = await fetch(GEMINI_ENDPOINT(apiKey), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+  const clearSilTimer = () => {
+    if (silTimerRef.current) clearTimeout(silTimerRef.current);
+    silTimerRef.current = null;
+  };
 
-      if (!res.ok) {
-        const err = await res.text();
-        throw new Error(`Gemini ${res.status}: ${err}`);
-      }
-
-      const data = await res.json();
-      const reply: string =
-        data?.candidates?.[0]?.content?.parts?.[0]?.text ?? 'Standing by, sir.';
-
-      // Append assistant turn
-      history.current.push({
-        role: 'model',
-        parts: [{ text: reply }],
-        timestamp: Date.now(),
-      });
-
-      return reply;
-    },
-    [apiKey]
-  );
-
-  const reset = useCallback(() => {
-    history.current = [];
+  const setOrbState = useCallback((s: OrbState) => {
+    stateRef.current = s;
+    onStateChangeRef.current(s);
   }, []);
 
-  return { ask, reset, history: history.current };
+  const stopRecognition = useCallback(() => {
+    if (recogRef.current) {
+      try { recogRef.current.stop(); } catch (_) {}
+      recogRef.current = null;
+    }
+  }, []);
+
+  const startRecognition = useCallback(() => {
+    if (stateRef.current !== 'idle') return;
+    setOrbState('listening');
+    bufferRef.current = '';
+
+    const SR =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+    if (!SR) {
+      setOrbState('error');
+      return;
+    }
+
+    const recog: SpeechRecognition = new SR();
+    recog.continuous = true;
+    recog.interimResults = true;
+    recog.lang = 'en-US';
+
+    recog.onresult = (e: SpeechRecognitionEvent) => {
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; ++i) {
+        if (e.results[i].isFinal) {
+          bufferRef.current += e.results[i][0].transcript;
+        } else {
+          interim += e.results[i][0].transcript;
+        }
+      }
+    };
+
+    recog.onerror = (e: any) => {
+      console.error('[Jarvis] Speech Error:', e.error);
+      if (e.error === 'not-allowed') setOrbState('error');
+      else {
+        stopRecognition();
+        setOrbState('idle');
+      }
+    };
+
+    recog.onend = () => {
+      if (stateRef.current === 'listening') {
+        const text = bufferRef.current.trim();
+        bufferRef.current = '';
+        if (text) onTranscriptRef.current(text);
+        setOrbState('idle');
+      }
+    };
+
+    recogRef.current = recog;
+    recog.start();
+  }, [setOrbState, stopRecognition]);
+
+  const initMic = useCallback(async () => {
+    if (activeRef.current) return;
+    activeRef.current = true;
+
+    try {
+      // Request standard audio pre-processing configurations to aid echo-cancellation
+      streamRef.current = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      });
+      audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      analyserRef.current = audioCtxRef.current.createAnalyser();
+      analyserRef.current.fftSize = 512;
+      analyserRef.current.smoothingTimeConstant = 0.5;
+      
+      audioCtxRef.current
+        .createMediaStreamSource(streamRef.current)
+        .connect(analyserRef.current);
+
+      const data = new Uint8Array(analyserRef.current.frequencyBinCount);
+
+      const tick = () => {
+        if (!analyserRef.current) return;
+        analyserRef.current.getByteFrequencyData(data);
+        
+        const avg = data.slice(0, 150).reduce((a, b) => a + b, 0) / 150;
+        const level = Math.min(1, Math.max(0, (avg - 8) / 75));
+        
+        onLevelChangeRef.current(level);
+
+        if (!preventListeningRef.current && avg > vadThreshold && stateRef.current === 'idle') {
+          startRecognition();
+        }
+
+        if (avg > vadThreshold && stateRef.current === 'listening') {
+          clearSilTimer();
+        }
+
+        if (
+          avg <= vadThreshold &&
+          stateRef.current === 'listening' &&
+          !silTimerRef.current
+        ) {
+          silTimerRef.current = setTimeout(() => {
+            stopRecognition();
+          }, silenceMs);
+        }
+
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      tick();
+      setOrbState('idle');
+    } catch (err) {
+      console.error('[Jarvis] Mic Init Error:', err);
+      setOrbState('error');
+    }
+  }, [setOrbState, startRecognition, stopRecognition, vadThreshold, silenceMs]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    initMic();
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      clearSilTimer();
+      stopRecognition();
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      audioCtxRef.current?.close();
+      audioCtxRef.current = null;
+      analyserRef.current = null;
+      streamRef.current = null;
+      activeRef.current = false;
+    };
+  }, [enabled, initMic, stopRecognition]);
+
+  return { initMic };
 }
