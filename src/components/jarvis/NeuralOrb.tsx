@@ -350,7 +350,7 @@ export default function NeuralOrb({ state, audioLevel, size = 330 }: NeuralOrbPr
         }
       `}} />
 
-      {/* ── Orb wrapper (Clipping removed, styled to support floating gradient effects) ── */}
+      {/* ── Glowing Orb Component (With Radial Gradient and Motion Scale Pulse) ── */}
       <div
         ref={mountRef}
         style={{
@@ -367,7 +367,7 @@ export default function NeuralOrb({ state, audioLevel, size = 330 }: NeuralOrbPr
         }}
       />
 
-      {/* ── Secondary state label (Crisp white with low opacity) ── */}
+      {/* ── Single Standby/State Text Line (Secondary low opacity layout) ── */}
       <div style={{
         marginTop:     28,
         fontSize:      11,
@@ -376,15 +376,14 @@ export default function NeuralOrb({ state, audioLevel, size = 330 }: NeuralOrbPr
         color:         '#ffffff',
         opacity:       0.25,
         textTransform: 'uppercase',
-        transition:    'opacity 0.4s ease',
         lineHeight:    1,
         textAlign:     'center',
         overflow:      'visible',
       }}>
-        {!isInitialized ? 'OFFLINE' : isMuted ? 'STANDBY' : STATE_LABEL[state]}
+        {!isInitialized || isMuted ? 'STANDBY' : STATE_LABEL[state]}
       </div>
 
-      {/* ── Hairline-Bordered Button (Full opacity crisp text) ── */}
+      {/* ── Main Hairline-Bordered Initialize Button (Full opacity white text) ── */}
       <button
         onClick={() => {
           if (!isInitialized) {
@@ -403,9 +402,6 @@ export default function NeuralOrb({ state, audioLevel, size = 330 }: NeuralOrbPr
           color:           '#ffffff',
           opacity:         1,
           cursor:          'pointer',
-          display:         'flex',
-          alignItems:      'center',
-          justifyContent:  'center',
           outline:         'none',
           fontSize:        '11px',
           fontWeight:      600,
@@ -414,31 +410,15 @@ export default function NeuralOrb({ state, audioLevel, size = 330 }: NeuralOrbPr
           borderRadius:    '2px',
         }}
       >
-        {!isInitialized ? 'INITIALISE JARVIS' : isMuted ? 'UNMUTE JARVIS' : 'MUTE JARVIS'}
+        {!isInitialized || isMuted ? 'INITIALISE JARVIS' : 'DEACTIVATE'}
       </button>
 
-      {/* ── Secondary status hint (Crisp white with very low opacity) ── */}
-      <div style={{
-        marginTop:     14,
-        fontSize:      9,
-        fontWeight:    400,
-        letterSpacing: '0.25em',
-        color:         '#ffffff',
-        opacity:       0.15,
-        textTransform: 'uppercase',
-        lineHeight:    1,
-        textAlign:     'center',
-        overflow:      'visible',
-      }}>
-        {!isInitialized ? 'CLICK TO BOOT SYSTEM' : isMuted ? 'CLICK TO GO LIVE' : 'CLICK TO SUSPEND AUDIO'}
-      </div>
-
-      {/* ── System Status (Glassmorphism backdrop & monospaced status) ── */}
+      {/* ── Backdrop-filter glassmorphism system info readout (Hidden by default, shown when active) ── */}
       <div
         style={{
           display:         isSystemActive ? 'block' : 'none',
           position:        'absolute',
-          bottom:          '-40px',
+          bottom:          '5%',
           padding:         '8px 16px',
           background:      'rgba(255, 255, 255, 0.02)',
           border:          '1px solid rgba(255, 255, 255, 0.08)',
