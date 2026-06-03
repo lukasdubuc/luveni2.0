@@ -4,13 +4,13 @@
 
 import { useRef, useCallback } from 'react';
 import type { JarvisMessage } from '../types/jarvis';
-import { supabase } from "@/integrations/supabase/client";
 import {
+  GEMINI_ENDPOINT,
   JARVIS_SYSTEM_PROMPT,
   DEFAULT_MAX_HISTORY,
 } from '../lib/jarvis-config';
 
-export function useGemini() {
+export function useGemini(apiKey: string) {
   const history = useRef<JarvisMessage[]>([]);
 
   const ask = useCallback(
@@ -79,46 +79,37 @@ export function useGemini() {
 - Note: Refer strictly to these variables if the user asks for the current time, date, or day.
 `;
 
-      const systemPrompt = `${JARVIS_SYSTEM_PROMPT}\n${timeContext}`;
-      const mappedHistory = history.current.map(({ role, parts }) => ({ role, parts }));
-
-      // Helper to attempt Edge Function execution securely
-      const invokeEdgeFunction = async (name: string) => {
-        try {
-          const { data, error } = await supabase.functions.invoke(name, {
-            body: {
-              message: userText,
-              history: mappedHistory,
-              systemPrompt: systemPrompt
-            }
-          });
-          if (error) throw error;
-          return data;
-        } catch (err) {
-          console.warn(`[Jarvis] Failed invoking edge function '${name}':`, err);
-          return null;
-        }
+      const payload = {
+        systemInstruction: { 
+          parts: [{ text: `${JARVIS_SYSTEM_PROMPT}\n${timeContext}` }] 
+        },
+        contents: history.current.map(({ role, parts }) => ({ role, parts })),
+        generationConfig: { maxOutputTokens: 220, temperature: 0.75 },
       };
 
-      // 5. Invoke standard Lovable backend 'gemini' proxy first [1]
-      let data = await invokeEdgeFunction('gemini');
+      // Perform direct fetch to Google using the exact key passed to the hook
+      const res = await fetch(GEMINI_ENDPOINT(apiKey), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
 
-      // Fallback to 'chat-with-gemini' if the primary function is named differently
-      if (!data) {
-        console.log('[Jarvis] Primary proxy failed. Attempting fallback route...');
-        data = await invokeEdgeFunction('chat-with-gemini');
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error('[Jarvis] Gemini API payload failure:', {
+          status: res.status,
+          errorResponse: errText,
+          sentPayload: payload,
+        });
+        throw new Error(`Gemini error ${res.status}: ${errText}`);
       }
 
-      if (!data) {
-        throw new Error("Unable to reach any secure backend Edge Functions. Verify your functions are deployed.");
-      }
-
+      const data = await res.json();
+      
       const reply: string =
-        data?.text || 
-        data?.reply || 
-        (typeof data === 'string' ? data : 'Standing by, sir.');
+        data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Standing by, sir.';
 
-      // 6. Append model turn to history
+      // 5. Append model turn to history
       history.current.push({
         role: 'model',
         parts: [{ text: reply }],
@@ -127,7 +118,7 @@ export function useGemini() {
 
       return reply;
     },
-    []
+    [apiKey]
   );
 
   const reset = useCallback(() => {
