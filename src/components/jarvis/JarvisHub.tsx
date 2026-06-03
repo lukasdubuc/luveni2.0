@@ -39,6 +39,7 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
   const [lastLine, setLastLine]     = useState('');
   const [isReady, setIsReady]       = useState(false);
   const [isMuted, setIsMuted]       = useState(true); // Starts muted on load
+  const [isBooting, setIsBooting]   = useState(false); // One-time gate to avoid browser thread conflict on launch
   const [telemetry, setTelemetry]   = useState({
     core: false,
     vision: false,
@@ -48,8 +49,9 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
   const smoothLevel = useRef(0);
   const rafRef = useRef<number>(0);
   const stateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const bootTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Keep references to mute and orb states to avoid stale closures in Web Speech VAD callbacks
+  // References to keep mute and state values fresh inside Web Speech API callbacks
   const isMutedRef = useRef(isMuted);
   const orbStateRef = useRef(orbState);
 
@@ -61,7 +63,7 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     orbStateRef.current = orbState;
   }, [orbState]);
 
-  // Warm up Web Speech voices on initial mount to prevent the robotic fallback voice
+  // Warm up Web Speech voices on initial mount to help the browser load high-quality profiles
   useEffect(() => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.getVoices();
@@ -71,6 +73,7 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
       window.speechSynthesis.addEventListener('voiceschanged', handleVoicesChanged);
       return () => {
         window.speechSynthesis.removeEventListener('voiceschanged', handleVoicesChanged);
+        if (bootTimeoutRef.current) clearTimeout(bootTimeoutRef.current);
       };
     }
   }, []);
@@ -147,16 +150,23 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     onEnd: () => {
       setAudioLevel(0);
       changeOrbState('idle');
+      
+      // Release boot gate when intro finishes speaking
+      setIsBooting(false);
+      if (bootTimeoutRef.current) {
+        clearTimeout(bootTimeoutRef.current);
+        bootTimeoutRef.current = null;
+      }
     },
   });
 
   const handleTranscript = useCallback(
     async (text: string) => {
-      if (isMutedRef.current) return; // Safely read mute state from ref
+      if (isMutedRef.current) return; 
       setLastLine(text);
       changeOrbState('thinking');
       setAudioLevel(0);
-      cancel(); // Cancel any active TTS speech immediately for barge-in
+      cancel(); // Interrupts active speech output immediately when the user starts speaking
       try {
         const reply = await ask(text);
         setLastLine(reply);
@@ -186,15 +196,24 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
       }
       setAudioLevel(lvl);
     },
-    enabled: isReady && !isMuted,
+    // Keep mic fully active and interruptible, except for the tiny window of the initial boot greeting
+    enabled: isReady && !isMuted && !isBooting,
   });
 
   const handleActionClick = () => {
     if (!isReady) {
       setIsReady(true);
       setIsMuted(false);
+      setIsBooting(true); // Temporarily keep mic off during boot greeting to avoid resource collision
+      
       // Boot greeting - triggered directly inside user gesture click handler to unlock TTS
       speak("System online. J.A.R.V.I.S is fully operational and listening, sir.");
+      
+      if (bootTimeoutRef.current) clearTimeout(bootTimeoutRef.current);
+      // Safety fallback release of booting state after 4.5 seconds in case the onEnd event drops
+      bootTimeoutRef.current = setTimeout(() => {
+        setIsBooting(false);
+      }, 4500);
     } else {
       const nextMuted = !isMuted;
       setIsMuted(nextMuted);
