@@ -104,7 +104,8 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
       let visionOnline = false;
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
-        visionOnline = devices.some(d => d.kind: 'audioinput') && isReady;
+        // Corrected comparison operator (===)
+        visionOnline = devices.some(d => d.kind === 'audioinput') && isReady;
       } catch (e) {
         visionOnline = false;
       }
@@ -132,6 +133,7 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     return () => clearInterval(interval);
   }, [geminiApiKey, isReady]);
 
+  
   const { speak, cancel } = useSpeechOutput({
     onStart: () => changeOrbState('speaking'),
     onBoundary: (lvl) => { 
