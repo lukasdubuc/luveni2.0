@@ -49,17 +49,6 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
   const smoothLevelRef = useRef(0);
   const stateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const isMutedRef = useRef(isMuted);
-  const orbStateRef = useRef(orbState);
-
-  useEffect(() => {
-    isMutedRef.current = isMuted;
-  }, [isMuted]);
-
-  useEffect(() => {
-    orbStateRef.current = orbState;
-  }, [orbState]);
-
   // Clear chat text after 15 seconds
   useEffect(() => {
     if (!lastLine) return;
@@ -151,7 +140,7 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
 
   const handleTranscript = useCallback(
     async (text: string) => {
-      if (isMutedRef.current) return;
+      if (isMuted) return;
       setLastLine(text);
       changeOrbState('thinking');
       targetLevelRef.current = 0;
@@ -165,21 +154,21 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
         speak('I encountered an issue reaching the neural network, sir.');
       }
     },
-    [ask, cancel, speak, changeOrbState]
+    [ask, cancel, speak, changeOrbState, isMuted]
   );
 
   useVoiceInput({
     onTranscript: (text) => {
-      if (isMutedRef.current) return;
+      if (isMuted) return;
       handleTranscript(text);
     },
     onStateChange: (s) => {
-      if (isMutedRef.current) return;
-      if (s === 'idle' && orbStateRef.current === 'speaking') return;
+      if (isMuted) return;
+      if (s === 'idle' && orbState === 'speaking') return;
       changeOrbState(s);
     },
     onLevelChange: (lvl) => {
-      if (isMutedRef.current) {
+      if (isMuted) {
         targetLevelRef.current = 0;
         return;
       }
@@ -189,17 +178,20 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     preventListening: orbState === 'speaking' || orbState === 'thinking',
   });
 
-  // Mobile Web Speech Warm-Up helper
+  // Defensive Web Speech Warm-Up helper
   const warmUpMobileSpeech = () => {
-    if ('speechSynthesis' in window) {
-      const u = new SpeechSynthesisUtterance('');
-      u.volume = 0;
-      window.speechSynthesis.speak(u);
+    try {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        const u = new SpeechSynthesisUtterance('');
+        u.volume = 0;
+        window.speechSynthesis.speak(u);
+      }
+    } catch (e) {
+      console.warn('[Jarvis] Speech synthesis warm up failed:', e);
     }
   };
 
   const handleActionClick = () => {
-    // Warm up the mobile speech context synchronously on user tap
     warmUpMobileSpeech();
 
     if (!isReady) {
@@ -236,7 +228,6 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
 
   return (
     <div style={styles.root}>
-      {/* Global CSS Stylesheet containing responsive media queries */}
       <style dangerouslySetInnerHTML={{ __html: `
         html, body {
           background-color: #000000 !important;
@@ -299,7 +290,7 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
           {lastLine && (
             <motion.div
               key={lastLine}
-              className="jarvis-transcript" // Overrides fontSize and letterSpacing responsively
+              className="jarvis-transcript"
               initial={{ opacity: 0, y: 20, filter: 'blur(15px)', scale: 0.95 }}
               animate={{ opacity: 1, y: 0, filter: 'blur(0px)', scale: 1 }}
               exit={{ opacity: 0, y: -20, filter: 'blur(15px)', scale: 1.05 }}
@@ -439,7 +430,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
   transcript: {
     textAlign: 'center',
-    // Removed static size values to allow desktop/mobile overrides in stylesheet
     color: '#fff',
     fontWeight: 'lighter',
     lineHeight: 1.6,
