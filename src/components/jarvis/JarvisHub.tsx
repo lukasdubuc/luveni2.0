@@ -49,9 +49,10 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
   const rafRef = useRef<number>(0);
   const stateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Keep references to mute and orb states to prevent stale closures in Web Speech callbacks
+  // Keep references to mute and orb states to prevent stale closures in Web Speech VAD callbacks
   const isMutedRef = useRef(isMuted);
   const orbStateRef = useRef(orbState);
+  const audioLevelRef = useRef(audioLevel);
 
   useEffect(() => {
     isMutedRef.current = isMuted;
@@ -60,6 +61,10 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
   useEffect(() => {
     orbStateRef.current = orbState;
   }, [orbState]);
+
+  useEffect(() => {
+    audioLevelRef.current = audioLevel;
+  }, [audioLevel]);
 
   // Page-specific theme fix: Apply black background to body and HTML root on mount,
   // and restore original styles on unmount to prevent affecting any other pages on the site.
@@ -124,9 +129,10 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     }
   }, []);
 
+  // Optimized animation rendering loop runs statically once on mount using values from the audio ref
   useEffect(() => {
     const tick = () => {
-      smoothLevel.current += (audioLevel - smoothLevel.current) * 0.25;
+      smoothLevel.current += (audioLevelRef.current - smoothLevel.current) * 0.25;
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
@@ -134,7 +140,7 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
       cancelAnimationFrame(rafRef.current);
       if (stateTimeoutRef.current) clearTimeout(stateTimeoutRef.current);
     };
-  }, [audioLevel]);
+  }, []);
 
   useEffect(() => {
     const checkTelemetry = async () => {
@@ -171,15 +177,6 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     return () => clearInterval(interval);
   }, [geminiApiKey, isReady]);
 
-  const { speak, cancel } = useSpeechOutput({
-    onStart: () => changeOrbState('speaking'),
-    onBoundary: (lvl) => { setAudioLevel(lvl); },
-    onEnd: () => {
-      setAudioLevel(0);
-      changeOrbState('idle');
-    },
-  });
-
   const handleTranscript = useCallback(
     async (text: string) => {
       if (isMutedRef.current) return; // Drop processing if mic receives transcripts while muting
@@ -199,23 +196,81 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     [ask, cancel, speak, changeOrbState]
   );
 
-  useVoiceInput({
-    onTranscript: (text) => {
-      if (isMutedRef.current) return; // Drop transcript triggers instantly when muted
-      handleTranscript(text);
-    },
-    onStateChange: (s) => {
-      if (isMutedRef.current) return; // Drop any asynchronous engine state updates if muted
+  // Maintain reference safety for hook event listeners to prevent loop crashes
+  const onTranscriptRef = useRef(handleTranscript);
+  const onStateChangeRef = useRef<(s: OrbState) => void>(() => {});
+  const onLevelChangeRef = useRef<(lvl: number) => void>(() => {});
+
+  useEffect(() => {
+    onTranscriptRef.current = handleTranscript;
+  }, [handleTranscript]);
+
+  useEffect(() => {
+    onStateChangeRef.current = (s) => {
+      if (isMutedRef.current) return;
       if (s === 'idle' && orbStateRef.current === 'speaking') return;
       changeOrbState(s);
-    },
-    onLevelChange: (lvl) => {
+    };
+  }, [changeOrbState]);
+
+  useEffect(() => {
+    onLevelChangeRef.current = (lvl) => {
       if (isMutedRef.current) {
-        setAudioLevel(0); // Zero out visual feedback pulses immediately
+        setAudioLevel(0);
         return;
       }
       setAudioLevel(lvl);
-    },
+    };
+  }, []);
+
+  const stableOnTranscript = useCallback((text: string) => {
+    if (isMutedRef.current) return;
+    onTranscriptRef.current(text);
+  }, []);
+
+  const stableOnStateChange = useCallback((s: OrbState) => {
+    if (isMutedRef.current) return;
+    onStateChangeRef.current(s);
+  }, []);
+
+  const stableOnLevelChange = useCallback((lvl: number) => {
+    onLevelChangeRef.current(lvl);
+  }, []);
+
+  // Stabilized callbacks for the Speech Output hook
+  const onSpeechStartRef = useRef<() => void>(() => {});
+  const onSpeechBoundaryRef = useRef<(lvl: number) => void>(() => {});
+  const onSpeechEndRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    onSpeechStartRef.current = () => changeOrbState('speaking');
+  }, [changeOrbState]);
+
+  useEffect(() => {
+    onSpeechBoundaryRef.current = (lvl) => setAudioLevel(lvl);
+  }, []);
+
+  useEffect(() => {
+    onSpeechEndRef.current = () => {
+      setAudioLevel(0);
+      changeOrbState('idle');
+    };
+  }, [changeOrbState]);
+
+  const stableOnSpeechStart = useCallback(() => onSpeechStartRef.current(), []);
+  const stableOnSpeechBoundary = useCallback((lvl: number) => onSpeechBoundaryRef.current(lvl), []);
+  const stableOnSpeechEnd = useCallback(() => onSpeechEndRef.current(), []);
+
+  const { speak, cancel } = useSpeechOutput({
+    onStart: stableOnSpeechStart,
+    onBoundary: stableOnSpeechBoundary,
+    onEnd: stableOnSpeechEnd,
+  });
+
+  useVoiceInput({
+    onTranscript: stableOnTranscript,
+    onStateChange: stableOnStateChange,
+    onLevelChange: stableOnLevelChange,
     enabled: isReady && !isMuted,
   });
 
