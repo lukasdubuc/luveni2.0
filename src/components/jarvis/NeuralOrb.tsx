@@ -410,7 +410,7 @@ export default function NeuralOrb({ state, audioLevel, size = 330 }: NeuralOrbPr
           borderRadius:    '2px',
         }}
       >
-        {!isInitialized || isMuted ? 'INITIALISE JARVIS' : 'DEACTIVATE'}
+        {!isInitialized || isMuted ? 'INITIALISE' : 'DEACTIVATE'}
       </button>
 
       {/* ── Backdrop-filter glassmorphism system info readout (Hidden by default, shown when active) ── */}
