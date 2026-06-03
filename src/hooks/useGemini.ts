@@ -4,8 +4,8 @@
 
 import { useRef, useCallback } from 'react';
 import type { JarvisMessage } from '../types/jarvis';
-import { supabase } from "@/integrations/supabase/client"; // Handles secure backend communication
 import {
+  GEMINI_ENDPOINT,
   JARVIS_SYSTEM_PROMPT,
   DEFAULT_MAX_HISTORY,
 } from '../lib/jarvis-config';
@@ -79,30 +79,40 @@ export function useGemini(apiKey: string) {
 - Note: Refer strictly to these variables if the user asks for the current time, date, or day.
 `;
 
-      const systemPrompt = `${JARVIS_SYSTEM_PROMPT}\n${timeContext}`;
-      const mappedHistory = history.current.map(({ role, parts }) => ({ role, parts }));
+      // 5. Environment Resolver
+      // Reads VITE_GEMINI_API_KEY first, falling back to the dynamically loaded database prop
+      const envKey = import.meta.env.VITE_GEMINI_API_KEY;
+      const activeKey = (envKey && envKey.startsWith('AQ.')) ? envKey : apiKey;
 
-      // 5. Invoke your secure Lovable backend 'chat-with-gemini' Edge Function [1]
-      // This reads the GEMINI_API_KEY secret directly from your secure server environment
-      const { data, error } = await supabase.functions.invoke('chat-with-gemini', {
-        body: {
-          message: userText,
-          history: mappedHistory,
-          systemPrompt: systemPrompt
-        }
+      const payload = {
+        systemInstruction: { 
+          parts: [{ text: `${JARVIS_SYSTEM_PROMPT}\n${timeContext}` }] 
+        },
+        contents: history.current.map(({ role, parts }) => ({ role, parts })),
+        generationConfig: { maxOutputTokens: 220, temperature: 0.75 },
+      };
+
+      // Perform direct fetch to Google using the resolved secure key
+      const res = await fetch(GEMINI_ENDPOINT(activeKey), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
 
-      if (error) {
-        console.error('[Jarvis] Supabase Edge Function invocation failure:', error);
-        throw new Error(`Edge Function error: ${error.message}`);
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error('[Jarvis] Gemini API payload failure:', {
+          status: res.status,
+          errorResponse: errText,
+          sentPayload: payload,
+        });
+        throw new Error(`Gemini error ${res.status}: ${errText}`);
       }
 
-      // Handle raw string or JSON returns defensively
+      const data = await res.json();
+      
       const reply: string =
-        data?.text || 
-        data?.reply || 
-        data?.response ||
-        (typeof data === 'string' ? data : 'Standing by, sir.');
+        data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Standing by, sir.';
 
       // 6. Append model turn to history
       history.current.push({
@@ -113,7 +123,7 @@ export function useGemini(apiKey: string) {
 
       return reply;
     },
-    [] // Parameter list is cleared of the apiKey dependency to keep it secure
+    [apiKey]
   );
 
   const reset = useCallback(() => {
