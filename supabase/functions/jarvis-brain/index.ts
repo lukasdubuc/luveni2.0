@@ -5,8 +5,9 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 
-const GEMINI_MODEL = 'gemini-2.0-flash'; // Updated to 2.0 for better agentic capabilities
-const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+// Using Mistral Large for advanced reasoning
+const MISTRAL_MODEL = 'mistral-large-latest'; 
+const MISTRAL_ENDPOINT = 'https://api.mistral.ai/v1/chat/completions';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -24,14 +25,18 @@ serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS_HEADERS });
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405, headers: CORS_HEADERS });
 
-  const apiKey = Deno.env.get('GEMINI_API_KEY');
+  const apiKey = Deno.env.get('MISTRAL_API_KEY');
   const body = await req.json();
 
   const payload = {
-    systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-    contents: body.history ?? body.contents ?? [],
+    model: MISTRAL_MODEL,
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...body.history ?? body.contents ?? []
+    ],
     tools: [{
-      functionDeclarations: [{
+      type: 'function',
+      function: {
         name: 'web_search',
         description: 'Search the live web for real-time information, weather, or market data.',
         parameters: {
@@ -39,35 +44,35 @@ serve(async (req: Request) => {
           properties: { query: { type: 'STRING' } },
           required: ['query'],
         },
-      }]
+      }
     }],
-    generationConfig: { temperature: 0.7 },
+    temperature: 0.7,
   };
 
-  const geminiRes = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
+  const mistralRes = await fetch(MISTRAL_ENDPOINT, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
     body: JSON.stringify(payload),
   });
 
-  const data = await geminiRes.json();
+  const data = await mistralRes.json();
   
-  // Check if J.A.R.V.I.S wants to call a tool
-  const candidate = data.candidates?.[0];
-  if (candidate?.content?.parts?.[0]?.functionCall) {
-    const call = candidate.content.parts[0].functionCall;
-    
+  // Mistral uses 'tool_calls' in the choices array
+  const message = data.choices?.[0]?.message;
+  if (message?.tool_calls) {
+    const call = message.tool_calls[0].function;
     if (call.name === 'web_search') {
-      // In a real scenario, you'd call a search API here (e.g., Serper or Google Search API)
-      // For now, return a placeholder result so J.A.R.V.I.S knows the tool was "called"
       return new Response(JSON.stringify({ 
-        tool_result: `Simulated search for: ${call.args.query}` 
+        tool_result: `Simulated search for: ${call.arguments.query}` 
       }), { headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } });
     }
   }
 
   return new Response(JSON.stringify(data), {
-    status: geminiRes.status,
+    status: mistralRes.status,
     headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
   });
 });
