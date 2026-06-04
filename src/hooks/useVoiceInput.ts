@@ -11,6 +11,7 @@ interface UseVoiceInputOptions {
   onStateChange: (state: OrbState) => void;
   onLevelChange: (level: number) => void;
   vadThreshold?: number;
+  silenceMs?: number;
   enabled?: boolean;
 }
 
@@ -19,6 +20,7 @@ export function useVoiceInput({
   onStateChange,
   onLevelChange,
   vadThreshold = DEFAULT_VAD_THRESHOLD,
+  silenceMs = DEFAULT_SILENCE_MS,
   enabled = true,
 }: UseVoiceInputOptions) {
   const onTranscriptRef = useRef(onTranscript);
@@ -38,6 +40,7 @@ export function useVoiceInput({
   const stateRef = useRef<OrbState>('idle');
   const bufferRef = useRef<string>('');
   const rafRef = useRef<number>(0);
+  const lastActiveRef = useRef<number>(0);
 
   const setOrbState = useCallback((s: OrbState) => {
     stateRef.current = s;
@@ -46,8 +49,9 @@ export function useVoiceInput({
 
   const stopRecognition = useCallback(() => {
     if (recogRef.current) {
-      try { recogRef.current.stop(); } catch (_) {}
-      recogRef.current = null;
+      try { 
+        recogRef.current.stop(); 
+      } catch (_) {}
     }
   }, []);
 
@@ -55,6 +59,7 @@ export function useVoiceInput({
     if (stateRef.current !== 'idle') return;
     setOrbState('listening');
     bufferRef.current = '';
+    lastActiveRef.current = Date.now();
 
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) return;
@@ -66,16 +71,19 @@ export function useVoiceInput({
 
     recog.onresult = (e: SpeechRecognitionEvent) => {
       for (let i = e.resultIndex; i < e.results.length; ++i) {
-        if (e.results[i].isFinal) bufferRef.current += e.results[i][0].transcript;
+        if (e.results[i].isFinal) {
+          bufferRef.current += e.results[i][0].transcript + ' ';
+        }
       }
     };
 
     recog.onend = () => {
-      if (stateRef.current === 'listening') {
-        const text = bufferRef.current.trim();
-        bufferRef.current = '';
-        if (text) onTranscriptRef.current(text);
-        setOrbState('idle');
+      const text = bufferRef.current.trim();
+      bufferRef.current = '';
+      setOrbState('idle');
+      recogRef.current = null;
+      if (text) {
+        onTranscriptRef.current(text);
       }
     };
 
@@ -104,7 +112,18 @@ export function useVoiceInput({
         const avg = data.reduce((a, b) => a + b, 0) / data.length;
         onLevelChangeRef.current(Math.min(1, avg / 50));
 
-        if (avg > vadThreshold && stateRef.current === 'idle') startRecognition();
+        const now = Date.now();
+        if (avg > vadThreshold) {
+          lastActiveRef.current = now;
+          if (stateRef.current === 'idle') {
+            startRecognition();
+          }
+        } else {
+          // If silent for longer than silenceMs while listening, stop capturing to process response
+          if (stateRef.current === 'listening' && (now - lastActiveRef.current) > silenceMs) {
+            stopRecognition();
+          }
+        }
         rafRef.current = requestAnimationFrame(tick);
       };
       tick();
@@ -112,14 +131,16 @@ export function useVoiceInput({
     } catch (err) {
       console.error("Mic init failed", err);
     }
-  }, [startRecognition, setOrbState, vadThreshold]);
+  }, [startRecognition, stopRecognition, setOrbState, vadThreshold, silenceMs]);
 
   useEffect(() => {
     if (!enabled) return;
-    // Logic to resume on first user interaction
     const handleInteraction = () => {
-      if (audioCtxRef.current?.state === 'suspended') audioCtxRef.current.resume();
-      else if (!audioCtxRef.current) initMic();
+      if (audioCtxRef.current?.state === 'suspended') {
+        audioCtxRef.current.resume();
+      } else if (!audioCtxRef.current) {
+        initMic();
+      }
     };
     window.addEventListener('click', handleInteraction, { once: true });
     return () => {
