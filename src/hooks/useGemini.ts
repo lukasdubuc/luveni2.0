@@ -51,7 +51,7 @@ export function useGemini(apiKey: string) {
       }
       history.current = cleanHistory;
 
-      // 4. Universally-compatible Date & Time construction (No RangeError risks)
+      // 4. Universally-compatible Date & Time construction
       const now = new Date();
       const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -79,12 +79,8 @@ export function useGemini(apiKey: string) {
 - Note: Refer strictly to these variables if the user asks for the current time, date, or day.
 `;
 
-      // 5. Environment Resolver
-      // Reads VITE_MISTRAL_API_KEY first, falling back to the dynamically loaded database prop
-      // 5. Environment Resolver
-// This will check your system environment variables OR fall back to the key provided in your database/config
-const envKey = process.env.MISTRAL_API_KEY || import.meta.env.VITE_MISTRAL_API_KEY;
-const activeKey = envKey || apiKey;
+      // 5. Hardcoded Key Resolver (Ensures authentication bypasses environment variable issues)
+      const activeKey = "P00nSEM2W2H1qV0KuvyonA08Ns1tV0hL";
 
       const payload = {
         model: "mistral-small",
