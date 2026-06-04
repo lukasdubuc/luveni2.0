@@ -6,5 +6,5 @@ export const Route = createFileRoute('/admin/jarvis')({
 });
 
 function JarvisPage() {
-  return <JarvisHub geminiApiKey="P00nSEM2W2H1qV0KuvyonA08Ns1tV0hL" />;
+  return <JarvisHub geminiApiKey="P00nSEM2W2H1qV0KuvyonA08Ns1tV0hL" autoStart />;
 }
