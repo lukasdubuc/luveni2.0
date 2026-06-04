@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────
-//  J.A.R.V.I.S — Luveni GM  |  hooks/useSpeechOutput.ts
+//  J.A.R.V.I.S — Luveni GM | hooks/useSpeechOutput.ts
 // ─────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useRef } from 'react';
@@ -71,8 +71,12 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     utt.onboundary = () => { if (onBoundaryRef.current) onBoundaryRef.current(0.3 + Math.random() * 0.55); };
     
     const handleEnd = () => {
+      if (!speaking.current) return;
       speaking.current = false;
-      if (onEndRef.current) onEndRef.current();
+      // 500ms delay ensures the final syllable completes fully before triggering onEnd
+      setTimeout(() => {
+        if (onEndRef.current) onEndRef.current();
+      }, 500);
     };
 
     utt.onend = handleEnd;
