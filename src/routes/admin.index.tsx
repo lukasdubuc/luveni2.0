@@ -6,6 +6,7 @@ import { offer } from "@/config/site";
 import { toast } from "sonner";
 import { Edit3, Archive, X, Menu, RefreshCw, BarChart2, Lock, CheckSquare, Square, Trash2, Eye, EyeOff, GripVertical, Users, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { requireAdmin } from "@/lib/admin-guard";
+import JarvisHub from "@/components/jarvis/JarvisHub";
 
 // ────────────────────────────────────────────────────────────────────────────
 // TYPES & ROUTE DEFINITION
@@ -52,7 +53,7 @@ type Lead = {
 
 type PageEvent = {
   id: string;
-  event_type: string; // 'page_view' | 'product_click' | 'add_to_cart' | 'checkout_start' | 'purchase'
+  event_type: string;
   path: string;
   product_id?: string;
   session_id?: string;
@@ -68,12 +69,8 @@ type AdminUser = {
   created_at: string;
 };
 
-type PrintfulCatalogItem = {
-  id: number;
-  name: string;
-  thumbnail_url: string;
-  sync_variants?: any[];
-};
+// ── NavSection type defined at module level (outside the component) ──────────
+type NavSection = "overview" | "products" | "orders" | "leads" | "analytics" | "settings" | "jarvishub";
 
 export const Route = createFileRoute("/admin/")({
   head: () => ({
@@ -83,29 +80,15 @@ export const Route = createFileRoute("/admin/")({
   component: AdminPage,
 });
 
-// ────────────────────────────────────────────────────────────────────────────
-// THEME FLASH FIX
-// The blocking <script> in index.html (see below) applies the .dark class
-// before the first paint. This component just reads whatever was applied.
-//
-// In index.html, add as the VERY FIRST child of <head>:
-//
-// <script>
-//   (function(){
-//     try {
-//       var t = localStorage.getItem('theme');
-//       if (t === 'dark') document.documentElement.classList.add('dark');
-//       else if (t === 'light') document.documentElement.classList.remove('dark');
-//     } catch(e) {}
-//   })();
-// </script>
-// ────────────────────────────────────────────────────────────────────────────
-
 function AdminPage() {
   const navigate = useNavigate();
-  const [section, setSection] = useState<"overview" | "products" | "orders" | "leads" | "analytics" | "settings">("overview");
-  // ── CHANGE: initialise isDark directly from the DOM class the blocking
-  //    script already set — no useLayoutEffect needed, no flash.
+
+  // ── navSections defined inside the component ─────────────────────────────
+  const navSections: NavSection[] = ["overview", "products", "orders", "leads", "analytics", "settings", "jarvishub"];
+
+  // ── section state uses the NavSection type ───────────────────────────────
+  const [section, setSection] = useState<NavSection>("overview");
+
   const [isDark, setIsDark] = useState<boolean>(
     () => typeof document !== "undefined" && document.documentElement.classList.contains("dark")
   );
@@ -176,10 +159,7 @@ function AdminPage() {
   const [selectedRow, setSelectedRow] = useState<any>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // ── REMOVED: useLayoutEffect for theme — the blocking script in index.html
-  //    handles it before first paint. isDark is initialised from the DOM above.
-
-  // Apply saved theme from site_config once loaded (only if localStorage not yet set)
+  // Apply saved theme from site_config once loaded
   useEffect(() => {
     if (!localStorage.getItem("theme") && siteContent.theme) {
       if (siteContent.theme === "dark") {
@@ -211,7 +191,7 @@ function AdminPage() {
     init();
   }, []);
 
-  // ── Realtime: keep admin metrics live without manual refresh ───────────
+  // ── Realtime ────────────────────────────────────────────────────────────
   useEffect(() => {
     const upsertById = <T extends { id: string }>(arr: T[], row: T) => {
       const idx = arr.findIndex(r => r.id === row.id);
@@ -252,7 +232,6 @@ function AdminPage() {
         });
       })
       .subscribe((status) => {
-        // On (re)connect, reconcile in case we missed events during the gap
         if (status === "SUBSCRIBED") {
           fetchData().catch(() => {});
         }
@@ -286,7 +265,6 @@ function AdminPage() {
     }
   };
 
-  // ── Printful Sync (original, unchanged) ────────────────────────────────
   const handleSyncPrintful = async () => {
     setIsSyncing(true);
     try {
@@ -297,28 +275,23 @@ function AdminPage() {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       const data = await res.json();
-      console.log("PRINTFUL SYNC RESPONSE:", data);
       if (!res.ok) {
-        console.error("PRINTFUL SYNC FAILED:", data);
         toast.error(data.error || data.message || "Sync failed");
         return;
       }
       if (Array.isArray(data.errors) && data.errors.length > 0) {
-        console.error("PRINTFUL SYNC ERRORS:", data.errors);
         toast.error(data.errors[0]);
         return;
       }
       toast.success(`Sync complete: ${data.synced}/${data.total} products processed.`);
       await fetchData();
     } catch (e: any) {
-      console.error("PRINTFUL SYNC EXCEPTION:", e);
       toast.error(`Sync error: ${e?.message || "Unknown error"}`);
     } finally {
       setIsSyncing(false);
     }
   };
 
-  // ── Save Product (original, unchanged) ─────────────────────────────────
   const saveProduct = async () => {
     try {
       const imageUrls = productForm.image_url
@@ -351,7 +324,6 @@ function AdminPage() {
     }
   };
 
-  // ── Toggle Published (original, unchanged) ─────────────────────────────
   const togglePublished = async (id: string, currentState: boolean) => {
     try {
       const { error } = await supabase.from("products").update({ is_published: !currentState }).eq("id", id);
@@ -362,7 +334,6 @@ function AdminPage() {
     }
   };
 
-  // ── Archive Product (original, unchanged) ──────────────────────────────
   const archiveProduct = async (id: string) => {
     try {
       const { error } = await supabase.from("products").delete().eq("id", id);
@@ -374,7 +345,6 @@ function AdminPage() {
     }
   };
 
-  // ── Archive Order (original, unchanged) ────────────────────────────────
   const handleArchiveOrder = async (id: string) => {
     try {
       const { error } = await supabase.from("orders").delete().eq("id", id);
@@ -387,7 +357,6 @@ function AdminPage() {
     }
   };
 
-  // ── Reset Product Form (original, unchanged) ───────────────────────────
   const resetProductForm = () => {
     setProductForm({
       editingId: null,
@@ -404,7 +373,6 @@ function AdminPage() {
     setProductFormOpen(false);
   };
 
-  // ── Start Edit Product (original, unchanged) ───────────────────────────
   const startEditProduct = (p: Product) => {
     setProductForm({
       editingId: p.id,
@@ -422,7 +390,6 @@ function AdminPage() {
     setSection("products");
   };
 
-  // ── Save Site Config (original, unchanged) ─────────────────────────────
   const saveSiteConfig = async (updatedContent: SiteContent) => {
     setSiteSaving(true);
     try {
@@ -439,21 +406,18 @@ function AdminPage() {
         updated_at: new Date().toISOString(),
       };
       const { error: updateError } = await supabase.from("site_config").update(payload).eq("id", "main");
-      if (updateError) { console.error("[Admin] Update failed:", updateError); throw updateError; }
+      if (updateError) throw updateError;
       toast.success("Site content saved.");
       setSiteEdited(false);
     } catch (e: any) {
-      console.error("[Admin] Save catch:", e);
       toast.error(`Failed: ${e.message || e.details || "Unknown error"}`);
     } finally {
       setSiteSaving(false);
     }
   };
 
-  // ── Sign Out (original, unchanged) ─────────────────────────────────────
   const handleSignOut = async () => { await supabase.auth.signOut(); window.location.href = "/login"; };
 
-  // ── NEW: Bulk Actions ───────────────────────────────────────────────────
   const toggleSelectProduct = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -506,7 +470,6 @@ function AdminPage() {
     }
   };
 
-  // ── NEW: Drag-to-Reorder ────────────────────────────────────────────────
   const handleDragStart = (id: string) => setDraggedId(id);
   const handleDragOver = (e: React.DragEvent, id: string) => {
     e.preventDefault();
@@ -527,7 +490,6 @@ function AdminPage() {
     setOrderedProducts(updated);
     setDraggedId(null);
     setDragOverId(null);
-    // Persist to DB
     try {
       await Promise.all(updated.map(p =>
         supabase.from("products").update({ display_order: p.display_order }).eq("id", p.id)
@@ -538,7 +500,6 @@ function AdminPage() {
     }
   };
 
-  // ── NEW: Add Admin User ─────────────────────────────────────────────────
   const handleAddAdminUser = async () => {
     if (!newUserEmail.trim()) return;
     setIsAddingUser(true);
@@ -633,7 +594,7 @@ function AdminPage() {
   const fmt$ = (cents: number) => `$${(cents / 100).toFixed(0)}`;
   const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
-  // ── Computed: Funnel (only real page_events data) ───────────────────────
+  // ── Computed: Funnel ────────────────────────────────────────────────────
   const hasEventData = pageEvents.length > 0;
   const funnelViews = hasEventData ? pageEvents.filter(e => e.event_type === "page_view").length : 0;
   const funnelProductClicks = hasEventData ? pageEvents.filter(e => e.event_type === "product_click").length : 0;
@@ -642,11 +603,10 @@ function AdminPage() {
   const funnelPurchase = paidOrders.length;
   const funnelMax = Math.max(funnelViews, funnelProductClicks, funnelAddToCart, funnelCheckoutStart, funnelPurchase, 1);
 
-  // ── Computed: Top Products by Revenue ──────────────────────────────────
+  // ── Computed: Top Products ──────────────────────────────────────────────
   const topProducts = useMemo(() => {
     const map: Record<string, { title: string; revenue: number; units: number }> = {};
     paidOrders.forEach(o => {
-      // Best-effort: if order has product_id, use it; otherwise attribute to store
       const key = (o as any).product_id || "store";
       const prod = products.find(p => p.id === key);
       const title = prod?.title || "All Products";
@@ -657,7 +617,7 @@ function AdminPage() {
     return Object.values(map).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
   }, [paidOrders, products]);
 
-  // ── Computed: Revenue sparkline (last 7 days) ───────────────────────────
+  // ── Computed: Sparkline ─────────────────────────────────────────────────
   const sparklineData = useMemo(() => {
     const days: { label: string; value: number }[] = [];
     for (let i = 6; i >= 0; i--) {
@@ -674,7 +634,7 @@ function AdminPage() {
 
   const sparkMax = Math.max(...sparklineData.map(d => d.value), 1);
 
-  // ── Computed: Filtered Orders by Status ────────────────────────────────
+  // ── Computed: Filtered Orders ───────────────────────────────────────────
   const filteredOrders = activeOrders
     .filter(o => orderStatusFilter === "all" ? true : o.status === orderStatusFilter)
     .filter(o =>
@@ -749,9 +709,8 @@ function AdminPage() {
     return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 6);
   }, [analyticsEvents]);
 
-  // ── Nav sections ────────────────────────────────────────────────────────
- type NavSection = "overview" | "products" | "orders" | "leads" | "analytics" | "settings" | "jarvishub";
- const [section, setSection] = useState<NavSection>("overview");
+  // ── RENDER ──────────────────────────────────────────────────────────────
+  return (
     <div className={`min-h-screen ${isDark ? "bg-black text-white" : "bg-white text-black"}`}>
       {/* ── NAV ── */}
       <nav className={`sticky top-0 z-50 md:border-b-0 ${isDark ? "md:bg-black md:border-0 border-b border-white/10 bg-black" : "md:bg-white md:border-0 border-b border-gray-100 bg-white"}`}>
@@ -761,7 +720,7 @@ function AdminPage() {
             {navSections.map(s => (
               <button
                 key={s}
-                onClick={() => setSection(s as any)}
+                onClick={() => setSection(s)}
                 className={`text-[10px] font-bold uppercase tracking-widest transition-all ${
                   section === s
                     ? isDark ? "text-white" : "text-black"
@@ -781,7 +740,7 @@ function AdminPage() {
             {navSections.map(s => (
               <button
                 key={s}
-                onClick={() => { setSection(s as any); setMobileMenuOpen(false); }}
+                onClick={() => { setSection(s); setMobileMenuOpen(false); }}
                 className={`block w-full text-left text-[10px] font-bold uppercase tracking-widest py-2 ${
                   section === s
                     ? isDark ? "text-white" : "text-black"
@@ -800,33 +759,31 @@ function AdminPage() {
         {/* ════════════════════════════════════════════════════════════════
             OVERVIEW
         ════════════════════════════════════════════════════════════════ */}
-       {section === "overview" && (
-  <div className="space-y-12">
-    {/* Header with JarvisHub positioned in the top-right of the Overview area */}
-    <div className="flex items-center justify-between">
-      <h1 className="text-2xl font-bold uppercase tracking-tighter">Overview</h1>
-      <div className="relative z-50">
-        <JarvisHub geminiApiKey="YOUR_API_KEY_HERE" />
-      </div>
-    </div>
+        {section === "overview" && (
+          <div className="space-y-12">
+            <div className="flex items-center justify-between">
+              <h1 className="text-2xl font-bold uppercase tracking-tighter">Overview</h1>
+              <div className="relative z-50">
+                <JarvisHub geminiApiKey={import.meta.env.VITE_GEMINI_API_KEY ?? ""} />
+              </div>
+            </div>
 
-    {/* Period Selector */}
-    <div className="flex gap-4">
-      {["day", "week", "month", "all"].map(r => (
-        <button
-          key={r}
-          onClick={() => setRevenueRange(r as any)}
-          className={`text-[9px] font-bold uppercase px-4 py-2 transition-all ${
-            revenueRange === r
-              ? isDark ? "bg-white text-black" : "bg-black text-white"
-              : isDark ? "text-white/50 hover:text-white" : "text-black/50 hover:text-black"
-          }`}
-        >
-          {r}
-        </button>
-      ))}
-    </div>
-
+            {/* Period Selector */}
+            <div className="flex gap-4">
+              {["day", "week", "month", "all"].map(r => (
+                <button
+                  key={r}
+                  onClick={() => setRevenueRange(r as any)}
+                  className={`text-[9px] font-bold uppercase px-4 py-2 transition-all ${
+                    revenueRange === r
+                      ? isDark ? "bg-white text-black" : "bg-black text-white"
+                      : isDark ? "text-white/50 hover:text-white" : "text-black/50 hover:text-black"
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
 
             {/* ── REVENUE HERO ── */}
             <div className={`p-8 space-y-4 ${isDark ? "bg-white/5" : "bg-gray-50/50"}`}>
@@ -1000,7 +957,7 @@ function AdminPage() {
                     {selectedIds.size === orderedProducts.length ? "DESELECT ALL" : "SELECT ALL"}
                   </button>
                   <button onClick={() => bulkPublish(true)} disabled={isBulkActing}
-                    className={`flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-2 bg-green-500/10 text-green-500 hover:bg-green-500/20 transition-all`}>
+                    className="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-2 bg-green-500/10 text-green-500 hover:bg-green-500/20 transition-all">
                     <Eye size={10} /> PUBLISH
                   </button>
                   <button onClick={() => bulkPublish(false)} disabled={isBulkActing}
@@ -1054,7 +1011,6 @@ function AdminPage() {
               </div>
             )}
 
-            {/* ── Drag-reorder hint ── */}
             {!selectMode && (
               <p className={`text-[8px] uppercase tracking-widest ${isDark ? "text-white/20" : "text-black/20"}`}>
                 Drag cards to reorder · Click SELECT for bulk actions
@@ -1080,7 +1036,6 @@ function AdminPage() {
                     onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}
                     onClick={() => selectMode && toggleSelectProduct(p.id)}
                   >
-                    {/* Select checkbox */}
                     {selectMode && (
                       <div className="absolute top-2 left-2 z-10">
                         {isSelected
@@ -1089,21 +1044,16 @@ function AdminPage() {
                         }
                       </div>
                     )}
-
-                    {/* Drag handle */}
                     {!selectMode && (
                       <div className={`absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 cursor-grab transition-opacity ${isDark ? "text-white/40" : "text-black/30"}`}>
                         <GripVertical size={12} />
                       </div>
                     )}
-
-                    {/* Printful badge */}
                     {isPrintful && (
                       <div className="absolute top-2 right-2 z-10 flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-500/20 text-blue-400 text-[7px] font-bold uppercase">
                         <Lock size={7} /> PF
                       </div>
                     )}
-
                     <div className={`relative flex aspect-[2/3] items-center justify-center overflow-hidden p-3 sm:p-4 transition-all duration-300 ${
                       isDark ? "bg-white/5" : "bg-gray-50/50"
                     } ${isSelected ? isDark ? "ring-1 ring-white" : "ring-1 ring-black" : ""} ${selectMode ? "cursor-pointer" : ""}`}>
@@ -1113,7 +1063,6 @@ function AdminPage() {
                         <span className={`text-[7px] uppercase tracking-[0.3em] ${isDark ? "text-white/20" : "text-black/20"}`}>No Image</span>
                       )}
                     </div>
-
                     <div className="px-2 text-center mt-2">
                       <p className={`mb-1 text-[9px] uppercase leading-tight tracking-[0.1em] truncate font-bold ${isDark ? "text-white" : "text-black"}`}>{p.title}</p>
                       <p className={`text-[9px] tracking-[0.05em] ${isDark ? "text-white/70" : "text-black/70"}`}>
@@ -1146,7 +1095,7 @@ function AdminPage() {
         )}
 
         {/* ════════════════════════════════════════════════════════════════
-            ORDERS — with status filter tabs
+            ORDERS
         ════════════════════════════════════════════════════════════════ */}
         {section === "orders" && (
           <div className="space-y-8">
@@ -1158,7 +1107,6 @@ function AdminPage() {
                 }`} />
             </div>
 
-            {/* Status Filter Tabs */}
             <div className={`flex gap-0 border-b ${isDark ? "border-white/10" : "border-gray-100"}`}>
               {([
                 { key: "all", label: "All", count: activeOrders.length },
@@ -1229,7 +1177,7 @@ function AdminPage() {
         )}
 
         {/* ════════════════════════════════════════════════════════════════
-            LEADS (original, unchanged)
+            LEADS
         ════════════════════════════════════════════════════════════════ */}
         {section === "leads" && (
           <div className="space-y-8">
@@ -1264,7 +1212,7 @@ function AdminPage() {
         )}
 
         {/* ════════════════════════════════════════════════════════════════
-            ANALYTICS — new section
+            ANALYTICS
         ════════════════════════════════════════════════════════════════ */}
         {section === "analytics" && (
           <div className="space-y-12">
@@ -1291,20 +1239,7 @@ function AdminPage() {
                   Add the snippet below to your frontend to start tracking page views, product clicks, add-to-cart, and checkout events.
                 </p>
                 <pre className={`text-[9px] p-4 overflow-x-auto font-mono ${isDark ? "bg-white/5 text-white/60" : "bg-gray-100 text-gray-600"}`}>
-{`// Run this SQL in Supabase first:
--- create table page_events (
---   id uuid default gen_random_uuid() primary key,
---   event_type text not null,
---   path text not null,
---   product_id uuid references products(id),
---   session_id text,
---   referrer text,
---   country text,
---   created_at timestamptz default now()
--- );
-
-// Then add to your frontend:
-export function trackEvent(type, data = {}) {
+{`export function trackEvent(type, data = {}) {
   supabase.from('page_events').insert([{
     event_type: type,
     path: window.location.pathname,
@@ -1318,13 +1253,9 @@ export function trackEvent(type, data = {}) {
   }]);
 }`}
                 </pre>
-                <p className={`text-[9px] uppercase tracking-widest ${isDark ? "text-white/20" : "text-gray-300"}`}>
-                  Track: page_view · product_click · add_to_cart · checkout_start
-                </p>
               </div>
             )}
 
-            {/* Stats row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-12">
               <Stat label="Page Views" value={analyticsEvents.filter(e => e.event_type === "page_view").length.toLocaleString()} sub={`last ${analyticsRange} days`} isDark={isDark} />
               <Stat label="Sessions" value={uniqueSessions.toLocaleString()} sub="unique visitors" isDark={isDark} />
@@ -1332,7 +1263,6 @@ export function trackEvent(type, data = {}) {
               <Stat label="Checkout Starts" value={analyticsEvents.filter(e => e.event_type === "checkout_start").length.toLocaleString()} sub="initiated checkout" isDark={isDark} />
             </div>
 
-            {/* Daily views bar chart */}
             <div className="space-y-4">
               <p className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Daily Page Views</p>
               <div className="flex items-end gap-1 h-32">
@@ -1355,7 +1285,6 @@ export function trackEvent(type, data = {}) {
               </div>
             </div>
 
-            {/* Two-col: Referrers + Top Paths */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
               <div className="space-y-4">
                 <p className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Top Referrers</p>
@@ -1389,7 +1318,6 @@ export function trackEvent(type, data = {}) {
               </div>
             </div>
 
-            {/* Product CTR table */}
             {Object.keys(productClickMap).length > 0 && (
               <div className="space-y-4">
                 <p className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Product Click-Through</p>
@@ -1420,7 +1348,6 @@ export function trackEvent(type, data = {}) {
               </div>
             )}
 
-            {/* Geo breakdown */}
             {geoBreakdown.length > 0 && (
               <div className="space-y-4">
                 <p className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Geographic Breakdown</p>
@@ -1438,14 +1365,13 @@ export function trackEvent(type, data = {}) {
         )}
 
         {/* ════════════════════════════════════════════════════════════════
-            SETTINGS — original + user management added
+            SETTINGS
         ════════════════════════════════════════════════════════════════ */}
         {section === "settings" && (
           <div className="max-w-2xl space-y-12">
             <h1 className="text-2xl font-bold uppercase tracking-tighter">Settings</h1>
             <div className="space-y-8">
 
-              {/* Appearance (original, unchanged) */}
               <div className="space-y-4">
                 <h2 className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Appearance</h2>
                 <div className={`p-6 space-y-6 ${isDark ? "bg-white/5" : "bg-gray-50/50"}`}>
@@ -1479,11 +1405,9 @@ export function trackEvent(type, data = {}) {
                 </div>
               </div>
 
-              {/* ── NEW: User / Role Management ── */}
               <div className="space-y-4">
                 <h2 className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Team Access</h2>
                 <div className={`p-6 space-y-6 ${isDark ? "bg-white/5" : "bg-gray-50/50"}`}>
-                  {/* Add user row */}
                   <div className="flex gap-3 flex-wrap">
                     <input
                       type="email"
@@ -1516,7 +1440,6 @@ export function trackEvent(type, data = {}) {
                     </button>
                   </div>
 
-                  {/* Role descriptions */}
                   <div className="grid grid-cols-3 gap-3">
                     {[
                       { role: "viewer", desc: "Read-only access to all data" },
@@ -1530,7 +1453,6 @@ export function trackEvent(type, data = {}) {
                     ))}
                   </div>
 
-                  {/* User list */}
                   {adminUsers.length > 0 ? (
                     <div className="space-y-2">
                       {adminUsers.map(u => (
@@ -1555,24 +1477,9 @@ export function trackEvent(type, data = {}) {
                   ) : (
                     <p className={`text-[9px] uppercase tracking-widest ${isDark ? "text-white/20" : "text-gray-300"}`}>No team members added yet</p>
                   )}
-
-                  {/* SQL migration note */}
-                  <details className={`text-[8px] ${isDark ? "text-white/20" : "text-gray-300"}`}>
-                    <summary className="cursor-pointer uppercase tracking-widest hover:opacity-70">Required SQL Migration</summary>
-                    <pre className={`mt-2 p-3 font-mono text-[7px] overflow-x-auto ${isDark ? "bg-white/5" : "bg-gray-100"}`}>
-{`create table admin_users (
-  id uuid default gen_random_uuid() primary key,
-  email text unique not null,
-  role text not null default 'viewer'
-    check (role in ('admin', 'manager', 'viewer')),
-  created_at timestamptz default now()
-);`}
-                    </pre>
-                  </details>
                 </div>
               </div>
 
-              {/* Account (original, unchanged) */}
               <div className="space-y-4">
                 <h2 className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Account</h2>
                 <div className={`p-6 space-y-4 ${isDark ? "bg-white/5" : "bg-gray-50/50"}`}>
@@ -1588,9 +1495,20 @@ export function trackEvent(type, data = {}) {
             </div>
           </div>
         )}
+
+        {/* ════════════════════════════════════════════════════════════════
+            JARVISHUB — full-page section
+        ════════════════════════════════════════════════════════════════ */}
+        {section === "jarvishub" && (
+          <div className="space-y-8">
+            <h1 className="text-2xl font-bold uppercase tracking-tighter">JarvisHub</h1>
+            <JarvisHub geminiApiKey={import.meta.env.VITE_GEMINI_API_KEY ?? ""} />
+          </div>
+        )}
+
       </main>
 
-      {/* ── ORDER DETAIL MODAL (original, unchanged) ── */}
+      {/* ── ORDER DETAIL MODAL ── */}
       {selectedRow && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
           <div className={`absolute inset-0 backdrop-blur-sm ${isDark ? "bg-black/90" : "bg-white/90"}`} onClick={() => setSelectedRow(null)} />
@@ -1625,7 +1543,7 @@ export function trackEvent(type, data = {}) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// SHARED COMPONENTS (originals preserved)
+// SHARED COMPONENTS
 // ────────────────────────────────────────────────────────────────────────────
 
 function Stat({ label, value, sub, isDark }: { label: string; value: string | number; sub: string; isDark: boolean }) {
