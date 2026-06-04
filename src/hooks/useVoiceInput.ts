@@ -22,31 +22,34 @@ export function useVoiceInput({
   const recognitionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyzerRef = useRef<AnalyserNode | null>(null);
-  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const rafRef = useRef<number>(0);
-  const shouldRestart = useRef(false);
 
+  // Initialize Audio Context once and keep it alive
   const initAudio = useCallback(async () => {
+    if (audioContextRef.current) return;
+    
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      analyzerRef.current = audioContextRef.current.createAnalyser();
-      sourceRef.current = audioContextRef.current.createMediaStreamSource(stream);
-      sourceRef.current.connect(analyzerRef.current);
-      analyzerRef.current.fftSize = 256;
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const ctx = new AudioCtx();
+      const analyzer = ctx.createAnalyser();
+      const source = ctx.createMediaStreamSource(stream);
+      source.connect(analyzer);
+      analyzer.fftSize = 256;
 
-      const dataArray = new Uint8Array(analyzerRef.current.frequencyBinCount);
+      audioContextRef.current = ctx;
+      analyzerRef.current = analyzer;
+
+      const dataArray = new Uint8Array(analyzer.frequencyBinCount);
       const updateLevel = () => {
-        if (!analyzerRef.current) return;
-        analyzerRef.current.getByteFrequencyData(dataArray);
-        const sum = dataArray.reduce((a, b) => a + b, 0);
-        const avg = sum / dataArray.length;
+        analyzer.getByteFrequencyData(dataArray);
+        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
         onLevelChange(avg / 128);
         rafRef.current = requestAnimationFrame(updateLevel);
       };
       updateLevel();
     } catch (e) {
-      console.error('[VoiceInput] Audio init error:', e);
+      console.error('[VoiceInput] Audio hardware access error:', e);
     }
   }, [onLevelChange]);
 
@@ -67,46 +70,53 @@ export function useVoiceInput({
     rec.onresult = (event: any) => {
       if (preventListening) return;
       for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          onTranscript(event.results[i][0].transcript);
-        }
+        if (event.results[i].isFinal) onTranscript(event.results[i][0].transcript);
       }
     };
 
     rec.onend = () => {
-      // Logic for persistent listening:
       onStateChange('idle');
-      cancelAnimationFrame(rafRef.current);
-      if (sourceRef.current) sourceRef.current.disconnect();
-      if (audioContextRef.current) audioContextRef.current.close();
-      
-      // Auto-restart if we are still "enabled"
-      if (shouldRestart.current) {
-        setTimeout(() => rec.start(), 100);
+      recognitionRef.current = null;
+      // DO NOT close AudioContext here.
+      if (enabled) {
+        setTimeout(() => startRecognition(), 250);
       }
     };
 
     rec.onerror = (e: any) => {
-      console.warn('[VoiceInput] Error:', e.error);
-      if (e.error === 'no-speech') return; // Ignore silence errors
+      if (e.error !== 'no-speech') console.warn('[VoiceInput] Recognition error:', e.error);
     };
 
-    rec.start();
-    recognitionRef.current = rec;
-  }, [onTranscript, onStateChange, initAudio, preventListening]);
+    try {
+      rec.start();
+      recognitionRef.current = rec;
+    } catch (e) {
+      console.warn('[VoiceInput] Start failed, likely already active.');
+    }
+  }, [onTranscript, onStateChange, initAudio, preventListening, enabled]);
 
   useEffect(() => {
-    shouldRestart.current = enabled;
     if (enabled) {
       startRecognition();
-    } else if (recognitionRef.current) {
-      recognitionRef.current.stop();
+    } else {
+      if (recognitionRef.current) recognitionRef.current.stop();
+      cancelAnimationFrame(rafRef.current);
+      // Clean up audio only on component unmount
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
     }
 
     return () => {
-      shouldRestart.current = false;
-      recognitionRef.current?.stop();
+      if (recognitionRef.current) recognitionRef.current.stop();
       cancelAnimationFrame(rafRef.current);
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
     };
   }, [enabled, startRecognition]);
+
+  return null;
 }
