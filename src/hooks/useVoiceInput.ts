@@ -11,9 +11,7 @@ interface UseVoiceInputOptions {
   onStateChange: (state: OrbState) => void;
   onLevelChange: (level: number) => void;
   vadThreshold?: number;
-  silenceMs?: number;
   enabled?: boolean;
-  preventListening?: boolean;
 }
 
 export function useVoiceInput({
@@ -21,21 +19,17 @@ export function useVoiceInput({
   onStateChange,
   onLevelChange,
   vadThreshold = DEFAULT_VAD_THRESHOLD,
-  silenceMs = DEFAULT_SILENCE_MS,
   enabled = true,
-  preventListening = false,
 }: UseVoiceInputOptions) {
   const onTranscriptRef = useRef(onTranscript);
   const onStateChangeRef = useRef(onStateChange);
   const onLevelChangeRef = useRef(onLevelChange);
-  const preventListeningRef = useRef(preventListening);
 
   useEffect(() => {
     onTranscriptRef.current = onTranscript;
     onStateChangeRef.current = onStateChange;
     onLevelChangeRef.current = onLevelChange;
-    preventListeningRef.current = preventListening;
-  }, [onTranscript, onStateChange, onLevelChange, preventListening]);
+  }, [onTranscript, onStateChange, onLevelChange]);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -44,7 +38,6 @@ export function useVoiceInput({
   const stateRef = useRef<OrbState>('idle');
   const bufferRef = useRef<string>('');
   const rafRef = useRef<number>(0);
-  const activeRef = useRef(false);
 
   const setOrbState = useCallback((s: OrbState) => {
     stateRef.current = s;
@@ -64,10 +57,7 @@ export function useVoiceInput({
     bufferRef.current = '';
 
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) {
-      setOrbState('error');
-      return;
-    }
+    if (!SR) return;
 
     const recog: SpeechRecognition = new SR();
     recog.continuous = true;
@@ -75,18 +65,9 @@ export function useVoiceInput({
     recog.lang = 'en-US';
 
     recog.onresult = (e: SpeechRecognitionEvent) => {
-      let finalTranscript = '';
       for (let i = e.resultIndex; i < e.results.length; ++i) {
-        if (e.results[i].isFinal) {
-          finalTranscript += e.results[i][0].transcript;
-        }
+        if (e.results[i].isFinal) bufferRef.current += e.results[i][0].transcript;
       }
-      if (finalTranscript) bufferRef.current = finalTranscript;
-    };
-
-    recog.onerror = () => {
-      stopRecognition();
-      setOrbState('idle');
     };
 
     recog.onend = () => {
@@ -100,62 +81,54 @@ export function useVoiceInput({
 
     recogRef.current = recog;
     recog.start();
-  }, [setOrbState, stopRecognition]);
-
-  const activateVoice = useCallback(async () => {
-    if (audioCtxRef.current?.state === 'suspended') {
-      await audioCtxRef.current.resume();
-    }
-    startRecognition();
-  }, [startRecognition]);
+  }, [setOrbState]);
 
   const initMic = useCallback(async () => {
-    if (activeRef.current) return;
-    activeRef.current = true;
-
     try {
-      streamRef.current = await navigator.mediaDevices.getUserMedia({ 
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      audioCtxRef.current = new AudioContextClass();
-      analyserRef.current = audioCtxRef.current.createAnalyser();
-      analyserRef.current.fftSize = 256;
+      const ctx = new AudioContextClass();
+      audioCtxRef.current = ctx;
       
-      audioCtxRef.current.createMediaStreamSource(streamRef.current).connect(analyserRef.current);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      ctx.createMediaStreamSource(stream).connect(analyser);
+      analyserRef.current = analyser;
 
-      const data = new Uint8Array(analyserRef.current.frequencyBinCount);
+      const data = new Uint8Array(analyser.frequencyBinCount);
       const tick = () => {
         if (!analyserRef.current) return;
         analyserRef.current.getByteFrequencyData(data);
         const avg = data.reduce((a, b) => a + b, 0) / data.length;
-        
         onLevelChangeRef.current(Math.min(1, avg / 50));
 
-        if (!preventListeningRef.current && avg > vadThreshold && stateRef.current === 'idle') {
-          startRecognition();
-        }
+        if (avg > vadThreshold && stateRef.current === 'idle') startRecognition();
         rafRef.current = requestAnimationFrame(tick);
       };
       tick();
       setOrbState('idle');
     } catch (err) {
-      setOrbState('error');
+      console.error("Mic init failed", err);
     }
-  }, [setOrbState, startRecognition, vadThreshold]);
+  }, [startRecognition, setOrbState, vadThreshold]);
 
   useEffect(() => {
     if (!enabled) return;
-    initMic();
+    // Logic to resume on first user interaction
+    const handleInteraction = () => {
+      if (audioCtxRef.current?.state === 'suspended') audioCtxRef.current.resume();
+      else if (!audioCtxRef.current) initMic();
+    };
+    window.addEventListener('click', handleInteraction, { once: true });
     return () => {
+      window.removeEventListener('click', handleInteraction);
       cancelAnimationFrame(rafRef.current);
       stopRecognition();
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      audioCtxRef.current?.close();
-      activeRef.current = false;
+      streamRef.current?.getTracks().forEach(t => t.stop());
     };
   }, [enabled, initMic, stopRecognition]);
 
-  return { initMic, activateVoice };
+  return { initMic };
 }
