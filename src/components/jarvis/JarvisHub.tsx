@@ -27,7 +27,6 @@ export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: s
   const [isLive, setIsLive] = useState(false);
 
   const targetLevelRef = useRef(0);
-  const smoothLevelRef = useRef(0);
   const stateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const orbStateRef = useRef(orbState);
 
@@ -54,9 +53,7 @@ export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: s
   });
 
   const handleTranscript = useCallback(async (text: string) => {
-    // Stop previous audio without killing the engine state
     window.speechSynthesis.cancel();
-    
     setLastLine(text);
     changeOrbState('thinking');
     
@@ -64,7 +61,6 @@ export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: s
       const reply = await ask(text);
       setLastLine(reply);
       setLastAiResponse(reply);
-      // speak() now safely handles its own persistence
       speak(reply);
     } catch (err) {
       console.error('[Jarvis] Error:', err);
@@ -90,10 +86,17 @@ export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: s
     if (isReady) return;
     setIsReady(true);
     setIsLive(true);
-    // Silent handshake for mobile browser audio policy
-    const s = new SpeechSynthesisUtterance(" ");
-    s.volume = 0;
-    window.speechSynthesis.speak(s);
+    
+    // MOBILE FIX: Explicit AudioContext resumption for mobile
+    try {
+      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+      const ctx = new AudioCtx();
+      if (ctx.state === 'suspended') await ctx.resume();
+      
+      const s = new SpeechSynthesisUtterance("Initializing.");
+      s.volume = 1; 
+      window.speechSynthesis.speak(s);
+    } catch (e) { console.error("Audio unlock failed", e); }
   };
 
   useEffect(() => { if (autoStart) initializeJarvis(); }, [autoStart]);
