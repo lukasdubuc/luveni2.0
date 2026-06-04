@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────
-//  J.A.R.V.I.S — Luveni GM  |  components/jarvis/JarvisHub.tsx
+//  J.A.R.V.I.S — Luveni GM | components/jarvis/JarvisHub.tsx
 // ─────────────────────────────────────────────────────────────
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -32,13 +32,12 @@ const STATE_COLOR: Record<OrbState, string> = {
 };
 
 export default function JarvisHub({ geminiApiKey, autoStart }: JarvisHubProps) {
-  const [orbState, setOrbState]     = useState<OrbState>('idle');
+  const [orbState, setOrbState]      = useState<OrbState>('idle');
   const [audioLevel, setAudioLevel] = useState(0);
-  const [lastLine, setLastLine]     = useState('');
-  // NEW: Track last AI response to kill echo loop
+  const [lastLine, setLastLine]      = useState('');
   const [lastAiResponse, setLastAiResponse] = useState('');
-  const [isReady, setIsReady]       = useState(false);
-  const [isLive, setIsLive]         = useState(false);
+  const [isReady, setIsReady]        = useState(false);
+  const [isLive, setIsLive]          = useState(false);
 
   const containerRef    = useRef<HTMLDivElement>(null);
   const targetLevelRef  = useRef(0);
@@ -76,7 +75,7 @@ export default function JarvisHub({ geminiApiKey, autoStart }: JarvisHubProps) {
     try {
       const reply = await ask(text);
       setLastLine(reply);
-      setLastAiResponse(reply); // Update the Echo-Killer state
+      setLastAiResponse(reply);
       speak(reply);
     } catch (err) {
       console.error('[Jarvis] error:', err);
@@ -98,11 +97,10 @@ export default function JarvisHub({ geminiApiKey, autoStart }: JarvisHubProps) {
     },
     enabled: isReady && isLive,
     isSpeaking: orbState === 'speaking',
-    lastAiResponse: lastAiResponse, // Pass the echo-killer here
+    lastAiResponse: lastAiResponse,
     preventListening: orbState === 'speaking' || orbState === 'thinking',
   });
 
-  // ... (Keep your existing useEffects for animation tick, autoStart, etc.)
   useEffect(() => {
     let rafId: number;
     const tick = () => {
@@ -115,17 +113,6 @@ export default function JarvisHub({ geminiApiKey, autoStart }: JarvisHubProps) {
     return () => { cancelAnimationFrame(rafId); if (stateTimeoutRef.current) clearTimeout(stateTimeoutRef.current); };
   }, []);
 
-  useEffect(() => {
-    if (!lastLine) return;
-    const t = setTimeout(() => setLastLine(''), 15000);
-    return () => clearTimeout(t);
-  }, [lastLine]);
-
-  useEffect(() => {
-    if (!autoStart) return;
-    initializeJarvis();
-  }, [autoStart]);
-
   const initializeJarvis = async () => {
     try {
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -136,17 +123,10 @@ export default function JarvisHub({ geminiApiKey, autoStart }: JarvisHubProps) {
     } catch (e) {}
     setIsReady(true);
     setIsLive(true);
-    if (containerRef.current && !document.fullscreenElement) {
-      await containerRef.current.requestFullscreen().catch((err) => console.warn(err));
-    }
   };
 
-  // ... (Keep your existing display logic and return JSX)
   const displayLabel = (isReady && isLive && orbState === 'idle') ? STATE_LABEL['listening'] : STATE_LABEL[orbState];
   const displayColor = (isReady && isLive && orbState === 'idle') ? STATE_COLOR['listening'] : STATE_COLOR[orbState];
-  const shadowColor = STATE_COLOR[orbState].replace('rgba(', '').replace(/,[^,]+\)$/, '');
-  const shadowOpacity = 0.12 + audioLevel * 0.22;
-  const shadowSize = 180 + audioLevel * 120;
 
   return (
     <div ref={containerRef} style={styles.root}>
@@ -155,8 +135,20 @@ export default function JarvisHub({ geminiApiKey, autoStart }: JarvisHubProps) {
         <NeuralOrb state={orbState} audioLevel={audioLevel} size={400} />
       </div>
       <div style={{ ...styles.stateLabel, color: displayColor }}>{displayLabel}</div>
+      <AnimatePresence>
+        {lastLine && (
+          <motion.div style={styles.transcript} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            {lastLine}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-const styles: Record<string, React.CSSProperties> = { /* Keep your existing styles */ };
+const styles: Record<string, React.CSSProperties> = {
+  root: { height: '100vh', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#020408' },
+  orbWrap: { cursor: 'pointer', transition: 'transform 0.3s ease' },
+  stateLabel: { marginTop: '2rem', fontSize: '1.2rem', fontFamily: 'monospace', letterSpacing: '0.4rem', fontWeight: 'bold' },
+  transcript: { marginTop: '1rem', color: 'rgba(255,255,255,0.7)', fontFamily: 'monospace', maxWidth: '600px', textAlign: 'center' }
+};
