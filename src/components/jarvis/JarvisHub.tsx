@@ -10,46 +10,33 @@ import { useGemini } from '../../hooks/useGemini';
 import type { OrbState } from '../../types/jarvis';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// --- CONSTANTS ---
 const STATE_LABEL: Record<OrbState, string> = {
-  idle:      'STANDBY',
-  listening: 'LISTENING',
-  thinking:  'PROCESSING',
-  speaking:  'RESPONDING',
-  error:     'MIC ERROR',
+  idle: 'STANDBY', listening: 'LISTENING', thinking: 'PROCESSING', speaking: 'RESPONDING', error: 'MIC ERROR',
 };
 
 const STATE_COLOR: Record<OrbState, string> = {
-  idle:      'rgba(0,180,255,0.6)',
-  listening: 'rgba(0,255,255,1.0)',
-  thinking:  'rgba(180,100,255,1.0)',
-  speaking:  'rgba(0,255,180,0.95)',
-  error:     'rgba(255,80,80,1.0)',
+  idle: 'rgba(0,180,255,0.6)', listening: 'rgba(0,255,255,1.0)', thinking: 'rgba(180,100,255,1.0)', speaking: 'rgba(0,255,180,0.95)', error: 'rgba(255,80,80,1.0)',
 };
 
 export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, autoStart?: boolean }) {
-  // --- STATE ---
-  const [orbState, setOrbState]      = useState<OrbState>('idle');
+  const [orbState, setOrbState] = useState<OrbState>('idle');
   const [audioLevel, setAudioLevel] = useState(0);
-  const [lastLine, setLastLine]      = useState('');
+  const [lastLine, setLastLine] = useState('');
   const [lastAiResponse, setLastAiResponse] = useState('');
-  const [isReady, setIsReady]        = useState(false);
-  const [isLive, setIsLive]          = useState(false);
+  const [isReady, setIsReady] = useState(false);
+  const [isLive, setIsLive] = useState(false);
 
-  // --- REFS ---
-  const containerRef    = useRef<HTMLDivElement>(null);
-  const targetLevelRef  = useRef(0);
-  const smoothLevelRef  = useRef(0);
+  const targetLevelRef = useRef(0);
+  const smoothLevelRef = useRef(0);
   const stateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const orbStateRef     = useRef(orbState);
+  const orbStateRef = useRef(orbState);
 
-  // --- EFFECT: Sync State ---
   useEffect(() => { orbStateRef.current = orbState; }, [orbState]);
 
   const { ask } = useGemini(geminiApiKey);
 
   const changeOrbState = useCallback((newState: OrbState) => {
-    if (stateTimeoutRef.current) { clearTimeout(stateTimeoutRef.current); stateTimeoutRef.current = null; }
+    if (stateTimeoutRef.current) clearTimeout(stateTimeoutRef.current);
     if (newState === 'idle') {
       stateTimeoutRef.current = setTimeout(() => setOrbState('idle'), 750);
     } else {
@@ -57,98 +44,73 @@ export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: s
     }
   }, []);
 
-  // --- AUDIO OUTPUT ---
   const { speak, cancel } = useSpeechOutput({
     onStart: () => changeOrbState('speaking'),
-    onBoundary: (lvl) => { targetLevelRef.current = lvl; },
+    onBoundary: (lvl: number) => { targetLevelRef.current = lvl; },
     onEnd: () => {
       targetLevelRef.current = 0;
-      setLastLine(''); // Clear text exactly when voice ends
-      setLastAiResponse('');
       if (orbStateRef.current === 'speaking') changeOrbState('idle');
     },
   });
 
-  // --- TRANSCRIPT HANDLER ---
   const handleTranscript = useCallback(async (text: string) => {
-    if (orbStateRef.current === 'speaking') cancel();
+    // Stop previous audio without killing the engine state
+    window.speechSynthesis.cancel();
     
     setLastLine(text);
     changeOrbState('thinking');
-    targetLevelRef.current = 0;
     
     try {
       const reply = await ask(text);
       setLastLine(reply);
       setLastAiResponse(reply);
+      // speak() now safely handles its own persistence
       speak(reply);
     } catch (err) {
       console.error('[Jarvis] Error:', err);
       changeOrbState('idle');
     }
-  }, [ask, cancel, speak, changeOrbState]);
+  }, [ask, speak, changeOrbState]);
 
-  // --- VOICE INPUT HOOK ---
   useVoiceInput({
-    onTranscript: (text: any) => { if (isLive) handleTranscript(text); },
-    onStateChange: (s: any) => {
+    onTranscript: (text: string) => { if (isLive) handleTranscript(text); },
+    onStateChange: (s: string) => {
       if (!isLive) return;
-      if (s === 'listening') { cancel(); targetLevelRef.current = 0; smoothLevelRef.current = 0; }
-      changeOrbState(s);
+      if (s === 'listening') { cancel(); targetLevelRef.current = 0; }
+      changeOrbState(s as OrbState);
     },
-    onLevelChange: (lvl: any) => {
-      if (!isLive) { targetLevelRef.current = 0; return; }
-      targetLevelRef.current = lvl;
-    },
+    onLevelChange: (lvl: number) => { if (isLive) targetLevelRef.current = lvl; },
     enabled: isReady && isLive,
     isSpeaking: orbState === 'speaking',
-    lastAiResponse: lastAiResponse,
+    lastAiResponse,
     preventListening: orbState === 'speaking' || orbState === 'thinking',
   });
 
-  // --- INITIALIZATION ---
   const initializeJarvis = async () => {
     if (isReady) return;
     setIsReady(true);
     setIsLive(true);
-    
-    // MOBILE FIX: Force audio context unlock with silent handshake
-    try {
-      const utterance = new SpeechSynthesisUtterance(" ");
-      utterance.volume = 0;
-      window.speechSynthesis.speak(utterance);
-    } catch (e) { console.error("Audio unlock failed", e); }
+    // Silent handshake for mobile browser audio policy
+    const s = new SpeechSynthesisUtterance(" ");
+    s.volume = 0;
+    window.speechSynthesis.speak(s);
   };
 
-  useEffect(() => {
-    if (autoStart) initializeJarvis();
-  }, [autoStart]);
-
-  const displayLabel = orbState === 'idle' && isLive ? STATE_LABEL['listening'] : STATE_LABEL[orbState];
-  const displayColor = orbState === 'idle' && isLive ? STATE_COLOR['listening'] : STATE_COLOR[orbState];
+  useEffect(() => { if (autoStart) initializeJarvis(); }, [autoStart]);
 
   return (
-    <div ref={containerRef} style={styles.root} onClick={initializeJarvis}>
-      <style dangerouslySetInnerHTML={{ __html: `
-        body { background-color: #020408 !important; margin: 0; overflow: hidden; }
-      `}} />
-      
+    <div style={styles.root} onClick={initializeJarvis}>
+      <style dangerouslySetInnerHTML={{ __html: `body { background-color: #020408 !important; margin: 0; overflow: hidden; }`}} />
       <div style={styles.orbWrap}>
         <NeuralOrb state={orbState} audioLevel={audioLevel} size={400} />
       </div>
-
       <div style={styles.transcriptContainer}>
         <AnimatePresence mode="wait">
-          {lastLine && (
-            <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} style={styles.transcript}>
-              {lastLine}
-            </motion.div>
-          )}
+          {lastLine && <motion.div key={lastLine} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} style={styles.transcript}>{lastLine}</motion.div>}
         </AnimatePresence>
       </div>
-
-      <div style={{ ...styles.stateLabel, color: displayColor }}>
-        {displayLabel}
+      <div style={{ ...styles.stateLabel, color: orbState === 'idle' && isLive ? STATE_COLOR['listening'] : STATE_COLOR[orbState] }}>
+        {orbState === 'idle' && isLive ? STATE_LABEL['listening'] : STATE_LABEL[orbState]}
       </div>
     </div>
   );
