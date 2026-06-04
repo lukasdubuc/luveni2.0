@@ -6,9 +6,9 @@ export const DEFAULT_VAD_THRESHOLD = 22;
 export const DEFAULT_SILENCE_MS = 1100;
 export const DEFAULT_MAX_HISTORY = 12;
 
-// Central model endpoint pointing to the high-quota 2.0-flash model
-export const GEMINI_ENDPOINT = (apiKey: string) =>
-  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+// Updated to the Mistral chat completions endpoint
+export const GEMINI_ENDPOINT = (apiKey: string) => 
+  "https://api.mistral.ai/v1/chat/completions";
 
 export const JARVIS_SYSTEM_PROMPT = `You are J.A.R.V.I.S., an articulate, dry-witted British AI assistant inspired by Tony Stark's AI. Keep replies concise (1-3 sentences), refer to the user as "sir", and be helpful, calm, and subtly clever.`;
 
