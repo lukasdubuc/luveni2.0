@@ -6,11 +6,9 @@ export const DEFAULT_VAD_THRESHOLD = 15;
 export const DEFAULT_SILENCE_MS = 600;
 export const DEFAULT_MAX_HISTORY = 12;
 
-// Updated to the Mistral chat completions endpoint
 export const GEMINI_ENDPOINT = (apiKey: string) => 
   "https://api.mistral.ai/v1/chat/completions";
 
-// lib/jarvis-config.ts
 export const JARVIS_SYSTEM_PROMPT = `You are J.A.R.V.I.S., an articulate, dry-witted AI assistant. 
 - You MUST NOT provide an introduction. 
 - Always end your sentences by addressing the user as "sir". 
