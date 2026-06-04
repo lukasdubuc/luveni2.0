@@ -1,7 +1,6 @@
 // ─────────────────────────────────────────────────────────────
 //  J.A.R.V.I.S — Luveni GM  |  hooks/useSpeechOutput.ts
-//  Cross-platform voice — desktop + iOS + Android
-//  Target: deep, calm, British male (closest to Iron Man JARVIS)
+//  Cross-platform male British voice — desktop + iOS + Android
 // ─────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useRef } from 'react';
@@ -12,47 +11,55 @@ interface UseSpeechOutputOptions {
   onEnd?: () => void;
 }
 
-// Ordered priority — first match wins
-// Desktop Chrome/Edge: "Google UK English Male"
-// macOS/iOS:           "Daniel" (British male, the closest to JARVIS)
-// iOS fallback:        "Arthur" (British male Siri voice, iOS 15+)
-// Android fallback:    "Google UK English Male" or any en-GB
-// Last resort:         any English male, then any English
-const VOICE_PRIORITY = [
-  'google uk english male',
-  'daniel',
-  'arthur',
-  'google uk english',
-  'english united kingdom',
-  'en-gb',
-  'rishi',        // Indian English male, neutral — better than robot
-  'google us english',
-  'en-us',
+// Exact voice names to target — order matters, first match wins
+// Desktop Chrome/Edge:  "Google UK English Male"
+// macOS Safari:         "Daniel" (com.apple.voice...daniel)
+// iOS Safari:           "Daniel" — only male en-GB on iOS, always wins for en-GB locale
+// Android Chrome:       "Google UK English Male"
+// Windows Edge:         "Microsoft George" or "Microsoft Ryan"
+const MALE_BRITISH_NAMES = [
+  'Google UK English Male',
+  'Daniel',
+  'Microsoft George',
+  'Microsoft Ryan',
+  'Microsoft George - English (United Kingdom)',
 ];
 
-let cachedVoice: SpeechSynthesisVoice | null = null;
-
-function findVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
-  for (const hint of VOICE_PRIORITY) {
-    const match = voices.find(
-      (v) =>
-        v.name.toLowerCase().includes(hint) ||
-        v.lang.toLowerCase().replace('_', '-').includes(hint)
-    );
-    if (match) return match;
+// Fallback — any en-GB voice (iOS forces Daniel for en-GB regardless of name)
+// Setting lang to en-GB on iOS guarantees Daniel plays
+function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+  // 1. Exact name match (desktop)
+  for (const name of MALE_BRITISH_NAMES) {
+    const v = voices.find(v => v.name === name);
+    if (v) return v;
   }
-  // Absolute fallback — any male-sounding English voice
-  const enVoice = voices.find((v) => v.lang.toLowerCase().startsWith('en'));
-  return enVoice ?? null;
+  // 2. Any en-GB voice — on iOS this will be Daniel
+  const enGB = voices.find(v => v.lang === 'en-GB');
+  if (enGB) return enGB;
+  // 3. Any English voice as last resort
+  return voices.find(v => v.lang.startsWith('en')) ?? null;
 }
 
-function pickVoice(): SpeechSynthesisVoice | null {
-  if (cachedVoice) return cachedVoice;
-  const voices = speechSynthesis.getVoices();
-  if (voices.length === 0) return null;
-  cachedVoice = findVoice(voices);
-  return cachedVoice;
+// Returns voices via Promise — handles both sync (Firefox/Safari) and
+// async (Chrome/mobile) loading correctly
+function loadVoices(): Promise<SpeechSynthesisVoice[]> {
+  return new Promise((resolve) => {
+    const voices = speechSynthesis.getVoices();
+    if (voices.length > 0) {
+      resolve(voices);
+      return;
+    }
+    // Voices not ready yet — wait for event
+    const handler = () => {
+      resolve(speechSynthesis.getVoices());
+    };
+    speechSynthesis.addEventListener('voiceschanged', handler, { once: true });
+    // Safety timeout — 3s, then resolve with whatever is available
+    setTimeout(() => resolve(speechSynthesis.getVoices()), 3000);
+  });
 }
+
+let voiceCache: SpeechSynthesisVoice | null | undefined = undefined; // undefined = not yet resolved
 
 export function useSpeechOutput({
   onStart,
@@ -60,84 +67,71 @@ export function useSpeechOutput({
   onEnd,
 }: UseSpeechOutputOptions = {}) {
   const speaking = useRef(false);
-  const pendingRef = useRef<string | null>(null);
+  const onStartRef   = useRef(onStart);
+  const onBoundaryRef = useRef(onBoundary);
+  const onEndRef     = useRef(onEnd);
 
-  // Warm up voices on mount — critical for mobile where voices load async
   useEffect(() => {
-    const warm = () => {
-      cachedVoice = null; // reset so we re-evaluate with full list
-      pickVoice();
-    };
-    speechSynthesis.addEventListener('voiceschanged', warm);
-    warm(); // attempt immediately in case already loaded
-    return () => speechSynthesis.removeEventListener('voiceschanged', warm);
+    onStartRef.current   = onStart;
+    onBoundaryRef.current = onBoundary;
+    onEndRef.current     = onEnd;
+  }, [onStart, onBoundary, onEnd]);
+
+  // Pre-warm voice resolution on mount
+  useEffect(() => {
+    if (voiceCache === undefined) {
+      loadVoices().then(voices => {
+        voiceCache = findBestVoice(voices);
+      });
+    }
   }, []);
 
-  const doSpeak = useCallback(
-    (text: string) => {
-      speechSynthesis.cancel();
-      speaking.current = true;
+  const doSpeak = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
+    speechSynthesis.cancel();
+    speaking.current = true;
 
-      const utt = new SpeechSynthesisUtterance(text);
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.rate   = 0.93;
+    utt.pitch  = 0.78;
+    utt.volume = 1.0;
 
-      // JARVIS voice profile — deep, deliberate, calm
-      utt.rate   = 0.93;  // slightly slower = more authoritative
-      utt.pitch  = 0.78;  // lower = deeper, more masculine
-      utt.volume = 1.0;
+    if (voice) {
+      utt.voice = voice;
+    } else {
+      // iOS fallback — set lang to en-GB, browser picks Daniel automatically
+      utt.lang = 'en-GB';
+    }
 
-      const voice = pickVoice();
-      if (voice) utt.voice = voice;
+    utt.onstart    = () => onStartRef.current?.();
+    utt.onboundary = () => onBoundaryRef.current?.(0.3 + Math.random() * 0.55);
+    utt.onend = () => {
+      speaking.current = false;
+      onEndRef.current?.();
+    };
+    utt.onerror = () => {
+      speaking.current = false;
+      onEndRef.current?.();
+    };
 
-      utt.onstart = () => onStart?.();
-      utt.onboundary = () => onBoundary?.(0.3 + Math.random() * 0.55);
-      utt.onend = () => {
-        speaking.current = false;
-        pendingRef.current = null;
-        onEnd?.();
-      };
-      utt.onerror = () => {
-        speaking.current = false;
-        pendingRef.current = null;
-        onEnd?.();
-      };
+    speechSynthesis.speak(utt);
+  }, []);
 
-      speechSynthesis.speak(utt);
-    },
-    [onStart, onBoundary, onEnd]
-  );
-
-  const speak = useCallback(
-    (text: string) => {
-      const voices = speechSynthesis.getVoices();
-      if (voices.length === 0) {
-        // Mobile: voices not ready yet — wait for voiceschanged then speak
-        pendingRef.current = text;
-        const handler = () => {
-          speechSynthesis.removeEventListener('voiceschanged', handler);
-          if (pendingRef.current) {
-            doSpeak(pendingRef.current);
-            pendingRef.current = null;
-          }
-        };
-        speechSynthesis.addEventListener('voiceschanged', handler);
-        // Timeout safety — speak anyway after 1s even if voices never fires
-        setTimeout(() => {
-          if (pendingRef.current) {
-            doSpeak(pendingRef.current);
-            pendingRef.current = null;
-          }
-        }, 1000);
-      } else {
-        doSpeak(text);
-      }
-    },
-    [doSpeak]
-  );
+  const speak = useCallback((text: string) => {
+    if (voiceCache !== undefined) {
+      // Already resolved
+      doSpeak(text, voiceCache);
+    } else {
+      // Still loading — resolve then speak
+      loadVoices().then(voices => {
+        voiceCache = findBestVoice(voices);
+        doSpeak(text, voiceCache);
+      });
+    }
+  }, [doSpeak]);
 
   const cancel = useCallback(() => {
     speechSynthesis.cancel();
     speaking.current = false;
-    pendingRef.current = null;
   }, []);
 
   return { speak, cancel, isSpeaking: () => speaking.current };
