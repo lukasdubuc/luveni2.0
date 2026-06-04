@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────
-// J.A.R.V.I.S — Luveni GM | components/jarvis/JarvisHub.tsx
+//  J.A.R.V.I.S — Luveni GM | components/jarvis/JarvisHub.tsx
 // ─────────────────────────────────────────────────────────────
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -44,19 +44,7 @@ export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: s
   const orbStateRef     = useRef(orbState);
 
   // --- EFFECT: Sync State ---
-  useEffect(() => { 
-    orbStateRef.current = orbState; 
-  }, [orbState]);
-
-  // --- EFFECT: Fix background flash and set body background globally ---
-  useEffect(() => {
-    // These styles target the actual document body before React renders
-    document.documentElement.style.backgroundColor = '#020408';
-    document.body.style.backgroundColor = '#020408';
-    document.body.style.margin = '0';
-    document.body.style.padding = '0';
-    document.body.style.overflow = 'hidden'; // Ensure background doesn't shift on overscroll
-  }, []);
+  useEffect(() => { orbStateRef.current = orbState; }, [orbState]);
 
   const { ask } = useGemini(geminiApiKey);
 
@@ -75,13 +63,14 @@ export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: s
     onBoundary: (lvl) => { targetLevelRef.current = lvl; },
     onEnd: () => {
       targetLevelRef.current = 0;
+      setLastLine(''); // Clear text exactly when voice ends
+      setLastAiResponse('');
       if (orbStateRef.current === 'speaking') changeOrbState('idle');
     },
   });
 
   // --- TRANSCRIPT HANDLER ---
   const handleTranscript = useCallback(async (text: string) => {
-    // Only cancel if we are currently speaking, not if we are just idling
     if (orbStateRef.current === 'speaking') cancel();
     
     setLastLine(text);
@@ -117,65 +106,47 @@ export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: s
     preventListening: orbState === 'speaking' || orbState === 'thinking',
   });
 
-  // --- ANIMATION TICK ---
-  useEffect(() => {
-    let rafId: number;
-    const tick = () => {
-      smoothLevelRef.current += (targetLevelRef.current - smoothLevelRef.current) * 0.15;
-      if (Math.abs(smoothLevelRef.current) < 0.001) smoothLevelRef.current = 0;
-      setAudioLevel(smoothLevelRef.current);
-      rafId = requestAnimationFrame(tick);
-    };
-    rafId = requestAnimationFrame(tick);
-    return () => { cancelAnimationFrame(rafId); if (stateTimeoutRef.current) clearTimeout(stateTimeoutRef.current); };
-  }, []);
-
   // --- INITIALIZATION ---
   const initializeJarvis = async () => {
+    if (isReady) return;
     setIsReady(true);
     setIsLive(true);
-    // Ensure we don't trigger the synth if not needed
+    
+    // MOBILE FIX: Force audio context unlock with silent handshake
     try {
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
-    } catch (e) {}
+      const utterance = new SpeechSynthesisUtterance(" ");
+      utterance.volume = 0;
+      window.speechSynthesis.speak(utterance);
+    } catch (e) { console.error("Audio unlock failed", e); }
   };
 
-  const displayLabel = (isReady && isLive && orbState === 'idle') ? STATE_LABEL['listening'] : STATE_LABEL[orbState];
-  const displayColor = (isReady && isLive && orbState === 'idle') ? STATE_COLOR['listening'] : STATE_COLOR[orbState];
+  useEffect(() => {
+    if (autoStart) initializeJarvis();
+  }, [autoStart]);
+
+  const displayLabel = orbState === 'idle' && isLive ? STATE_LABEL['listening'] : STATE_LABEL[orbState];
+  const displayColor = orbState === 'idle' && isLive ? STATE_COLOR['listening'] : STATE_COLOR[orbState];
 
   return (
-    <div ref={containerRef} style={styles.root}>
-      {/* Strict CSS injection ensures background is black for mobile header and footer.
-        The #root background stops the white flash before React mounts.
-      */}
+    <div ref={containerRef} style={styles.root} onClick={initializeJarvis}>
       <style dangerouslySetInnerHTML={{ __html: `
-        #root, html, body { 
-          background-color: #020408 !important; 
-          height: 100%;
-          width: 100%;
-          margin: 0;
-          padding: 0;
-          overflow: hidden;
-        }
-      ` }} />
+        body { background-color: #020408 !important; margin: 0; overflow: hidden; }
+      `}} />
       
-      <div style={styles.orbWrap} onClick={initializeJarvis}>
+      <div style={styles.orbWrap}>
         <NeuralOrb state={orbState} audioLevel={audioLevel} size={400} />
       </div>
 
       <div style={styles.transcriptContainer}>
         <AnimatePresence mode="wait">
           {lastLine && (
-            <motion.div key={lastLine} style={styles.transcript}>
+            <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} style={styles.transcript}>
               {lastLine}
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      {/* State label positioned bottom center for clear mobile formatting */}
       <div style={{ ...styles.stateLabel, color: displayColor }}>
         {displayLabel}
       </div>
@@ -184,51 +155,9 @@ export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: s
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  root: { 
-    height: '100vh', 
-    width: '100%', 
-    display: 'flex', 
-    flexDirection: 'column', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    background: '#020408',
-    padding: '20px',
-    boxSizing: 'border-box'
-  },
-  orbWrap: { 
-    cursor: 'pointer', 
-    display: 'flex', 
-    justifyContent: 'center' 
-  },
-  stateLabel: { 
-    marginTop: 'auto', // Pushes it towards the bottom of the screen
-    marginBottom: '20px',
-    fontSize: '12px', 
-    fontFamily: "'Inter', sans-serif", 
-    letterSpacing: '0.6rem', 
-    fontWeight: 300, 
-    textTransform: 'uppercase',
-    zIndex: 10,
-  },
-  transcriptContainer: {
-    // Fixed height and positioned middle center ensures zero overlap with label
-    position: 'absolute',
-    top: '60%', 
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    width: '100%',
-    maxWidth: '800px',
-    height: '150px', // Provides ample room for multiple lines
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    textAlign: 'center',
-    zIndex: 5,
-  },
-  transcript: { 
-    color: '#fff', 
-    fontSize: '1.5rem', 
-    fontFamily: "'Inter', sans-serif", 
-    lineHeight: 1.4 
-  }
+  root: { height: '100vh', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', boxSizing: 'border-box' },
+  orbWrap: { cursor: 'pointer', display: 'flex', justifyContent: 'center' },
+  stateLabel: { marginTop: 'auto', marginBottom: '20px', fontSize: '12px', fontFamily: "'Inter', sans-serif", letterSpacing: '0.6rem', fontWeight: 300, textTransform: 'uppercase', zIndex: 10 },
+  transcriptContainer: { position: 'absolute', top: '70%', left: '50%', transform: 'translate(-50%, -50%)', width: '90%', maxWidth: '800px', textAlign: 'center', zIndex: 5 },
+  transcript: { color: '#fff', fontSize: '1.5rem', fontFamily: "'Inter', sans-serif", lineHeight: 1.4 }
 };
