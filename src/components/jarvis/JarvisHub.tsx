@@ -68,10 +68,12 @@ export default function JarvisHub({ geminiApiKey, autoStart }: JarvisHubProps) {
   });
 
   const handleTranscript = useCallback(async (text: string) => {
+    // DESKTOP ECHO FIX: Hard kill synthesis and set state to avoid processing own voice
+    cancel(); 
     setLastLine(text);
     changeOrbState('thinking');
     targetLevelRef.current = 0;
-    cancel();
+    
     try {
       const reply = await ask(text);
       setLastLine(reply);
@@ -113,6 +115,17 @@ export default function JarvisHub({ geminiApiKey, autoStart }: JarvisHubProps) {
     return () => { cancelAnimationFrame(rafId); if (stateTimeoutRef.current) clearTimeout(stateTimeoutRef.current); };
   }, []);
 
+  useEffect(() => {
+    if (!lastLine) return;
+    const t = setTimeout(() => setLastLine(''), 15000);
+    return () => clearTimeout(t);
+  }, [lastLine]);
+
+  useEffect(() => {
+    if (!autoStart) return;
+    initializeJarvis();
+  }, [autoStart]);
+
   const initializeJarvis = async () => {
     try {
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -123,6 +136,9 @@ export default function JarvisHub({ geminiApiKey, autoStart }: JarvisHubProps) {
     } catch (e) {}
     setIsReady(true);
     setIsLive(true);
+    if (containerRef.current && !document.fullscreenElement) {
+      await containerRef.current.requestFullscreen().catch((err) => console.warn(err));
+    }
   };
 
   const displayLabel = (isReady && isLive && orbState === 'idle') ? STATE_LABEL['listening'] : STATE_LABEL[orbState];
@@ -147,8 +163,33 @@ export default function JarvisHub({ geminiApiKey, autoStart }: JarvisHubProps) {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  root: { height: '100vh', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#020408' },
-  orbWrap: { cursor: 'pointer', transition: 'transform 0.3s ease' },
-  stateLabel: { marginTop: '2rem', fontSize: '1.2rem', fontFamily: 'monospace', letterSpacing: '0.4rem', fontWeight: 'bold' },
-  transcript: { marginTop: '1rem', color: 'rgba(255,255,255,0.7)', fontFamily: 'monospace', maxWidth: '600px', textAlign: 'center' }
+  root: { 
+    height: '100vh', 
+    width: '100%', 
+    display: 'flex', 
+    flexDirection: 'column', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    backgroundColor: '#020408',
+    overflow: 'hidden'
+  },
+  orbWrap: { 
+    cursor: 'pointer', 
+    transition: 'transform 0.3s ease' 
+  },
+  stateLabel: { 
+    marginTop: '2rem', 
+    fontSize: '1.2rem', 
+    fontFamily: 'monospace', 
+    letterSpacing: '0.4rem', 
+    fontWeight: 'bold' 
+  },
+  transcript: { 
+    marginTop: '1rem', 
+    color: 'rgba(255,255,255,0.7)', 
+    fontFamily: 'monospace', 
+    maxWidth: '600px', 
+    textAlign: 'center',
+    padding: '0 20px'
+  }
 };
