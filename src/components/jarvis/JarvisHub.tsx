@@ -20,13 +20,11 @@ const STATE_COLOR: Record<OrbState, string> = {
 
 export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, autoStart?: boolean }) {
   const [orbState, setOrbState] = useState<OrbState>('idle');
-  const [audioLevel, setAudioLevel] = useState(0);
   const [lastLine, setLastLine] = useState('');
   const [lastAiResponse, setLastAiResponse] = useState('');
   const [isReady, setIsReady] = useState(false);
   const [isLive, setIsLive] = useState(false);
 
-  const targetLevelRef = useRef(0);
   const stateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const orbStateRef = useRef(orbState);
 
@@ -45,25 +43,28 @@ export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: s
 
   const { speak, cancel } = useSpeechOutput({
     onStart: () => changeOrbState('speaking'),
-    onBoundary: (lvl: number) => { targetLevelRef.current = lvl; },
     onEnd: () => {
-      targetLevelRef.current = 0;
       if (orbStateRef.current === 'speaking') changeOrbState('idle');
     },
   });
 
   const handleTranscript = useCallback(async (text: string) => {
+    // Immediate cancellation to reset queue
     window.speechSynthesis.cancel();
-    setLastLine(text);
+    setLastLine("Thinking...");
     changeOrbState('thinking');
     
     try {
       const reply = await ask(text);
+      if (!reply) throw new Error("No response received");
       setLastLine(reply);
       setLastAiResponse(reply);
+      // speak() now triggers atomic chunking to keep the queue alive
       speak(reply);
     } catch (err) {
       console.error('[Jarvis] Error:', err);
+      setLastLine("System error, sir.");
+      speak("System error, sir.");
       changeOrbState('idle');
     }
   }, [ask, speak, changeOrbState]);
@@ -72,10 +73,10 @@ export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: s
     onTranscript: (text: string) => { if (isLive) handleTranscript(text); },
     onStateChange: (s: string) => {
       if (!isLive) return;
-      if (s === 'listening') { cancel(); targetLevelRef.current = 0; }
+      if (s === 'listening') { cancel(); }
       changeOrbState(s as OrbState);
     },
-    onLevelChange: (lvl: number) => { if (isLive) targetLevelRef.current = lvl; },
+    onLevelChange: () => {},
     enabled: isReady && isLive,
     isSpeaking: orbState === 'speaking',
     lastAiResponse,
@@ -87,13 +88,13 @@ export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: s
     setIsReady(true);
     setIsLive(true);
     
-    // MOBILE FIX: Explicit AudioContext resumption for mobile
+    // HARD UNLOCK: Resume AudioContext and speak immediately
     try {
       const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
       const ctx = new AudioCtx();
       if (ctx.state === 'suspended') await ctx.resume();
       
-      const s = new SpeechSynthesisUtterance("Initializing.");
+      const s = new SpeechSynthesisUtterance("System online.");
       s.volume = 1; 
       window.speechSynthesis.speak(s);
     } catch (e) { console.error("Audio unlock failed", e); }
@@ -102,10 +103,10 @@ export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: s
   useEffect(() => { if (autoStart) initializeJarvis(); }, [autoStart]);
 
   return (
-    <div style={styles.root} onClick={initializeJarvis}>
+    <div style={styles.root} onPointerDown={initializeJarvis}>
       <style dangerouslySetInnerHTML={{ __html: `body { background-color: #020408 !important; margin: 0; overflow: hidden; }`}} />
       <div style={styles.orbWrap}>
-        <NeuralOrb state={orbState} audioLevel={audioLevel} size={400} />
+        <NeuralOrb state={orbState} audioLevel={0} size={400} />
       </div>
       <div style={styles.transcriptContainer}>
         <AnimatePresence mode="wait">
@@ -119,7 +120,7 @@ export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: s
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<string, React.ReactProperties> = {
   root: { height: '100vh', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', boxSizing: 'border-box' },
   orbWrap: { cursor: 'pointer', display: 'flex', justifyContent: 'center' },
   stateLabel: { marginTop: 'auto', marginBottom: '20px', fontSize: '12px', fontFamily: "'Inter', sans-serif", letterSpacing: '0.6rem', fontWeight: 300, textTransform: 'uppercase', zIndex: 10 },
