@@ -66,7 +66,7 @@ export function useVoiceInput({
   }, [onLevelChange]);
 
   const startRecognition = useCallback(() => {
-    // Prevent multiple instances
+    // Only attempt start if we aren't already speaking
     if (isSpeaking || preventListening || recognitionRef.current) return;
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -80,23 +80,16 @@ export function useVoiceInput({
     rec.onstart = () => onStateChange('listening');
 
     rec.onresult = (event: any) => {
-      // Immediate exit if AI is active
       if (isSpeaking || preventListening) return;
-
-      // Ensure enough time has passed to prevent picking up AI echo
-      const now = Date.now();
-      if (now - lastSpeechEndTime.current < 1000) return;
 
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
           const transcript = event.results[i][0].transcript.trim();
           
-          // Semantic check against AI output
-          if (lastAiResponse && transcript.toLowerCase() === lastAiResponse.toLowerCase()) {
-            return;
+          // Only trigger if we aren't just echoing the last AI message
+          if (transcript && transcript.toLowerCase() !== lastAiResponse.toLowerCase()) {
+            onTranscript(transcript);
           }
-
-          if (transcript) onTranscript(transcript);
         }
       }
     };
@@ -104,9 +97,9 @@ export function useVoiceInput({
     rec.onend = () => {
       recognitionRef.current = null;
       onStateChange('idle');
-      // Automatic recovery loop
+      // Cooldown before next attempt
       if (enabled && !isSpeaking && !preventListening) {
-        restartTimeoutRef.current = setTimeout(startRecognition, 500);
+        restartTimeoutRef.current = setTimeout(startRecognition, 800);
       }
     };
 
@@ -114,15 +107,13 @@ export function useVoiceInput({
       rec.start(); 
       recognitionRef.current = rec; 
     } catch (e) { 
-      // MOBILE FIX: If error occurs, ensure we don't block subsequent starts
       recognitionRef.current = null;
-      console.warn('[VoiceInput] Restarting recognition...'); 
     }
   }, [onTranscript, onStateChange, preventListening, enabled, isSpeaking, lastAiResponse]);
 
   useEffect(() => {
     if (isSpeaking) {
-      // AI active: Kill mic immediately
+      // AI IS SPEAKING: Immediate shutdown
       lastSpeechEndTime.current = Date.now();
       clearTimeout(restartTimeoutRef.current);
       if (recognitionRef.current) {
@@ -130,10 +121,10 @@ export function useVoiceInput({
         recognitionRef.current = null;
       }
     } else if (enabled && !preventListening && !recognitionRef.current) {
-      // AI finished: Delay restart by 1s to allow buffer clear
+      // AI FINISHED: Wait for hardware settle time
       restartTimeoutRef.current = setTimeout(() => {
         initAudio().then(() => startRecognition());
-      }, 1000);
+      }, 1200); // Increased settle time to 1.2s to prevent cut-off
     }
 
     return () => clearTimeout(restartTimeoutRef.current);
