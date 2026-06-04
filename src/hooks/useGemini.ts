@@ -80,43 +80,46 @@ export function useGemini(apiKey: string) {
 `;
 
       // 5. Environment Resolver
-      // Reads VITE_GEMINI_API_KEY first, falling back to the dynamically loaded database prop
-      const envKey = import.meta.env.VITE_GEMINI_API_KEY;
-      const activeKey = (envKey && envKey.startsWith('AQ.')) ? envKey : apiKey;
+      // Reads VITE_MISTRAL_API_KEY first, falling back to the dynamically loaded database prop
+      const envKey = import.meta.env.VITE_MISTRAL_API_KEY;
+      const activeKey = envKey || apiKey;
 
       const payload = {
-        systemInstruction: { 
-          parts: [{ text: `${JARVIS_SYSTEM_PROMPT}\n${timeContext}` }] 
-        },
-        contents: history.current.map(({ role, parts }) => ({ role, parts })),
-        generationConfig: { maxOutputTokens: 220, temperature: 0.75 },
+        model: "mistral-small",
+        messages: [
+          { role: "system", content: `${JARVIS_SYSTEM_PROMPT}\n${timeContext}` },
+          ...history.current.map(({ role, parts }) => ({ 
+            role: role === 'model' ? 'assistant' : 'user', 
+            content: parts[0].text 
+          }))
+        ],
+        temperature: 0.75,
       };
 
-      // Perform direct fetch to Google using the resolved secure key
-      // Perform fetch with Authorization Bearer header for AQ. tokens
-const res = await fetch(GEMINI_ENDPOINT(activeKey), {
-  method: 'POST',
-  headers: { 
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${activeKey}` // Changed from x-goog-api-key
-  },
-  body: JSON.stringify(payload),
-});
+      // Perform fetch with Authorization Bearer header
+      const res = await fetch(GEMINI_ENDPOINT(activeKey), {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${activeKey}`
+        },
+        body: JSON.stringify(payload),
+      });
 
       if (!res.ok) {
         const errText = await res.text();
-        console.error('[Jarvis] Gemini API payload failure:', {
+        console.error('[Jarvis] API payload failure:', {
           status: res.status,
           errorResponse: errText,
           sentPayload: payload,
         });
-        throw new Error(`Gemini error ${res.status}: ${errText}`);
+        throw new Error(`API error ${res.status}: ${errText}`);
       }
 
       const data = await res.json();
       
       const reply: string =
-        data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Standing by, sir.';
+        data?.choices?.[0]?.message?.content || 'Standing by, sir.';
 
       // 6. Append model turn to history
       history.current.push({
