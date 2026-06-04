@@ -30,8 +30,11 @@ export function useVoiceInput({
   const lastSpeechEndTime = useRef(0);
 
   const initAudio = useCallback(async () => {
-    // Only initialize if context is suspended or doesn't exist
-    if (sharedAudioContext && sharedAudioContext.state === 'running') return;
+    // MOBILE FIX: Resume context if it exists but is suspended
+    if (sharedAudioContext) {
+      if (sharedAudioContext.state === 'suspended') await sharedAudioContext.resume();
+      return;
+    }
     
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -111,6 +114,8 @@ export function useVoiceInput({
       rec.start(); 
       recognitionRef.current = rec; 
     } catch (e) { 
+      // MOBILE FIX: If error occurs, ensure we don't block subsequent starts
+      recognitionRef.current = null;
       console.warn('[VoiceInput] Restarting recognition...'); 
     }
   }, [onTranscript, onStateChange, preventListening, enabled, isSpeaking, lastAiResponse]);
