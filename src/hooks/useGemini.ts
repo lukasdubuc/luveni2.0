@@ -93,11 +93,15 @@ export function useGemini(apiKey: string) {
       };
 
       // Perform direct fetch to Google using the resolved secure key
-      const res = await fetch(GEMINI_ENDPOINT(activeKey), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      // Perform fetch with Authorization Bearer header for AQ. tokens
+const res = await fetch(GEMINI_ENDPOINT(activeKey), {
+  method: 'POST',
+  headers: { 
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${activeKey}` // Changed from x-goog-api-key
+  },
+  body: JSON.stringify(payload),
+});
 
       if (!res.ok) {
         const errText = await res.text();
