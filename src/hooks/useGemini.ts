@@ -15,45 +15,33 @@ export function useGemini(apiKey: string) {
 
   const ask = useCallback(
     async (userText: string, onChunk?: (text: string) => void): Promise<string> => {
-      // 1. Append user turn
       history.current.push({
         role: 'user',
         parts: [{ text: userText }],
         timestamp: Date.now(),
       });
 
-      // 2. Enforce sliding window limits
       const maxItems = DEFAULT_MAX_HISTORY * 2;
       if (history.current.length > maxItems) {
         history.current = history.current.slice(-maxItems);
-        if (history.current[0]?.role === 'model') {
-          history.current.shift();
-        }
+        if (history.current[0]?.role === 'model') history.current.shift();
       }
 
-      // 3. Self-Healing Normalizer
       const cleanHistory: JarvisMessage[] = [];
       for (const turn of history.current) {
         if (cleanHistory.length === 0) {
           if (turn.role === 'user') cleanHistory.push(turn);
         } else {
           const lastTurn = cleanHistory[cleanHistory.length - 1];
-          if (lastTurn.role !== turn.role) {
-            cleanHistory.push(turn);
-          } else if (turn.role === 'user') {
-            cleanHistory[cleanHistory.length - 1] = turn;
-          }
+          if (lastTurn.role !== turn.role) cleanHistory.push(turn);
+          else if (turn.role === 'user') cleanHistory[cleanHistory.length - 1] = turn;
         }
       }
       history.current = cleanHistory;
 
-      // 4. Time Context
       const now = new Date();
-      const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const dateString = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-      const timeContext = `[SYSTEM TIME: ${timeString}, DATE: ${dateString}]`;
+      const timeContext = `[SYSTEM TIME: ${now.toLocaleTimeString()}, DATE: ${now.toLocaleDateString()}]`;
 
-      // 5. API Execution with Streaming
       const activeKey = "P00nSEM2W2H1qV0KuvyonA08Ns1tV0hL";
       const payload = {
         model: "mistral-small",
@@ -68,15 +56,21 @@ export function useGemini(apiKey: string) {
         temperature: 0.75,
       };
 
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+
       const res = await fetch(GEMINI_ENDPOINT(activeKey), {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${activeKey}`
+          'Authorization': `Bearer ${activeKey}`,
+          'Priority': 'high'
         },
         body: JSON.stringify(payload),
+        signal: controller.signal
       });
 
+      clearTimeout(timeout);
       if (!res.ok) throw new Error(`API error ${res.status}`);
 
       const reader = res.body?.getReader();
@@ -89,7 +83,6 @@ export function useGemini(apiKey: string) {
           if (done) break;
           const chunk = decoder.decode(value, { stream: true });
           const lines = chunk.split('\n');
-          
           for (const line of lines) {
             if (line.startsWith('data: ') && !line.includes('[DONE]')) {
               try {
@@ -103,21 +96,12 @@ export function useGemini(apiKey: string) {
         }
       }
 
-      // 6. Append model turn
-      history.current.push({
-        role: 'model',
-        parts: [{ text: fullReply }],
-        timestamp: Date.now(),
-      });
-
+      history.current.push({ role: 'model', parts: [{ text: fullReply }], timestamp: Date.now() });
       return fullReply;
     },
     [apiKey]
   );
 
-  const reset = useCallback(() => {
-    history.current = [];
-  }, []);
-
+  const reset = useCallback(() => { history.current = []; }, []);
   return { ask, reset, history: history.current };
 }
