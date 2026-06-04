@@ -6,18 +6,37 @@ import { useEffect, useRef, useCallback } from 'react';
 
 let sharedAudioContext: AudioContext | null = null;
 
+interface UseVoiceInputOptions {
+  onTranscript: (text: string) => void;
+  onStateChange: (state: string) => void;
+  onLevelChange: (level: number) => void;
+  enabled: boolean;
+  isSpeaking: boolean;
+  lastAiResponse: string;
+  preventListening?: boolean;
+}
+
 export function useVoiceInput({ 
-  onTranscript, onStateChange, onLevelChange, enabled, isSpeaking, preventListening 
-}: any) {
+  onTranscript, 
+  onStateChange, 
+  onLevelChange, 
+  enabled, 
+  isSpeaking, 
+  lastAiResponse,
+  preventListening 
+}: UseVoiceInputOptions) {
   const recognitionRef = useRef<any>(null);
   const lastSpeechEndTime = useRef(0);
-  const isStabilizing = useRef(true); // NEW: Gate for AEC calibration
 
   const initAudio = useCallback(async () => {
     if (sharedAudioContext) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
+        audio: { 
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true 
+        } 
       });
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       sharedAudioContext = new AudioCtx();
@@ -28,17 +47,16 @@ export function useVoiceInput({
 
       const dataArray = new Uint8Array(analyzer.frequencyBinCount);
       const updateLevel = () => {
+        if (!analyzer) return;
         analyzer.getByteFrequencyData(dataArray);
         const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
         onLevelChange(avg / 128);
         requestAnimationFrame(updateLevel);
       };
       updateLevel();
-
-      // AEC Stabilizer: Wait 3 seconds before allowing the listener to process audio.
-      // This gives the browser's echo canceller time to learn the speaker profile.
-      setTimeout(() => { isStabilizing.current = false; }, 3000);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error('[VoiceInput] Hardware access blocked:', e);
+    }
   }, [onLevelChange]);
 
   const startRecognition = useCallback(() => {
@@ -52,31 +70,46 @@ export function useVoiceInput({
     rec.interimResults = false; 
     rec.lang = 'en-GB';
 
-    rec.onresult = (event: any) => {
-      // THE GATEKEEPER:
-      // 1. Is AI talking? Block.
-      // 2. Is browser still calibrating AEC? Block.
-      // 3. Did we just finish speaking (1s buffer)? Block.
-      if (isSpeaking || isStabilizing.current || preventListening) return;
+    rec.onstart = () => onStateChange('listening');
 
+    rec.onresult = (event: any) => {
+      // 1. HARD MUTE: Ignore if AI is currently speaking
+      if (isSpeaking || preventListening) return;
+
+      // 2. BUFFER COOLDOWN: 1.5s delay to ensure room silence
       const now = Date.now();
-      if (now - lastSpeechEndTime.current < 1500) return; // 1.5s buffer
+      if (now - lastSpeechEndTime.current < 1500) return;
 
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
-          const transcript = event.results[i][0].transcript;
-          if (transcript.trim()) onTranscript(transcript);
+          const transcript = event.results[i][0].transcript.trim();
+          
+          // 3. ECHO-KILLER: Ignore if it matches exactly what we just said
+          if (lastAiResponse && transcript.toLowerCase() === lastAiResponse.toLowerCase()) {
+            return;
+          }
+
+          if (transcript) onTranscript(transcript);
         }
       }
     };
 
     rec.onend = () => {
       recognitionRef.current = null;
-      if (enabled && !isSpeaking) setTimeout(startRecognition, 100);
+      onStateChange('idle');
+      // Restart loop
+      if (enabled && !isSpeaking) {
+        setTimeout(startRecognition, 100);
+      }
     };
 
-    try { rec.start(); recognitionRef.current = rec; } catch (e) { console.warn(e); }
-  }, [onTranscript, isSpeaking, preventListening, enabled]);
+    try { 
+      rec.start(); 
+      recognitionRef.current = rec; 
+    } catch (e) { 
+      console.warn('[VoiceInput] Recognition start failed:', e); 
+    }
+  }, [onTranscript, onStateChange, preventListening, enabled, isSpeaking, lastAiResponse]);
 
   useEffect(() => {
     if (enabled && !isSpeaking) {
@@ -86,7 +119,10 @@ export function useVoiceInput({
         recognitionRef.current.stop();
         recognitionRef.current = null;
       }
-      if (isSpeaking) lastSpeechEndTime.current = Date.now();
+      // When AI stops speaking, record the timestamp to start the cooldown
+      if (isSpeaking) {
+        lastSpeechEndTime.current = Date.now();
+      }
     }
   }, [enabled, isSpeaking, startRecognition, initAudio]);
 
