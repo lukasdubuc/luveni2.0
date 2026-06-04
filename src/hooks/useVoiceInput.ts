@@ -30,13 +30,11 @@ export function useSpeechRecognition({
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
-    if (!SpeechRecognition) {
-      return;
-    }
+    if (!SpeechRecognition) return;
 
     const rec = new SpeechRecognition();
-    rec.continuous = false; // Only record single queries, preventing long background listening
-    rec.interimResults = false; // Only rely on finalized transcripts
+    rec.continuous = false; 
+    rec.interimResults = false;
     rec.maxAlternatives = 1;
     rec.lang = lang;
 
@@ -58,10 +56,10 @@ export function useSpeechRecognition({
       const transcript = alternative.transcript.trim();
       const confidence = alternative.confidence;
 
-      // Noise and Non-Word Mitigation Filter:
-      // 1. Ignore transcripts containing only empty space or single characters (sighs, pops)
-      // 2. Ignore transcripts with very low recognition confidence scores
-      if (transcript.length > 1 && confidence > 0.45) {
+      // Noise Mitigation:
+      // Increased length requirement and confidence threshold to 
+      // filter out accidental background pops/clicks.
+      if (transcript.length > 2 && confidence > 0.6) {
         onResultRef.current(transcript);
       }
     };
@@ -76,21 +74,13 @@ export function useSpeechRecognition({
 
   const startListening = useCallback(() => {
     if (recognitionRef.current) {
-      try {
-        recognitionRef.current.start();
-      } catch (e) {
-        // Handle cases where engine is already listening
-      }
+      try { recognitionRef.current.start(); } catch (e) {}
     }
   }, []);
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch (e) {
-        // Handle cases where engine is already stopped
-      }
+      try { recognitionRef.current.stop(); } catch (e) {}
     }
   }, []);
 
