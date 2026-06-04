@@ -8,7 +8,6 @@ import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useSpeechOutput } from '../../hooks/useSpeechOutput';
 import { useGemini } from '../../hooks/useGemini';
 import type { OrbState } from '../../types/jarvis';
-import { AGENTS } from '../../lib/jarvis-config';
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -38,44 +37,26 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
   const [lastLine, setLastLine]     = useState('');
   const [isReady, setIsReady]       = useState(false);
   const [isMuted, setIsMuted]       = useState(true);
-  
-  const [telemetry, setTelemetry]   = useState({
-    core: false,
-    vision: false,
-    memory: false
-  });
-  
-  const targetLevelRef = useRef(0);
-  const smoothLevelRef = useRef(0);
+
+  const targetLevelRef  = useRef(0);
+  const smoothLevelRef  = useRef(0);
   const stateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const orbStateRef     = useRef(orbState);
 
-  const orbStateRef = useRef(orbState);
-  useEffect(() => {
-    orbStateRef.current = orbState;
-  }, [orbState]);
+  useEffect(() => { orbStateRef.current = orbState; }, [orbState]);
 
-  // Clear chat text after 15 seconds
   useEffect(() => {
     if (!lastLine) return;
-    const timer = setTimeout(() => {
-      setLastLine('');
-    }, 15000);
-    return () => clearTimeout(timer);
+    const t = setTimeout(() => setLastLine(''), 15000);
+    return () => clearTimeout(t);
   }, [lastLine]);
 
-  // useGemini now securely connects to your backend Edge Function
   const { ask } = useGemini(geminiApiKey);
 
   const changeOrbState = useCallback((newState: OrbState) => {
-    if (stateTimeoutRef.current) {
-      clearTimeout(stateTimeoutRef.current);
-      stateTimeoutRef.current = null;
-    }
-
+    if (stateTimeoutRef.current) { clearTimeout(stateTimeoutRef.current); stateTimeoutRef.current = null; }
     if (newState === 'idle') {
-      stateTimeoutRef.current = setTimeout(() => {
-        setOrbState('idle');
-      }, 750);
+      stateTimeoutRef.current = setTimeout(() => setOrbState('idle'), 750);
     } else {
       setOrbState(newState);
     }
@@ -85,112 +66,52 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     let rafId: number;
     const tick = () => {
       smoothLevelRef.current += (targetLevelRef.current - smoothLevelRef.current) * 0.15;
-      if (Math.abs(smoothLevelRef.current) < 0.001) {
-        smoothLevelRef.current = 0;
-      }
+      if (Math.abs(smoothLevelRef.current) < 0.001) smoothLevelRef.current = 0;
       setAudioLevel(smoothLevelRef.current);
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
-    return () => {
-      cancelAnimationFrame(rafId);
-      if (stateTimeoutRef.current) clearTimeout(stateTimeoutRef.current);
-    };
+    return () => { cancelAnimationFrame(rafId); if (stateTimeoutRef.current) clearTimeout(stateTimeoutRef.current); };
   }, []);
-
-  useEffect(() => {
-    const checkTelemetry = async () => {
-      const coreOnline = !!geminiApiKey && geminiApiKey.length > 10;
-      
-      let visionOnline = false;
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        visionOnline = devices.some(d => d.kind === 'audioinput') && isReady;
-      } catch (e) {
-        visionOnline = false;
-      }
-
-      let memoryOnline = false;
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          const { error } = await supabase.from('memories').select('count').limit(1);
-          if (!error) memoryOnline = true;
-        }
-      } catch (e) {
-        memoryOnline = false;
-      }
-
-      setTelemetry({
-        core: coreOnline,
-        vision: visionOnline,
-        memory: memoryOnline
-      });
-    };
-
-    checkTelemetry();
-    const interval = setInterval(checkTelemetry, 5000);
-    return () => clearInterval(interval);
-  }, [geminiApiKey, isReady]);
 
   const { speak, cancel } = useSpeechOutput({
     onStart: () => changeOrbState('speaking'),
-    onBoundary: (lvl) => { 
-      targetLevelRef.current = lvl; 
-    },
+    onBoundary: (lvl) => { targetLevelRef.current = lvl; },
     onEnd: () => {
       targetLevelRef.current = 0;
-      if (orbStateRef.current === 'speaking') {
-        changeOrbState('idle');
-      }
+      if (orbStateRef.current === 'speaking') changeOrbState('idle');
     },
   });
 
-  const handleTranscript = useCallback(
-    async (text: string) => {
-      if (isMuted) return;
-      setLastLine(text);
-      changeOrbState('thinking');
-      targetLevelRef.current = 0;
-      cancel();
-      try {
-        const reply = await ask(text);
-        setLastLine(reply);
-        speak(reply);
-      } catch (err) {
-        console.error('[Jarvis] Gemini error:', err);
-        speak('I encountered an issue reaching the neural network, sir.');
-      }
-    },
-    [ask, cancel, speak, changeOrbState, isMuted]
-  );
+  const handleTranscript = useCallback(async (text: string) => {
+    if (isMuted) return;
+    setLastLine(text);
+    changeOrbState('thinking');
+    targetLevelRef.current = 0;
+    cancel();
+    try {
+      const reply = await ask(text);
+      setLastLine(reply);
+      speak(reply);
+    } catch (err) {
+      console.error('[Jarvis] error:', err);
+      speak('I encountered an issue reaching the neural network, sir.');
+    }
+  }, [ask, cancel, speak, changeOrbState, isMuted]);
 
   useVoiceInput({
-    onTranscript: (text) => {
-      if (isMuted) return;
-      handleTranscript(text);
-    },
+    onTranscript: (text) => { if (!isMuted) handleTranscript(text); },
     onStateChange: (s) => {
       if (isMuted) return;
-
-      if (s === 'listening') {
-        cancel(); 
-        targetLevelRef.current = 0;
-        smoothLevelRef.current = 0;
-      }
-
+      if (s === 'listening') { cancel(); targetLevelRef.current = 0; smoothLevelRef.current = 0; }
       if (s === 'idle' && orbState === 'speaking') return;
       changeOrbState(s);
     },
     onLevelChange: (lvl) => {
-      if (isMuted) {
-        targetLevelRef.current = 0;
-        return;
-      }
+      if (isMuted) { targetLevelRef.current = 0; return; }
       targetLevelRef.current = lvl;
     },
     enabled: isReady && !isMuted,
-    // Prevents feedback loop by blocking listening during speaker output
     preventListening: orbState === 'speaking' || orbState === 'thinking',
   });
 
@@ -201,31 +122,23 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
         u.volume = 0;
         window.speechSynthesis.speak(u);
       }
-    } catch (e) {
-      console.warn('[Jarvis] Speech synthesis warm up failed:', e);
-    }
+    } catch (e) {}
   };
 
   const handleActionClick = () => {
     warmUpMobileSpeech();
-
     if (!isReady) {
       setIsReady(true);
       setIsMuted(false);
     } else {
       const nextMuted = !isMuted;
       setIsMuted(nextMuted);
-      
       if (nextMuted) {
         cancel();
         setAudioLevel(0);
         targetLevelRef.current = 0;
         smoothLevelRef.current = 0;
-        
-        if (stateTimeoutRef.current) {
-          clearTimeout(stateTimeoutRef.current);
-          stateTimeoutRef.current = null;
-        }
+        if (stateTimeoutRef.current) { clearTimeout(stateTimeoutRef.current); stateTimeoutRef.current = null; }
         setOrbState('idle');
       } else {
         setOrbState('idle');
@@ -235,77 +148,38 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
 
   const handleOrbClick = () => {
     if (!isReady || isMuted) return;
-    
     if (orbState === 'speaking' || orbState === 'thinking') {
-      cancel(); 
+      cancel();
       targetLevelRef.current = 0;
       smoothLevelRef.current = 0;
-      changeOrbState('idle'); 
+      changeOrbState('idle');
     }
   };
 
-  const displayLabel = (isReady && !isMuted && orbState === 'idle') 
-    ? STATE_LABEL['listening'] 
-    : STATE_LABEL[orbState];
-
-  const displayColor = (isReady && !isMuted && orbState === 'idle') 
-    ? STATE_COLOR['listening'] 
-    : STATE_COLOR[orbState];
+  const displayLabel = (isReady && !isMuted && orbState === 'idle') ? STATE_LABEL['listening'] : STATE_LABEL[orbState];
+  const displayColor = (isReady && !isMuted && orbState === 'idle') ? STATE_COLOR['listening'] : STATE_COLOR[orbState];
 
   return (
     <div style={styles.root}>
       <style dangerouslySetInnerHTML={{ __html: `
-        html, body {
-          background-color: #000000 !important;
-          background: #000000 !important;
-        }
-        @media (min-width: 769px) {
-          .jarvis-transcript {
-            font-size: 12px !important;
-            letter-spacing: 10px !important;
-          }
-        }
-        @media (max-width: 768px) {
-          .jarvis-transcript {
-            font-size: 16px !important;
-            letter-spacing: 1.5px !important;
-          }
-        }
+        html, body { background-color: #000000 !important; }
+        @media (min-width: 769px) { .jarvis-transcript { font-size: 12px !important; letter-spacing: 10px !important; } }
+        @media (max-width: 768px) { .jarvis-transcript { font-size: 16px !important; letter-spacing: 1.5px !important; } }
       ` }} />
 
+      {/* 4K HD grid background */}
+      <div style={styles.gridBg} />
+      <div style={styles.gridFade} />
       <div style={styles.scanlines} />
-      <div style={styles.topLabel}>J·A·R·V·I·S — LUVENI</div>
 
-      <div style={styles.agentBadges}>
-        {AGENTS.map((a: { id: string; name: string }) => {
-          const isOnline = telemetry[a.id as keyof typeof telemetry] ?? false;
-          return (
-            <div
-              key={a.id}
-              style={{
-                ...styles.badge,
-                borderColor: isOnline ? 'rgba(0,255,140,0.35)' : 'rgba(255,255,255,0.1)',
-                color:       isOnline ? 'rgba(0,255,140,0.7)'  : 'rgba(255,255,255,0.2)',
-              }}
-            >
-              <span style={{ fontSize: 7, marginRight: 6 }}>{isOnline ? '●' : '○'}</span>
-              {a.name.toUpperCase()}
-            </div>
-          );
-        })}
-      </div>
-
-      <div 
-        style={{ ...styles.orbWrap, cursor: (isReady && !isMuted && (orbState === 'speaking' || orbState === 'thinking')) ? 'pointer' : 'default' }} 
-        onClick={handleOrbClick}
-      >
+      <div style={{ ...styles.orbWrap, cursor: (isReady && !isMuted && (orbState === 'speaking' || orbState === 'thinking')) ? 'pointer' : 'default' }} onClick={handleOrbClick}>
         <NeuralOrb state={orbState} audioLevel={audioLevel} size={400} />
-        <motion.div 
+        <motion.div
           animate={{
-            boxShadow: `0 0 ${100 + audioLevel * 200}px ${STATE_COLOR[orbState].replace('rgba(', 'rgba(').replace(/,[^,]+\)$/, ',0.4)')}`,
+            boxShadow: `0 0 ${100 + audioLevel * 200}px ${STATE_COLOR[orbState].replace(/,[^,]+\)$/, ',0.4)')}`,
             scale: 1.05 + audioLevel * 0.15
           }}
-          style={styles.glowRing} 
+          style={styles.glowRing}
         />
       </div>
 
@@ -336,16 +210,8 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
         whileTap={{ scale: 0.95 }}
         style={{
           ...styles.circularControlBtn,
-          borderColor: !isReady 
-            ? 'rgba(180,100,255,0.4)'
-            : isMuted 
-              ? 'rgba(255,80,80,0.4)'
-              : 'rgba(0,255,255,0.4)',
-          boxShadow: !isReady
-            ? '0 0 20px rgba(180,100,255,0.08)'
-            : isMuted
-              ? '0 0 20px rgba(255,80,80,0.08)'
-              : '0 0 20px rgba(0,255,255,0.08)'
+          borderColor: !isReady ? 'rgba(180,100,255,0.4)' : isMuted ? 'rgba(255,80,80,0.4)' : 'rgba(0,255,255,0.4)',
+          boxShadow:   !isReady ? '0 0 20px rgba(180,100,255,0.08)' : isMuted ? '0 0 20px rgba(255,80,80,0.08)' : '0 0 20px rgba(0,255,255,0.08)',
         }}
         onClick={handleActionClick}
         aria-label={!isReady ? "Initialize J.A.R.V.I.S." : isMuted ? "Unmute J.A.R.V.I.S." : "Mute J.A.R.V.I.S."}
@@ -364,10 +230,6 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
           </svg>
         )}
       </motion.button>
-
-      <div style={styles.bottomMeta}>
-        Gemini 2.5 Flash · Web Speech VAD · Always Listening
-      </div>
     </div>
   );
 }
@@ -376,7 +238,7 @@ const styles: Record<string, React.CSSProperties> = {
   root: {
     position: 'fixed',
     inset: 0,
-    background: '#000000',
+    background: '#00000',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -388,40 +250,40 @@ const styles: Record<string, React.CSSProperties> = {
     userSelect: 'none',
     zIndex: 9999,
   },
-  scanlines: {
+  // Deep space grid — fine lines, perspective fade toward center
+  gridBg: {
+    position: 'absolute',
+    inset: '-20%',
+    backgroundImage: `
+      linear-gradient(rgba(0,180,255,0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,180,255,0.07) 1px, transparent 1px),
+      linear-gradient(rgba(0,180,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,180,255,0.03) 1px, transparent 1px)
+    `,
+    backgroundSize: '80px 80px, 80px 80px, 20px 20px, 20px 20px',
+    backgroundPosition: '-1px -1px, -1px -1px, -1px -1px, -1px -1px',
+    transform: 'perspective(600px) rotateX(12deg)',
+    transformOrigin: 'center 60%',
+    pointerEvents: 'none',
+    zIndex: 0,
+  },
+  // Radial fade — blacks out center so grid lives on edges, orb pops
+  gridFade: {
     position: 'absolute',
     inset: 0,
-    backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.06) 2px, rgba(0,0,0,0.06) 4px)',
+    background: `
+      radial-gradient(ellipse 65% 65% at 50% 50%, #000000 30%, transparent 100%),
+      radial-gradient(ellipse 100% 50% at 50% 100%, #000000 0%, transparent 70%)
+    `,
     pointerEvents: 'none',
     zIndex: 1,
   },
-  topLabel: {
+  scanlines: {
     position: 'absolute',
-    top: 28,
-    fontSize: 10,
-    letterSpacing: 9,
-    color: 'rgba(255,255,255,0.12)',
-    zIndex: 10,
-  },
-  agentBadges: {
-    position: 'absolute',
-    top: 24,
-    right: 28,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6,
-    alignItems: 'flex-end',
-    zIndex: 10,
-  },
-  badge: {
-    fontSize: 9,
-    letterSpacing: 2,
-    padding: '4px 14px',
-    border: '1px solid',
-    borderRadius: 9999,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
+    inset: 0,
+    backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.04) 2px, rgba(0,0,0,0.04) 4px)',
+    pointerEvents: 'none',
+    zIndex: 2,
   },
   orbWrap: {
     position: 'relative',
@@ -467,7 +329,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: '56px',
     height: '56px',
     borderRadius: '9999px',
-    background: 'rgba(13, 13, 30, 0.4)',
+    background: 'rgba(13,13,30,0.4)',
     backdropFilter: 'blur(16px)',
     WebkitBackdropFilter: 'blur(16px)',
     border: '1px solid',
@@ -478,12 +340,5 @@ const styles: Record<string, React.CSSProperties> = {
     transition: 'border-color 0.3s ease, box-shadow 0.3s ease',
     zIndex: 20,
     outline: 'none',
-  },
-  bottomMeta: {
-    position: 'absolute',
-    bottom: 20,
-    fontSize: 8,
-    letterSpacing: 2,
-    color: 'rgba(255,255,255,0.1)',
   },
 };
