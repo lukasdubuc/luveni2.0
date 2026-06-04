@@ -2,8 +2,10 @@
 //  J.A.R.V.I.S — Luveni GM  |  components/jarvis/NeuralOrb.tsx
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useRef } from 'react';
-import type { OrbState } from '../../types/jarvis';
+import React, { useEffect, useRef } from 'react';
+
+// Inlining the type to resolve the circular dependency/build error
+export type OrbState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';
 
 interface NeuralOrbProps {
   state:      OrbState;
@@ -11,7 +13,6 @@ interface NeuralOrbProps {
   size?:      number;
 }
 
-// ── Vertex Shader ─────────────────────────────────────────────
 const VERT = `
 precision highp float;
 varying vec3 vNormal;
@@ -26,7 +27,6 @@ void main() {
 }
 `;
 
-// ── Backing sphere — solid dark glass core, no additive blowout
 const FRAG_BACK = `
 precision highp float;
 uniform float uTime;
@@ -47,28 +47,22 @@ void main() {
   vec3 viewDir = normalize(vViewPosition);
   float ndotv  = max(dot(normal, viewDir), 0.0);
   float t      = uTime * 0.4;
-
   vec3 p  = vPosition * 2.0 + vec3(t*0.1, t*0.07, t*0.05);
   float n = noise(p)*0.6 + noise(p*2.1)*0.4;
 
-  // State-driven deep interior color
   vec3 c0, c1;
   if(uState < 0.5){      c0=vec3(0.04,0.0,0.12);  c1=vec3(0.12,0.0,0.30); }
   else if(uState < 1.5){ c0=vec3(0.0,0.02,0.14);  c1=vec3(0.0,0.08,0.35); }
   else if(uState < 2.5){ c0=vec3(0.08,0.0,0.18);  c1=vec3(0.25,0.0,0.45); }
-  else {                  c0=vec3(0.0,0.06,0.10);  c1=vec3(0.0,0.18,0.28); }
+  else {                 c0=vec3(0.0,0.06,0.10);  c1=vec3(0.0,0.18,0.28); }
 
   vec3 col = mix(c0, c1, n);
-  // Slightly brighter at mid-sphere for depth illusion
   float midGlow = smoothstep(0.0,0.5,ndotv)*smoothstep(1.0,0.5,ndotv);
   col = mix(col*0.4, col*1.6, midGlow);
-
-  // Fully opaque — this is what kills the holes
   gl_FragColor = vec4(col, 1.0);
 }
 `;
 
-// ── Original filament shader — UNCHANGED ─────────────────────
 const FRAG = `
 precision highp float;
 uniform float uTime;
@@ -94,8 +88,8 @@ void main() {
   vec3 normal  = normalize(vNormal);
   vec3 viewDir = normalize(vViewPosition);
   float ndotv  = max(dot(normal, viewDir), 0.0);
-  float fresnel    = pow(1.0-ndotv, 2.5);
-  float sharpRim   = pow(1.0-ndotv, 12.0);
+  float fresnel = pow(1.0-ndotv, 2.5);
+  float sharpRim = pow(1.0-ndotv, 12.0);
   float t = uTime*0.8;
   vec3 p  = vPosition*1.8;
 
@@ -104,11 +98,10 @@ void main() {
   float n3 = liquidNoise(p-vec3(0.3,0.4,-0.5), t*1.15);
 
   float thick = 0.035 + uAudio*0.12;
-  float band1 = pow(smoothstep(thick,       0.0, abs(n1-0.12)), 2.6);
-  float band2 = pow(smoothstep(thick+0.01,  0.0, abs(n2+0.15)), 2.6);
-  float band3 = pow(smoothstep(thick*1.1,   0.0, abs(n3-0.25)), 3.0);
+  float band1 = pow(smoothstep(thick, 0.0, abs(n1-0.12)), 2.6);
+  float band2 = pow(smoothstep(thick+0.01, 0.0, abs(n2+0.15)), 2.6);
+  float band3 = pow(smoothstep(thick*1.1, 0.0, abs(n3-0.25)), 3.0);
 
-  // State-based palette
   vec3 neonCyan, electricBlue, magenta, hotPink, deepIndigo;
   if(uState < 0.5){
     neonCyan=vec3(0.0,0.95,1.0); electricBlue=vec3(0.02,0.22,1.0);
@@ -124,11 +117,11 @@ void main() {
     magenta=vec3(0.0,0.6,1.0); hotPink=vec3(0.0,1.0,0.5); deepIndigo=vec3(0.0,0.5,0.8);
   }
 
-  float diagonal  = dot(normal, normalize(vec3(0.7,-0.7,0.4)))*0.5+0.5;
-  vec3  rimColor  = mix(magenta, neonCyan, diagonal);
-  vec3  col1 = mix(magenta,      hotPink,      sin(t+p.z)*0.5+0.5);
-  vec3  col2 = mix(electricBlue, neonCyan,     cos(t-p.x)*0.5+0.5);
-  vec3  col3 = mix(deepIndigo,   magenta,      sin(t*1.2)*0.5+0.5);
+  float diagonal = dot(normal, normalize(vec3(0.7,-0.7,0.4)))*0.5+0.5;
+  vec3 rimColor = mix(magenta, neonCyan, diagonal);
+  vec3 col1 = mix(magenta, hotPink, sin(t+p.z)*0.5+0.5);
+  vec3 col2 = mix(electricBlue, neonCyan, cos(t-p.x)*0.5+0.5);
+  vec3 col3 = mix(deepIndigo, magenta, sin(t*1.2)*0.5+0.5);
 
   vec3 finalColor = vec3(0.0);
   finalColor += band1*col1*3.5;
@@ -137,10 +130,8 @@ void main() {
   finalColor += fresnel*rimColor*2.8;
   finalColor += sharpRim*neonCyan*4.0;
 
-  // No centerDarkness mix — backing sphere handles that
   float alpha = fresnel*0.65 + band1*0.9 + band2*0.9 + band3*0.9 + sharpRim*1.0;
   alpha = clamp(alpha, 0.0, 0.96);
-
   gl_FragColor = vec4(finalColor, alpha);
 }
 `;
@@ -173,7 +164,6 @@ export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbPr
   const mountRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef(0);
   const stateRef = useRef(0);
-
   const ctx = useRef<{
     renderer: any; uBack: any; uFilament: any; clock: any;
     geoBack?: any; matBack?: any; geoFil?: any; matFil?: any;
@@ -183,7 +173,7 @@ export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbPr
   useEffect(() => {
     stateRef.current = STATE_NUM[state];
     if (ctx.current) {
-      ctx.current.uBack.uState.value     = stateRef.current;
+      ctx.current.uBack.uState.value = stateRef.current;
       ctx.current.uFilament.uState.value = stateRef.current;
     }
   }, [state]);
@@ -192,78 +182,60 @@ export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbPr
     if (!mountRef.current) return;
     let active = true;
     let rafId: number | null = null;
-
     loadThree()
       .then(() => { if (active && mountRef.current) boot(); })
       .catch(e => console.error('[NeuralOrb]', e));
 
     function boot() {
       const THREE = (window as any).THREE;
-      const el    = mountRef.current!;
+      const el = mountRef.current!;
       el.querySelector('canvas')?.remove();
-
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
-      renderer.setPixelRatio(dpr);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.setSize(size, size);
       renderer.setClearColor(0x000000, 0);
-      renderer.sortObjects = true;
-
       const canvas = renderer.domElement as HTMLCanvasElement;
-      canvas.style.cssText = 'width:100%;height:100%;display:block;position:absolute;top:0;left:0;overflow:visible;';
+      canvas.style.cssText = 'width:100%;height:100%;display:block;position:absolute;top:0;left:0;';
       el.appendChild(canvas);
 
-      const scene  = new THREE.Scene();
+      const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
       camera.position.z = 3.0;
 
-      // ── Backing sphere — opaque, NormalBlending, renders first ──
       const geoBack = new THREE.SphereGeometry(0.995, 64, 64);
-      const uBack   = { uTime: {value:0}, uState: {value:0} };
+      const uBack = { uTime: {value:0}, uState: {value:0} };
       const matBack = new THREE.ShaderMaterial({
         vertexShader: VERT, fragmentShader: FRAG_BACK,
-        uniforms: uBack, transparent: false,
-        depthWrite: true, side: THREE.FrontSide,
+        uniforms: uBack, transparent: false, depthWrite: true, side: THREE.FrontSide,
       });
       const meshBack = new THREE.Mesh(geoBack, matBack);
-      meshBack.renderOrder = 0;
       scene.add(meshBack);
 
-      // ── Filament sphere — additive on top ────────────────────
       const geoFil = new THREE.SphereGeometry(1.0, 64, 64);
       const uFilament = { uTime: {value:0}, uAudio: {value:0}, uState: {value:0} };
       const matFil = new THREE.ShaderMaterial({
         vertexShader: VERT, fragmentShader: FRAG,
-        uniforms: uFilament, transparent: true,
-        depthWrite: false, blending: THREE.AdditiveBlending,
-        side: THREE.FrontSide,
+        uniforms: uFilament, transparent: true, depthWrite: false,
+        blending: THREE.AdditiveBlending, side: THREE.FrontSide,
       });
       const meshFil = new THREE.Mesh(geoFil, matFil);
-      meshFil.renderOrder = 1;
       scene.add(meshFil);
 
       const clock = new THREE.Clock();
-
       const tick = () => {
         if (!active) return;
         rafId = requestAnimationFrame(tick);
         const t = clock.getElapsedTime();
-        uBack.uTime.value        = t;
-        uFilament.uTime.value    = t;
-        uFilament.uAudio.value   = audioRef.current;
-
-        // Slow shared rotation
+        uBack.uTime.value = t;
+        uFilament.uTime.value = t;
+        uFilament.uAudio.value = audioRef.current;
         const ry = t * 0.08;
         const rx = Math.sin(t * 0.05) * 0.06;
-        meshBack.rotation.y = ry;
-        meshBack.rotation.x = rx;
-        meshFil.rotation.y  = ry;
-        meshFil.rotation.x  = rx;
-
+        meshBack.rotation.y = meshFil.rotation.y = ry;
+        meshBack.rotation.x = meshFil.rotation.x = rx;
         renderer.render(scene, camera);
       };
       tick();
-
       ctx.current = { renderer, uBack, uFilament, clock, geoBack, matBack, geoFil, matFil };
     }
 
@@ -273,19 +245,13 @@ export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbPr
       if (ctx.current) {
         const { renderer, geoBack, matBack, geoFil, matFil } = ctx.current;
         geoBack?.dispose(); matBack?.dispose();
-        geoFil?.dispose();  matFil?.dispose();
-        renderer?.dispose(); renderer?.forceContextLoss?.();
+        geoFil?.dispose(); matFil?.dispose();
+        renderer?.dispose();
         ctx.current = null;
       }
       mountRef.current?.querySelector('canvas')?.remove();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [size]);
 
-  return (
-    <div
-      ref={mountRef}
-      style={{ position: 'relative', width: `${size}px`, height: `${size}px`, overflow: 'visible' }}
-    />
-  );
+  return <div ref={mountRef} style={{ position: 'relative', width: `${size}px`, height: `${size}px` }} />;
 }
