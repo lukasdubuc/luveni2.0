@@ -159,17 +159,41 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
   const displayLabel = (isReady && !isMuted && orbState === 'idle') ? STATE_LABEL['listening'] : STATE_LABEL[orbState];
   const displayColor = (isReady && !isMuted && orbState === 'idle') ? STATE_COLOR['listening'] : STATE_COLOR[orbState];
 
+  // Extract RGB from current state color for dynamic shadow
+  const shadowColor = STATE_COLOR[orbState].replace('rgba(', '').replace(/,[^,]+\)$/, '');
+  const shadowOpacity = 0.12 + audioLevel * 0.22;
+  const shadowSize = 180 + audioLevel * 120;
+
+  // Desktop fullscreen on first interaction
+  useEffect(() => {
+    if (window.innerWidth <= 768) return;
+    const requestFS = () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen?.().catch(() => {});
+      }
+    };
+    window.addEventListener('click', requestFS, { once: true });
+    return () => window.removeEventListener('click', requestFS);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div style={styles.root}>
       <style dangerouslySetInnerHTML={{ __html: `
-        html, body { background-color: #000000 !important; }
+        html, body { background-color: #020408 !important; margin: 0; padding: 0; }
         @media (min-width: 769px) { .jarvis-transcript { font-size: 12px !important; letter-spacing: 10px !important; } }
         @media (max-width: 768px) { .jarvis-transcript { font-size: 16px !important; letter-spacing: 1.5px !important; } }
+        :fullscreen { background: #020408 !important; }
+        :-webkit-full-screen { background: #020408 !important; }
       ` }} />
 
-      {/* 4K HD grid background */}
+      {/* Crisp grid — full coverage, no transforms */}
       <div style={styles.gridBg} />
-      <div style={styles.gridFade} />
+      {/* Organic orb shadow — moves with audio level */}
+      <div style={{
+        ...styles.orbShadow,
+        background: `radial-gradient(ellipse ${shadowSize}px ${shadowSize * 0.55}px at 50% 52%, rgba(${shadowColor},${shadowOpacity}) 0%, transparent 70%)`,
+      }} />
       <div style={styles.scanlines} />
 
       <div style={{ ...styles.orbWrap, cursor: (isReady && !isMuted && (orbState === 'speaking' || orbState === 'thinking')) ? 'pointer' : 'default' }} onClick={handleOrbClick}>
@@ -238,7 +262,7 @@ const styles: Record<string, React.CSSProperties> = {
   root: {
     position: 'fixed',
     inset: 0,
-    background: '#00000',
+    background: '#020408',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -250,32 +274,29 @@ const styles: Record<string, React.CSSProperties> = {
     userSelect: 'none',
     zIndex: 9999,
   },
-  // Crisp flat grid — no transforms, pixel-perfect 1px lines
+  // Pixel-perfect grid — crisp 1px lines, deep navy base so it reads as space not void
   gridBg: {
     position: 'absolute',
     inset: 0,
     backgroundImage: `
-      linear-gradient(rgba(0,180,255,0.09) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0,180,255,0.09) 1px, transparent 1px),
-      linear-gradient(rgba(0,180,255,0.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0,180,255,0.04) 1px, transparent 1px)
+      linear-gradient(rgba(0,160,255,0.13) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,160,255,0.13) 1px, transparent 1px),
+      linear-gradient(rgba(0,160,255,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,160,255,0.05) 1px, transparent 1px)
     `,
     backgroundSize: '80px 80px, 80px 80px, 20px 20px, 20px 20px',
-    backgroundPosition: '0 0, 0 0, 0 0, 0 0',
-    imageRendering: 'crisp-edges' as const,
+    backgroundPosition: '0 0',
+    imageRendering: 'pixelated' as const,
     pointerEvents: 'none',
     zIndex: 0,
   },
-  // Radial fade — blacks out center so grid lives on edges, orb pops
-  gridFade: {
+  // Organic orb shadow — rendered inline so it reacts to audioLevel + state color
+  orbShadow: {
     position: 'absolute',
     inset: 0,
-    background: `
-      radial-gradient(ellipse 65% 65% at 50% 50%, #000000 30%, transparent 100%),
-      radial-gradient(ellipse 100% 50% at 50% 100%, #000000 0%, transparent 70%)
-    `,
     pointerEvents: 'none',
     zIndex: 1,
+    transition: 'background 0.15s ease',
   },
   scanlines: {
     position: 'absolute',
