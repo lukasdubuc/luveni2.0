@@ -543,6 +543,21 @@ function AdminPage() {
     }
   };
 
+  // ── Handler: Navigate to Jarvis with fullscreen ─────────────────────────
+  const handleOpenJarvis = async () => {
+    try {
+      if (
+        document.documentElement.requestFullscreen &&
+        !document.fullscreenElement
+      ) {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch (e) {
+      // Fullscreen denied or unavailable — proceed anyway
+    }
+    navigate({ to: "/admin/jarvis" });
+  };
+
   // ── Computed: Revenue ───────────────────────────────────────────────────
   const filterByRange = (date: Date, range: typeof revenueRange) => {
     const now = new Date();
@@ -763,8 +778,10 @@ function AdminPage() {
           <div className="space-y-12">
             <div className="flex items-center justify-between">
               <h1 className="text-2xl font-bold uppercase tracking-tighter">Overview</h1>
+
+              {/* ── JARVIS BUTTON — requests fullscreen then navigates ── */}
               <button
-                onClick={() => navigate({ to: "/admin/jarvis" })}
+                onClick={handleOpenJarvis}
                 className={`text-[10px] font-bold uppercase px-6 py-3 border transition-all ${
                   isDark
                     ? "border-white/20 text-white hover:bg-white/5"
@@ -1502,8 +1519,6 @@ function AdminPage() {
             </div>
           </div>
         )}
-
-
 
       </main>
 
