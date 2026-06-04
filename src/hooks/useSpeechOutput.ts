@@ -4,10 +4,11 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 
-// Extend window to hold our persistent utterance
+// Extend window to hold our persistent utterance and heartbeat
 declare global {
   interface Window {
     jarvisUtterance: SpeechSynthesisUtterance | null;
+    jarvisHeartbeat: NodeJS.Timeout | null;
   }
 }
 
@@ -69,23 +70,29 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     window.speechSynthesis.cancel();
     speaking.current = true;
 
+    // HEARTBEAT FIX: Prevents browser power-save from suspending audio thread
+    if (window.jarvisHeartbeat) clearInterval(window.jarvisHeartbeat);
+    window.jarvisHeartbeat = setInterval(() => {
+        window.speechSynthesis.pause();
+        window.speechSynthesis.resume();
+    }, 5000);
+
     const utt = new SpeechSynthesisUtterance(text);
     utt.rate = 0.93;
     utt.pitch = 0.78;
     utt.voice = voice;
 
-    // PERSISTENCE FIX: Assign to global window object so GC doesn't kill it
     window.jarvisUtterance = utt;
 
     utt.onstart = () => { if (onStartRef.current) onStartRef.current(); };
     utt.onboundary = () => { if (onBoundaryRef.current) onBoundaryRef.current(0.3 + Math.random() * 0.55); };
     
     const handleEnd = () => {
+      if (window.jarvisHeartbeat) clearInterval(window.jarvisHeartbeat);
       if (!speaking.current) return;
       speaking.current = false;
       window.jarvisUtterance = null;
       
-      // 500ms delay ensures the final syllable completes fully before triggering onEnd
       setTimeout(() => {
         if (onEndRef.current) onEndRef.current();
       }, 500);
@@ -110,6 +117,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
   const cancel = useCallback(() => {
     window.speechSynthesis.cancel();
+    if (window.jarvisHeartbeat) clearInterval(window.jarvisHeartbeat);
     speaking.current = false;
     window.jarvisUtterance = null;
   }, []);
