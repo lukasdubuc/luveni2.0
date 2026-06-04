@@ -53,11 +53,17 @@ export default function JarvisHub({ geminiApiKey, autoStart }: JarvisHubProps) {
   }, [lastLine]);
 
   // ── autoStart: skip the manual tap, go live immediately ─────────────────
+  // Mirrors what handleActionClick + handleOrbClick do when unmuting:
+  // cancel any audio, zero levels, then set orbState to 'idle' so the
+  // displayColor/displayLabel logic resolves to the cyan LISTENING state.
   useEffect(() => {
     if (!autoStart) return;
     warmUpMobileSpeech();
+    targetLevelRef.current = 0;
+    smoothLevelRef.current = 0;
     setIsReady(true);
     setIsMuted(false);
+    setOrbState('idle'); // triggers cyan LISTENING display immediately
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStart]);
 
