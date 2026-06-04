@@ -27,10 +27,8 @@ export function useVoiceInput({
 }: UseVoiceInputOptions) {
   const recognitionRef = useRef<any>(null);
   const restartTimeoutRef = useRef<NodeJS.Timeout>();
-  const lastSpeechEndTime = useRef(0);
 
   const initAudio = useCallback(async () => {
-    // MOBILE FIX: Resume context if it exists but is suspended
     if (sharedAudioContext) {
       if (sharedAudioContext.state === 'suspended') await sharedAudioContext.resume();
       return;
@@ -66,7 +64,7 @@ export function useVoiceInput({
   }, [onLevelChange]);
 
   const startRecognition = useCallback(() => {
-    // Only attempt start if we aren't already speaking
+    // Hard-lock: Do not start if AI is currently speaking
     if (isSpeaking || preventListening || recognitionRef.current) return;
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -86,7 +84,6 @@ export function useVoiceInput({
         if (event.results[i].isFinal) {
           const transcript = event.results[i][0].transcript.trim();
           
-          // Only trigger if we aren't just echoing the last AI message
           if (transcript && transcript.toLowerCase() !== lastAiResponse.toLowerCase()) {
             onTranscript(transcript);
           }
@@ -113,18 +110,20 @@ export function useVoiceInput({
 
   useEffect(() => {
     if (isSpeaking) {
-      // AI IS SPEAKING: Immediate shutdown
-      lastSpeechEndTime.current = Date.now();
+      // AI IS SPEAKING: Immediate shutdown of microphone
       clearTimeout(restartTimeoutRef.current);
       if (recognitionRef.current) {
         try { recognitionRef.current.stop(); } catch (e) {}
         recognitionRef.current = null;
       }
     } else if (enabled && !preventListening && !recognitionRef.current) {
-      // AI FINISHED: Wait for hardware settle time
+      // AI FINISHED: Wait for hardware/audio settle time
       restartTimeoutRef.current = setTimeout(() => {
-        initAudio().then(() => startRecognition());
-      }, 1200); // Increased settle time to 1.2s to prevent cut-off
+        // Double-check isSpeaking inside the timeout for safety
+        if (!isSpeaking) {
+          initAudio().then(() => startRecognition());
+        }
+      }, 1200); 
     }
 
     return () => clearTimeout(restartTimeoutRef.current);
