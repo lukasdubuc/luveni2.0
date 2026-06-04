@@ -13,7 +13,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 interface JarvisHubProps {
   geminiApiKey: string;
-  autoStart?: boolean;   // ← NEW: skip the power button, go live immediately
+  autoStart?: boolean;
 }
 
 const STATE_LABEL: Record<OrbState, string> = {
@@ -32,7 +32,7 @@ const STATE_COLOR: Record<OrbState, string> = {
   error:     'rgba(255,80,80,1.0)',
 };
 
-export default function JarvisHub({ geminiApiKey, autoStart = false }: JarvisHubProps) {
+export default function JarvisHub({ geminiApiKey, autoStart }: JarvisHubProps) {
   const [orbState, setOrbState]     = useState<OrbState>('idle');
   const [audioLevel, setAudioLevel] = useState(0);
   const [lastLine, setLastLine]     = useState('');
@@ -52,19 +52,13 @@ export default function JarvisHub({ geminiApiKey, autoStart = false }: JarvisHub
     return () => clearTimeout(t);
   }, [lastLine]);
 
-  // ── AUTO-START: go live immediately on mount when prop is set ────────────
+  // ── autoStart: skip the manual tap, go live immediately ─────────────────
   useEffect(() => {
     if (!autoStart) return;
-    // Warm up mobile speech synthesis (same as handleActionClick does)
-    try {
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        const u = new SpeechSynthesisUtterance('');
-        u.volume = 0;
-        window.speechSynthesis.speak(u);
-      }
-    } catch (e) {}
+    warmUpMobileSpeech();
     setIsReady(true);
     setIsMuted(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStart]);
 
   const { ask } = useGemini(geminiApiKey);
@@ -175,13 +169,17 @@ export default function JarvisHub({ geminiApiKey, autoStart = false }: JarvisHub
   const displayLabel = (isReady && !isMuted && orbState === 'idle') ? STATE_LABEL['listening'] : STATE_LABEL[orbState];
   const displayColor = (isReady && !isMuted && orbState === 'idle') ? STATE_COLOR['listening'] : STATE_COLOR[orbState];
 
+  // Extract RGB from current state color for dynamic shadow
   const shadowColor = STATE_COLOR[orbState].replace('rgba(', '').replace(/,[^,]+\)$/, '');
   const shadowOpacity = 0.12 + audioLevel * 0.22;
   const shadowSize = 180 + audioLevel * 120;
 
-  // Desktop fullscreen on first interaction
+  // Desktop fullscreen on first interaction — skipped when autoStart already
+  // triggered fullscreen from the parent page before navigation
   useEffect(() => {
     if (window.innerWidth <= 768) return;
+    // If already fullscreen (e.g. initiated by JARVIS HUB button), skip
+    if (document.fullscreenElement) return;
     const requestFS = () => {
       if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen?.().catch(() => {});
@@ -202,7 +200,9 @@ export default function JarvisHub({ geminiApiKey, autoStart = false }: JarvisHub
         :-webkit-full-screen { background: #020408 !important; }
       ` }} />
 
+      {/* Crisp grid — full coverage, no transforms */}
       <div style={styles.gridBg} />
+      {/* Organic orb shadow — moves with audio level */}
       <div style={{
         ...styles.orbShadow,
         background: `radial-gradient(ellipse ${shadowSize}px ${shadowSize * 0.55}px at 50% 52%, rgba(${shadowColor},${shadowOpacity}) 0%, transparent 70%)`,
@@ -287,6 +287,7 @@ const styles: Record<string, React.CSSProperties> = {
     userSelect: 'none',
     zIndex: 9999,
   },
+  // Pixel-perfect grid — crisp 1px lines, deep navy base so it reads as space not void
   gridBg: {
     position: 'absolute',
     inset: 0,
@@ -302,6 +303,7 @@ const styles: Record<string, React.CSSProperties> = {
     pointerEvents: 'none',
     zIndex: 0,
   },
+  // Organic orb shadow — rendered inline so it reacts to audioLevel + state color
   orbShadow: {
     position: 'absolute',
     inset: 0,
