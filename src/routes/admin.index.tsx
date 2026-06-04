@@ -6,7 +6,7 @@ import { offer } from "@/config/site";
 import { toast } from "sonner";
 import { Edit3, Archive, X, Menu, RefreshCw, BarChart2, Lock, CheckSquare, Square, Trash2, Eye, EyeOff, GripVertical, Users, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { requireAdmin } from "@/lib/admin-guard";
-import JarvisHub from "@/components/jarvis/JarvisHub";
+
 
 // ────────────────────────────────────────────────────────────────────────────
 // TYPES & ROUTE DEFINITION
@@ -763,9 +763,16 @@ function AdminPage() {
           <div className="space-y-12">
             <div className="flex items-center justify-between">
               <h1 className="text-2xl font-bold uppercase tracking-tighter">Overview</h1>
-              <div className="relative z-50">
-                <JarvisHub geminiApiKey={import.meta.env.VITE_GEMINI_API_KEY ?? ""} />
-              </div>
+              <button
+                onClick={() => navigate({ to: "/admin/jarvis" })}
+                className={`text-[10px] font-bold uppercase px-6 py-3 border transition-all ${
+                  isDark
+                    ? "border-white/20 text-white hover:bg-white/5"
+                    : "border-black/10 text-black hover:bg-black/5"
+                }`}
+              >
+                JARVIS HUB →
+              </button>
             </div>
 
             {/* Period Selector */}
