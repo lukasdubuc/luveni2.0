@@ -1,6 +1,5 @@
 // ─────────────────────────────────────────────────────────────
 //  J.A.R.V.I.S — Luveni GM  |  hooks/useSpeechRecognition.ts
-//  Noise-filtered speech-to-text hook
 // ─────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -33,19 +32,19 @@ export function useSpeechRecognition({
     if (!SpeechRecognition) return;
 
     const rec = new SpeechRecognition();
-    rec.continuous = false; 
+    rec.continuous = false;
     rec.interimResults = false;
     rec.maxAlternatives = 1;
     rec.lang = lang;
 
     rec.onstart = () => {
       setIsListening(true);
-      onListeningStateChange?.(true);
+      if (onListeningStateChange) onListeningStateChange(true);
     };
 
     rec.onend = () => {
       setIsListening(false);
-      onListeningStateChange?.(false);
+      if (onListeningStateChange) onListeningStateChange(false);
     };
 
     rec.onresult = (event: any) => {
@@ -56,9 +55,6 @@ export function useSpeechRecognition({
       const transcript = alternative.transcript.trim();
       const confidence = alternative.confidence;
 
-      // Noise Mitigation:
-      // Increased length requirement and confidence threshold to 
-      // filter out accidental background pops/clicks.
       if (transcript.length > 2 && confidence > 0.6) {
         onResultRef.current(transcript);
       }
@@ -66,7 +62,7 @@ export function useSpeechRecognition({
 
     rec.onerror = () => {
       setIsListening(false);
-      onListeningStateChange?.(false);
+      if (onListeningStateChange) onListeningStateChange(false);
     };
 
     recognitionRef.current = rec;
