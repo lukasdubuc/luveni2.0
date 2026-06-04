@@ -1,6 +1,5 @@
 // ─────────────────────────────────────────────────────────────
 //  J.A.R.V.I.S — Luveni GM  |  hooks/useSpeechOutput.ts
-//  Cross-platform male British voice — desktop + iOS + Android
 // ─────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useRef } from 'react';
@@ -68,12 +67,12 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     utt.pitch = 0.78;
     utt.voice = voice;
 
-    utt.onstart = () => onStartRef.current?.();
-    utt.onboundary = () => onBoundaryRef.current?.(0.3 + Math.random() * 0.55);
+    utt.onstart = () => { if (onStartRef.current) onStartRef.current(); };
+    utt.onboundary = () => { if (onBoundaryRef.current) onBoundaryRef.current(0.3 + Math.random() * 0.55); };
     
     const handleEnd = () => {
       speaking.current = false;
-      onEndRef.current?.();
+      if (onEndRef.current) onEndRef.current();
     };
 
     utt.onend = handleEnd;
