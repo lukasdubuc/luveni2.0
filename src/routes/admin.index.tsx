@@ -70,7 +70,7 @@ type AdminUser = {
 };
 
 // ── NavSection type defined at module level (outside the component) ──────────
-type NavSection = "overview" | "products" | "orders" | "leads" | "analytics" | "settings" | "jarvishub";
+type NavSection = "overview" | "products" | "orders" | "leads" | "analytics" | "settings";
 
 export const Route = createFileRoute("/admin/")({
   head: () => ({
@@ -84,7 +84,7 @@ function AdminPage() {
   const navigate = useNavigate();
 
   // ── navSections defined inside the component ─────────────────────────────
-  const navSections: NavSection[] = ["overview", "products", "orders", "leads", "analytics", "settings", "jarvishub"];
+  const navSections: NavSection[] = ["overview", "products", "orders", "leads", "analytics", "settings"];
 
   // ── section state uses the NavSection type ───────────────────────────────
   const [section, setSection] = useState<NavSection>("overview");
@@ -1496,15 +1496,7 @@ function AdminPage() {
           </div>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════
-            JARVISHUB — full-page section
-        ════════════════════════════════════════════════════════════════ */}
-        {section === "jarvishub" && (
-          <div className="space-y-8">
-            <h1 className="text-2xl font-bold uppercase tracking-tighter">JarvisHub</h1>
-            <JarvisHub geminiApiKey={import.meta.env.VITE_GEMINI_API_KEY ?? ""} />
-          </div>
-        )}
+
 
       </main>
 
