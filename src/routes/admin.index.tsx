@@ -750,9 +750,8 @@ function AdminPage() {
   }, [analyticsEvents]);
 
   // ── Nav sections ────────────────────────────────────────────────────────
-  const navSections = ["overview", "products", "orders", "leads", "analytics", "settings"];
-
-  return (
+ type NavSection = "overview" | "products" | "orders" | "leads" | "analytics" | "settings" | "jarvishub";
+ const [section, setSection] = useState<NavSection>("overview");
     <div className={`min-h-screen ${isDark ? "bg-black text-white" : "bg-white text-black"}`}>
       {/* ── NAV ── */}
       <nav className={`sticky top-0 z-50 md:border-b-0 ${isDark ? "md:bg-black md:border-0 border-b border-white/10 bg-black" : "md:bg-white md:border-0 border-b border-gray-100 bg-white"}`}>
@@ -801,26 +800,33 @@ function AdminPage() {
         {/* ════════════════════════════════════════════════════════════════
             OVERVIEW
         ════════════════════════════════════════════════════════════════ */}
-        {section === "overview" && (
-          <div className="space-y-12">
-            <div><h1 className="text-2xl font-bold uppercase tracking-tighter">Overview</h1></div>
+       {section === "overview" && (
+  <div className="space-y-12">
+    {/* Header with JarvisHub positioned in the top-right of the Overview area */}
+    <div className="flex items-center justify-between">
+      <h1 className="text-2xl font-bold uppercase tracking-tighter">Overview</h1>
+      <div className="relative z-50">
+        <JarvisHub geminiApiKey="YOUR_API_KEY_HERE" />
+      </div>
+    </div>
 
-            {/* Period Selector */}
-            <div className="flex gap-4">
-              {["day", "week", "month", "all"].map(r => (
-                <button
-                  key={r}
-                  onClick={() => setRevenueRange(r as any)}
-                  className={`text-[9px] font-bold uppercase px-4 py-2 transition-all ${
-                    revenueRange === r
-                      ? isDark ? "bg-white text-black" : "bg-black text-white"
-                      : isDark ? "text-white/50 hover:text-white" : "text-black/50 hover:text-black"
-                  }`}
-                >
-                  {r}
-                </button>
-              ))}
-            </div>
+    {/* Period Selector */}
+    <div className="flex gap-4">
+      {["day", "week", "month", "all"].map(r => (
+        <button
+          key={r}
+          onClick={() => setRevenueRange(r as any)}
+          className={`text-[9px] font-bold uppercase px-4 py-2 transition-all ${
+            revenueRange === r
+              ? isDark ? "bg-white text-black" : "bg-black text-white"
+              : isDark ? "text-white/50 hover:text-white" : "text-black/50 hover:text-black"
+          }`}
+        >
+          {r}
+        </button>
+      ))}
+    </div>
+
 
             {/* ── REVENUE HERO ── */}
             <div className={`p-8 space-y-4 ${isDark ? "bg-white/5" : "bg-gray-50/50"}`}>
