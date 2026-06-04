@@ -6,26 +6,50 @@ import { useEffect, useRef, useCallback } from 'react';
 
 let sharedAudioContext: AudioContext | null = null;
 
+interface UseVoiceInputOptions {
+  onTranscript: (text: string) => void;
+  onStateChange: (state: string) => void;
+  onLevelChange: (level: number) => void;
+  enabled: boolean;
+  isSpeaking: boolean;
+  lastAiResponse: string;
+  preventListening?: boolean;
+}
+
 export function useVoiceInput({ 
-  onTranscript, onStateChange, onLevelChange, enabled, isSpeaking, lastAiResponse, preventListening 
-}: any) {
+  onTranscript, 
+  onStateChange, 
+  onLevelChange, 
+  enabled, 
+  isSpeaking, 
+  lastAiResponse,
+  preventListening 
+}: UseVoiceInputOptions) {
   const recognitionRef = useRef<any>(null);
   const restartTimeoutRef = useRef<NodeJS.Timeout>();
+  const lastSpeechEndTime = useRef(0);
 
   const initAudio = useCallback(async () => {
+    // MOBILE FIX: Resume context if it exists but is suspended
     if (sharedAudioContext) {
       if (sharedAudioContext.state === 'suspended') await sharedAudioContext.resume();
       return;
     }
     
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { 
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true 
+        } 
+      });
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       sharedAudioContext = new AudioCtx();
       const analyzer = sharedAudioContext.createAnalyser();
       const source = sharedAudioContext.createMediaStreamSource(stream);
       source.connect(analyzer);
-      analyzer.fftSize = 64;
+      analyzer.fftSize = 256;
 
       const dataArray = new Uint8Array(analyzer.frequencyBinCount);
       const updateLevel = () => {
@@ -36,10 +60,13 @@ export function useVoiceInput({
         requestAnimationFrame(updateLevel);
       };
       updateLevel();
-    } catch (e) { console.error('[VoiceInput] Hardware access blocked:', e); }
+    } catch (e) {
+      console.error('[VoiceInput] Hardware access blocked:', e);
+    }
   }, [onLevelChange]);
 
   const startRecognition = useCallback(() => {
+    // Prevent multiple instances
     if (isSpeaking || preventListening || recognitionRef.current) return;
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -51,17 +78,25 @@ export function useVoiceInput({
     rec.lang = 'en-GB';
 
     rec.onstart = () => onStateChange('listening');
+
     rec.onresult = (event: any) => {
+      // Immediate exit if AI is active
       if (isSpeaking || preventListening) return;
+
+      // Ensure enough time has passed to prevent picking up AI echo
+      const now = Date.now();
+      if (now - lastSpeechEndTime.current < 1000) return;
 
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
           const transcript = event.results[i][0].transcript.trim();
           
-          // CRITICAL FIX: Only ignore if the response is empty or truly identical
-          if (transcript && transcript.toLowerCase() !== lastAiResponse.toLowerCase()) {
-            onTranscript(transcript);
+          // Semantic check against AI output
+          if (lastAiResponse && transcript.toLowerCase() === lastAiResponse.toLowerCase()) {
+            return;
           }
+
+          if (transcript) onTranscript(transcript);
         }
       }
     };
@@ -69,26 +104,38 @@ export function useVoiceInput({
     rec.onend = () => {
       recognitionRef.current = null;
       onStateChange('idle');
+      // Automatic recovery loop
       if (enabled && !isSpeaking && !preventListening) {
         restartTimeoutRef.current = setTimeout(startRecognition, 500);
       }
     };
 
-    try { rec.start(); recognitionRef.current = rec; } catch (e) { recognitionRef.current = null; }
+    try { 
+      rec.start(); 
+      recognitionRef.current = rec; 
+    } catch (e) { 
+      // MOBILE FIX: If error occurs, ensure we don't block subsequent starts
+      recognitionRef.current = null;
+      console.warn('[VoiceInput] Restarting recognition...'); 
+    }
   }, [onTranscript, onStateChange, preventListening, enabled, isSpeaking, lastAiResponse]);
 
   useEffect(() => {
     if (isSpeaking) {
+      // AI active: Kill mic immediately
+      lastSpeechEndTime.current = Date.now();
       clearTimeout(restartTimeoutRef.current);
       if (recognitionRef.current) {
         try { recognitionRef.current.stop(); } catch (e) {}
         recognitionRef.current = null;
       }
     } else if (enabled && !preventListening && !recognitionRef.current) {
+      // AI finished: Delay restart by 1s to allow buffer clear
       restartTimeoutRef.current = setTimeout(() => {
-        initAudio().then(startRecognition);
+        initAudio().then(() => startRecognition());
       }, 1000);
     }
+
     return () => clearTimeout(restartTimeoutRef.current);
   }, [enabled, isSpeaking, preventListening, startRecognition, initAudio]);
 
