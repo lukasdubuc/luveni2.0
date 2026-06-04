@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 interface JarvisHubProps {
   geminiApiKey: string;
+  autoStart?: boolean;   // ← NEW: skip the power button, go live immediately
 }
 
 const STATE_LABEL: Record<OrbState, string> = {
@@ -31,7 +32,7 @@ const STATE_COLOR: Record<OrbState, string> = {
   error:     'rgba(255,80,80,1.0)',
 };
 
-export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
+export default function JarvisHub({ geminiApiKey, autoStart = false }: JarvisHubProps) {
   const [orbState, setOrbState]     = useState<OrbState>('idle');
   const [audioLevel, setAudioLevel] = useState(0);
   const [lastLine, setLastLine]     = useState('');
@@ -50,6 +51,21 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
     const t = setTimeout(() => setLastLine(''), 15000);
     return () => clearTimeout(t);
   }, [lastLine]);
+
+  // ── AUTO-START: go live immediately on mount when prop is set ────────────
+  useEffect(() => {
+    if (!autoStart) return;
+    // Warm up mobile speech synthesis (same as handleActionClick does)
+    try {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        const u = new SpeechSynthesisUtterance('');
+        u.volume = 0;
+        window.speechSynthesis.speak(u);
+      }
+    } catch (e) {}
+    setIsReady(true);
+    setIsMuted(false);
+  }, [autoStart]);
 
   const { ask } = useGemini(geminiApiKey);
 
@@ -159,7 +175,6 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
   const displayLabel = (isReady && !isMuted && orbState === 'idle') ? STATE_LABEL['listening'] : STATE_LABEL[orbState];
   const displayColor = (isReady && !isMuted && orbState === 'idle') ? STATE_COLOR['listening'] : STATE_COLOR[orbState];
 
-  // Extract RGB from current state color for dynamic shadow
   const shadowColor = STATE_COLOR[orbState].replace('rgba(', '').replace(/,[^,]+\)$/, '');
   const shadowOpacity = 0.12 + audioLevel * 0.22;
   const shadowSize = 180 + audioLevel * 120;
@@ -187,9 +202,7 @@ export default function JarvisHub({ geminiApiKey }: JarvisHubProps) {
         :-webkit-full-screen { background: #020408 !important; }
       ` }} />
 
-      {/* Crisp grid — full coverage, no transforms */}
       <div style={styles.gridBg} />
-      {/* Organic orb shadow — moves with audio level */}
       <div style={{
         ...styles.orbShadow,
         background: `radial-gradient(ellipse ${shadowSize}px ${shadowSize * 0.55}px at 50% 52%, rgba(${shadowColor},${shadowOpacity}) 0%, transparent 70%)`,
@@ -274,7 +287,6 @@ const styles: Record<string, React.CSSProperties> = {
     userSelect: 'none',
     zIndex: 9999,
   },
-  // Pixel-perfect grid — crisp 1px lines, deep navy base so it reads as space not void
   gridBg: {
     position: 'absolute',
     inset: 0,
@@ -290,7 +302,6 @@ const styles: Record<string, React.CSSProperties> = {
     pointerEvents: 'none',
     zIndex: 0,
   },
-  // Organic orb shadow — rendered inline so it reacts to audioLevel + state color
   orbShadow: {
     position: 'absolute',
     inset: 0,
