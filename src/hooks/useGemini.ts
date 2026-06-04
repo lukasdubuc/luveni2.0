@@ -81,8 +81,10 @@ export function useGemini(apiKey: string) {
 
       // 5. Environment Resolver
       // Reads VITE_MISTRAL_API_KEY first, falling back to the dynamically loaded database prop
-      const envKey = import.meta.env.VITE_MISTRAL_API_KEY;
-      const activeKey = envKey || apiKey;
+      // 5. Environment Resolver
+// This will check your system environment variables OR fall back to the key provided in your database/config
+const envKey = process.env.MISTRAL_API_KEY || import.meta.env.VITE_MISTRAL_API_KEY;
+const activeKey = envKey || apiKey;
 
       const payload = {
         model: "mistral-small",
