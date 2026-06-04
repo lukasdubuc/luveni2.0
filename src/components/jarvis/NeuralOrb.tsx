@@ -1,6 +1,5 @@
 // ─────────────────────────────────────────────────────────────
 //  J.A.R.V.I.S — Luveni GM  |  components/jarvis/NeuralOrb.tsx
-//  Volumetric glass sphere — solid atmosphere, plasma interior
 // ─────────────────────────────────────────────────────────────
 
 import { useEffect, useRef } from 'react';
@@ -12,7 +11,7 @@ interface NeuralOrbProps {
   size?:      number;
 }
 
-// ── Shared vertex shader ──────────────────────────────────────
+// ── Vertex Shader ─────────────────────────────────────────────
 const VERT = `
 precision highp float;
 varying vec3 vNormal;
@@ -27,72 +26,50 @@ void main() {
 }
 `;
 
-// ── Layer 1: Deep glass body — solid dark core with depth ─────
-const FRAG_BODY = `
+// ── Backing sphere — solid dark glass core, no additive blowout
+const FRAG_BACK = `
 precision highp float;
 uniform float uTime;
-uniform float uAudio;
 uniform float uState;
 varying vec3 vNormal;
 varying vec3 vViewPosition;
 varying vec3 vPosition;
 
-mat3 rotY(float a){ float s=sin(a),c=cos(a); return mat3(c,0,s,0,1,0,-s,0,c); }
-mat3 rotX(float a){ float s=sin(a),c=cos(a); return mat3(1,0,0,0,c,-s,0,s,c); }
-
 float hash(vec3 p){ return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453); }
 float noise(vec3 p){
-  vec3 i=floor(p); vec3 f=fract(p);
-  f=f*f*(3.0-2.0*f);
-  return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),
-                 mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
-             mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),
-                 mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);
+  vec3 i=floor(p); vec3 f=fract(p); f=f*f*(3.0-2.0*f);
+  return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
+             mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);
 }
 
 void main() {
   vec3 normal  = normalize(vNormal);
   vec3 viewDir = normalize(vViewPosition);
   float ndotv  = max(dot(normal, viewDir), 0.0);
-  float t      = uTime * 0.5;
+  float t      = uTime * 0.4;
 
-  // Swirling interior plasma
-  vec3 p = rotY(t * 0.3) * rotX(t * 0.2) * vPosition * 2.2;
-  float n1 = noise(p);
-  float n2 = noise(p * 2.0 + vec3(t * 0.4, -t * 0.3, t * 0.2));
-  float plasma = n1 * 0.6 + n2 * 0.4;
+  vec3 p  = vPosition * 2.0 + vec3(t*0.1, t*0.07, t*0.05);
+  float n = noise(p)*0.6 + noise(p*2.1)*0.4;
 
-  // State-driven interior color
-  vec3 cIdle    = vec3(0.18, 0.02, 0.45);
-  vec3 cListen  = vec3(0.0,  0.12, 0.55);
-  vec3 cThink   = vec3(0.30, 0.0,  0.60);
-  vec3 cSpeak   = vec3(0.0,  0.22, 0.35);
+  // State-driven deep interior color
+  vec3 c0, c1;
+  if(uState < 0.5){      c0=vec3(0.04,0.0,0.12);  c1=vec3(0.12,0.0,0.30); }
+  else if(uState < 1.5){ c0=vec3(0.0,0.02,0.14);  c1=vec3(0.0,0.08,0.35); }
+  else if(uState < 2.5){ c0=vec3(0.08,0.0,0.18);  c1=vec3(0.25,0.0,0.45); }
+  else {                  c0=vec3(0.0,0.06,0.10);  c1=vec3(0.0,0.18,0.28); }
 
-  vec3 baseColor;
-  if(uState < 0.5)      baseColor = cIdle;
-  else if(uState < 1.5) baseColor = cListen;
-  else if(uState < 2.5) baseColor = cThink;
-  else                  baseColor = cSpeak;
+  vec3 col = mix(c0, c1, n);
+  // Slightly brighter at mid-sphere for depth illusion
+  float midGlow = smoothstep(0.0,0.5,ndotv)*smoothstep(1.0,0.5,ndotv);
+  col = mix(col*0.4, col*1.6, midGlow);
 
-  vec3 brightColor = baseColor * 3.5 + vec3(0.08, 0.04, 0.18);
-  vec3 interiorColor = mix(baseColor, brightColor, plasma);
-
-  // Depth — center is darkest, mid-sphere is richest
-  float depth = 1.0 - ndotv;
-  float midGlow = smoothstep(0.0, 0.5, ndotv) * smoothstep(1.0, 0.5, ndotv);
-  interiorColor = mix(interiorColor * 0.15, interiorColor, midGlow * 0.9 + 0.1);
-  interiorColor += uAudio * baseColor * 1.5 * midGlow;
-
-  // Solid glass body opacity — fills the hollow completely
-  float alpha = 0.82 - ndotv * 0.25;
-  alpha = clamp(alpha, 0.55, 0.88);
-
-  gl_FragColor = vec4(interiorColor, alpha);
+  // Fully opaque — this is what kills the holes
+  gl_FragColor = vec4(col, 1.0);
 }
 `;
 
-// ── Layer 2: Plasma filaments — swirling lines on surface ────
-const FRAG_PLASMA = `
+// ── Original filament shader — UNCHANGED ─────────────────────
+const FRAG = `
 precision highp float;
 uniform float uTime;
 uniform float uAudio;
@@ -107,9 +84,9 @@ mat3 rotZ(float a){ float s=sin(a),c=cos(a); return mat3(c,-s,0,s,c,0,0,0,1); }
 
 float liquidNoise(vec3 p, float t) {
   vec3 p1 = rotX(t*0.15)*rotY(t*0.10)*p;
-  vec3 q = vec3(sin(p1.x*2.0+t*0.4), cos(p1.y*2.0-t*0.3), sin(p1.z*2.0+t*0.5));
+  vec3 q  = vec3(sin(p1.x*2.0+t*0.4), cos(p1.y*2.0-t*0.3), sin(p1.z*2.0+t*0.5));
   vec3 p2 = rotZ(-t*0.12)*rotX(t*0.08)*(p+q*0.5);
-  vec3 r = vec3(sin(p2.y*3.0+t*0.6), cos(p2.z*3.0-t*0.4), sin(p2.x*3.0+t*0.2));
+  vec3 r  = vec3(sin(p2.y*3.0+t*0.6), cos(p2.z*3.0-t*0.4), sin(p2.x*3.0+t*0.2));
   return sin(r.x*2.5+r.y*1.5)*cos(r.z*2.0);
 }
 
@@ -117,83 +94,52 @@ void main() {
   vec3 normal  = normalize(vNormal);
   vec3 viewDir = normalize(vViewPosition);
   float ndotv  = max(dot(normal, viewDir), 0.0);
-  float t      = uTime * 0.8;
-  vec3 p       = vPosition * 1.8;
+  float fresnel    = pow(1.0-ndotv, 2.5);
+  float sharpRim   = pow(1.0-ndotv, 12.0);
+  float t = uTime*0.8;
+  vec3 p  = vPosition*1.8;
 
   float n1 = liquidNoise(p, t);
-  float n2 = liquidNoise(p + vec3(0.5,-0.3,0.2), t*0.85);
-  float n3 = liquidNoise(p - vec3(0.3,0.4,-0.5), t*1.15);
+  float n2 = liquidNoise(p+vec3(0.5,-0.3,0.2), t*0.85);
+  float n3 = liquidNoise(p-vec3(0.3,0.4,-0.5), t*1.15);
 
-  float thick = 0.032 + uAudio * 0.10;
-  float band1 = pow(smoothstep(thick,        0.0, abs(n1-0.12)), 2.6);
-  float band2 = pow(smoothstep(thick+0.008,  0.0, abs(n2+0.15)), 2.6);
-  float band3 = pow(smoothstep(thick*1.1,    0.0, abs(n3-0.25)), 3.0);
+  float thick = 0.035 + uAudio*0.12;
+  float band1 = pow(smoothstep(thick,       0.0, abs(n1-0.12)), 2.6);
+  float band2 = pow(smoothstep(thick+0.01,  0.0, abs(n2+0.15)), 2.6);
+  float band3 = pow(smoothstep(thick*1.1,   0.0, abs(n3-0.25)), 3.0);
 
   // State-based palette
-  vec3 cA, cB, cC;
+  vec3 neonCyan, electricBlue, magenta, hotPink, deepIndigo;
   if(uState < 0.5){
-    cA = vec3(0.95,0.02,0.60); cB = vec3(0.0,0.85,1.0); cC = vec3(0.5,0.0,1.0);
+    neonCyan=vec3(0.0,0.95,1.0); electricBlue=vec3(0.02,0.22,1.0);
+    magenta=vec3(0.95,0.02,0.60); hotPink=vec3(1.0,0.08,0.75); deepIndigo=vec3(0.35,0.0,0.9);
   } else if(uState < 1.5){
-    cA = vec3(0.0,0.9,1.0);  cB = vec3(0.0,0.6,1.0);  cC = vec3(0.2,0.0,1.0);
+    neonCyan=vec3(0.0,0.9,1.0); electricBlue=vec3(0.0,0.5,1.0);
+    magenta=vec3(0.0,0.7,1.0); hotPink=vec3(0.2,0.4,1.0); deepIndigo=vec3(0.0,0.3,0.9);
   } else if(uState < 2.5){
-    cA = vec3(0.7,0.0,1.0);  cB = vec3(0.4,0.0,0.9);  cC = vec3(0.9,0.1,0.6);
+    neonCyan=vec3(0.8,0.0,1.0); electricBlue=vec3(0.5,0.0,0.9);
+    magenta=vec3(0.9,0.1,0.6); hotPink=vec3(0.7,0.0,1.0); deepIndigo=vec3(0.4,0.0,0.8);
   } else {
-    cA = vec3(0.0,1.0,0.6);  cB = vec3(0.0,0.8,0.4);  cC = vec3(0.0,0.5,1.0);
+    neonCyan=vec3(0.0,1.0,0.6); electricBlue=vec3(0.0,0.8,0.4);
+    magenta=vec3(0.0,0.6,1.0); hotPink=vec3(0.0,1.0,0.5); deepIndigo=vec3(0.0,0.5,0.8);
   }
 
-  vec3 col1 = mix(cA, cA*1.3, sin(t+p.z)*0.5+0.5);
-  vec3 col2 = mix(cB, cB*1.2, cos(t-p.x)*0.5+0.5);
-  vec3 col3 = mix(cC, cC*1.1, sin(t*1.2)*0.5+0.5);
+  float diagonal  = dot(normal, normalize(vec3(0.7,-0.7,0.4)))*0.5+0.5;
+  vec3  rimColor  = mix(magenta, neonCyan, diagonal);
+  vec3  col1 = mix(magenta,      hotPink,      sin(t+p.z)*0.5+0.5);
+  vec3  col2 = mix(electricBlue, neonCyan,     cos(t-p.x)*0.5+0.5);
+  vec3  col3 = mix(deepIndigo,   magenta,      sin(t*1.2)*0.5+0.5);
 
-  vec3 finalColor = band1*col1*3.5 + band2*col2*3.0 + band3*col3*2.5;
+  vec3 finalColor = vec3(0.0);
+  finalColor += band1*col1*3.5;
+  finalColor += band2*col2*3.0;
+  finalColor += band3*col3*2.5;
+  finalColor += fresnel*rimColor*2.8;
+  finalColor += sharpRim*neonCyan*4.0;
 
-  float filamentAlpha = band1*0.95 + band2*0.90 + band3*0.85;
-  filamentAlpha = clamp(filamentAlpha, 0.0, 1.0);
-
-  gl_FragColor = vec4(finalColor, filamentAlpha);
-}
-`;
-
-// ── Layer 3: Glass rim + atmosphere ──────────────────────────
-const FRAG_RIM = `
-precision highp float;
-uniform float uTime;
-uniform float uAudio;
-uniform float uState;
-varying vec3 vNormal;
-varying vec3 vViewPosition;
-varying vec3 vPosition;
-
-void main() {
-  vec3 normal  = normalize(vNormal);
-  vec3 viewDir = normalize(vViewPosition);
-  float ndotv  = max(dot(normal, viewDir), 0.0);
-
-  // Razor-thin outer glass rim
-  float rim     = pow(1.0 - ndotv, 5.5);
-  float softRim = pow(1.0 - ndotv, 2.2);
-
-  // Diagonal color gradient on rim (magenta → cyan)
-  float diag   = dot(normal, normalize(vec3(0.7,-0.7,0.4)))*0.5+0.5;
-
-  vec3 rimA, rimB;
-  if(uState < 0.5){
-    rimA = vec3(0.95,0.02,0.60); rimB = vec3(0.0,0.95,1.0);
-  } else if(uState < 1.5){
-    rimA = vec3(0.0,0.8,1.0);   rimB = vec3(0.2,0.4,1.0);
-  } else if(uState < 2.5){
-    rimA = vec3(0.6,0.0,1.0);   rimB = vec3(0.9,0.1,0.6);
-  } else {
-    rimA = vec3(0.0,1.0,0.5);   rimB = vec3(0.0,0.6,1.0);
-  }
-
-  vec3 rimColor = mix(rimA, rimB, diag);
-
-  // Atmospheric halo just inside the edge
-  vec3 atmosColor = mix(rimA * 0.6, rimB * 0.6, 0.5);
-  vec3 finalColor = rim * rimColor * 4.5 + softRim * atmosColor * 1.2;
-  float alpha = rim * 1.0 + softRim * 0.35 + uAudio * rim * 0.8;
-  alpha = clamp(alpha, 0.0, 1.0);
+  // No centerDarkness mix — backing sphere handles that
+  float alpha = fresnel*0.65 + band1*0.9 + band2*0.9 + band3*0.9 + sharpRim*1.0;
+  alpha = clamp(alpha, 0.0, 0.96);
 
   gl_FragColor = vec4(finalColor, alpha);
 }
@@ -229,18 +175,18 @@ export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbPr
   const stateRef = useRef(0);
 
   const ctx = useRef<{
-    renderer: any;
-    uniformsBody: any;
-    uniformsPlasma: any;
-    uniformsRim: any;
-    clock: any;
-    meshBody?: any;
-    meshPlasma?: any;
-    meshRim?: any;
+    renderer: any; uBack: any; uFilament: any; clock: any;
+    geoBack?: any; matBack?: any; geoFil?: any; matFil?: any;
   } | null>(null);
 
   useEffect(() => { audioRef.current = audioLevel; }, [audioLevel]);
-  useEffect(() => { stateRef.current = STATE_NUM[state]; }, [state]);
+  useEffect(() => {
+    stateRef.current = STATE_NUM[state];
+    if (ctx.current) {
+      ctx.current.uBack.uState.value     = stateRef.current;
+      ctx.current.uFilament.uState.value = stateRef.current;
+    }
+  }, [state]);
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -271,41 +217,30 @@ export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbPr
       const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
       camera.position.z = 3.0;
 
-      // ── Layer 1: solid glass body ─────────────────────────
-      const geoBody = new THREE.SphereGeometry(1.0, 64, 64);
-      const uBody   = { uTime: {value:0}, uAudio: {value:0}, uState: {value:0} };
-      const matBody = new THREE.ShaderMaterial({
-        vertexShader: VERT, fragmentShader: FRAG_BODY,
-        uniforms: uBody, transparent: true, depthWrite: false,
-        blending: THREE.NormalBlending, side: THREE.FrontSide,
+      // ── Backing sphere — opaque, NormalBlending, renders first ──
+      const geoBack = new THREE.SphereGeometry(0.995, 64, 64);
+      const uBack   = { uTime: {value:0}, uState: {value:0} };
+      const matBack = new THREE.ShaderMaterial({
+        vertexShader: VERT, fragmentShader: FRAG_BACK,
+        uniforms: uBack, transparent: false,
+        depthWrite: true, side: THREE.FrontSide,
       });
-      const meshBody = new THREE.Mesh(geoBody, matBody);
-      meshBody.renderOrder = 0;
-      scene.add(meshBody);
+      const meshBack = new THREE.Mesh(geoBack, matBack);
+      meshBack.renderOrder = 0;
+      scene.add(meshBack);
 
-      // ── Layer 2: plasma filaments ─────────────────────────
-      const geoPlasma = new THREE.SphereGeometry(1.01, 64, 64);
-      const uPlasma   = { uTime: {value:0}, uAudio: {value:0}, uState: {value:0} };
-      const matPlasma = new THREE.ShaderMaterial({
-        vertexShader: VERT, fragmentShader: FRAG_PLASMA,
-        uniforms: uPlasma, transparent: true, depthWrite: false,
-        blending: THREE.AdditiveBlending, side: THREE.FrontSide,
+      // ── Filament sphere — additive on top ────────────────────
+      const geoFil = new THREE.SphereGeometry(1.0, 64, 64);
+      const uFilament = { uTime: {value:0}, uAudio: {value:0}, uState: {value:0} };
+      const matFil = new THREE.ShaderMaterial({
+        vertexShader: VERT, fragmentShader: FRAG,
+        uniforms: uFilament, transparent: true,
+        depthWrite: false, blending: THREE.AdditiveBlending,
+        side: THREE.FrontSide,
       });
-      const meshPlasma = new THREE.Mesh(geoPlasma, matPlasma);
-      meshPlasma.renderOrder = 1;
-      scene.add(meshPlasma);
-
-      // ── Layer 3: rim glow (back face first for atmosphere) ─
-      const geoRim = new THREE.SphereGeometry(1.02, 64, 64);
-      const uRim   = { uTime: {value:0}, uAudio: {value:0}, uState: {value:0} };
-      const matRim = new THREE.ShaderMaterial({
-        vertexShader: VERT, fragmentShader: FRAG_RIM,
-        uniforms: uRim, transparent: true, depthWrite: false,
-        blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
-      });
-      const meshRim = new THREE.Mesh(geoRim, matRim);
-      meshRim.renderOrder = 2;
-      scene.add(meshRim);
+      const meshFil = new THREE.Mesh(geoFil, matFil);
+      meshFil.renderOrder = 1;
+      scene.add(meshFil);
 
       const clock = new THREE.Clock();
 
@@ -313,36 +248,33 @@ export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbPr
         if (!active) return;
         rafId = requestAnimationFrame(tick);
         const t = clock.getElapsedTime();
+        uBack.uTime.value        = t;
+        uFilament.uTime.value    = t;
+        uFilament.uAudio.value   = audioRef.current;
 
-        [uBody, uPlasma, uRim].forEach(u => {
-          u.uTime.value  = t;
-          u.uAudio.value = audioRef.current;
-          u.uState.value = stateRef.current;
-        });
-
-        // Slow organic rotation
-        meshBody.rotation.y   = t * 0.08;
-        meshPlasma.rotation.y = t * 0.10;
-        meshPlasma.rotation.x = Math.sin(t * 0.07) * 0.12;
-        meshRim.rotation.y    = t * 0.06;
+        // Slow shared rotation
+        const ry = t * 0.08;
+        const rx = Math.sin(t * 0.05) * 0.06;
+        meshBack.rotation.y = ry;
+        meshBack.rotation.x = rx;
+        meshFil.rotation.y  = ry;
+        meshFil.rotation.x  = rx;
 
         renderer.render(scene, camera);
       };
       tick();
 
-      ctx.current = { renderer, uniformsBody: uBody, uniformsPlasma: uPlasma, uniformsRim: uRim, clock, meshBody, meshPlasma, meshRim };
+      ctx.current = { renderer, uBack, uFilament, clock, geoBack, matBack, geoFil, matFil };
     }
 
     return () => {
       active = false;
       if (rafId !== null) cancelAnimationFrame(rafId);
       if (ctx.current) {
-        const { renderer, meshBody, meshPlasma, meshRim } = ctx.current;
-        meshBody?.geometry?.dispose();    meshBody?.material?.dispose();
-        meshPlasma?.geometry?.dispose();  meshPlasma?.material?.dispose();
-        meshRim?.geometry?.dispose();     meshRim?.material?.dispose();
-        renderer?.dispose();
-        renderer?.forceContextLoss?.();
+        const { renderer, geoBack, matBack, geoFil, matFil } = ctx.current;
+        geoBack?.dispose(); matBack?.dispose();
+        geoFil?.dispose();  matFil?.dispose();
+        renderer?.dispose(); renderer?.forceContextLoss?.();
         ctx.current = null;
       }
       mountRef.current?.querySelector('canvas')?.remove();
