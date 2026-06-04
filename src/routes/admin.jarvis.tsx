@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────
-//  src/routes/admin.jarvis.tsx
+//  J.A.R.V.I.S — Luveni GM | src/routes/admin.jarvis.tsx
 // ─────────────────────────────────────────────────────────────
 import { createFileRoute } from '@tanstack/react-router';
 import JarvisHub from '../components/jarvis/JarvisHub';
@@ -8,12 +8,15 @@ export const Route = createFileRoute('/admin/jarvis')({
   component: () => (
     <div style={{ 
       minHeight: '100vh', 
-      backgroundColor: '#020408', 
+      width: '100vw',
+      // High-definition 4K inspired dark gradient background
+      background: 'radial-gradient(circle at 50% 50%, #0a0e14 0%, #020408 100%)',
       color: '#fff', 
       display: 'flex', 
       justifyContent: 'center', 
       alignItems: 'center',
-      fontFamily: 'monospace'
+      fontFamily: "'Inter', sans-serif",
+      overflow: 'hidden'
     }}>
       <JarvisHub 
         geminiApiKey="P00nSEM2W2H1qV0KuvyonA08Ns1tV0hL" 
