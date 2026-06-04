@@ -6,7 +6,15 @@ import { useRef, useCallback, useEffect } from 'react';
 import type { OrbState } from '../types/jarvis';
 import { DEFAULT_VAD_THRESHOLD, DEFAULT_SILENCE_MS } from '../lib/jarvis-config';
 
-// ... (Interface definitions remain the same) ...
+interface UseVoiceInputOptions {
+  onTranscript: (text: string) => void;
+  onStateChange: (state: OrbState) => void;
+  onLevelChange: (level: number) => void;
+  vadThreshold?: number;
+  silenceMs?: number;
+  enabled?: boolean;
+  preventListening?: boolean;
+}
 
 export function useVoiceInput({
   onTranscript,
@@ -17,7 +25,38 @@ export function useVoiceInput({
   enabled = true,
   preventListening = false,
 }: UseVoiceInputOptions) {
-  // ... (Refs and State setup remain the same) ...
+  const onTranscriptRef = useRef(onTranscript);
+  const onStateChangeRef = useRef(onStateChange);
+  const onLevelChangeRef = useRef(onLevelChange);
+  const preventListeningRef = useRef(preventListening);
+
+  useEffect(() => {
+    onTranscriptRef.current = onTranscript;
+    onStateChangeRef.current = onStateChange;
+    onLevelChangeRef.current = onLevelChange;
+    preventListeningRef.current = preventListening;
+  }, [onTranscript, onStateChange, onLevelChange, preventListening]);
+
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const recogRef = useRef<SpeechRecognition | null>(null);
+  const stateRef = useRef<OrbState>('idle');
+  const bufferRef = useRef<string>('');
+  const rafRef = useRef<number>(0);
+  const activeRef = useRef(false);
+
+  const setOrbState = useCallback((s: OrbState) => {
+    stateRef.current = s;
+    onStateChangeRef.current(s);
+  }, []);
+
+  const stopRecognition = useCallback(() => {
+    if (recogRef.current) {
+      try { recogRef.current.stop(); } catch (_) {}
+      recogRef.current = null;
+    }
+  }, []);
 
   const startRecognition = useCallback(() => {
     if (stateRef.current !== 'idle') return;
@@ -31,8 +70,8 @@ export function useVoiceInput({
     }
 
     const recog: SpeechRecognition = new SR();
-    recog.continuous = true; // Kept true for better mobile streaming
-    recog.interimResults = false; // Set to false to reduce processing lag
+    recog.continuous = true;
+    recog.interimResults = false;
     recog.lang = 'en-US';
 
     recog.onresult = (e: SpeechRecognitionEvent) => {
@@ -45,7 +84,7 @@ export function useVoiceInput({
       if (finalTranscript) bufferRef.current = finalTranscript;
     };
 
-    recog.onerror = (e: any) => {
+    recog.onerror = () => {
       stopRecognition();
       setOrbState('idle');
     };
@@ -63,12 +102,10 @@ export function useVoiceInput({
     recog.start();
   }, [setOrbState, stopRecognition]);
 
-  // NEW: Manual Activation Handler for Mobile
   const activateVoice = useCallback(async () => {
     if (audioCtxRef.current?.state === 'suspended') {
       await audioCtxRef.current.resume();
     }
-    // Explicit trigger to start listening regardless of VAD
     startRecognition();
   }, [startRecognition]);
 
@@ -84,7 +121,7 @@ export function useVoiceInput({
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       audioCtxRef.current = new AudioContextClass();
       analyserRef.current = audioCtxRef.current.createAnalyser();
-      analyserRef.current.fftSize = 256; // Reduced for faster processing
+      analyserRef.current.fftSize = 256;
       
       audioCtxRef.current.createMediaStreamSource(streamRef.current).connect(analyserRef.current);
 
@@ -96,11 +133,9 @@ export function useVoiceInput({
         
         onLevelChangeRef.current(Math.min(1, avg / 50));
 
-        // Auto-trigger only if not prevented
         if (!preventListeningRef.current && avg > vadThreshold && stateRef.current === 'idle') {
           startRecognition();
         }
-        
         rafRef.current = requestAnimationFrame(tick);
       };
       tick();
@@ -110,7 +145,17 @@ export function useVoiceInput({
     }
   }, [setOrbState, startRecognition, vadThreshold]);
 
-  // ... (useEffect for cleanup remains the same) ...
+  useEffect(() => {
+    if (!enabled) return;
+    initMic();
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      stopRecognition();
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      audioCtxRef.current?.close();
+      activeRef.current = false;
+    };
+  }, [enabled, initMic, stopRecognition]);
 
-  return { initMic, activateVoice }; // Export activateVoice for your UI button
+  return { initMic, activateVoice };
 }
