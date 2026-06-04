@@ -26,10 +26,13 @@ export function useVoiceInput({
   preventListening 
 }: UseVoiceInputOptions) {
   const recognitionRef = useRef<any>(null);
+  const restartTimeoutRef = useRef<NodeJS.Timeout>();
   const lastSpeechEndTime = useRef(0);
 
   const initAudio = useCallback(async () => {
-    if (sharedAudioContext) return;
+    // Only initialize if context is suspended or doesn't exist
+    if (sharedAudioContext && sharedAudioContext.state === 'running') return;
+    
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: { 
@@ -60,6 +63,7 @@ export function useVoiceInput({
   }, [onLevelChange]);
 
   const startRecognition = useCallback(() => {
+    // Prevent multiple instances
     if (isSpeaking || preventListening || recognitionRef.current) return;
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -73,15 +77,18 @@ export function useVoiceInput({
     rec.onstart = () => onStateChange('listening');
 
     rec.onresult = (event: any) => {
+      // Immediate exit if AI is active
       if (isSpeaking || preventListening) return;
 
+      // Ensure enough time has passed to prevent picking up AI echo
       const now = Date.now();
-      if (now - lastSpeechEndTime.current < 1500) return;
+      if (now - lastSpeechEndTime.current < 1000) return;
 
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
           const transcript = event.results[i][0].transcript.trim();
           
+          // Semantic check against AI output
           if (lastAiResponse && transcript.toLowerCase() === lastAiResponse.toLowerCase()) {
             return;
           }
@@ -94,8 +101,9 @@ export function useVoiceInput({
     rec.onend = () => {
       recognitionRef.current = null;
       onStateChange('idle');
+      // Automatic recovery loop
       if (enabled && !isSpeaking && !preventListening) {
-        setTimeout(startRecognition, 100);
+        restartTimeoutRef.current = setTimeout(startRecognition, 500);
       }
     };
 
@@ -103,34 +111,27 @@ export function useVoiceInput({
       rec.start(); 
       recognitionRef.current = rec; 
     } catch (e) { 
-      console.warn('[VoiceInput] Recognition start failed:', e); 
+      console.warn('[VoiceInput] Restarting recognition...'); 
     }
   }, [onTranscript, onStateChange, preventListening, enabled, isSpeaking, lastAiResponse]);
 
   useEffect(() => {
     if (isSpeaking) {
-      // AI started speaking: Ensure the mic is muted immediately
+      // AI active: Kill mic immediately
       lastSpeechEndTime.current = Date.now();
+      clearTimeout(restartTimeoutRef.current);
       if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop();
-        } catch (e) {}
+        try { recognitionRef.current.stop(); } catch (e) {}
         recognitionRef.current = null;
       }
-    } else if (enabled && !preventListening) {
-      // AI stopped speaking: Safety-check with 500ms grace period to prevent cut-off
-      const restartTimeout = setTimeout(() => {
+    } else if (enabled && !preventListening && !recognitionRef.current) {
+      // AI finished: Delay restart by 1s to allow buffer clear
+      restartTimeoutRef.current = setTimeout(() => {
         initAudio().then(() => startRecognition());
-      }, 500);
-      
-      return () => clearTimeout(restartTimeout);
-    } else if (!enabled && recognitionRef.current) {
-      // Disabled completely
-      try {
-        recognitionRef.current.stop();
-      } catch (e) {}
-      recognitionRef.current = null;
+      }, 1000);
     }
+
+    return () => clearTimeout(restartTimeoutRef.current);
   }, [enabled, isSpeaking, preventListening, startRecognition, initAudio]);
 
   return null;
