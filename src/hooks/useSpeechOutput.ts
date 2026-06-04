@@ -4,6 +4,13 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 
+// Extend window to hold our persistent utterance
+declare global {
+  interface Window {
+    jarvisUtterance: SpeechSynthesisUtterance | null;
+  }
+}
+
 interface UseSpeechOutputOptions {
   onStart?: () => void;
   onBoundary?: (level: number) => void;
@@ -59,7 +66,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const doSpeak = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
-    speechSynthesis.cancel();
+    window.speechSynthesis.cancel();
     speaking.current = true;
 
     const utt = new SpeechSynthesisUtterance(text);
@@ -67,12 +74,17 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     utt.pitch = 0.78;
     utt.voice = voice;
 
+    // PERSISTENCE FIX: Assign to global window object so GC doesn't kill it
+    window.jarvisUtterance = utt;
+
     utt.onstart = () => { if (onStartRef.current) onStartRef.current(); };
     utt.onboundary = () => { if (onBoundaryRef.current) onBoundaryRef.current(0.3 + Math.random() * 0.55); };
     
     const handleEnd = () => {
       if (!speaking.current) return;
       speaking.current = false;
+      window.jarvisUtterance = null;
+      
       // 500ms delay ensures the final syllable completes fully before triggering onEnd
       setTimeout(() => {
         if (onEndRef.current) onEndRef.current();
@@ -82,7 +94,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     utt.onend = handleEnd;
     utt.onerror = handleEnd;
 
-    speechSynthesis.speak(utt);
+    window.speechSynthesis.speak(utt);
   }, []);
 
   const speak = useCallback((text: string) => {
@@ -97,8 +109,9 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   }, [doSpeak]);
 
   const cancel = useCallback(() => {
-    speechSynthesis.cancel();
+    window.speechSynthesis.cancel();
     speaking.current = false;
+    window.jarvisUtterance = null;
   }, []);
 
   return { speak, cancel, isSpeaking: () => speaking.current };
