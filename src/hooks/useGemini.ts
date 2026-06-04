@@ -4,87 +4,95 @@
 
 import { useRef, useCallback } from 'react';
 import type { JarvisMessage } from '../types/jarvis';
-import { GEMINI_ENDPOINT, JARVIS_SYSTEM_PROMPT } from '../lib/jarvis-config';
+import { MISTRAL_ENDPOINT, JARVIS_SYSTEM_PROMPT } from '../lib/jarvis-config';
 
 export function useGemini(apiKey: string) {
   const history = useRef<JarvisMessage[]>([]);
 
-  const ask = useCallback(async (userText: string, onChunk?: (text: string) => void): Promise<string> => {
-    history.current.push({ role: 'user', parts: [{ text: userText }], timestamp: Date.now() });
+  const ask = useCallback(
+    async (userText: string, onChunk?: (text: string) => void): Promise<string> => {
+      history.current.push({
+        role: 'user',
+        parts: [{ text: userText }],
+        timestamp: Date.now(),
+      });
 
-    const activeKey = apiKey || "P00nSEM2W2H1qV0KuvyonA08Ns1tV0hL";
-    const payload = {
-      model: "mistral-small",
-      stream: true,
-      messages: [
-        { role: "system", content: JARVIS_SYSTEM_PROMPT }, 
-        ...history.current.map(h => ({ 
-          role: h.role === 'model' ? 'assistant' : 'user', 
-          content: h.parts[0].text 
-        }))
-      ],
-      temperature: 0.75,
-    };
+      const payload = {
+        model: 'mistral-small-latest',
+        stream: true,
+        messages: [
+          { role: 'system', content: JARVIS_SYSTEM_PROMPT },
+          ...history.current.map((h) => ({
+            role: h.role === 'model' ? 'assistant' : 'user',
+            content: h.parts[0].text,
+          })),
+        ],
+        temperature: 0.75,
+      };
 
-    const res = await fetch(GEMINI_ENDPOINT(activeKey), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${activeKey}` },
-      body: JSON.stringify(payload),
-    });
+      const res = await fetch(MISTRAL_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(payload),
+      });
 
-    if (!res.ok) throw new Error(`API error ${res.status}`);
-    const reader = res.body?.getReader();
-    const decoder = new TextDecoder();
-    let fullReply = "";
-    let buffer = "";
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`API error ${res.status}: ${body}`);
+      }
 
-    if (reader) {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let fullReply = '';
+      let buffer = '';
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        
-        // Save incomplete line back to the buffer
-        buffer = lines.pop() || "";
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() ?? '';
 
-        for (const line of lines) {
-          const cleanLine = line.trim();
-          if (!cleanLine) continue;
-          if (cleanLine.startsWith('data: ') && !cleanLine.includes('[DONE]')) {
+          for (const line of lines) {
+            const clean = line.trim();
+            if (!clean || !clean.startsWith('data: ') || clean.includes('[DONE]')) continue;
             try {
-              const dataContent = cleanLine.slice(6).trim();
-              const parsed = JSON.parse(dataContent);
+              const parsed = JSON.parse(clean.slice(6));
               const content = parsed.choices?.[0]?.delta?.content;
-              if (content) { 
-                fullReply += content; 
-                if (onChunk) onChunk(content); 
+              if (content) {
+                fullReply += content;
+                onChunk?.(content);
               }
-            } catch (e) {
-              // Ignore partial JSON parsing errors
-            }
+            } catch (_) {}
           }
+        }
+
+        // flush remainder
+        if (buffer.trim().startsWith('data: ') && !buffer.includes('[DONE]')) {
+          try {
+            const parsed = JSON.parse(buffer.trim().slice(6));
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) { fullReply += content; onChunk?.(content); }
+          } catch (_) {}
         }
       }
 
-      // Process remainder if present
-      if (buffer.trim().startsWith('data: ') && !buffer.includes('[DONE]')) {
-        try {
-          const dataContent = buffer.trim().slice(6).trim();
-          const parsed = JSON.parse(dataContent);
-          const content = parsed.choices?.[0]?.delta?.content;
-          if (content) {
-            fullReply += content;
-            if (onChunk) onChunk(content);
-          }
-        } catch (e) {}
-      }
-    }
+      history.current.push({
+        role: 'model',
+        parts: [{ text: fullReply }],
+        timestamp: Date.now(),
+      });
 
-    history.current.push({ role: 'model', parts: [{ text: fullReply }], timestamp: Date.now() });
-    return fullReply;
-  }, [apiKey]);
+      return fullReply;
+    },
+    [apiKey]
+  );
 
-  return { ask, reset: () => { history.current = []; } };
+  const reset = useCallback(() => { history.current = []; }, []);
+
+  return { ask, reset };
 }
