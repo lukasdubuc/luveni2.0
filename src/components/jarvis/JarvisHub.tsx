@@ -53,12 +53,9 @@ export default function JarvisHub({ geminiApiKey, autoStart }: JarvisHubProps) {
     return () => clearTimeout(t);
   }, [lastLine]);
 
-  // autoStart logic adjusted to trigger Live Mode
   useEffect(() => {
     if (!autoStart) return;
-    warmUpMobileSpeech();
-    setIsReady(true);
-    setIsLive(true);
+    initializeJarvis();
   }, [autoStart]);
 
   const { ask } = useGemini(geminiApiKey);
@@ -134,15 +131,14 @@ export default function JarvisHub({ geminiApiKey, autoStart }: JarvisHubProps) {
     } catch (e) {}
   };
 
-  const toggleLiveMode = async () => {
+  const initializeJarvis = async () => {
     warmUpMobileSpeech();
     setIsReady(true);
-    if (!document.fullscreenElement) {
-      await containerRef.current?.requestFullscreen().catch(() => {});
-      setIsLive(true);
-    } else {
-      await document.exitFullscreen().catch(() => {});
-      setIsLive(false);
+    setIsLive(true);
+    if (containerRef.current && !document.fullscreenElement) {
+      await containerRef.current.requestFullscreen().catch((err) => {
+        console.warn("Fullscreen request denied, continuing in windowed mode:", err);
+      });
     }
   };
 
@@ -170,7 +166,7 @@ export default function JarvisHub({ geminiApiKey, autoStart }: JarvisHubProps) {
       }} />
       <div style={styles.scanlines} />
 
-      <div style={{ ...styles.orbWrap, cursor: 'pointer' }} onClick={toggleLiveMode}>
+      <div style={{ ...styles.orbWrap, cursor: 'pointer' }} onClick={initializeJarvis}>
         <NeuralOrb state={orbState} audioLevel={audioLevel} size={400} />
         <motion.div
           animate={{
