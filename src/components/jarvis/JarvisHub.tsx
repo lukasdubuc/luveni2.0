@@ -37,8 +37,9 @@ export default function JarvisHub({ geminiApiKey, autoStart }: JarvisHubProps) {
   const [audioLevel, setAudioLevel] = useState(0);
   const [lastLine, setLastLine]     = useState('');
   const [isReady, setIsReady]       = useState(false);
-  const [isMuted, setIsMuted]       = useState(true);
+  const [isLive, setIsLive]         = useState(false);
 
+  const containerRef    = useRef<HTMLDivElement>(null);
   const targetLevelRef  = useRef(0);
   const smoothLevelRef  = useRef(0);
   const stateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -52,19 +53,12 @@ export default function JarvisHub({ geminiApiKey, autoStart }: JarvisHubProps) {
     return () => clearTimeout(t);
   }, [lastLine]);
 
-  // ── autoStart: skip the manual tap, go live immediately ─────────────────
-  // Mirrors what handleActionClick + handleOrbClick do when unmuting:
-  // cancel any audio, zero levels, then set orbState to 'idle' so the
-  // displayColor/displayLabel logic resolves to the cyan LISTENING state.
+  // autoStart logic adjusted to trigger Live Mode
   useEffect(() => {
     if (!autoStart) return;
     warmUpMobileSpeech();
-    targetLevelRef.current = 0;
-    smoothLevelRef.current = 0;
     setIsReady(true);
-    setIsMuted(false);
-    setOrbState('idle'); // triggers cyan LISTENING display immediately
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    setIsLive(true);
   }, [autoStart]);
 
   const { ask } = useGemini(geminiApiKey);
@@ -100,7 +94,6 @@ export default function JarvisHub({ geminiApiKey, autoStart }: JarvisHubProps) {
   });
 
   const handleTranscript = useCallback(async (text: string) => {
-    if (isMuted) return;
     setLastLine(text);
     changeOrbState('thinking');
     targetLevelRef.current = 0;
@@ -113,23 +106,23 @@ export default function JarvisHub({ geminiApiKey, autoStart }: JarvisHubProps) {
       console.error('[Jarvis] error:', err);
       speak('I encountered an issue reaching the neural network, sir.');
     }
-  }, [ask, cancel, speak, changeOrbState, isMuted]);
+  }, [ask, cancel, speak, changeOrbState]);
 
- useVoiceInput({
-  onTranscript: (text: any) => { if (!isMuted) handleTranscript(text); },
-  onStateChange: (s: any) => {
-    if (isMuted) return;
-    if (s === 'listening') { cancel(); targetLevelRef.current = 0; smoothLevelRef.current = 0; }
-    if (s === 'idle' && orbState === 'speaking') return;
-    changeOrbState(s);
-  },
-  onLevelChange: (lvl: any) => {
-    if (isMuted) { targetLevelRef.current = 0; return; }
-    targetLevelRef.current = lvl;
-  },
-  enabled: isReady && !isMuted,
-  preventListening: orbState === 'speaking' || orbState === 'thinking',
-});
+  useVoiceInput({
+    onTranscript: (text: any) => { if (isLive) handleTranscript(text); },
+    onStateChange: (s: any) => {
+      if (!isLive) return;
+      if (s === 'listening') { cancel(); targetLevelRef.current = 0; smoothLevelRef.current = 0; }
+      if (s === 'idle' && orbState === 'speaking') return;
+      changeOrbState(s);
+    },
+    onLevelChange: (lvl: any) => {
+      if (!isLive) { targetLevelRef.current = 0; return; }
+      targetLevelRef.current = lvl;
+    },
+    enabled: isReady && isLive,
+    preventListening: orbState === 'speaking' || orbState === 'thinking',
+  });
 
   const warmUpMobileSpeech = () => {
     try {
@@ -141,63 +134,27 @@ export default function JarvisHub({ geminiApiKey, autoStart }: JarvisHubProps) {
     } catch (e) {}
   };
 
-  const handleActionClick = () => {
+  const toggleLiveMode = async () => {
     warmUpMobileSpeech();
-    if (!isReady) {
-      setIsReady(true);
-      setIsMuted(false);
+    setIsReady(true);
+    if (!document.fullscreenElement) {
+      await containerRef.current?.requestFullscreen().catch(() => {});
+      setIsLive(true);
     } else {
-      const nextMuted = !isMuted;
-      setIsMuted(nextMuted);
-      if (nextMuted) {
-        cancel();
-        setAudioLevel(0);
-        targetLevelRef.current = 0;
-        smoothLevelRef.current = 0;
-        if (stateTimeoutRef.current) { clearTimeout(stateTimeoutRef.current); stateTimeoutRef.current = null; }
-        setOrbState('idle');
-      } else {
-        setOrbState('idle');
-      }
+      await document.exitFullscreen().catch(() => {});
+      setIsLive(false);
     }
   };
 
-  const handleOrbClick = () => {
-    if (!isReady || isMuted) return;
-    if (orbState === 'speaking' || orbState === 'thinking') {
-      cancel();
-      targetLevelRef.current = 0;
-      smoothLevelRef.current = 0;
-      changeOrbState('idle');
-    }
-  };
+  const displayLabel = (isReady && isLive && orbState === 'idle') ? STATE_LABEL['listening'] : STATE_LABEL[orbState];
+  const displayColor = (isReady && isLive && orbState === 'idle') ? STATE_COLOR['listening'] : STATE_COLOR[orbState];
 
-  const displayLabel = (isReady && !isMuted && orbState === 'idle') ? STATE_LABEL['listening'] : STATE_LABEL[orbState];
-  const displayColor = (isReady && !isMuted && orbState === 'idle') ? STATE_COLOR['listening'] : STATE_COLOR[orbState];
-
-  // Extract RGB from current state color for dynamic shadow
   const shadowColor = STATE_COLOR[orbState].replace('rgba(', '').replace(/,[^,]+\)$/, '');
   const shadowOpacity = 0.12 + audioLevel * 0.22;
   const shadowSize = 180 + audioLevel * 120;
 
-  // Desktop fullscreen on first interaction — skipped when autoStart already
-  // triggered fullscreen from the parent page before navigation
-  useEffect(() => {
-    if (window.innerWidth <= 768) return;
-    // If already fullscreen (e.g. initiated by JARVIS HUB button), skip
-    if (document.fullscreenElement) return;
-    const requestFS = () => {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen?.().catch(() => {});
-      }
-    };
-    window.addEventListener('click', requestFS, { once: true });
-    return () => window.removeEventListener('click', requestFS);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   return (
-    <div style={styles.root}>
+    <div ref={containerRef} style={styles.root}>
       <style dangerouslySetInnerHTML={{ __html: `
         html, body { background-color: #020408 !important; margin: 0; padding: 0; }
         @media (min-width: 769px) { .jarvis-transcript { font-size: 12px !important; letter-spacing: 10px !important; } }
@@ -206,16 +163,14 @@ export default function JarvisHub({ geminiApiKey, autoStart }: JarvisHubProps) {
         :-webkit-full-screen { background: #020408 !important; }
       ` }} />
 
-      {/* Crisp grid — full coverage, no transforms */}
       <div style={styles.gridBg} />
-      {/* Organic orb shadow — moves with audio level */}
       <div style={{
         ...styles.orbShadow,
         background: `radial-gradient(ellipse ${shadowSize}px ${shadowSize * 0.55}px at 50% 52%, rgba(${shadowColor},${shadowOpacity}) 0%, transparent 70%)`,
       }} />
       <div style={styles.scanlines} />
 
-      <div style={{ ...styles.orbWrap, cursor: (isReady && !isMuted && (orbState === 'speaking' || orbState === 'thinking')) ? 'pointer' : 'default' }} onClick={handleOrbClick}>
+      <div style={{ ...styles.orbWrap, cursor: 'pointer' }} onClick={toggleLiveMode}>
         <NeuralOrb state={orbState} audioLevel={audioLevel} size={400} />
         <motion.div
           animate={{
@@ -247,32 +202,6 @@ export default function JarvisHub({ geminiApiKey, autoStart }: JarvisHubProps) {
           )}
         </AnimatePresence>
       </div>
-
-      <motion.button
-        whileHover={{ scale: 1.06, backgroundColor: 'rgba(255,255,255,0.03)' }}
-        whileTap={{ scale: 0.95 }}
-        style={{
-          ...styles.circularControlBtn,
-          borderColor: !isReady ? 'rgba(180,100,255,0.4)' : isMuted ? 'rgba(255,80,80,0.4)' : 'rgba(0,255,255,0.4)',
-          boxShadow:   !isReady ? '0 0 20px rgba(180,100,255,0.08)' : isMuted ? '0 0 20px rgba(255,80,80,0.08)' : '0 0 20px rgba(0,255,255,0.08)',
-        }}
-        onClick={handleActionClick}
-        aria-label={!isReady ? "Initialize J.A.R.V.I.S." : isMuted ? "Unmute J.A.R.V.I.S." : "Mute J.A.R.V.I.S."}
-      >
-        {!isReady ? (
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{ width: 22, height: 22, color: 'rgba(180,100,255,0.95)' }}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9" />
-          </svg>
-        ) : isMuted ? (
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{ width: 22, height: 22, color: 'rgba(255,80,80,0.95)' }}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M2.25 2.25l19.5 19.5M15.364 15.364l4.656-4.656m0 0l2.25 2.25m-2.25-2.25l2.25-2.25m-4.5 4.5l-2.25-2.25M9 10.5v1.5a3 3 0 003 3v0M12 4.5c.828 0 1.5.672 1.5 1.5V9M12 21v-3" />
-          </svg>
-        ) : (
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{ width: 22, height: 22, color: 'rgba(0,255,255,0.95)' }}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V6a3 3 0 016 0v6.75a3 3 0 01-3 3z" />
-          </svg>
-        )}
-      </motion.button>
     </div>
   );
 }
@@ -293,7 +222,6 @@ const styles: Record<string, React.CSSProperties> = {
     userSelect: 'none',
     zIndex: 9999,
   },
-  // Pixel-perfect grid — crisp 1px lines, deep navy base so it reads as space not void
   gridBg: {
     position: 'absolute',
     inset: 0,
@@ -309,7 +237,6 @@ const styles: Record<string, React.CSSProperties> = {
     pointerEvents: 'none',
     zIndex: 0,
   },
-  // Organic orb shadow — rendered inline so it reacts to audioLevel + state color
   orbShadow: {
     position: 'absolute',
     inset: 0,
@@ -362,22 +289,5 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#fff',
     fontWeight: 'lighter',
     lineHeight: 1.6,
-  },
-  circularControlBtn: {
-    marginTop: 20,
-    width: '56px',
-    height: '56px',
-    borderRadius: '9999px',
-    background: 'rgba(13,13,30,0.4)',
-    backdropFilter: 'blur(16px)',
-    WebkitBackdropFilter: 'blur(16px)',
-    border: '1px solid',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    transition: 'border-color 0.3s ease, box-shadow 0.3s ease',
-    zIndex: 20,
-    outline: 'none',
   },
 };
