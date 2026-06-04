@@ -24,6 +24,9 @@ export function useVoiceInput({
   const analyzerRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const rafRef = useRef<number>(0);
+  
+  // Noise Gate Configuration
+  const SILENCE_THRESHOLD = 0.12; // Increase this (e.g., to 0.2) if AC is still being heard
 
   const initAudio = useCallback(async () => {
     try {
@@ -39,7 +42,9 @@ export function useVoiceInput({
         analyzerRef.current?.getByteFrequencyData(dataArray);
         const sum = dataArray.reduce((a, b) => a + b, 0);
         const avg = sum / dataArray.length;
-        onLevelChange(avg / 128);
+        const normalizedLevel = avg / 128;
+        
+        onLevelChange(normalizedLevel);
         rafRef.current = requestAnimationFrame(updateLevel);
       };
       updateLevel();
@@ -69,6 +74,16 @@ export function useVoiceInput({
 
     rec.onresult = (event: any) => {
       if (preventListening) return;
+
+      // Noise Gate: Check current volume level before processing
+      // We check the last frame of audio data
+      const dataArray = new Uint8Array(analyzerRef.current?.frequencyBinCount || 0);
+      analyzerRef.current?.getByteFrequencyData(dataArray);
+      const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+      const currentLevel = avg / 128;
+
+      if (currentLevel < SILENCE_THRESHOLD) return;
+
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
           onTranscript(event.results[i][0].transcript);
@@ -89,6 +104,8 @@ export function useVoiceInput({
     return () => {
       rec.stop();
       cancelAnimationFrame(rafRef.current);
+      sourceRef.current?.disconnect();
+      audioContextRef.current?.close();
     };
   }, [enabled, preventListening, onTranscript, onStateChange, initAudio]);
 }
