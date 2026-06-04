@@ -1,155 +1,103 @@
 // ─────────────────────────────────────────────────────────────
-//  J.A.R.V.I.S — Luveni GM  |  hooks/useVoiceInput.ts
+//  J.A.R.V.I.S — Luveni GM  |  hooks/useSpeechRecognition.ts
+//  Noise-filtered speech-to-text hook
 // ─────────────────────────────────────────────────────────────
 
-import { useRef, useCallback, useEffect } from 'react';
-import type { OrbState } from '../types/jarvis';
-import { DEFAULT_VAD_THRESHOLD, DEFAULT_SILENCE_MS } from '../lib/jarvis-config';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-interface UseVoiceInputOptions {
-  onTranscript: (text: string) => void;
-  onStateChange: (state: OrbState) => void;
-  onLevelChange: (level: number) => void;
-  vadThreshold?: number;
-  silenceMs?: number;
-  enabled?: boolean;
+interface UseSpeechRecognitionOptions {
+  onResult: (text: string) => void;
+  onListeningStateChange?: (listening: boolean) => void;
+  lang?: string;
 }
 
-export function useVoiceInput({
-  onTranscript,
-  onStateChange,
-  onLevelChange,
-  vadThreshold = DEFAULT_VAD_THRESHOLD,
-  silenceMs = DEFAULT_SILENCE_MS,
-  enabled = true,
-}: UseVoiceInputOptions) {
-  const onTranscriptRef = useRef(onTranscript);
-  const onStateChangeRef = useRef(onStateChange);
-  const onLevelChangeRef = useRef(onLevelChange);
+export function useSpeechRecognition({
+  onResult,
+  onListeningStateChange,
+  lang = 'en-US',
+}: UseSpeechRecognitionOptions) {
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+  const onResultRef = useRef(onResult);
 
   useEffect(() => {
-    onTranscriptRef.current = onTranscript;
-    onStateChangeRef.current = onStateChange;
-    onLevelChangeRef.current = onLevelChange;
-  }, [onTranscript, onStateChange, onLevelChange]);
+    onResultRef.current = onResult;
+  }, [onResult]);
 
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const recogRef = useRef<SpeechRecognition | null>(null);
-  const stateRef = useRef<OrbState>('idle');
-  const bufferRef = useRef<string>('');
-  const rafRef = useRef<number>(0);
-  const lastActiveRef = useRef<number>(0);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
 
-  const setOrbState = useCallback((s: OrbState) => {
-    stateRef.current = s;
-    onStateChangeRef.current(s);
-  }, []);
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
-  const stopRecognition = useCallback(() => {
-    if (recogRef.current) {
-      try { 
-        recogRef.current.stop(); 
-      } catch (_) {}
+    if (!SpeechRecognition) {
+      return;
+    }
+
+    const rec = new SpeechRecognition();
+    rec.continuous = false; // Only record single queries, preventing long background listening
+    rec.interimResults = false; // Only rely on finalized transcripts
+    rec.maxAlternatives = 1;
+    rec.lang = lang;
+
+    rec.onstart = () => {
+      setIsListening(true);
+      onListeningStateChange?.(true);
+    };
+
+    rec.onend = () => {
+      setIsListening(false);
+      onListeningStateChange?.(false);
+    };
+
+    rec.onresult = (event: any) => {
+      const result = event.results[event.resultIndex];
+      if (!result) return;
+
+      const alternative = result[0];
+      const transcript = alternative.transcript.trim();
+      const confidence = alternative.confidence;
+
+      // Noise and Non-Word Mitigation Filter:
+      // 1. Ignore transcripts containing only empty space or single characters (sighs, pops)
+      // 2. Ignore transcripts with very low recognition confidence scores
+      if (transcript.length > 1 && confidence > 0.45) {
+        onResultRef.current(transcript);
+      }
+    };
+
+    rec.onerror = () => {
+      setIsListening(false);
+      onListeningStateChange?.(false);
+    };
+
+    recognitionRef.current = rec;
+  }, [lang, onListeningStateChange]);
+
+  const startListening = useCallback(() => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.start();
+      } catch (e) {
+        // Handle cases where engine is already listening
+      }
     }
   }, []);
 
-  const startRecognition = useCallback(() => {
-    if (stateRef.current !== 'idle') return;
-    setOrbState('listening');
-    bufferRef.current = '';
-    lastActiveRef.current = Date.now();
-
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) return;
-
-    const recog: SpeechRecognition = new SR();
-    recog.continuous = true;
-    recog.interimResults = false;
-    recog.lang = 'en-US';
-
-    recog.onresult = (e: SpeechRecognitionEvent) => {
-      for (let i = e.resultIndex; i < e.results.length; ++i) {
-        if (e.results[i].isFinal) {
-          bufferRef.current += e.results[i][0].transcript + ' ';
-        }
+  const stopListening = useCallback(() => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        // Handle cases where engine is already stopped
       }
-    };
-
-    recog.onend = () => {
-      const text = bufferRef.current.trim();
-      bufferRef.current = '';
-      setOrbState('idle');
-      recogRef.current = null;
-      if (text) {
-        onTranscriptRef.current(text);
-      }
-    };
-
-    recogRef.current = recog;
-    recog.start();
-  }, [setOrbState]);
-
-  const initMic = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      const ctx = new AudioContextClass();
-      audioCtxRef.current = ctx;
-      
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
-      ctx.createMediaStreamSource(stream).connect(analyser);
-      analyserRef.current = analyser;
-
-      const data = new Uint8Array(analyser.frequencyBinCount);
-      const tick = () => {
-        if (!analyserRef.current) return;
-        analyserRef.current.getByteFrequencyData(data);
-        const avg = data.reduce((a, b) => a + b, 0) / data.length;
-        onLevelChangeRef.current(Math.min(1, avg / 50));
-
-        const now = Date.now();
-        if (avg > vadThreshold) {
-          lastActiveRef.current = now;
-          if (stateRef.current === 'idle') {
-            startRecognition();
-          }
-        } else {
-          // If silent for longer than silenceMs while listening, stop capturing to process response
-          if (stateRef.current === 'listening' && (now - lastActiveRef.current) > silenceMs) {
-            stopRecognition();
-          }
-        }
-        rafRef.current = requestAnimationFrame(tick);
-      };
-      tick();
-      setOrbState('idle');
-    } catch (err) {
-      console.error("Mic init failed", err);
     }
-  }, [startRecognition, stopRecognition, setOrbState, vadThreshold, silenceMs]);
+  }, []);
 
-  useEffect(() => {
-    if (!enabled) return;
-    const handleInteraction = () => {
-      if (audioCtxRef.current?.state === 'suspended') {
-        audioCtxRef.current.resume();
-      } else if (!audioCtxRef.current) {
-        initMic();
-      }
-    };
-    window.addEventListener('click', handleInteraction, { once: true });
-    return () => {
-      window.removeEventListener('click', handleInteraction);
-      cancelAnimationFrame(rafRef.current);
-      stopRecognition();
-      streamRef.current?.getTracks().forEach(t => t.stop());
-    };
-  }, [enabled, initMic, stopRecognition]);
-
-  return { initMic };
+  return {
+    startListening,
+    stopListening,
+    isListening,
+    isSupported: !!recognitionRef.current,
+  };
 }
