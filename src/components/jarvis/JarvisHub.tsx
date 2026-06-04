@@ -284,7 +284,7 @@ const styles: Record<string, React.CSSProperties> = {
       linear-gradient(rgba(0,160,255,0.05) 1px, transparent 1px),
       linear-gradient(90deg, rgba(0,160,255,0.05) 1px, transparent 1px)
     `,
-    backgroundSize: '80px 80px, 80px 80px, 20px 20px, 20px 20px',
+    backgroundSize: '40px 40px, 40px 40px, 10px 10px, 10px 10px',
     backgroundPosition: '0 0',
     imageRendering: 'pixelated' as const,
     pointerEvents: 'none',
