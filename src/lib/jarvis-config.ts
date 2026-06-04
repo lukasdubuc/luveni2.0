@@ -2,8 +2,8 @@
 //  J.A.R.V.I.S — Luveni GM  |  lib/jarvis-config.ts
 // ─────────────────────────────────────────────────────────────
 
-export const DEFAULT_VAD_THRESHOLD = 22;
-export const DEFAULT_SILENCE_MS = 1100;
+export const DEFAULT_VAD_THRESHOLD = 15;
+export const DEFAULT_SILENCE_MS = 600;
 export const DEFAULT_MAX_HISTORY = 12;
 
 // Updated to the Mistral chat completions endpoint
