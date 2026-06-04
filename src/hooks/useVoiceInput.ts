@@ -1,104 +1,62 @@
 // ─────────────────────────────────────────────────────────────
-//  J.A.R.V.I.S — Luveni GM  |  hooks/useVoiceInput.ts
+//  J.A.R.V.I.S — Luveni GM | hooks/useVoiceInput.ts
 // ─────────────────────────────────────────────────────────────
 
 import { useEffect, useRef, useCallback } from 'react';
 
-// External singleton to ensure hardware is only grabbed once
 let sharedAudioContext: AudioContext | null = null;
 
-interface UseVoiceInputOptions {
-  onTranscript: (text: string) => void;
-  onStateChange: (state: string) => void;
-  onLevelChange: (level: number) => void;
-  enabled: boolean;
-  preventListening?: boolean;
-}
-
 export function useVoiceInput({ 
-  onTranscript, onStateChange, onLevelChange, enabled, preventListening 
-}: UseVoiceInputOptions) {
+  onTranscript, 
+  onStateChange, 
+  onLevelChange, 
+  enabled, 
+  isSpeaking // NEW: Pass true when AI is talking
+}: any) {
   const recognitionRef = useRef<any>(null);
 
-  const initAudio = useCallback(async () => {
-    if (sharedAudioContext) return;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      sharedAudioContext = new AudioCtx();
-      const analyzer = sharedAudioContext.createAnalyser();
-      const source = sharedAudioContext.createMediaStreamSource(stream);
-      source.connect(analyzer);
-      analyzer.fftSize = 256;
-
-      const dataArray = new Uint8Array(analyzer.frequencyBinCount);
-      const updateLevel = () => {
-        analyzer.getByteFrequencyData(dataArray);
-        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-        onLevelChange(avg / 128);
-        requestAnimationFrame(updateLevel);
-      };
-      updateLevel();
-    } catch (e) {
-      console.error('[VoiceInput] Hardware block:', e);
-    }
-  }, [onLevelChange]);
-
   const startRecognition = useCallback(() => {
-    if (recognitionRef.current) return;
+    // If we are currently "speaking," do not start or restart the listener.
+    if (isSpeaking || recognitionRef.current) return;
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
     const rec = new SpeechRecognition();
     rec.continuous = true;
-    rec.interimResults = true;
+    rec.interimResults = false;
     rec.lang = 'en-GB';
 
-    rec.onstart = () => {
-      onStateChange('listening');
-      initAudio();
-    };
-
+    rec.onstart = () => onStateChange('listening');
     rec.onresult = (event: any) => {
-      if (preventListening) return;
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) onTranscript(event.results[i][0].transcript);
-      }
+      // If AI is speaking, ignore incoming audio completely
+      if (isSpeaking) return; 
+      const transcript = event.results[event.results.length - 1][0].transcript;
+      if (transcript.trim()) onTranscript(transcript);
     };
 
     rec.onend = () => {
-      onStateChange('idle');
       recognitionRef.current = null;
-      
-      // PERSISTENCE FIX:
-      // Only restart if the component is still mounted and enabled.
-      // We add a shorter delay to ensure the mic stays captured.
-      if (enabled) {
-        // Use a 50ms delay for a "seamless" feel
-        setTimeout(() => {
-          if (enabled) startRecognition();
-        }, 50);
+      // Only restart if we aren't currently "speaking"
+      if (enabled && !isSpeaking) {
+        setTimeout(startRecognition, 100);
       }
     };
 
-    rec.onerror = () => {
-      recognitionRef.current = null; // Force reset on error
-    };
-
-    try { rec.start(); recognitionRef.current = rec; } catch {}
-  }, [onTranscript, onStateChange, initAudio, preventListening, enabled]);
+    try { rec.start(); recognitionRef.current = rec; } catch (e) { console.warn(e); }
+  }, [onTranscript, onStateChange, enabled, isSpeaking]);
 
   useEffect(() => {
-    if (enabled) {
+    if (enabled && !isSpeaking) {
       startRecognition();
-    } else if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      recognitionRef.current = null;
+    } else {
+      // Stop listening immediately when AI starts speaking
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
     }
-    // Note: We do NOT close the AudioContext on unmount
-    // to prevent InvalidStateError crashes.
-  }, [enabled, startRecognition]);
+  }, [enabled, isSpeaking, startRecognition]);
 
   return null;
 }
