@@ -70,9 +70,15 @@ export function useVoiceInput({
     rec.onend = () => {
       onStateChange('idle');
       recognitionRef.current = null;
-      // Do NOT touch AudioContext here
+      
+      // PERSISTENCE FIX:
+      // Only restart if the component is still mounted and enabled.
+      // We add a shorter delay to ensure the mic stays captured.
       if (enabled) {
-        setTimeout(() => startRecognition(), 500); // 500ms cool-down
+        // Use a 50ms delay for a "seamless" feel
+        setTimeout(() => {
+          if (enabled) startRecognition();
+        }, 50);
       }
     };
 
