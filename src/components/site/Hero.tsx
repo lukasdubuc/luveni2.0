@@ -31,16 +31,16 @@ export function Hero({ siteConfig }: { siteConfig?: SiteConfig }) {
             className="mx-auto mt-6 max-w-xl text-base text-black/55 md:text-lg"
             dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(cfg.hero_subheadline, SANITIZE_OPTS) }}
           />
-          <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
+         <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
-              to="/offer"
+              to="/shop" // Changed from /offer
               className="group inline-flex w-full items-center justify-center gap-2 rounded-md px-7 py-3.5 text-sm font-medium text-black-foreground transition-transform hover:-translate-y-0.5 sm:w-auto"
             >
               {cfg.hero_cta}
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Link>
             <Link
-              to="/offer"
+              to="/shop" // Changed from /offer
               className="inline-flex w-full items-center justify-center border border-black/10 bg-white px-7 py-3.5 text-sm font-medium text-black transition-colors hover:border-black sm:w-auto"
             >
               See what's included

@@ -115,21 +115,21 @@ export default function JarvisHub({ geminiApiKey, autoStart }: JarvisHubProps) {
     }
   }, [ask, cancel, speak, changeOrbState, isMuted]);
 
-  useVoiceInput({
-    onTranscript: (text) => { if (!isMuted) handleTranscript(text); },
-    onStateChange: (s) => {
-      if (isMuted) return;
-      if (s === 'listening') { cancel(); targetLevelRef.current = 0; smoothLevelRef.current = 0; }
-      if (s === 'idle' && orbState === 'speaking') return;
-      changeOrbState(s);
-    },
-    onLevelChange: (lvl) => {
-      if (isMuted) { targetLevelRef.current = 0; return; }
-      targetLevelRef.current = lvl;
-    },
-    enabled: isReady && !isMuted,
-    preventListening: orbState === 'speaking' || orbState === 'thinking',
-  });
+ useVoiceInput({
+  onTranscript: (text: any) => { if (!isMuted) handleTranscript(text); },
+  onStateChange: (s: any) => {
+    if (isMuted) return;
+    if (s === 'listening') { cancel(); targetLevelRef.current = 0; smoothLevelRef.current = 0; }
+    if (s === 'idle' && orbState === 'speaking') return;
+    changeOrbState(s);
+  },
+  onLevelChange: (lvl: any) => {
+    if (isMuted) { targetLevelRef.current = 0; return; }
+    targetLevelRef.current = lvl;
+  },
+  enabled: isReady && !isMuted,
+  preventListening: orbState === 'speaking' || orbState === 'thinking',
+});
 
   const warmUpMobileSpeech = () => {
     try {

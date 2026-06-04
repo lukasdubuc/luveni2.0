@@ -1,89 +1,94 @@
 // ─────────────────────────────────────────────────────────────
-//  J.A.R.V.I.S — Luveni GM  |  hooks/useSpeechRecognition.ts
+//  J.A.R.V.I.S — Luveni GM  |  hooks/useVoiceInput.ts
 // ─────────────────────────────────────────────────────────────
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 
-interface UseSpeechRecognitionOptions {
-  onResult: (text: string) => void;
-  onListeningStateChange?: (listening: boolean) => void;
-  lang?: string;
+interface UseVoiceInputOptions {
+  onTranscript: (text: string) => void;
+  onStateChange: (state: string) => void;
+  onLevelChange: (level: number) => void;
+  enabled: boolean;
+  preventListening?: boolean;
 }
 
-export function useSpeechRecognition({
-  onResult,
-  onListeningStateChange,
-  lang = 'en-US',
-}: UseSpeechRecognitionOptions) {
-  const [isListening, setIsListening] = useState(false);
+export function useVoiceInput({ 
+  onTranscript, 
+  onStateChange, 
+  onLevelChange, 
+  enabled, 
+  preventListening 
+}: UseVoiceInputOptions) {
   const recognitionRef = useRef<any>(null);
-  const onResultRef = useRef(onResult);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyzerRef = useRef<AnalyserNode | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const rafRef = useRef<number>(0);
+
+  const initAudio = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      analyzerRef.current = audioContextRef.current.createAnalyser();
+      sourceRef.current = audioContextRef.current.createMediaStreamSource(stream);
+      sourceRef.current.connect(analyzerRef.current);
+      analyzerRef.current.fftSize = 256;
+
+      const dataArray = new Uint8Array(analyzerRef.current.frequencyBinCount);
+      const updateLevel = () => {
+        analyzerRef.current?.getByteFrequencyData(dataArray);
+        const sum = dataArray.reduce((a, b) => a + b, 0);
+        const avg = sum / dataArray.length;
+        onLevelChange(avg / 128);
+        rafRef.current = requestAnimationFrame(updateLevel);
+      };
+      updateLevel();
+    } catch (e) {
+      console.error('[VoiceInput] Audio error:', e);
+    }
+  }, [onLevelChange]);
 
   useEffect(() => {
-    onResultRef.current = onResult;
-  }, [onResult]);
+    if (!enabled) {
+      if (recognitionRef.current) recognitionRef.current.stop();
+      return;
+    }
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
     const rec = new SpeechRecognition();
-    rec.continuous = false;
-    rec.interimResults = false;
-    rec.maxAlternatives = 1;
-    rec.lang = lang;
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.lang = 'en-GB';
 
     rec.onstart = () => {
-      setIsListening(true);
-      if (onListeningStateChange) onListeningStateChange(true);
-    };
-
-    rec.onend = () => {
-      setIsListening(false);
-      if (onListeningStateChange) onListeningStateChange(false);
+      onStateChange('listening');
+      initAudio();
     };
 
     rec.onresult = (event: any) => {
-      const result = event.results[event.resultIndex];
-      if (!result) return;
-
-      const alternative = result[0];
-      const transcript = alternative.transcript.trim();
-      const confidence = alternative.confidence;
-
-      if (transcript.length > 2 && confidence > 0.6) {
-        onResultRef.current(transcript);
+      if (preventListening) return;
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          onTranscript(event.results[i][0].transcript);
+        }
       }
     };
 
-    rec.onerror = () => {
-      setIsListening(false);
-      if (onListeningStateChange) onListeningStateChange(false);
+    rec.onend = () => {
+      onStateChange('idle');
+      cancelAnimationFrame(rafRef.current);
+      sourceRef.current?.disconnect();
+      audioContextRef.current?.close();
     };
 
+    rec.start();
     recognitionRef.current = rec;
-  }, [lang, onListeningStateChange]);
 
-  const startListening = useCallback(() => {
-    if (recognitionRef.current) {
-      try { recognitionRef.current.start(); } catch (e) {}
-    }
-  }, []);
-
-  const stopListening = useCallback(() => {
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch (e) {}
-    }
-  }, []);
-
-  return {
-    startListening,
-    stopListening,
-    isListening,
-    isSupported: !!recognitionRef.current,
-  };
+    return () => {
+      rec.stop();
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, [enabled, preventListening, onTranscript, onStateChange, initAudio]);
 }
