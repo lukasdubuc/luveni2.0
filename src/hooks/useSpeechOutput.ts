@@ -1,126 +1,124 @@
 // ─────────────────────────────────────────────────────────────
-//  J.A.R.V.I.S — Luveni GM | hooks/useSpeechOutput.ts
+//  J.A.R.V.I.S — Luveni GM | components/jarvis/JarvisHub.tsx
 // ─────────────────────────────────────────────────────────────
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import NeuralOrb from './NeuralOrb';
+import { useVoiceInput } from '../../hooks/useVoiceInput';
+import { useSpeechOutput } from '../../hooks/useSpeechOutput';
+import { useGemini } from '../../hooks/useGemini';
+import type { OrbState } from '../../types/jarvis';
+import { motion, AnimatePresence } from 'framer-motion';
 
-// Extend window to hold our persistent utterance and heartbeat
-declare global {
-  interface Window {
-    jarvisUtterance: SpeechSynthesisUtterance | null;
-    jarvisHeartbeat: NodeJS.Timeout | null;
-  }
-}
+const STATE_LABEL: Record<OrbState, string> = {
+  idle: 'STANDBY', listening: 'LISTENING', thinking: 'PROCESSING', speaking: 'RESPONDING', error: 'MIC ERROR',
+};
 
-interface UseSpeechOutputOptions {
-  onStart?: () => void;
-  onBoundary?: (level: number) => void;
-  onEnd?: () => void;
-}
+const STATE_COLOR: Record<OrbState, string> = {
+  idle: 'rgba(0,180,255,0.6)', listening: 'rgba(0,255,255,1.0)', thinking: 'rgba(180,100,255,1.0)', speaking: 'rgba(0,255,180,0.95)', error: 'rgba(255,80,80,1.0)',
+};
 
-const MALE_BRITISH_NAMES = [
-  'Google UK English Male',
-  'Daniel',
-  'Microsoft George',
-  'Microsoft Ryan',
-];
+export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, autoStart?: boolean }) {
+  const [orbState, setOrbState] = useState<OrbState>('idle');
+  const [lastLine, setLastLine] = useState('');
+  const [lastAiResponse, setLastAiResponse] = useState('');
+  const [isReady, setIsReady] = useState(false);
+  const [isLive, setIsLive] = useState(false);
 
-function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
-  for (const name of MALE_BRITISH_NAMES) {
-    const v = voices.find(v => v.name === name);
-    if (v) return v;
-  }
-  return voices.find(v => v.lang.startsWith('en-GB')) ?? null;
-}
+  const stateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const orbStateRef = useRef(orbState);
 
-function loadVoices(): Promise<SpeechSynthesisVoice[]> {
-  return new Promise((resolve) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) {
-      resolve([]);
-      return;
-    }
-    const voices = speechSynthesis.getVoices();
-    if (voices.length > 0) {
-      resolve(voices);
-      return;
-    }
-    const handler = () => resolve(speechSynthesis.getVoices());
-    speechSynthesis.addEventListener('voiceschanged', handler, { once: true });
-    setTimeout(() => resolve(speechSynthesis.getVoices()), 3000);
-  });
-}
+  useEffect(() => { orbStateRef.current = orbState; }, [orbState]);
 
-let voiceCache: SpeechSynthesisVoice | null | undefined = undefined;
+  const { ask } = useGemini(geminiApiKey);
 
-export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputOptions = {}) {
-  const speaking = useRef(false);
-  const onStartRef = useRef(onStart);
-  const onBoundaryRef = useRef(onBoundary);
-  const onEndRef = useRef(onEnd);
-
-  useEffect(() => {
-    onStartRef.current = onStart;
-    onBoundaryRef.current = onBoundary;
-    onEndRef.current = onEnd;
-  }, [onStart, onBoundary, onEnd]);
-
-  const doSpeak = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-
-    window.speechSynthesis.cancel();
-    speaking.current = true;
-
-    // HEARTBEAT FIX: Prevents browser power-save from suspending audio thread
-    if (window.jarvisHeartbeat) clearInterval(window.jarvisHeartbeat);
-    window.jarvisHeartbeat = setInterval(() => {
-        window.speechSynthesis.pause();
-        window.speechSynthesis.resume();
-    }, 5000);
-
-    const utt = new SpeechSynthesisUtterance(text);
-    utt.rate = 0.93;
-    utt.pitch = 0.78;
-    utt.voice = voice;
-
-    window.jarvisUtterance = utt;
-
-    utt.onstart = () => { if (onStartRef.current) onStartRef.current(); };
-    utt.onboundary = () => { if (onBoundaryRef.current) onBoundaryRef.current(0.3 + Math.random() * 0.55); };
-    
-    const handleEnd = () => {
-      if (window.jarvisHeartbeat) clearInterval(window.jarvisHeartbeat);
-      if (!speaking.current) return;
-      speaking.current = false;
-      window.jarvisUtterance = null;
-      
-      setTimeout(() => {
-        if (onEndRef.current) onEndRef.current();
-      }, 500);
-    };
-
-    utt.onend = handleEnd;
-    utt.onerror = handleEnd;
-
-    window.speechSynthesis.speak(utt);
-  }, []);
-
-  const speak = useCallback((text: string) => {
-    if (voiceCache !== undefined) {
-      doSpeak(text, voiceCache);
+  const changeOrbState = useCallback((newState: OrbState) => {
+    if (stateTimeoutRef.current) clearTimeout(stateTimeoutRef.current);
+    if (newState === 'idle') {
+      stateTimeoutRef.current = setTimeout(() => setOrbState('idle'), 750);
     } else {
-      loadVoices().then(v => {
-        voiceCache = findBestVoice(v);
-        doSpeak(text, voiceCache);
-      });
+      setOrbState(newState);
     }
-  }, [doSpeak]);
-
-  const cancel = useCallback(() => {
-    window.speechSynthesis.cancel();
-    if (window.jarvisHeartbeat) clearInterval(window.jarvisHeartbeat);
-    speaking.current = false;
-    window.jarvisUtterance = null;
   }, []);
 
-  return { speak, cancel, isSpeaking: () => speaking.current };
+  const { speak, cancel } = useSpeechOutput({
+    onStart: () => changeOrbState('speaking'),
+    onEnd: () => {
+      if (orbStateRef.current === 'speaking') changeOrbState('idle');
+    },
+  });
+
+  const handleTranscript = useCallback(async (text: string) => {
+    window.speechSynthesis.cancel();
+    setLastLine(text);
+    changeOrbState('thinking');
+    
+    try {
+      const reply = await ask(text);
+      setLastLine(reply);
+      setLastAiResponse(reply);
+      // Chunking: Send response to speak which handles queueing
+      speak(reply);
+    } catch (err) {
+      console.error('[Jarvis] Error:', err);
+      changeOrbState('idle');
+    }
+  }, [ask, speak, changeOrbState]);
+
+  useVoiceInput({
+    onTranscript: (text: string) => { if (isLive) handleTranscript(text); },
+    onStateChange: (s: string) => {
+      if (!isLive) return;
+      if (s === 'listening') { cancel(); }
+      changeOrbState(s as OrbState);
+    },
+    onLevelChange: () => {},
+    enabled: isReady && isLive,
+    isSpeaking: orbState === 'speaking',
+    lastAiResponse,
+    preventListening: orbState === 'speaking' || orbState === 'thinking',
+  });
+
+  const initializeJarvis = async () => {
+    if (isReady) return;
+    setIsReady(true);
+    setIsLive(true);
+    
+    // MOBILE FIX: Force audio context resume and speak dummy text immediately
+    try {
+      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+      const ctx = new AudioCtx();
+      if (ctx.state === 'suspended') await ctx.resume();
+      const s = new SpeechSynthesisUtterance("System online.");
+      s.volume = 1; 
+      window.speechSynthesis.speak(s);
+    } catch (e) { console.error("Audio unlock failed", e); }
+  };
+
+  useEffect(() => { if (autoStart) initializeJarvis(); }, [autoStart]);
+
+  return (
+    <div style={styles.root} onClick={initializeJarvis}>
+      <style dangerouslySetInnerHTML={{ __html: `body { background-color: #020408 !important; margin: 0; overflow: hidden; }`}} />
+      <div style={styles.orbWrap}>
+        <NeuralOrb state={orbState} audioLevel={0} size={400} />
+      </div>
+      <div style={styles.transcriptContainer}>
+        <AnimatePresence mode="wait">
+          {lastLine && <motion.div key={lastLine} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} style={styles.transcript}>{lastLine}</motion.div>}
+        </AnimatePresence>
+      </div>
+      <div style={{ ...styles.stateLabel, color: orbState === 'idle' && isLive ? STATE_COLOR['listening'] : STATE_COLOR[orbState] }}>
+        {orbState === 'idle' && isLive ? STATE_LABEL['listening'] : STATE_LABEL[orbState]}
+      </div>
+    </div>
+  );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  root: { height: '100vh', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', boxSizing: 'border-box' },
+  orbWrap: { cursor: 'pointer', display: 'flex', justifyContent: 'center' },
+  stateLabel: { marginTop: 'auto', marginBottom: '20px', fontSize: '12px', fontFamily: "'Inter', sans-serif", letterSpacing: '0.6rem', fontWeight: 300, textTransform: 'uppercase', zIndex: 10 },
+  transcriptContainer: { position: 'absolute', top: '70%', left: '50%', transform: 'translate(-50%, -50%)', width: '90%', maxWidth: '800px', textAlign: 'center', zIndex: 5 },
+  transcript: { color: '#fff', fontSize: '1.5rem', fontFamily: "'Inter', sans-serif", lineHeight: 1.4 }
+};
