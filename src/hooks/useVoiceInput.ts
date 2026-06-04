@@ -60,7 +60,8 @@ export function useVoiceInput({
   }, [onLevelChange]);
 
   const startRecognition = useCallback(() => {
-    if (isSpeaking || recognitionRef.current) return;
+    // If already speaking or already running, don't restart
+    if (isSpeaking || preventListening || recognitionRef.current) return;
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) return;
@@ -73,10 +74,10 @@ export function useVoiceInput({
     rec.onstart = () => onStateChange('listening');
 
     rec.onresult = (event: any) => {
-      // 1. HARD MUTE: Ignore if AI is currently speaking
+      // 1. HARD MUTE: Ignore if AI is currently speaking or explicitly blocked
       if (isSpeaking || preventListening) return;
 
-      // 2. BUFFER COOLDOWN: 1.5s delay to ensure room silence
+      // 2. BUFFER COOLDOWN: 1.5s delay to ensure room silence after AI finished
       const now = Date.now();
       if (now - lastSpeechEndTime.current < 1500) return;
 
@@ -97,8 +98,8 @@ export function useVoiceInput({
     rec.onend = () => {
       recognitionRef.current = null;
       onStateChange('idle');
-      // Restart loop
-      if (enabled && !isSpeaking) {
+      // Restart loop if still enabled
+      if (enabled && !isSpeaking && !preventListening) {
         setTimeout(startRecognition, 100);
       }
     };
@@ -112,19 +113,25 @@ export function useVoiceInput({
   }, [onTranscript, onStateChange, preventListening, enabled, isSpeaking, lastAiResponse]);
 
   useEffect(() => {
-    if (enabled && !isSpeaking) {
-      initAudio().then(() => startRecognition());
-    } else {
+    // Logic to handle state transitions
+    if (isSpeaking) {
+      // AI started speaking, kill the mic
+      lastSpeechEndTime.current = Date.now();
       if (recognitionRef.current) {
         recognitionRef.current.stop();
         recognitionRef.current = null;
       }
-      // When AI stops speaking, record the timestamp to start the cooldown
-      if (isSpeaking) {
-        lastSpeechEndTime.current = Date.now();
+    } else if (enabled && !preventListening) {
+      // AI stopped speaking, try to restart the mic
+      initAudio().then(() => startRecognition());
+    } else if (!enabled) {
+      // Disabled completely
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
       }
     }
-  }, [enabled, isSpeaking, startRecognition, initAudio]);
+  }, [enabled, isSpeaking, preventListening, startRecognition, initAudio]);
 
   return null;
 }
