@@ -60,7 +60,6 @@ export function useVoiceInput({
   }, [onLevelChange]);
 
   const startRecognition = useCallback(() => {
-    // If already speaking or already running, don't restart
     if (isSpeaking || preventListening || recognitionRef.current) return;
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -74,10 +73,8 @@ export function useVoiceInput({
     rec.onstart = () => onStateChange('listening');
 
     rec.onresult = (event: any) => {
-      // 1. HARD MUTE: Ignore if AI is currently speaking or explicitly blocked
       if (isSpeaking || preventListening) return;
 
-      // 2. BUFFER COOLDOWN: 1.5s delay to ensure room silence after AI finished
       const now = Date.now();
       if (now - lastSpeechEndTime.current < 1500) return;
 
@@ -85,7 +82,6 @@ export function useVoiceInput({
         if (event.results[i].isFinal) {
           const transcript = event.results[i][0].transcript.trim();
           
-          // 3. ECHO-KILLER: Ignore if it matches exactly what we just said
           if (lastAiResponse && transcript.toLowerCase() === lastAiResponse.toLowerCase()) {
             return;
           }
@@ -98,7 +94,6 @@ export function useVoiceInput({
     rec.onend = () => {
       recognitionRef.current = null;
       onStateChange('idle');
-      // Restart loop if still enabled
       if (enabled && !isSpeaking && !preventListening) {
         setTimeout(startRecognition, 100);
       }
@@ -113,23 +108,28 @@ export function useVoiceInput({
   }, [onTranscript, onStateChange, preventListening, enabled, isSpeaking, lastAiResponse]);
 
   useEffect(() => {
-    // Logic to handle state transitions
     if (isSpeaking) {
-      // AI started speaking, kill the mic
+      // AI started speaking: Ensure the mic is muted immediately
       lastSpeechEndTime.current = Date.now();
       if (recognitionRef.current) {
-        recognitionRef.current.stop();
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {}
         recognitionRef.current = null;
       }
     } else if (enabled && !preventListening) {
-      // AI stopped speaking, try to restart the mic
-      initAudio().then(() => startRecognition());
-    } else if (!enabled) {
+      // AI stopped speaking: Safety-check with 500ms grace period to prevent cut-off
+      const restartTimeout = setTimeout(() => {
+        initAudio().then(() => startRecognition());
+      }, 500);
+      
+      return () => clearTimeout(restartTimeout);
+    } else if (!enabled && recognitionRef.current) {
       // Disabled completely
-      if (recognitionRef.current) {
+      try {
         recognitionRef.current.stop();
-        recognitionRef.current = null;
-      }
+      } catch (e) {}
+      recognitionRef.current = null;
     }
   }, [enabled, isSpeaking, preventListening, startRecognition, initAudio]);
 
