@@ -24,9 +24,7 @@ export function useVoiceInput({
   const analyzerRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const rafRef = useRef<number>(0);
-  
-  // Noise Gate Configuration
-  const SILENCE_THRESHOLD = 0.12; // Increase this (e.g., to 0.2) if AC is still being heard
+  const shouldRestart = useRef(false);
 
   const initAudio = useCallback(async () => {
     try {
@@ -39,26 +37,20 @@ export function useVoiceInput({
 
       const dataArray = new Uint8Array(analyzerRef.current.frequencyBinCount);
       const updateLevel = () => {
-        analyzerRef.current?.getByteFrequencyData(dataArray);
+        if (!analyzerRef.current) return;
+        analyzerRef.current.getByteFrequencyData(dataArray);
         const sum = dataArray.reduce((a, b) => a + b, 0);
         const avg = sum / dataArray.length;
-        const normalizedLevel = avg / 128;
-        
-        onLevelChange(normalizedLevel);
+        onLevelChange(avg / 128);
         rafRef.current = requestAnimationFrame(updateLevel);
       };
       updateLevel();
     } catch (e) {
-      console.error('[VoiceInput] Audio error:', e);
+      console.error('[VoiceInput] Audio init error:', e);
     }
   }, [onLevelChange]);
 
-  useEffect(() => {
-    if (!enabled) {
-      if (recognitionRef.current) recognitionRef.current.stop();
-      return;
-    }
-
+  const startRecognition = useCallback(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
@@ -74,16 +66,6 @@ export function useVoiceInput({
 
     rec.onresult = (event: any) => {
       if (preventListening) return;
-
-      // Noise Gate: Check current volume level before processing
-      // We check the last frame of audio data
-      const dataArray = new Uint8Array(analyzerRef.current?.frequencyBinCount || 0);
-      analyzerRef.current?.getByteFrequencyData(dataArray);
-      const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-      const currentLevel = avg / 128;
-
-      if (currentLevel < SILENCE_THRESHOLD) return;
-
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
           onTranscript(event.results[i][0].transcript);
@@ -92,20 +74,39 @@ export function useVoiceInput({
     };
 
     rec.onend = () => {
+      // Logic for persistent listening:
       onStateChange('idle');
       cancelAnimationFrame(rafRef.current);
-      sourceRef.current?.disconnect();
-      audioContextRef.current?.close();
+      if (sourceRef.current) sourceRef.current.disconnect();
+      if (audioContextRef.current) audioContextRef.current.close();
+      
+      // Auto-restart if we are still "enabled"
+      if (shouldRestart.current) {
+        setTimeout(() => rec.start(), 100);
+      }
+    };
+
+    rec.onerror = (e: any) => {
+      console.warn('[VoiceInput] Error:', e.error);
+      if (e.error === 'no-speech') return; // Ignore silence errors
     };
 
     rec.start();
     recognitionRef.current = rec;
+  }, [onTranscript, onStateChange, initAudio, preventListening]);
+
+  useEffect(() => {
+    shouldRestart.current = enabled;
+    if (enabled) {
+      startRecognition();
+    } else if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
 
     return () => {
-      rec.stop();
+      shouldRestart.current = false;
+      recognitionRef.current?.stop();
       cancelAnimationFrame(rafRef.current);
-      sourceRef.current?.disconnect();
-      audioContextRef.current?.close();
     };
-  }, [enabled, preventListening, onTranscript, onStateChange, initAudio]);
+  }, [enabled, startRecognition]);
 }
