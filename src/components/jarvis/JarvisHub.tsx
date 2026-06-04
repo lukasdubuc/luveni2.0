@@ -250,20 +250,19 @@ const styles: Record<string, React.CSSProperties> = {
     userSelect: 'none',
     zIndex: 9999,
   },
-  // Deep space grid — fine lines, perspective fade toward center
+  // Crisp flat grid — no transforms, pixel-perfect 1px lines
   gridBg: {
     position: 'absolute',
-    inset: '-20%',
+    inset: 0,
     backgroundImage: `
-      linear-gradient(rgba(0,180,255,0.07) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0,180,255,0.07) 1px, transparent 1px),
-      linear-gradient(rgba(0,180,255,0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0,180,255,0.03) 1px, transparent 1px)
+      linear-gradient(rgba(0,180,255,0.09) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,180,255,0.09) 1px, transparent 1px),
+      linear-gradient(rgba(0,180,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,180,255,0.04) 1px, transparent 1px)
     `,
     backgroundSize: '80px 80px, 80px 80px, 20px 20px, 20px 20px',
-    backgroundPosition: '-1px -1px, -1px -1px, -1px -1px, -1px -1px',
-    transform: 'perspective(600px) rotateX(12deg)',
-    transformOrigin: 'center 60%',
+    backgroundPosition: '0 0, 0 0, 0 0, 0 0',
+    imageRendering: 'crisp-edges' as const,
     pointerEvents: 'none',
     zIndex: 0,
   },
