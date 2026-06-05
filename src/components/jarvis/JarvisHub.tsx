@@ -18,7 +18,6 @@ const STATE_COLOR: Record<OrbState, string> = {
   idle: 'rgba(0,180,255,0.6)', listening: 'rgba(0,255,255,1.0)', thinking: 'rgba(180,100,255,1.0)', speaking: 'rgba(0,255,180,0.95)', error: 'rgba(255,80,80,1.0)',
 };
 
-// Universal mobile check to cover Android and iOS
 const isMobile = typeof window !== 'undefined' && 
   (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
@@ -134,18 +133,27 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
 
   const initializeJarvis = async () => {
     if (isReady) return;
+    setIsReady(true);
 
     // 1. Speak SYNCHRONOUSLY immediately to satisfy mobile gesture constraints
     try {
-      const s = new SpeechSynthesisUtterance("System online.");
+      const s = new SpeechSynthesisUtterance("System online, sir.");
       s.volume = 1; 
+
+      // SEQUENTIAL STARTUP: Wait for welcome speech to finish before starting microphone.
+      // This avoids the concurrent Web Audio & Mic capture crash on iOS.
+      s.onend = () => {
+        setIsLive(true);
+      };
+      s.onerror = () => {
+        setIsLive(true);
+      };
+
       window.speechSynthesis.speak(s);
     } catch (e) { 
       console.error("Audio unlock failed", e); 
+      setIsLive(true);
     }
-
-    setIsReady(true);
-    setIsLive(true);
     
     // 2. Resume Web Audio context asynchronously
     try {
@@ -168,7 +176,6 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
   const shadowColor = STATE_COLOR[orbState].replace('rgba(', '').replace(/,[^,]+\)$/, '');
 
   return (
-    // Removed onTouchStart to prevent rapid overlapping double-initializations
     <div 
       style={styles.root} 
       onClick={initializeJarvis}
@@ -196,6 +203,10 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
 
 const styles: Record<string, React.CSSProperties> = {
   root: { height: '100vh', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', boxSizing: 'border-box', position: 'relative', overflow: 'hidden' },
+  orbWrap: { cursor: 'pointer', display: 'flex', justifyContent: 'center', zIndex: 5 },
+  stateLabel: { marginTop: 'auto', marginBottom: '20px', fontSize: '12px', fontFamily: "'Inter', sans-serif", letterSpacing: '0.6rem', fontWeight: 300, textTransform: 'uppercase', zIndex: 10 },
+  transcriptContainer: { position: 'absolute', top: '70%', left: '50%', transform: 'translate(-50%, -50%)', width: '90%', maxWidth: '800px', textAlign: 'center', zIndex: 5 },
+  transcript: { color: '#fff', fontSize: '1.5rem', fontFamily: "'Inter', sans-serif", lineHeight: 1.4 },
   gridBg: {
     position: 'absolute',
     inset: 0,
@@ -208,11 +219,7 @@ const styles: Record<string, React.CSSProperties> = {
     pointerEvents: 'none',
     zIndex: 0,
   },
-  orbShadow: { position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1, transition: 'background 0.3s ease' },
-  orbWrap: { cursor: 'pointer', display: 'flex', justifyContent: 'center', zIndex: 5 },
-  stateLabel: { marginTop: 'auto', marginBottom: '20px', fontSize: '12px', fontFamily: "'Inter', sans-serif", letterSpacing: '0.6rem', fontWeight: 300, textTransform: 'uppercase', zIndex: 10 },
-  transcriptContainer: { position: 'absolute', top: '70%', left: '50%', transform: 'translate(-50%, -50%)', width: '90%', maxWidth: '800px', textAlign: 'center', zIndex: 5 },
-  transcript: { color: '#fff', fontSize: '1.5rem', fontFamily: "'Inter', sans-serif", lineHeight: 1.4 }
+  orbShadow: { position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1, transition: 'background 0.3s ease' }
 };
 
 export default JarvisHub;
