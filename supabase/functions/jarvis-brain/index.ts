@@ -23,10 +23,17 @@ Always be executive-level, sharp, and concise. Refer to Luke as 'sir'.
 /**
  * Resilient multi-source search query executor.
  * Combines a POST-based DDG Lite scraper and a clean Wikipedia Search API.
- * This ensures 100% uptime without cloud IP blocks.
  */
 async function executeWebSearch(query: string): Promise<string> {
   const results: string[] = [];
+  const trimmedQuery = query.trim();
+
+  if (!trimmedQuery) {
+    console.warn("[Search] Aborting execution: Extracted query was empty.");
+    return "Error: Search query was empty.";
+  }
+
+  console.log(`[Search] Executing live search for query: "${trimmedQuery}"`);
 
   // Source 1: DuckDuckGo Lite (POST method bypasses typical GET cloud IP blocks)
   try {
@@ -36,7 +43,7 @@ async function executeWebSearch(query: string): Promise<string> {
         "Content-Type": "application/x-www-form-urlencoded",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
       },
-      body: `q=${encodeURIComponent(query)}`
+      body: `q=${encodeURIComponent(trimmedQuery)}`
     });
 
     if (response.ok) {
@@ -67,34 +74,42 @@ async function executeWebSearch(query: string): Promise<string> {
       for (let i = 0; i < links.length; i++) {
         results.push(`[Web Result #${i + 1}]\nTitle: ${links[i].title}\nURL: ${links[i].url}\nExtract: ${snippets[i] || 'No snippet available.'}`);
       }
+      console.log(`[Search] DDG Lite returned ${links.length} results.`);
+    } else {
+      console.warn(`[Search] DDG Lite responded with status: ${response.status}`);
     }
-  } catch (e) {
-    console.error("DuckDuckGo Lite search failed:", e);
+  } catch (e: any) {
+    console.error("[Search] DDG Lite search failed with error:", e.message);
   }
 
   // Source 2: Wikipedia Search API (100% resilient fallback, never blocks cloud IPs)
   try {
     if (results.length < 2) {
-      const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*`;
+      const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(trimmedQuery)}&format=json&origin=*`;
       const response = await fetch(wikiUrl, {
         headers: { "User-Agent": "JARVIS-Bot/1.0 (contact: support@luveni.com)" }
       });
       if (response.ok) {
         const data = await response.json();
         if (data.query && data.query.search) {
-          data.query.search.slice(0, 2).forEach((item: any, idx: number) => {
+          const wikiItems = data.query.search.slice(0, 2);
+          wikiItems.forEach((item: any, idx: number) => {
             const snippet = item.snippet.replace(/<[^>]*>/g, "").trim();
             const link = `https://en.wikipedia.org/wiki/${encodeURIComponent(item.title.replace(/ /g, "_"))}`;
             results.push(`[Wikipedia Result #${idx + 1}]\nTitle: ${item.title}\nURL: ${link}\nSummary: ${snippet}...`);
           });
+          console.log(`[Search] Wikipedia API returned ${wikiItems.length} results.`);
         }
+      } else {
+        console.warn(`[Search] Wikipedia API responded with status: ${response.status}`);
       }
     }
-  } catch (e) {
-    console.error("Wikipedia API search failed:", e);
+  } catch (e: any) {
+    console.error("[Search] Wikipedia API search failed with error:", e.message);
   }
 
   if (results.length === 0) {
+    console.error("[Search] Critical: Both DDG Lite and Wikipedia search streams returned zero results.");
     return "Error: Web search was unable to retrieve live data. Inform the user that direct search retrieval is offline, sir.";
   }
 
@@ -152,12 +167,27 @@ serve(async (req: Request) => {
 
     if (call.name === 'web_search') {
       let searchQuery = '';
+      
       try {
         const parsedArgs = typeof call.arguments === 'string' ? JSON.parse(call.arguments) : call.arguments;
-        searchQuery = parsedArgs.query;
-      } catch (_) {
+        
+        // 1. Attempt to extract from the standard 'query' parameter
+        searchQuery = parsedArgs.query || parsedArgs.search_query || parsedArgs.q || parsedArgs.text || '';
+        
+        // 2. Fuzzy Fallback: Grab the first string-typed parameter if the model confabulated the parameter key
+        if (!searchQuery && typeof parsedArgs === 'object' && parsedArgs !== null) {
+          const values = Object.values(parsedArgs);
+          const firstString = values.find(val => typeof val === 'string');
+          if (firstString) {
+            searchQuery = firstString as string;
+          }
+        }
+      } catch (err: any) {
+        console.warn("[Overseer] Argument parsing exception:", err.message);
         searchQuery = call.arguments?.query || '';
       }
+
+      console.log(`[Overseer] Tool 'web_search' invoked. Resolution query string: "${searchQuery}"`);
 
       const searchResults = await executeWebSearch(searchQuery);
 
