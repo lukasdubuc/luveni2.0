@@ -10,36 +10,32 @@ interface UseSpeechOutputOptions {
   onEnd?: () => void;
 }
 
-const BRITISH_VOICES = [
-  'Google UK English Female',
-  'Google UK English Male',
-  'Daniel',
-  'Hazel',
-  'Siri',
-  'Microsoft Susan',
-  'Microsoft George',
-  'Microsoft Ryan',
-];
-
 const isMobile = typeof window !== 'undefined' && 
   (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
 const globalActiveUtterances: SpeechSynthesisUtterance[] = [];
 
-// Resolves key from Lovable's database/secrets injection or standard environment configurations safely
-// Resolves key from Lovable's database/secrets injection or standard environment configurations safely
-const GOOGLE_API_KEY = 
-  (typeof import.meta !== 'undefined' && (import.meta.env?.GOOGLE_API_KEY || import.meta.env?.VITE_GOOGLE_API_KEY)) || 
-  (typeof process !== 'undefined' && (process.env?.GOOGLE_API_KEY || process.env?.VITE_GOOGLE_API_KEY)) || 
+// Resolves key from Lovable's database secrets configuration safely
+const ELEVENLABS_API_KEY = 
+  (typeof import.meta !== 'undefined' && (import.meta.env?.ELEVENLABS_API_KEY || import.meta.env?.GOOGLE_API_KEY)) || 
+  (typeof process !== 'undefined' && (process.env?.ELEVENLABS_API_KEY || process.env?.GOOGLE_API_KEY)) || 
   '';
 
+// Upgraded matching engine: searches case-insensitively for preferred British Male characteristics
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
-  for (const name of BRITISH_VOICES) {
-    const v = voices.find(v => v.name === name);
-    if (v) return v;
+  const gbVoices = voices.filter(v => v.lang.toLowerCase().startsWith('en-gb'));
+  if (gbVoices.length === 0) return null;
+
+  // Prioritize high-quality British male voice markers
+  const maleKeywords = ['ryan', 'george', 'thomas', 'guy', 'daniel', 'arthur', 'oliver', 'harry', 'male'];
+  for (const keyword of maleKeywords) {
+    const match = gbVoices.find(v => v.name.toLowerCase().includes(keyword));
+    if (match) return match;
   }
-  return voices.find(v => v.lang.startsWith('en-GB')) ?? null;
+
+  // Fallback to any available British English voice (Siri, Hazel, etc.)
+  return gbVoices[0];
 }
 
 function loadVoices(): Promise<SpeechSynthesisVoice[]> {
@@ -109,7 +105,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const onBoundaryRef = useRef(onBoundary);
   const onEndRef = useRef(onEnd);
 
-  // References to track active Google TTS audio playbacks to allow absolute cancellation
   const activeAudiosRef = useRef<HTMLAudioElement[]>([]);
   const audioIntervalRef = useRef<any>(null);
 
@@ -128,30 +123,30 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   }, []);
 
   const cancel = useCallback(() => {
-    // 1. Clear native SpeechSynthesis fallback
+    // 1. Cancel browser system speech synthesis
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
     globalActiveUtterances.length = 0;
 
-    // 2. Stop and clear any ongoing Google TTS audio playback streams
+    // 2. Stop and clear ElevenLabs audio streams
     activeAudiosRef.current.forEach(audio => {
       audio.pause();
       audio.currentTime = 0;
     });
     activeAudiosRef.current = [];
 
-    // 3. Clear simulated boundary visualizer timers
+    // 3. Clear visualizer timers
     if (audioIntervalRef.current) {
       clearInterval(audioIntervalRef.current);
       audioIntervalRef.current = null;
     }
 
     speaking.current = false;
-    setCurrentSubtitle(""); // Instantly clear subtitle on cancel
+    setCurrentSubtitle(""); 
   }, []);
 
-  // Native SpeechSynthesis fallback core
+  // Free system speech synthesis (Optimized for high-quality British synthesizers)
   const doSpeakNative = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
@@ -175,6 +170,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         utt.rate = isMobile ? 1.0 : 0.93;
         utt.pitch = isMobile ? 1.0 : 0.78;
         
+        // Explicitly enforce British English language bounds to fix mobile synthesizers
+        utt.lang = 'en-GB';
         if (voice) utt.voice = voice;
 
         globalActiveUtterances.push(utt);
@@ -210,8 +207,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }, 250); 
   }, [cancel]);
 
-  // Google Cloud Text-to-Speech Engine integration
-  const doSpeakGoogle = useCallback(async (text: string) => {
+  // ElevenLabs Streaming Engine (Falls back cleanly if character limit is exceeded)
+  const doSpeakElevenLabs = useCallback(async (text: string) => {
     cancel();
 
     setTimeout(async () => {
@@ -222,43 +219,37 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       const chunks = chunkText(phoneticallyCleanText, 150);
 
       try {
-        // Fetch audio payloads for all chunks in parallel to prevent sound delays
+        const VOICE_ID = 'pNInz6obpgDQGcFbJwr1'; // George (Classic British Male)
+
         const audioPromises = chunks.map(async (chunk) => {
-          const response = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${GOOGLE_API_KEY}`, {
+          const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'xi-api-key': ELEVENLABS_API_KEY,
+            },
             body: JSON.stringify({
-              input: { text: chunk },
-              voice: { languageCode: 'en-GB', name: 'en-GB-Neural2-B' },
-              audioConfig: { audioEncoding: 'MP3' },
+              text: chunk,
+              model_id: 'eleven_turbo_v2_5',
+              voice_settings: {
+                stability: 0.5,
+                similarity_boost: 0.75,
+              },
             }),
           });
-          
-          if (!response.ok) throw new Error(`Google TTS status code: ${response.status}`);
-          const data = await response.json();
-          return data.audioContent; // Base64 string payload
-        });
 
-        const base64Contents = await Promise.all(audioPromises);
-
-        // Convert Base64 strings to memory Blob URLs
-        const audioUrls = base64Contents.map(base64 => {
-          const binaryString = window.atob(base64);
-          const len = binaryString.length;
-          const bytes = new Uint8Array(len);
-          for (let i = 0; i < len; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-          }
-          const blob = new Blob([bytes.buffer], { type: 'audio/mp3' });
+          // If the free tier character limit is hit, this will catch the non-200 error status
+          if (!response.ok) throw new Error(`ElevenLabs error: ${response.status}`);
+          const blob = await response.blob();
           return URL.createObjectURL(blob);
         });
 
-        // Play the compiled chunks sequentially to preserve subtitle timing
+        const audioUrls = await Promise.all(audioPromises);
+
         let currentIndex = 0;
 
         const playNext = () => {
           if (!speaking.current || currentIndex >= audioUrls.length) {
-            // Queue playback completed
             speaking.current = false;
             setCurrentSubtitle("");
             if (audioIntervalRef.current) {
@@ -275,7 +266,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
           const audio = new Audio(audioUrls[currentIndex]);
           activeAudiosRef.current.push(audio);
 
-          // Simulate speech boundary pulses to drive your orb visualizer organically
           if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
           audioIntervalRef.current = setInterval(() => {
             if (onBoundaryRef.current && speaking.current) {
@@ -296,7 +286,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
           };
 
           audio.play().catch(() => {
-            // Autoplay safety bypass
             currentIndex++;
             playNext();
           });
@@ -305,41 +294,30 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         playNext();
 
       } catch (error) {
-        console.error('[Speech Engine] Google TTS generation failed, using native fallback:', error);
-        // Fall back seamlessly to browser speech synthesis so the system never hangs
+        console.warn('[Speech Engine] ElevenLabs unavailable (or quota met). Activating native fallback:', error);
+        // Fall back seamlessly to browser speech synthesis
         doSpeakNative(text, voiceCache || null);
       }
     }, 250);
   }, [cancel, doSpeakNative]);
 
   const speak = useCallback((text: string) => {
-    // If the Google Cloud Key is configured in Lovable's Database, prioritize it
-    if (GOOGLE_API_KEY) {
-      doSpeakGoogle(text);
+    // If ElevenLabs key is present, prioritize ElevenLabs
+    if (ELEVENLABS_API_KEY) {
+      doSpeakElevenLabs(text);
       return;
     }
 
-    // Default WebSpeech Fallback
-    if (isMobile) {
-      doSpeakNative(text, null);
-      return;
-    }
-
-    if (voiceCache !== undefined) {
-      doSpeakNative(text, voiceCache);
-    } else {
+    // Default Fallback: Unified voice selector for both mobile and desktop
+    let voice = voiceCache;
+    if (!voice) {
       const immediateVoices = window.speechSynthesis?.getVoices() || [];
-      if (immediateVoices.length > 0) {
-        voiceCache = findBestVoice(immediateVoices);
-        doSpeakNative(text, voiceCache);
-      } else {
-        loadVoices().then(v => {
-          voiceCache = findBestVoice(v);
-          doSpeakNative(text, voiceCache);
-        });
-      }
+      voice = findBestVoice(immediateVoices);
+      if (voice) voiceCache = voice;
     }
-  }, [doSpeakNative, doSpeakGoogle]);
+
+    doSpeakNative(text, voice);
+  }, [doSpeakNative, doSpeakElevenLabs]);
 
   return { 
     speak, 
