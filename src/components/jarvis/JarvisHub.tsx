@@ -49,7 +49,6 @@ export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: s
   });
 
   const handleTranscript = useCallback(async (text: string) => {
-    // Immediate cancellation to reset queue
     window.speechSynthesis.cancel();
     setLastLine("Thinking...");
     changeOrbState('thinking');
@@ -59,7 +58,6 @@ export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: s
       if (!reply) throw new Error("No response received");
       setLastLine(reply);
       setLastAiResponse(reply);
-      // speak() now triggers atomic chunking to keep the queue alive
       speak(reply);
     } catch (err) {
       console.error('[Jarvis] Error:', err);
@@ -88,7 +86,7 @@ export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: s
     setIsReady(true);
     setIsLive(true);
     
-    // HARD UNLOCK: Resume AudioContext and speak immediately
+    // HARD UNLOCK: Standardizes AudioContext and triggers speech synthesis instantly 
     try {
       const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
       const ctx = new AudioCtx();
@@ -103,7 +101,12 @@ export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: s
   useEffect(() => { if (autoStart) initializeJarvis(); }, [autoStart]);
 
   return (
-    <div style={styles.root} onPointerDown={initializeJarvis}>
+    // Replaced onPointerDown with onClick and onTouchStart for iOS/WebKit gesture compliance
+    <div 
+      style={styles.root} 
+      onClick={initializeJarvis} 
+      onTouchStart={initializeJarvis}
+    >
       <style dangerouslySetInnerHTML={{ __html: `body { background-color: #020408 !important; margin: 0; overflow: hidden; }`}} />
       <div style={styles.orbWrap}>
         <NeuralOrb state={orbState} audioLevel={0} size={400} />
@@ -120,7 +123,7 @@ export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: s
   );
 }
 
-const styles: Record<string, React.ReactProperties> = {
+const styles: Record<string, React.CSSProperties> = {
   root: { height: '100vh', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', boxSizing: 'border-box' },
   orbWrap: { cursor: 'pointer', display: 'flex', justifyContent: 'center' },
   stateLabel: { marginTop: 'auto', marginBottom: '20px', fontSize: '12px', fontFamily: "'Inter', sans-serif", letterSpacing: '0.6rem', fontWeight: 300, textTransform: 'uppercase', zIndex: 10 },
