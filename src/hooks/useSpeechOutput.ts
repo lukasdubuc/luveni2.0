@@ -109,6 +109,31 @@ function loadVoices(): Promise<SpeechSynthesisVoice[]> {
 }
 
 /**
+ * Clean and format text before speaking. Removes markdown tags, asterisks, 
+ * links, and raw URLs so J.A.R.V.I.S. speaks in natural, fluid sentences.
+ */
+function sanitizeTextForSpeech(rawText: string): string {
+  return rawText
+    // Remove phonetic acronym spelling bugs
+    .replace(/J\.A\.R\.V\.I\.S\.?/gi, "Jarvis")
+    // Remove double asterisks (markdown bold)
+    .replace(/\*\*/g, '')
+    // Remove single asterisks (markdown italic or bullet points)
+    .replace(/\*/g, '')
+    // Remove markdown headers (e.g. # Header -> Header)
+    .replace(/^#+\s+/gm, '')
+    // Remove markdown link syntax [Display Text](https://url) -> just displays and speaks "Display Text"
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    // Remove inline code backticks
+    .replace(/`/g, '')
+    // Remove HTML tags if present
+    .replace(/<[^>]*>/g, '')
+    // Clean up empty lines or multiple consecutive spaces
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * Splits text into small, readable chunks (max 150 characters) to target
  * approximately 2-3 display lines per visual subtitle.
  */
@@ -213,8 +238,9 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       speaking.current = true;
       if (onStartRef.current) onStartRef.current();
 
-      const phoneticallyCleanText = text.replace(/J\.A\.R\.V\.I\.S\.?/gi, "Jarvis");
-      const chunks = chunkText(phoneticallyCleanText, 150);
+      // Clean the incoming text of any markdown, links, or visual formatting artifacts
+      const cleanText = sanitizeTextForSpeech(text);
+      const chunks = chunkText(cleanText, 150);
       
       globalActiveUtterances.length = 0;
 
@@ -272,8 +298,9 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       speaking.current = true;
       if (onStartRef.current) onStartRef.current();
 
-      const phoneticallyCleanText = text.replace(/J\.A\.R\.V\.I\.S\.?/gi, "Jarvis");
-      const chunks = chunkText(phoneticallyCleanText, 150);
+      // Clean the incoming text of any markdown, links, or visual formatting artifacts
+      const cleanText = sanitizeTextForSpeech(text);
+      const chunks = chunkText(cleanText, 150);
 
       try {
         const VOICE_ID = 'pNInz6obpgDQGcFbJwr1';
@@ -320,65 +347,4 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
           setCurrentSubtitle(rawChunk);
 
           const audio = new Audio(audioUrls[currentIndex]);
-          activeAudiosRef.current.push(audio);
-
-          if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
-          audioIntervalRef.current = setInterval(() => {
-            if (onBoundaryRef.current && speaking.current) {
-              onBoundaryRef.current(0.3 + Math.random() * 0.55);
-            }
-          }, 80);
-
-          audio.onended = () => {
-            URL.revokeObjectURL(audioUrls[currentIndex]);
-            currentIndex++;
-            playNext();
-          };
-
-          audio.onerror = () => {
-            URL.revokeObjectURL(audioUrls[currentIndex]);
-            currentIndex++;
-            playNext();
-          };
-
-          audio.play().catch(() => {
-            currentIndex++;
-            playNext();
-          });
-        };
-
-        playNext();
-
-      } catch (error) {
-        console.warn('[Speech Engine] ElevenLabs failed, falling back:', error);
-        doSpeakNative(text, voiceCache || null);
-      }
-    }, 250);
-  }, [cancel, doSpeakNative]);
-
-  const speak = useCallback((text: string) => {
-    if (ELEVENLABS_API_KEY) {
-      doSpeakElevenLabs(text);
-      return;
-    }
-
-    // Force a fresh check of current browser voices every time speech is triggered
-    const immediateVoices = typeof window !== 'undefined' && window.speechSynthesis 
-      ? window.speechSynthesis.getVoices() 
-      : [];
-    
-    const voice = findBestVoice(immediateVoices);
-    if (voice) {
-      voiceCache = voice;
-    }
-
-    doSpeakNative(text, voice);
-  }, [doSpeakNative, doSpeakElevenLabs]);
-
-  return { 
-    speak, 
-    cancel, 
-    isSpeaking: () => speaking.current,
-    currentSubtitle 
-  };
-}
+          activeA
