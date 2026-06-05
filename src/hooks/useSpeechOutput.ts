@@ -35,41 +35,51 @@ const ELEVENLABS_API_KEY =
   (typeof process !== 'undefined' && (process.env?.ELEVENLABS_API_KEY || process.env?.GOOGLE_API_KEY)) || 
   '';
 
-// Upgraded matching engine: prioritizes Australian Siri voices on mobile, and British Male on desktop
+// Upgraded matching engine: scans dynamically for your downloaded "Enhanced" or "Premium" iPhone accessibility voices
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   if (isMobile) {
-    // 1. Prioritize Australian English (en-AU) first for custom Siri Voice 3 matching
-    const auVoices = voices.filter(v => {
+    // Look for high-quality English (Australian or British) voices on mobile
+    const englishVoices = voices.filter(v => {
       const lang = v.lang.toLowerCase().replace('_', '-');
-      return lang.startsWith('en-au');
+      return lang.startsWith('en-au') || lang.startsWith('en-gb');
     });
 
-    if (auVoices.length > 0) {
-      // Seek the system-cloned Siri voice profile directly
-      const siriMatch = auVoices.find(v => v.name.toLowerCase().includes('siri'));
-      if (siriMatch) return siriMatch;
-
-      // Avoid robotic fallbacks like Karen or Tessa, look for other natural options
-      const preferredAU = ['natural', 'male', 'ryan', 'thomas', 'guy', 'daniel', 'arthur'];
-      for (const name of preferredAU) {
-        const match = auVoices.find(v => v.name.toLowerCase().includes(name));
+    if (englishVoices.length > 0) {
+      // 1. Strictly prioritize any downloaded high-quality 'premium' or 'enhanced' voices first
+      const qualityKeywords = ['premium', 'enhanced', 'natural', 'siri'];
+      for (const keyword of qualityKeywords) {
+        const match = englishVoices.find(v => v.name.toLowerCase().includes(keyword));
         if (match) return match;
       }
-      return auVoices[0];
+
+      // 2. Fallback to male voices
+      const maleKeywords = ['ryan', 'george', 'thomas', 'guy', 'daniel', 'arthur', 'oliver', 'harry', 'male'];
+      for (const keyword of maleKeywords) {
+        const match = englishVoices.find(v => v.name.toLowerCase().includes(keyword));
+        if (match) return match;
+      }
+
+      return englishVoices[0];
     }
   }
 
-  // 2. Standard Desktop / Fallback (British English)
+  // Standard Desktop / Fallback (British English)
   const gbVoices = voices.filter(v => {
     const lang = v.lang.toLowerCase().replace('_', '-');
     return lang.startsWith('en-gb');
   });
 
   if (gbVoices.length === 0) {
-    // Absolute fallback if en-GB isn't installed
     return voices.find(v => v.lang.toLowerCase().startsWith('en-au')) ?? 
            voices.find(v => v.lang.toLowerCase().startsWith('en')) ?? 
            null;
+  }
+
+  // Prioritize high-quality voices on desktop
+  const premiumDesktop = ['natural', 'premium', 'enhanced'];
+  for (const keyword of premiumDesktop) {
+    const match = gbVoices.find(v => v.name.toLowerCase().includes(keyword));
+    if (match) return match;
   }
 
   const maleKeywords = ['ryan', 'george', 'thomas', 'guy', 'daniel', 'arthur', 'oliver', 'harry', 'male'];
@@ -186,14 +196,12 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     setCurrentSubtitle(""); 
   }, []);
 
-  // Native speech synthesis (Enforces voice language strictly for iOS matching)
   const doSpeakNative = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
     cancel();
 
-    // Game-Changer Fallback: If voice is null (because iOS list loaded empty), 
-    // re-query the freshly populated voices list immediately before synthesis runs.
+    // Query voices live immediately before starting audio playback to bypass empty-list startup bugs
     let activeVoice = voice;
     if (!activeVoice) {
       const liveVoices = window.speechSynthesis.getVoices();
@@ -219,7 +227,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         utt.rate = isMobile ? 1.0 : 0.93;
         utt.pitch = isMobile ? 1.0 : 0.78;
         
-        // Match the language parameter exactly with the targeted voice to prevent Safari fallback bugs
+        // Match lang parameters to avoid mobile audio driver crashes
         utt.lang = activeVoice ? activeVoice.lang : (isMobile ? 'en-AU' : 'en-GB');
         if (activeVoice) utt.voice = activeVoice;
 
