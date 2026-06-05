@@ -129,4 +129,90 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
     cancel();
 
-    // 250ms settling t
+    // 250ms settling time allows hardware and browser sound pipelines to clear completely
+    setTimeout(() => {
+      speaking.current = true;
+      if (onStartRef.current) onStartRef.current();
+
+      const phoneticallyCleanText = text.replace(/J\.A\.R\.V\.I\.S\.?/gi, "Jarvis");
+      const chunks = chunkText(phoneticallyCleanText, 150);
+      
+      globalActiveUtterances.length = 0;
+
+      chunks.forEach((chunk, index) => {
+        const rawChunk = chunk.trim();
+        if (!rawChunk) return;
+
+        const utt = new SpeechSynthesisUtterance(rawChunk);
+        
+        utt.rate = isMobile ? 1.0 : 0.93;
+        utt.pitch = isMobile ? 1.0 : 0.78;
+        
+        if (voice) utt.voice = voice;
+
+        // Keep references alive in the global module array to bypass garbage collection issues
+        globalActiveUtterances.push(utt);
+
+        // Synchronize subtitle text dynamically with the exact start of playback
+        utt.onstart = () => {
+          setCurrentSubtitle(rawChunk);
+        };
+
+        utt.onboundary = () => {
+          if (onBoundaryRef.current) onBoundaryRef.current(0.3 + Math.random() * 0.55);
+        };
+
+        // Handle the final speech element
+        if (index === chunks.length - 1) {
+          utt.onend = () => {
+            globalActiveUtterances.length = 0;
+            speaking.current = false;
+            setCurrentSubtitle(""); // Instantly clear subtitles upon final completion
+            if (onEndRef.current) onEndRef.current();
+          };
+        }
+
+        utt.onerror = () => {
+          if (index === chunks.length - 1) {
+            globalActiveUtterances.length = 0;
+            speaking.current = false;
+            setCurrentSubtitle("");
+            if (onEndRef.current) onEndRef.current();
+          }
+        };
+
+        // Queue natively into browser SpeechSynthesis
+        window.speechSynthesis.speak(utt);
+      });
+    }, 250); 
+  }, [cancel]);
+
+  const speak = useCallback((text: string) => {
+    if (isMobile) {
+      doSpeak(text, null);
+      return;
+    }
+
+    if (voiceCache !== undefined) {
+      doSpeak(text, voiceCache);
+    } else {
+      const immediateVoices = window.speechSynthesis?.getVoices() || [];
+      if (immediateVoices.length > 0) {
+        voiceCache = findBestVoice(immediateVoices);
+        doSpeak(text, voiceCache);
+      } else {
+        loadVoices().then(v => {
+          voiceCache = findBestVoice(v);
+          doSpeak(text, voiceCache);
+        });
+      }
+    }
+  }, [doSpeak]);
+
+  return { 
+    speak, 
+    cancel, 
+    isSpeaking: () => speaking.current,
+    currentSubtitle 
+  };
+}
