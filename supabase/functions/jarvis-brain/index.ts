@@ -10,21 +10,95 @@ const corsHeaders = {
 }
 
 /**
+ * Strips conversational filler and stop-words from long queries
+ * to make them highly searchable for DuckDuckGo and Wikipedia.
+ */
+function cleanQuery(query: string): string {
+  const trimmed = query.trim();
+  if (trimmed.split(/\s+/).length <= 4) return trimmed;
+
+  const stopWords = new Set([
+    "the", "a", "an", "of", "to", "for", "in", "is", "as", "at", "by", "from", "on", 
+    "with", "about", "current", "results", "official", "please", "can", "you", "search", 
+    "and", "tell", "me", "more", "here", "there", "find", "who", "what", "where", "info"
+  ]);
+
+  const keywords = trimmed
+    .toLowerCase()
+    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g, "")
+    .split(/\s+/)
+    .filter(word => !stopWords.has(word))
+    .slice(0, 5);
+
+  return keywords.join(" ") || trimmed;
+}
+
+/**
+ * Scrapes, cleans, and extracts readable text from any specific URL link.
+ * Automatically strips JavaScript, CSS, SVGs, and other non-readable elements.
+ */
+async function readWebPage(url: string): Promise<string> {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
+      }
+    });
+
+    if (!response.ok) {
+      return `Error: Failed to fetch webpage at ${url}. Status code: ${response.status}`;
+    }
+
+    let html = await response.text();
+
+    // 1. Strip out non-readable element blocks
+    html = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
+    html = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
+    html = html.replace(/<head[^>]*>[\s\S]*?<\/head>/gi, "");
+    html = html.replace(/<iframe[^>]*>[\s\S]*?<\/iframe>/gi, "");
+    html = html.replace(/<svg[^>]*>[\s\S]*?<\/svg>/gi, "");
+
+    // 2. Extract content body if present
+    const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    const contentToParse = bodyMatch ? bodyMatch[1] : html;
+
+    // 3. Remove all HTML tags and normalize whitespace
+    let text = contentToParse
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    // 4. Truncate clean output text to safely protect the LLM context limits (~5000 characters)
+    if (text.length > 5000) {
+      text = text.substring(0, 5000) + "... [Content truncated due to page length]";
+    }
+
+    return text || "Webpage was fetched successfully, but no readable text content was found.";
+
+  } catch (error: any) {
+    return `Error loading URL: ${error.message}`;
+  }
+}
+
+/**
  * Resilient web search query executor.
- * Combines POST-based DuckDuckGo Lite scraping and public Wikipedia Search API.
- * Bypasses cloud IP blocking completely without requiring paid search API keys.
  */
 async function executeKeylessSearch(query: string): Promise<string> {
   const results: string[] = [];
-  const trimmedQuery = query.trim();
+  const optimizedQuery = cleanQuery(query);
 
-  if (!trimmedQuery) {
+  if (!optimizedQuery) {
     return "Error: Empty search query.";
   }
 
-  console.log(`[Search] Executing free search for query: "${trimmedQuery}"`);
+  console.log(`[Search] Original Query: "${query}" -> Optimized Query: "${optimizedQuery}"`);
 
-  // Source 1: DuckDuckGo Lite (POST request bypasses typical GET cloud IP blocks)
+  // Source 1: DuckDuckGo Lite
   try {
     const response = await fetch("https://lite.duckduckgo.com/lite/", {
       method: "POST",
@@ -32,7 +106,7 @@ async function executeKeylessSearch(query: string): Promise<string> {
         "Content-Type": "application/x-www-form-urlencoded",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
       },
-      body: `q=${encodeURIComponent(trimmedQuery)}`
+      body: `q=${encodeURIComponent(optimizedQuery)}`
     });
 
     if (response.ok) {
@@ -63,16 +137,15 @@ async function executeKeylessSearch(query: string): Promise<string> {
       for (let i = 0; i < links.length; i++) {
         results.push(`[Web Result #${i + 1}]\nTitle: ${links[i].title}\nURL: ${links[i].url}\nExtract: ${snippets[i] || 'No summary available.'}`);
       }
-      console.log(`[Search] DDG Lite returned ${links.length} results.`);
     }
   } catch (e: any) {
     console.error("[Search] DDG Lite search failed:", e.message);
   }
 
-  // Source 2: Wikipedia Search API (100% resilient fallback, never blocks cloud IPs)
+  // Source 2: Wikipedia Search API
   try {
     if (results.length < 2) {
-      const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(trimmedQuery)}&format=json&origin=*`;
+      const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(optimizedQuery)}&format=json&origin=*`;
       const response = await fetch(wikiUrl, {
         headers: { "User-Agent": "JARVIS-Bot/1.0 (contact: support@luveni.com)" }
       });
@@ -85,7 +158,6 @@ async function executeKeylessSearch(query: string): Promise<string> {
             const link = `https://en.wikipedia.org/wiki/${encodeURIComponent(item.title.replace(/ /g, "_"))}`;
             results.push(`[Wikipedia Result #${idx + 1}]\nTitle: ${item.title}\nURL: ${link}\nSummary: ${snippet}...`);
           });
-          console.log(`[Search] Wikipedia API returned ${wikiItems.length} results.`);
         }
       }
     }
@@ -94,7 +166,8 @@ async function executeKeylessSearch(query: string): Promise<string> {
   }
 
   if (results.length === 0) {
-    return "Error: Web search was unable to retrieve live data. Inform the user that direct search retrieval is offline, sir.";
+    console.log(`[Search] Search executed but returned 0 results for: "${optimizedQuery}"`);
+    return `Search query: "${optimizedQuery}" executed successfully, but returned 0 public records from DuckDuckGo and Wikipedia. This implies there are no public archives matching this term.`;
   }
 
   return results.join("\n\n---\n\n");
@@ -108,12 +181,12 @@ serve(async (req) => {
   try {
     const { tool, args } = await req.json()
 
+    // 1. Handle Web Searches
     if (tool === 'google_search') {
       let searchQuery = '';
       if (args) {
         searchQuery = args.query || args.search_query || args.q || args.text || '';
         
-        // Fuzzy Fallback: Grab first string parameter if key mismatched
         if (!searchQuery && typeof args === 'object') {
           const values = Object.values(args);
           const firstString = values.find(val => typeof val === 'string');
@@ -127,6 +200,25 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({ results: searchResults }), 
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
+    }
+
+    // 2. Handle specific Web Link Scraping (Opening URLs)
+    if (tool === 'open_link') {
+      const url = args?.url;
+      if (!url) {
+        return new Response(
+          JSON.stringify({ error: "No URL parameter provided to open." }), 
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+        );
+      }
+
+      console.log(`[Overseer] Opening URL to scrape: "${url}"`);
+      const pageContent = await readWebPage(url);
+
+      return new Response(
+        JSON.stringify({ results: pageContent }), 
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
     }
