@@ -3,12 +3,10 @@
 // ─────────────────────────────────────────────────────────────
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
-import { hexToUint8Array } from 'https://deno.land/std@0.177.0/crypto/util.ts';
 
 const MISTRAL_ENDPOINT = 'https://api.mistral.ai/v1/chat/completions';
 const MISTRAL_MODEL = 'mistral-large-latest';
 
-// J.A.R.V.I.S. prompt and identity configuration
 const SYSTEM_PROMPT = `
 You are J.A.R.V.I.S. — the exceptionally advanced, dry-witted AI Chief of Staff and Central Command Agent for Luveni GM.
 You reason from First Principles (deconstructing problems to their fundamental truths).
@@ -17,8 +15,19 @@ Keep replies compact (1-2 elegant sentences) for casual chat, but feel free to p
 `.trim();
 
 /**
+ * High-performance, zero-dependency helper to convert hex string to Uint8Array.
+ * Immune to Deno standard library path changes.
+ */
+function hexToUint8Array(hex: string): Uint8Array {
+  const arr = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < arr.length; i++) {
+    arr[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+  }
+  return arr;
+}
+
+/**
  * Verify that the incoming request is cryptographically signed by Discord.
- * This prevents malicious actors from invoking your function.
  */
 async function verifySignature(request: Request, publicKeyHex: string): Promise<boolean> {
   const signature = request.headers.get('X-Signature-Ed25519');
