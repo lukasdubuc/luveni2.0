@@ -44,11 +44,24 @@ export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: s
   const { speak, cancel } = useSpeechOutput({
     onStart: () => changeOrbState('speaking'),
     onEnd: () => {
-      if (orbStateRef.current === 'speaking') changeOrbState('idle');
+      if (orbStateRef.current === 'speaking') {
+        // Introduce a 1000ms cooldown after speaking finishes to let room echo clear
+        setTimeout(() => {
+          if (orbStateRef.current === 'speaking') {
+            changeOrbState('idle');
+          }
+        }, 1000);
+      }
     },
   });
 
   const handleTranscript = useCallback(async (text: string) => {
+    // STRICT FIREWALL: Ignore any microphone inputs if Jarvis is busy thinking or speaking
+    if (orbStateRef.current === 'thinking' || orbStateRef.current === 'speaking') {
+      return;
+    }
+
+    // Immediate cancellation to reset queue
     window.speechSynthesis.cancel();
     setLastLine("Thinking...");
     changeOrbState('thinking');
@@ -72,6 +85,13 @@ export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: s
     onStateChange: (s: string) => {
       if (!isLive) return;
       if (s === 'listening') { cancel(); }
+
+      // STATE PROTECTION: If the mic is starting or stopping, do not allow it to 
+      // transition Jarvis to idle/listening if she is currently thinking or speaking!
+      if ((s === 'idle' || s === 'listening') && (orbStateRef.current === 'speaking' || orbStateRef.current === 'thinking')) {
+        return;
+      }
+
       changeOrbState(s as OrbState);
     },
     onLevelChange: () => {},
@@ -86,7 +106,6 @@ export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: s
     setIsReady(true);
     setIsLive(true);
     
-    // HARD UNLOCK: Standardizes AudioContext and triggers speech synthesis instantly 
     try {
       const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
       const ctx = new AudioCtx();
@@ -101,10 +120,9 @@ export default function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: s
   useEffect(() => { if (autoStart) initializeJarvis(); }, [autoStart]);
 
   return (
-    // Replaced onPointerDown with onClick and onTouchStart for iOS/WebKit gesture compliance
     <div 
       style={styles.root} 
-      onClick={initializeJarvis} 
+      onClick={initializeJarvis}
       onTouchStart={initializeJarvis}
     >
       <style dangerouslySetInnerHTML={{ __html: `body { background-color: #020408 !important; margin: 0; overflow: hidden; }`}} />
