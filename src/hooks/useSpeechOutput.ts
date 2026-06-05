@@ -2,7 +2,7 @@
 //  J.A.R.V.I.S — Luveni GM | hooks/useSpeechOutput.ts
 // ─────────────────────────────────────────────────────────────
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 
 interface UseSpeechOutputOptions {
   onStart?: () => void;
@@ -25,8 +25,6 @@ const isMobile = typeof window !== 'undefined' &&
   (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
-// A global array to keep a strong reference to active utterances.
-// This prevents Chrome/Safari garbage collection from stopping speech mid-sentence.
 const globalActiveUtterances: SpeechSynthesisUtterance[] = [];
 
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
@@ -55,10 +53,10 @@ function loadVoices(): Promise<SpeechSynthesisVoice[]> {
 }
 
 /**
- * Helper to split text into larger chunks to avoid Chrome's 15-second speech bug,
- * without aggressively splitting short sentences which ruins conversational flow.
+ * Splits text into small, readable chunks (max 150 characters) to target
+ * approximately 2-3 display lines per visual subtitle.
  */
-function chunkText(text: string, maxLength = 200): string[] {
+function chunkText(text: string, maxLength = 150): string[] {
   if (text.length <= maxLength) return [text];
 
   const chunks: string[] = [];
@@ -70,23 +68,20 @@ function chunkText(text: string, maxLength = 200): string[] {
       break;
     }
 
-    // Try to split at sentence/clause endings first
     let splitIndex = -1;
     const breakPoints = ['. ', '! ', '? ', '; ', ', '];
     for (const punct of breakPoints) {
       const idx = remaining.lastIndexOf(punct, maxLength);
       if (idx > splitIndex) {
-        splitIndex = idx + punct.length - 1; // split immediately after punctuation
+        splitIndex = idx + punct.length - 1;
       }
     }
 
-    // Fall back to space if no clean punctuation boundary is found
     if (splitIndex === -1) {
       const idx = remaining.lastIndexOf(' ', maxLength);
       if (idx > 0) splitIndex = idx;
     }
 
-    // Fall back to hard-cut if necessary
     if (splitIndex === -1) {
       splitIndex = maxLength;
     }
@@ -101,6 +96,7 @@ function chunkText(text: string, maxLength = 200): string[] {
 let voiceCache: SpeechSynthesisVoice | null | undefined = undefined;
 
 export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputOptions = {}) {
+  const [currentSubtitle, setCurrentSubtitle] = useState("");
   const speaking = useRef(false);
   const onStartRef = useRef(onStart);
   const onBoundaryRef = useRef(onBoundary);
@@ -123,103 +119,14 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const cancel = useCallback(() => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
-    globalActiveUtterances.length = 0; // clear the global array
+    globalActiveUtterances.length = 0;
     speaking.current = false;
+    setCurrentSubtitle(""); // Instantly clear subtitle on cancel
   }, []);
 
   const doSpeak = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
-    // First stop any current speech
     cancel();
 
-    // A brief delay allows the browser's audio engine and OS thread to settle.
-    // This reduces instances of clipped/cut-off first words.
-    setTimeout(() => {
-      speaking.current = true;
-      if (onStartRef.current) onStartRef.current();
-
-      const phoneticallyCleanText = text.replace(/J\.A\.R\.V\.I\.S\.?/gi, "Jarvis");
-      const chunks = chunkText(phoneticallyCleanText, 200);
-      let currentIndex = 0;
-
-      const playNext = () => {
-        if (currentIndex >= chunks.length) {
-          globalActiveUtterances.length = 0;
-          speaking.current = false;
-          // Introduce a minor delay before firing onEnd to ensure physical playback is complete
-          setTimeout(() => {
-            if (onEndRef.current) onEndRef.current();
-          }, 150);
-          return;
-        }
-
-        const rawChunk = chunks[currentIndex].trim();
-        if (!rawChunk) {
-          currentIndex++;
-          playNext();
-          return;
-        }
-
-        const utt = new SpeechSynthesisUtterance(rawChunk);
-        
-        utt.rate = isMobile ? 1.0 : 0.93;
-        utt.pitch = isMobile ? 1.0 : 0.78;
-        
-        if (voice) utt.voice = voice;
-
-        // Keep a strong reference to prevent garbage collection cutting off the word
-        globalActiveUtterances.push(utt);
-
-        utt.onboundary = () => {
-          if (onBoundaryRef.current) onBoundaryRef.current(0.3 + Math.random() * 0.55);
-        };
-
-        utt.onend = () => {
-          // Clean up reference to this utterance
-          const idx = globalActiveUtterances.indexOf(utt);
-          if (idx > -1) globalActiveUtterances.splice(idx, 1);
-
-          currentIndex++;
-          playNext();
-        };
-
-        utt.onerror = () => {
-          const idx = globalActiveUtterances.indexOf(utt);
-          if (idx > -1) globalActiveUtterances.splice(idx, 1);
-
-          currentIndex++;
-          playNext();
-        };
-
-        window.speechSynthesis.speak(utt);
-      };
-
-      playNext();
-    }, 100); // 100ms settling time
-  }, [cancel]);
-
-  const speak = useCallback((text: string) => {
-    if (isMobile) {
-      doSpeak(text, null);
-      return;
-    }
-
-    if (voiceCache !== undefined) {
-      doSpeak(text, voiceCache);
-    } else {
-      const immediateVoices = window.speechSynthesis?.getVoices() || [];
-      if (immediateVoices.length > 0) {
-        voiceCache = findBestVoice(immediateVoices);
-        doSpeak(text, voiceCache);
-      } else {
-        loadVoices().then(v => {
-          voiceCache = findBestVoice(v);
-          doSpeak(text, voiceCache);
-        });
-      }
-    }
-  }, [doSpeak]);
-
-  return { speak, cancel, isSpeaking: () => speaking.current };
-}
+    // 250ms settling t
