@@ -22,6 +22,7 @@ const isIOS = typeof window !== 'undefined' &&
   (/iPad|iPhone|iPod/.test(navigator.userAgent) || 
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
+// Named Export to prevent TanStack Router import failures
 export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, autoStart?: boolean }) {
   const [orbState, setOrbState] = useState<OrbState>('idle');
   const [lastLine, setLastLine] = useState('');
@@ -29,6 +30,7 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
   const [isReady, setIsReady] = useState(false);
   const [isLive, setIsLive] = useState(false);
 
+  // Using any prevents NodeJS.Timeout vs browser window.setTimeout type conflicts
   const stateTimeoutRef = useRef<any>(null);
   const orbStateRef = useRef(orbState);
 
@@ -49,6 +51,7 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
     onStart: () => changeOrbState('speaking'),
     onEnd: () => {
       if (orbStateRef.current === 'speaking') {
+        // Delay transitioning back to 'idle' by 1000ms to allow audio feedback/echo to clear
         setTimeout(() => {
           if (orbStateRef.current === 'speaking') {
             changeOrbState('idle');
@@ -59,6 +62,7 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
   });
 
   const handleTranscript = useCallback(async (text: string) => {
+    // STRICT FIREWALL: Ignore transcripts if Jarvis is busy thinking or speaking
     if (orbStateRef.current === 'thinking' || orbStateRef.current === 'speaking') {
       return;
     }
@@ -87,6 +91,7 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
       if (!isLive) return;
       if (s === 'listening') { cancel(); }
 
+      // STATE PROTECTION: Ignore microphone-terminated callbacks while Jarvis is speaking
       if ((s === 'idle' || s === 'listening') && (orbStateRef.current === 'speaking' || orbStateRef.current === 'thinking')) {
         return;
       }
@@ -102,19 +107,28 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
 
   const initializeJarvis = async () => {
     if (isReady) return;
-    setIsReady(true);
-    setIsLive(true);
-    
+
+    // 1. Speak SYNCHRONOUSLY immediately to satisfy iOS Safari gesture constraints
     try {
-      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
-      const ctx = new AudioCtx();
-      if (ctx.state === 'suspended') await ctx.resume();
-      
       const s = new SpeechSynthesisUtterance("System online.");
       s.volume = 1; 
       window.speechSynthesis.speak(s);
     } catch (e) { 
       console.error("Audio unlock failed", e); 
+    }
+
+    setIsReady(true);
+    setIsLive(true);
+    
+    // 2. Resume Web Audio context asynchronously
+    try {
+      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+      const ctx = new AudioCtx();
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
+    } catch (e) { 
+      console.error("Audio context resume failed", e); 
     }
   };
 
@@ -154,4 +168,5 @@ const styles: Record<string, React.CSSProperties> = {
   transcript: { color: '#fff', fontSize: '1.5rem', fontFamily: "'Inter', sans-serif", lineHeight: 1.4 }
 };
 
+// Default Export to prevent TanStack Router import failures
 export default JarvisHub;
