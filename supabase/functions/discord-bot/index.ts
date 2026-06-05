@@ -32,13 +32,16 @@ function hexToUint8Array(hex: string): Uint8Array {
   return arr;
 }
 
-async function verifySignature(request: Request, publicKeyHex: string): Promise<boolean> {
-  const signature = request.headers.get('X-Signature-Ed25519');
-  const timestamp = request.headers.get('X-Signature-Timestamp');
+/**
+ * Verifies the signature using the pre-read raw body string.
+ * This completely avoids Deno stream-locking bugs.
+ */
+async function verifySignature(headers: Headers, body: string, publicKeyHex: string): Promise<boolean> {
+  const signature = headers.get('X-Signature-Ed25519');
+  const timestamp = headers.get('X-Signature-Timestamp');
   
   if (!signature || !timestamp) return false;
 
-  const body = await request.clone().text();
   const encoder = new TextEncoder();
   const data = encoder.encode(timestamp + body);
   
@@ -83,6 +86,7 @@ async function processAndReply(interaction: any, userQuery: string, username: st
     const mistralData = await mistralRes.json();
     const replyText = mistralData.choices?.[0]?.message?.content || "I am currently processing offline data, sir.";
 
+    // PATCH updates the deferred interaction message on Discord's servers
     await fetch(`https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -147,18 +151,43 @@ serve(async (req: Request) => {
     return new Response('Configuration missing', { status: 500 });
   }
 
-  const isValid = await verifySignature(req, publicKey);
+  // 1. Read the request body as text exactly once
+  const bodyText = await req.text();
+
+  // 2. Validate using the pre-read body text
+  const isValid = await verifySignature(req.headers, bodyText, publicKey);
   if (!isValid) {
     return new Response('Invalid request signature', { status: 401 });
   }
 
-  const interaction = await req.json();
+  // 3. Parse JSON from the verified text string
+  const interaction = JSON.parse(bodyText);
 
+  // Handle Handshake PING (Type 1)
   if (interaction.type === 1) {
     return new Response(JSON.stringify({ type: 1 }), {
       headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
     });
   }
 
+  // Handle Command (Type 2)
   if (interaction.type === 2) {
-    const co
+    const commandName = interaction.data?.name;
+
+    if (commandName === 'jarvis') {
+      const userQuery = interaction.data.options?.[0]?.value || '';
+      const username = interaction.member?.user?.username || 'sir';
+
+      EdgeRuntime.waitUntil(
+        processAndReply(interaction, userQuery, username, mistralApiKey)
+      );
+
+      // Return instant "thinking..." status
+      return new Response(JSON.stringify({ type: 5 }), {
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+      });
+    }
+  }
+
+  return new Response(JSON.stringify({ error: 'Unsupported interaction type' }), { status: 400 });
+});
