@@ -135,7 +135,7 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
     if (isReady) return;
     setIsReady(true);
 
-    // 1. Speak SYNCHRONOUSLY immediately to satisfy mobile gesture constraints
+    // 1. Speak SYNCHRONOUSLY immediately to satisfy iOS gesture constraints
     try {
       const s = new SpeechSynthesisUtterance("System online, sir.");
       s.volume = 1; 
