@@ -16,14 +16,14 @@ const CORS_HEADERS = {
 };
 
 const SYSTEM_PROMPT = `
-You are Jarvis — the autonomous Director of Opertions for Luveni.
+You are Jarvis — the autonomous General Manager of Luveni.
 You have access to tools. If a user asks for real-time information, weather, or research, use 'web_search'.
-Always be executive-level, sharp, and concise, occasionally funny. Refer to Luke as 'sir'. 
+Always be executive-level, sharp, and concise. Refer to Luke as 'sir'.
 `.trim();
 
 /**
- * 100% Free web search executor utilizing DuckDuckGo's HTML interface.
- * Requires no API keys or subscription setups.
+ * Ultra-fast web search resolver using Deno fetch and optimized regex.
+ * Zero external libraries or key dependencies.
  */
 async function executeWebSearch(query: string): Promise<string> {
   try {
@@ -36,13 +36,13 @@ async function executeWebSearch(query: string): Promise<string> {
     });
 
     if (!response.ok) {
-      return `Error: Search failed with status ${response.status}`;
+      return `Error: Web search failed with status ${response.status}`;
     }
 
     const html = await response.text();
     const results: { title: string; link: string; snippet: string }[] = [];
 
-    // Parse the HTML structure to isolate web result blocks
+    // Isolate search result blocks
     const blockRegex = /<div class="[^"]*result__body[^"]*">([\s\S]*?)<\/div>\s*<\/div>/g;
     let match;
 
@@ -54,7 +54,7 @@ async function executeWebSearch(query: string): Promise<string> {
       if (titleLinkMatch) {
         let rawUrl = titleLinkMatch[1];
         
-        // Resolve DuckDuckGo redirect wrappers back to direct source URLs
+        // Clean redirect wrappers
         if (rawUrl.includes("uddg=")) {
           const urlParam = rawUrl.split("uddg=")[1];
           if (urlParam) {
@@ -62,7 +62,7 @@ async function executeWebSearch(query: string): Promise<string> {
           }
         }
         
-        // Strip inner HTML tags from titles/snippets (e.g., <b> text matches)
+        // Strip residual HTML highlights (like <b> tags)
         const title = titleLinkMatch[2].replace(/<[^>]*>/g, "").trim();
         const snippet = snippetMatch ? snippetMatch[1].replace(/<[^>]*>/g, "").trim() : "";
         
@@ -73,7 +73,7 @@ async function executeWebSearch(query: string): Promise<string> {
     }
 
     if (results.length === 0) {
-      return "No web results were found for this query.";
+      return "No web search results were found for this query.";
     }
 
     return results.map((r, i) => 
@@ -108,7 +108,7 @@ serve(async (req: Request) => {
           properties: { 
             query: { 
               type: 'string',
-              description: 'The semantic query to search the web with.'
+              description: 'The query string to run on the search engine.'
             } 
           },
           required: ['query'],
@@ -118,7 +118,7 @@ serve(async (req: Request) => {
     temperature: 0.7,
   };
 
-  // First Round: Request response/tool calls from Mistral
+  // Round 1: Send input to Mistral to see if it triggers the search tool
   const mistralRes = await fetch(MISTRAL_ENDPOINT, {
     method: 'POST',
     headers: { 
@@ -131,13 +131,12 @@ serve(async (req: Request) => {
   const data = await mistralRes.json();
   const message = data.choices?.[0]?.message;
 
-  // Intercept tool calls for server-side resolution
+  // If Mistral requests a web search, handle it transparently on the server
   if (message?.tool_calls && message.tool_calls.length > 0) {
     const toolCall = message.tool_calls[0];
     const call = toolCall.function;
 
     if (call.name === 'web_search') {
-      // Safely parse the query arguments (handles stringified JSON parameters)
       let searchQuery = '';
       try {
         const parsedArgs = typeof call.arguments === 'string' ? JSON.parse(call.arguments) : call.arguments;
@@ -146,20 +145,18 @@ serve(async (req: Request) => {
         searchQuery = call.arguments?.query || '';
       }
 
-      // Execute search on DuckDuckGo
+      // Execute live web search
       const searchResults = await executeWebSearch(searchQuery);
 
-      // Append search results back to the conversation thread
+      // Append tool execution state directly to messages thread
       const updatedMessages = [
         { role: 'system', content: SYSTEM_PROMPT },
         ...body.history ?? body.contents ?? [],
-        // 1. Submit Mistral's assistant instruction requesting tool usage
         {
           role: 'assistant',
           content: message.content || null,
           tool_calls: message.tool_calls
         },
-        // 2. Submit the resolved text from the tool output
         {
           role: 'tool',
           name: 'web_search',
@@ -168,7 +165,7 @@ serve(async (req: Request) => {
         }
       ];
 
-      // Second Round: Feed results back to Mistral for a synthesized text reply
+      // Round 2: Feed the search results back to Mistral to synthesize the final answer
       const finalRes = await fetch(MISTRAL_ENDPOINT, {
         method: 'POST',
         headers: { 
@@ -178,7 +175,7 @@ serve(async (req: Request) => {
         body: JSON.stringify({
           model: MISTRAL_MODEL,
           messages: updatedMessages,
-          tool_choice: 'none', // Disable tool selection to guarantee a text response
+          tool_choice: 'none', // Force a direct text response on this final pass
           temperature: 0.7,
         }),
       });
