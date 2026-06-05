@@ -5,9 +5,10 @@ import { useRef, useCallback } from 'react';
 import { JARVIS_SYSTEM_PROMPT } from '../lib/jarvis-config';
 import { supabase } from '@/integrations/supabase/client';
 
-// ─── API Keys (Lovable secrets) ───────────────────────────────
+// ─── API Keys ─────────────────────────────────────────────────
 const GEMINI_API_KEY  = import.meta.env.GEMINI_API_KEY  || import.meta.env.VITE_GEMINI_API_KEY  || '';
 const MISTRAL_API_KEY = import.meta.env.MISTRAL_API_KEY || import.meta.env.VITE_MISTRAL_API_KEY || '';
+const TAVILY_API_KEY  = import.meta.env.TAVILY_API_KEY  || import.meta.env.VITE_TAVILY_API_KEY  || '';
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -65,8 +66,48 @@ function buildLiveContext(snapshot: StoreSnapshot | null | undefined): string {
   return lines.join('\n');
 }
 
+// ─── Tavily Web Search ────────────────────────────────────────
+
+async function callTavily(query: string): Promise<string> {
+  if (!TAVILY_API_KEY) return 'Error: TAVILY_API_KEY is not set.';
+
+  try {
+    const res = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key:                TAVILY_API_KEY,
+        query,
+        search_depth:           'basic',
+        include_answer:         true,
+        include_raw_content:    false,
+        max_results:            5,
+      })
+    });
+
+    if (!res.ok) throw new Error(`Tavily error ${res.status}: ${await res.text()}`);
+
+    const data = await res.json();
+
+    // Return the AI-synthesised answer + top source snippets
+    const lines: string[] = [];
+    if (data.answer) lines.push(`Summary: ${data.answer}`);
+    if (data.results?.length) {
+      lines.push('Sources:');
+      data.results.slice(0, 5).forEach((r: any) => {
+        lines.push(`• ${r.title} (${r.url}): ${r.content?.slice(0, 300)}`);
+      });
+    }
+
+    return lines.join('\n') || 'No results found.';
+  } catch (e: any) {
+    console.warn('[Jarvis] Tavily search failed:', e.message);
+    return `Search error: ${e.message}`;
+  }
+}
+
 // ─── Edge Function Tool Handler ───────────────────────────────
-// Handles: google_search, open_link, gmail_read, gmail_send, drive_search, drive_read
+// Handles: open_link, gmail_read, gmail_send, drive_search, drive_read
 
 async function callEdgeTool(toolName: string, args: Record<string, any>, googleToken?: string | null): Promise<string> {
   try {
@@ -165,185 +206,132 @@ function scrapeCurrentPage(): string {
   }
 }
 
+// ─── Tool Executor ────────────────────────────────────────────
+
+async function executeTool(
+  name:        string,
+  args:        Record<string, any>,
+  googleToken: string | null | undefined,
+  memoryRef:   React.MutableRefObject<string>
+): Promise<string> {
+  if (name === 'google_search')                                    return callTavily(args.query || '');
+  if (name === 'get_current_page_content')                         return scrapeCurrentPage();
+  if (name === 'github_list_files' || name === 'github_read_file') return callGithubTool(name, args);
+  if (name === 'update_memory')                                    return handleMemoryUpdate(args.new_memory_summary, memoryRef);
+  // open_link, gmail_*, drive_* → edge function
+  return callEdgeTool(name, args, googleToken);
+}
+
+// ─── Gemini Tool Schema ───────────────────────────────────────
+// No { googleSearch: {} } — Tavily handles search via declared function
+
+const GEMINI_TOOLS_SCHEMA = [
+  {
+    function_declarations: [
+      {
+        name:        'google_search',
+        description: 'Search the web for current information, news, or any topic.',
+        parameters:  { type: 'OBJECT', properties: { query: { type: 'STRING', description: 'Concise keyword search query' } }, required: ['query'] }
+      },
+      { name: 'open_link',              description: 'Scrape and read the full text of any URL.',    parameters: { type: 'OBJECT', properties: { url:    { type: 'STRING' } }, required: ['url'] } },
+      { name: 'get_current_page_content', description: 'Read the active webpage.',                  parameters: { type: 'OBJECT', properties: {} } },
+      { name: 'github_list_files',      description: 'List files in a GitHub repo.',                parameters: { type: 'OBJECT', properties: { owner: { type: 'STRING' }, repo: { type: 'STRING' }, path: { type: 'STRING' } }, required: ['owner', 'repo'] } },
+      { name: 'github_read_file',       description: 'Read a file in a GitHub repo.',               parameters: { type: 'OBJECT', properties: { owner: { type: 'STRING' }, repo: { type: 'STRING' }, path: { type: 'STRING' }, branch: { type: 'STRING' } }, required: ['owner', 'repo', 'path'] } },
+      { name: 'update_memory',          description: 'Save to long-term memory.',                   parameters: { type: 'OBJECT', properties: { new_memory_summary: { type: 'STRING' } }, required: ['new_memory_summary'] } },
+      { name: 'gmail_read',             description: 'Read Gmail.',                                 parameters: { type: 'OBJECT', properties: { query: { type: 'STRING' }, maxResults: { type: 'NUMBER' } }, required: ['query'] } },
+      { name: 'gmail_send',             description: 'Send Gmail.',                                 parameters: { type: 'OBJECT', properties: { to: { type: 'STRING' }, subject: { type: 'STRING' }, body: { type: 'STRING' } }, required: ['to', 'subject', 'body'] } },
+      { name: 'drive_search',           description: 'Search Google Drive.',                        parameters: { type: 'OBJECT', properties: { query: { type: 'STRING' } }, required: ['query'] } },
+      { name: 'drive_read',             description: 'Read a Google Drive file.',                   parameters: { type: 'OBJECT', properties: { fileId: { type: 'STRING' } }, required: ['fileId'] } },
+    ]
+  }
+];
+
 // ─── Mistral Tool Definitions ─────────────────────────────────
 
 const MISTRAL_TOOLS = [
   {
     type: 'function',
     function: {
-      name: 'google_search',
+      name:        'google_search',
       description: 'Search the web for current information, news, or any topic.',
-      parameters: {
-        type: 'object',
-        properties: {
-          query: { type: 'string', description: 'Concise keyword search query' }
-        },
-        required: ['query']
-      }
+      parameters:  { type: 'object', properties: { query: { type: 'string', description: 'Concise keyword search query' } }, required: ['query'] }
     }
   },
   {
     type: 'function',
     function: {
-      name: 'open_link',
+      name:        'open_link',
       description: 'Scrape and read the full text content of any URL.',
-      parameters: {
-        type: 'object',
-        properties: {
-          url: { type: 'string', description: 'The full URL to open and read' }
-        },
-        required: ['url']
-      }
+      parameters:  { type: 'object', properties: { url: { type: 'string', description: 'The full URL to open and read' } }, required: ['url'] }
     }
   },
   {
     type: 'function',
     function: {
-      name: 'get_current_page_content',
+      name:        'get_current_page_content',
       description: 'Read the text contents and URL of the active webpage the user is viewing.',
-      parameters: { type: 'object', properties: {} }
+      parameters:  { type: 'object', properties: {} }
     }
   },
   {
     type: 'function',
     function: {
-      name: 'github_list_files',
+      name:        'github_list_files',
       description: 'List directories and files inside a GitHub repository.',
-      parameters: {
-        type: 'object',
-        properties: {
-          owner:  { type: 'string', description: 'GitHub owner or organization name' },
-          repo:   { type: 'string', description: 'Repository name' },
-          path:   { type: 'string', description: 'Subfolder path (default: root)' }
-        },
-        required: ['owner', 'repo']
-      }
+      parameters:  { type: 'object', properties: { owner: { type: 'string' }, repo: { type: 'string' }, path: { type: 'string' } }, required: ['owner', 'repo'] }
     }
   },
   {
     type: 'function',
     function: {
-      name: 'github_read_file',
+      name:        'github_read_file',
       description: 'Read the contents of a file in a GitHub repository.',
-      parameters: {
-        type: 'object',
-        properties: {
-          owner:  { type: 'string', description: 'GitHub owner or organization name' },
-          repo:   { type: 'string', description: 'Repository name' },
-          path:   { type: 'string', description: 'File path inside the repository' },
-          branch: { type: 'string', description: 'Branch name (default: main)' }
-        },
-        required: ['owner', 'repo', 'path']
-      }
+      parameters:  { type: 'object', properties: { owner: { type: 'string' }, repo: { type: 'string' }, path: { type: 'string' }, branch: { type: 'string' } }, required: ['owner', 'repo', 'path'] }
     }
   },
   {
     type: 'function',
     function: {
-      name: 'update_memory',
+      name:        'update_memory',
       description: 'Save consolidated wisdom, rules, and lessons to long-term memory.',
-      parameters: {
-        type: 'object',
-        properties: {
-          new_memory_summary: { type: 'string', description: 'The full updated memory summary.' }
-        },
-        required: ['new_memory_summary']
-      }
+      parameters:  { type: 'object', properties: { new_memory_summary: { type: 'string' } }, required: ['new_memory_summary'] }
     }
   },
   {
     type: 'function',
     function: {
-      name: 'gmail_read',
+      name:        'gmail_read',
       description: 'Read emails from Gmail.',
-      parameters: {
-        type: 'object',
-        properties: {
-          query:      { type: 'string', description: 'Gmail search query' },
-          maxResults: { type: 'number', description: 'Max emails to return (default 5)' }
-        },
-        required: ['query']
-      }
+      parameters:  { type: 'object', properties: { query: { type: 'string' }, maxResults: { type: 'number' } }, required: ['query'] }
     }
   },
   {
     type: 'function',
     function: {
-      name: 'gmail_send',
+      name:        'gmail_send',
       description: 'Send an email via Gmail.',
-      parameters: {
-        type: 'object',
-        properties: {
-          to:      { type: 'string', description: 'Recipient email address' },
-          subject: { type: 'string', description: 'Email subject' },
-          body:    { type: 'string', description: 'Plain text email body' }
-        },
-        required: ['to', 'subject', 'body']
-      }
+      parameters:  { type: 'object', properties: { to: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' } }, required: ['to', 'subject', 'body'] }
     }
   },
   {
     type: 'function',
     function: {
-      name: 'drive_search',
+      name:        'drive_search',
       description: 'Search Google Drive for files.',
-      parameters: {
-        type: 'object',
-        properties: {
-          query: { type: 'string', description: 'Drive search query' }
-        },
-        required: ['query']
-      }
+      parameters:  { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] }
     }
   },
   {
     type: 'function',
     function: {
-      name: 'drive_read',
+      name:        'drive_read',
       description: 'Read a Google Drive file by ID.',
-      parameters: {
-        type: 'object',
-        properties: {
-          fileId: { type: 'string', description: 'Google Drive file ID' }
-        },
-        required: ['fileId']
-      }
+      parameters:  { type: 'object', properties: { fileId: { type: 'string' } }, required: ['fileId'] }
     }
   }
 ];
-
-// ─── Tool Executor (shared between Gemini & Mistral) ──────────
-
-async function executeTool(
-  name:       string,
-  args:       Record<string, any>,
-  googleToken: string | null | undefined,
-  memoryRef:  React.MutableRefObject<string>
-): Promise<string> {
-  if (name === 'get_current_page_content')                      return scrapeCurrentPage();
-  if (name === 'github_list_files' || name === 'github_read_file') return callGithubTool(name, args);
-  if (name === 'update_memory')                                 return handleMemoryUpdate(args.new_memory_summary, memoryRef);
-  // All other tools (google_search, open_link, gmail_*, drive_*) go through edge function
-  return callEdgeTool(name, args, googleToken);
-}
 
 // ─── Gemini API Call ──────────────────────────────────────────
-
-const GEMINI_TOOLS_SCHEMA = [
-  { googleSearch: {} },
-  {
-    function_declarations: [
-      { name: 'get_current_page_content', description: 'Read the active webpage.', parameters: { type: 'OBJECT', properties: {} } },
-      { name: 'github_list_files',        description: 'List files in a GitHub repo.', parameters: { type: 'OBJECT', properties: { owner: { type: 'STRING' }, repo: { type: 'STRING' }, path: { type: 'STRING' } }, required: ['owner', 'repo'] } },
-      { name: 'github_read_file',         description: 'Read a file in a GitHub repo.', parameters: { type: 'OBJECT', properties: { owner: { type: 'STRING' }, repo: { type: 'STRING' }, path: { type: 'STRING' }, branch: { type: 'STRING' } }, required: ['owner', 'repo', 'path'] } },
-      { name: 'update_memory',            description: 'Save to long-term memory.', parameters: { type: 'OBJECT', properties: { new_memory_summary: { type: 'STRING' } }, required: ['new_memory_summary'] } },
-      { name: 'gmail_read',               description: 'Read Gmail.',  parameters: { type: 'OBJECT', properties: { query: { type: 'STRING' }, maxResults: { type: 'NUMBER' } }, required: ['query'] } },
-      { name: 'gmail_send',               description: 'Send Gmail.',  parameters: { type: 'OBJECT', properties: { to: { type: 'STRING' }, subject: { type: 'STRING' }, body: { type: 'STRING' } }, required: ['to', 'subject', 'body'] } },
-      { name: 'drive_search',             description: 'Search Drive.', parameters: { type: 'OBJECT', properties: { query: { type: 'STRING' } }, required: ['query'] } },
-      { name: 'drive_read',               description: 'Read Drive file.', parameters: { type: 'OBJECT', properties: { fileId: { type: 'STRING' } }, required: ['fileId'] } },
-    ]
-  }
-];
 
 async function askGemini(
   systemContent: string,
@@ -352,24 +340,17 @@ async function askGemini(
   memoryRef:     React.MutableRefObject<string>,
   onChunk?:      (text: string) => void
 ): Promise<string> {
-  const key          = GEMINI_API_KEY;
-  const isOAuth      = key.startsWith('AQ.');
-  const url          = isOAuth
-    ? 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
-    : `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(isOAuth && { 'Authorization': `Bearer ${key}` }),
-  };
+  const key = GEMINI_API_KEY;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
 
-  let contents: any[]  = [...history];
-  let finalReply       = '';
-  const MAX_ROUNDS     = 4;
+  let contents: any[] = [...history];
+  let finalReply      = '';
+  const MAX_ROUNDS    = 4;
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
     const res = await fetch(url, {
       method: 'POST',
-      headers,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents,
         tools:             GEMINI_TOOLS_SCHEMA,
@@ -414,7 +395,6 @@ async function askMistral(
   memoryRef:     React.MutableRefObject<string>,
   onChunk?:      (text: string) => void
 ): Promise<string> {
-  // Convert Gemini-style history to Mistral format
   const messages: any[] = [
     { role: 'system', content: systemContent },
     ...history.slice(0, -1).map((h: any) => ({
@@ -449,28 +429,21 @@ async function askMistral(
     const choice  = data.choices?.[0];
     const message = choice?.message;
 
-    // Push assistant turn into messages
     messages.push(message);
 
     const toolCalls = message?.tool_calls;
-
     if (!toolCalls || toolCalls.length === 0) {
       finalReply = message?.content || '';
       onChunk?.(finalReply);
       break;
     }
 
-    // Execute each tool call and feed results back
     for (const tc of toolCalls) {
       const args   = typeof tc.function.arguments === 'string'
         ? JSON.parse(tc.function.arguments)
         : tc.function.arguments;
       const result = await executeTool(tc.function.name, args, googleToken, memoryRef);
-      messages.push({
-        role:         'tool',
-        tool_call_id: tc.id,
-        content:      result
-      });
+      messages.push({ role: 'tool', tool_call_id: tc.id, content: result });
     }
   }
 
@@ -489,7 +462,6 @@ export function useGemini(apiKey?: string, options: UseGeminiOptions = {}) {
     async (userText: string, onChunk?: (text: string) => void): Promise<string> => {
       const { googleToken, storeSnapshot } = optionsRef.current;
 
-      // Lazy-load long-term memory
       if (!longTermMemoryRef.current) {
         try {
           const { data } = await supabase
@@ -524,7 +496,6 @@ CRITICAL CONVERSATIONAL & VOICE ASSISTANT FORMATTING INSTRUCTIONS:
 - Integrate search results into fluid, flowing prose. Write lists as natural sentences.
 `.trim();
 
-      // Push user message
       history.current.push({ role: 'user', parts: [{ text: userText }] });
 
       let finalReply = '';
