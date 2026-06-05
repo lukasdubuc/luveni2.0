@@ -25,6 +25,10 @@ const isMobile = typeof window !== 'undefined' &&
   (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
+// A global array to keep a strong reference to active utterances.
+// This prevents Chrome/Safari garbage collection from stopping speech mid-sentence.
+const globalActiveUtterances: SpeechSynthesisUtterance[] = [];
+
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   for (const name of BRITISH_VOICES) {
     const v = voices.find(v => v.name === name);
@@ -50,6 +54,50 @@ function loadVoices(): Promise<SpeechSynthesisVoice[]> {
   });
 }
 
+/**
+ * Helper to split text into larger chunks to avoid Chrome's 15-second speech bug,
+ * without aggressively splitting short sentences which ruins conversational flow.
+ */
+function chunkText(text: string, maxLength = 200): string[] {
+  if (text.length <= maxLength) return [text];
+
+  const chunks: string[] = [];
+  let remaining = text;
+
+  while (remaining.length > 0) {
+    if (remaining.length <= maxLength) {
+      chunks.push(remaining);
+      break;
+    }
+
+    // Try to split at sentence/clause endings first
+    let splitIndex = -1;
+    const breakPoints = ['. ', '! ', '? ', '; ', ', '];
+    for (const punct of breakPoints) {
+      const idx = remaining.lastIndexOf(punct, maxLength);
+      if (idx > splitIndex) {
+        splitIndex = idx + punct.length - 1; // split immediately after punctuation
+      }
+    }
+
+    // Fall back to space if no clean punctuation boundary is found
+    if (splitIndex === -1) {
+      const idx = remaining.lastIndexOf(' ', maxLength);
+      if (idx > 0) splitIndex = idx;
+    }
+
+    // Fall back to hard-cut if necessary
+    if (splitIndex === -1) {
+      splitIndex = maxLength;
+    }
+
+    chunks.push(remaining.substring(0, splitIndex).trim());
+    remaining = remaining.substring(splitIndex).trim();
+  }
+
+  return chunks.filter(Boolean);
+}
+
 let voiceCache: SpeechSynthesisVoice | null | undefined = undefined;
 
 export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputOptions = {}) {
@@ -57,8 +105,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const onStartRef = useRef(onStart);
   const onBoundaryRef = useRef(onBoundary);
   const onEndRef = useRef(onEnd);
-
-  const activeUtterancesRef = useRef<SpeechSynthesisUtterance[]>([]);
 
   useEffect(() => {
     onStartRef.current = onStart;
@@ -77,69 +123,83 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const cancel = useCallback(() => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
-    activeUtterancesRef.current = [];
+    globalActiveUtterances.length = 0; // clear the global array
     speaking.current = false;
   }, []);
 
   const doSpeak = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
+    // First stop any current speech
     cancel();
-    speaking.current = true;
-    if (onStartRef.current) onStartRef.current();
 
-    // INTERCEPT SPELLING: Replace J.A.R.V.I.S. with Jarvis so the TTS engines pronounce it naturally
-    const phoneticallyCleanText = text.replace(/J\.A\.R\.V\.I\.S\.?/gi, "Jarvis");
+    // A brief delay allows the browser's audio engine and OS thread to settle.
+    // This reduces instances of clipped/cut-off first words.
+    setTimeout(() => {
+      speaking.current = true;
+      if (onStartRef.current) onStartRef.current();
 
-    const sentences = phoneticallyCleanText.match(/[^.!?]+[.!?]+/g) || [phoneticallyCleanText];
-    let currentIndex = 0;
+      const phoneticallyCleanText = text.replace(/J\.A\.R\.V\.I\.S\.?/gi, "Jarvis");
+      const chunks = chunkText(phoneticallyCleanText, 200);
+      let currentIndex = 0;
 
-    const playNext = () => {
-      if (currentIndex >= sentences.length) {
-        activeUtterancesRef.current = [];
-        speaking.current = false;
-        setTimeout(() => { if (onEndRef.current) onEndRef.current(); }, 300);
-        return;
-      }
+      const playNext = () => {
+        if (currentIndex >= chunks.length) {
+          globalActiveUtterances.length = 0;
+          speaking.current = false;
+          // Introduce a minor delay before firing onEnd to ensure physical playback is complete
+          setTimeout(() => {
+            if (onEndRef.current) onEndRef.current();
+          }, 150);
+          return;
+        }
 
-      const rawSentence = sentences[currentIndex].trim();
-      if (!rawSentence) {
-        currentIndex++;
-        playNext();
-        return;
-      }
+        const rawChunk = chunks[currentIndex].trim();
+        if (!rawChunk) {
+          currentIndex++;
+          playNext();
+          return;
+        }
 
-      const utt = new SpeechSynthesisUtterance(rawSentence);
-      
-      utt.rate = isMobile ? 1.0 : 0.93;
-      utt.pitch = isMobile ? 1.0 : 0.78;
-      
-      if (voice) utt.voice = voice;
+        const utt = new SpeechSynthesisUtterance(rawChunk);
+        
+        utt.rate = isMobile ? 1.0 : 0.93;
+        utt.pitch = isMobile ? 1.0 : 0.78;
+        
+        if (voice) utt.voice = voice;
 
-      utt.onboundary = () => {
-        if (onBoundaryRef.current) onBoundaryRef.current(0.3 + Math.random() * 0.55);
+        // Keep a strong reference to prevent garbage collection cutting off the word
+        globalActiveUtterances.push(utt);
+
+        utt.onboundary = () => {
+          if (onBoundaryRef.current) onBoundaryRef.current(0.3 + Math.random() * 0.55);
+        };
+
+        utt.onend = () => {
+          // Clean up reference to this utterance
+          const idx = globalActiveUtterances.indexOf(utt);
+          if (idx > -1) globalActiveUtterances.splice(idx, 1);
+
+          currentIndex++;
+          playNext();
+        };
+
+        utt.onerror = () => {
+          const idx = globalActiveUtterances.indexOf(utt);
+          if (idx > -1) globalActiveUtterances.splice(idx, 1);
+
+          currentIndex++;
+          playNext();
+        };
+
+        window.speechSynthesis.speak(utt);
       };
 
-      utt.onend = () => {
-        currentIndex++;
-        playNext();
-      };
-
-      utt.onerror = () => {
-        currentIndex++;
-        playNext();
-      };
-
-      activeUtterancesRef.current.push(utt);
-      window.speechSynthesis.speak(utt);
-    };
-
-    playNext();
+      playNext();
+    }, 100); // 100ms settling time
   }, [cancel]);
 
   const speak = useCallback((text: string) => {
-    // Universal Mobile Fix: Instantly trigger synchronous speak with standard defaults.
-    // This bypasses async loadVoices().then() blocks which mobile platforms prevent.
     if (isMobile) {
       doSpeak(text, null);
       return;
