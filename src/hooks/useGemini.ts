@@ -8,8 +8,9 @@ import { supabase } from '@/integrations/supabase/client';
 
 // ─── Gemini Tool Schema ───────────────────────────────────────
 // Uses correct snake_case keys per Gemini REST API v1beta spec.
+// googleSearch is camelCase — that's how Google defined it for 2.0.
 const GEMINI_TOOLS = [
-  { googleSearch: {} }, // Native Google Search Grounding (no credentials needed)
+  { googleSearch: {} }, // Native Google Search Grounding for Gemini 2.0
   {
     function_declarations: [
       {
@@ -92,7 +93,7 @@ const GEMINI_TOOLS = [
         parameters: {
           type: 'OBJECT',
           properties: {
-            query: { type: 'STRING', description: 'Drive search query, e.g. "name contains \'invoice\'" or "mimeType=\'application/pdf\'"' }
+            query: { type: 'STRING', description: "Drive search query, e.g. \"name contains 'invoice'\" or \"mimeType='application/pdf'\"" }
           },
           required: ['query']
         }
@@ -130,8 +131,8 @@ interface StoreSnapshot {
 }
 
 interface UseGeminiOptions {
-  googleToken?:    string | null;
-  storeSnapshot?:  StoreSnapshot | null;
+  googleToken?:   string | null;
+  storeSnapshot?: StoreSnapshot | null;
 }
 
 // ─── Google Workspace Tool Handler ───────────────────────────
@@ -169,7 +170,6 @@ async function callGoogleTool(
 }
 
 // ─── GitHub Tool Handler ──────────────────────────────────────
-// Uses robust UTF-8-safe base64 decoding via TextDecoder (no escape/unescape).
 
 async function callGithubTool(toolName: string, args: Record<string, any>): Promise<string> {
   const githubToken =
@@ -247,12 +247,36 @@ function buildLiveContext(snapshot: StoreSnapshot | null | undefined): string {
   return lines.join('\n');
 }
 
+// ─── Gemini API Call ──────────────────────────────────────────
+// Supports both:
+//   - AIza... keys  → passed as ?key= query param (standard)
+//   - AQ.... tokens → passed as Authorization: Bearer header (OAuth)
+
+async function callGeminiAPI(apiKey: string, payload: object): Promise<Response> {
+  const isOAuthToken = apiKey.startsWith('AQ.');
+
+  const url = isOAuthToken
+    ? 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
+    : `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(isOAuthToken && { 'Authorization': `Bearer ${apiKey}` }),
+  };
+
+  return fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+  });
+}
+
 // ─── Main Hook ────────────────────────────────────────────────
 
 export function useGemini(apiKey: string, options: UseGeminiOptions = {}) {
-  const history          = useRef<any[]>([]);
-  const optionsRef       = useRef(options);
-  optionsRef.current     = options;
+  const history           = useRef<any[]>([]);
+  const optionsRef        = useRef(options);
+  optionsRef.current      = options;
   const longTermMemoryRef = useRef<string>('');
 
   const ask = useCallback(
@@ -314,14 +338,7 @@ CRITICAL CONVERSATIONAL & VOICE ASSISTANT FORMATTING INSTRUCTIONS:
           }
         };
 
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          }
-        );
+        const res = await callGeminiAPI(apiKey, payload);
 
         if (!res.ok) {
           const body = await res.text();
