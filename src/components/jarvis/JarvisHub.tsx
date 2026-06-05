@@ -18,11 +18,11 @@ const STATE_COLOR: Record<OrbState, string> = {
   idle: 'rgba(0,180,255,0.6)', listening: 'rgba(0,255,255,1.0)', thinking: 'rgba(180,100,255,1.0)', speaking: 'rgba(0,255,180,0.95)', error: 'rgba(255,80,80,1.0)',
 };
 
-const isIOS = typeof window !== 'undefined' && 
-  (/iPad|iPhone|iPod/.test(navigator.userAgent) || 
+// Universal mobile check to cover Android and iOS
+const isMobile = typeof window !== 'undefined' && 
+  (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
-// Mathematically perfect, seamless tiling 3D isometric cube vector pattern
 const svgPattern = `
 <svg width="120" height="138.56" viewBox="0 0 120 138.56" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -135,6 +135,7 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
   const initializeJarvis = async () => {
     if (isReady) return;
 
+    // 1. Speak SYNCHRONOUSLY immediately to satisfy mobile gesture constraints
     try {
       const s = new SpeechSynthesisUtterance("System online.");
       s.volume = 1; 
@@ -146,6 +147,7 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
     setIsReady(true);
     setIsLive(true);
     
+    // 2. Resume Web Audio context asynchronously
     try {
       const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
       const ctx = new AudioCtx();
@@ -158,31 +160,25 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
   };
 
   useEffect(() => { 
-    if (autoStart && !isIOS) {
+    if (autoStart && !isMobile) {
       initializeJarvis(); 
     }
   }, [autoStart]);
 
-  // Extract color values dynamically for localized glow shadows
   const shadowColor = STATE_COLOR[orbState].replace('rgba(', '').replace(/,[^,]+\)$/, '');
 
   return (
+    // Removed onTouchStart to prevent rapid overlapping double-initializations
     <div 
       style={styles.root} 
       onClick={initializeJarvis}
-      onTouchStart={initializeJarvis}
     >
       <style dangerouslySetInnerHTML={{ __html: `body { background-color: #020408 !important; margin: 0; overflow: hidden; }`}} />
-      
-      {/* 4K Seamless Isometric Geometry Grid */}
       <div style={styles.gridBg} />
-
-      {/* Dynamic ambient orb glow layer that projects onto the 3D isometric blocks */}
       <div style={{
         ...styles.orbShadow,
         background: `radial-gradient(circle 350px at 50% 50%, rgba(${shadowColor}, 0.12) 0%, transparent 100%)`,
       }} />
-
       <div style={styles.orbWrap}>
         <NeuralOrb state={orbState} audioLevel={0} size={400} />
       </div>
@@ -199,18 +195,7 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  root: { 
-    height: '100vh', 
-    width: '100%', 
-    display: 'flex', 
-    flexDirection: 'column', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    padding: '20px', 
-    boxSizing: 'border-box',
-    position: 'relative',
-    overflow: 'hidden'
-  },
+  root: { height: '100vh', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', boxSizing: 'border-box', position: 'relative', overflow: 'hidden' },
   gridBg: {
     position: 'absolute',
     inset: 0,
@@ -223,13 +208,7 @@ const styles: Record<string, React.CSSProperties> = {
     pointerEvents: 'none',
     zIndex: 0,
   },
-  orbShadow: {
-    position: 'absolute',
-    inset: 0,
-    pointerEvents: 'none',
-    zIndex: 1,
-    transition: 'background 0.3s ease',
-  },
+  orbShadow: { position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1, transition: 'background 0.3s ease' },
   orbWrap: { cursor: 'pointer', display: 'flex', justifyContent: 'center', zIndex: 5 },
   stateLabel: { marginTop: 'auto', marginBottom: '20px', fontSize: '12px', fontFamily: "'Inter', sans-serif", letterSpacing: '0.6rem', fontWeight: 300, textTransform: 'uppercase', zIndex: 10 },
   transcriptContainer: { position: 'absolute', top: '70%', left: '50%', transform: 'translate(-50%, -50%)', width: '90%', maxWidth: '800px', textAlign: 'center', zIndex: 5 },
