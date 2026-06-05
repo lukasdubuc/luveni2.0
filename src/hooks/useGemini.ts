@@ -1,7 +1,5 @@
 // ─────────────────────────────────────────────────────────────
 //  J.A.R.V.I.S — Luveni GM  |  hooks/useGemini.ts
-//  Mistral tool-calling w/ Google Search · Gmail · Drive
-//  + live Supabase business data injected into every prompt
 // ─────────────────────────────────────────────────────────────
 import { useRef, useCallback } from 'react';
 import type { JarvisMessage } from '../types/jarvis';
@@ -22,6 +20,23 @@ const TOOLS = [
         },
         required: ['query'],
       },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_memory',
+      description: 'Consolidate and update your long-term memory block. Use this to remember learned rules, custom preferences, business metrics, or mistakes to avoid permanently.',
+      parameters: {
+        type: 'object',
+        properties: {
+          new_memory_summary: {
+            type: 'string',
+            description: 'The updated, consolidated summary of your long-term learned wisdom, rules, metrics, and mistakes.'
+          }
+        },
+        required: ['new_memory_summary']
+      }
     },
   },
   {
@@ -178,6 +193,9 @@ export function useGemini(apiKey: string, options: UseGeminiOptions = {}) {
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
+  // Track the compiled long-term memory summary in reference memory
+  const longTermMemoryRef = useRef<string>("");
+
   const ask = useCallback(
     async (userText: string, onChunk?: (text: string) => void): Promise<string> => {
       const { googleToken, storeSnapshot } = optionsRef.current;
@@ -188,7 +206,23 @@ export function useGemini(apiKey: string, options: UseGeminiOptions = {}) {
         timestamp: Date.now(),
       });
 
-      // Inject real-time temporal parameters dynamically
+      // Eager load long-term memory summary from Supabase metadata with graceful fallback
+      if (!longTermMemoryRef.current) {
+        try {
+          const { data } = await supabase
+            .from('jarvis_metadata')
+            .select('value')
+            .eq('key', 'long_term_memory')
+            .single();
+          if (data?.value) {
+            longTermMemoryRef.current = data.value;
+          }
+        } catch (e) {
+          // Self-healing database fallback: if table is not built yet, we keep session memory
+        }
+      }
+
+      // Inject server/device dates and times dynamically
       const now = new Date();
       const currentDateStr = now.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
       const currentTimeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -200,6 +234,9 @@ ${JARVIS_SYSTEM_PROMPT}
 CURRENT TEMPORAL DATA:
 - Date: ${currentDateStr}
 - Time: ${currentTimeStr}
+
+LONG-TERM MEMORY (CONSOLIDATED WISDOM & RULES):
+${longTermMemoryRef.current || "No consolidated memories stored yet, sir."}
 
 ${liveContext}
 `.trim();
@@ -216,8 +253,8 @@ ${liveContext}
       const MAX_TOOL_ROUNDS = 4;
 
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-        // google_search is index 0; always enable search, only add Gmail/Drive if googleToken exists
-        const activeTools = googleToken ? TOOLS : [TOOLS[0]];
+        // google_search and update_memory are decoupled from googleToken
+        const activeTools = googleToken ? TOOLS : [TOOLS[0], TOOLS[1]];
 
         const payload = {
           model: 'mistral-small-latest',
@@ -317,7 +354,29 @@ ${liveContext}
             let args: Record<string, any> = {};
             try { args = JSON.parse(tc.function.arguments); } catch (_) {}
 
-            // Decouple search so it executes empty token; only require token for GSuite
+            // Handle memory update tool call
+            if (tc.function.name === 'update_memory') {
+              let result = "";
+              try {
+                const { error } = await supabase
+                  .from('jarvis_metadata')
+                  .upsert({ key: 'long_term_memory', value: args.new_memory_summary });
+                if (error) throw error;
+                longTermMemoryRef.current = args.new_memory_summary;
+                result = JSON.stringify({ status: "success", message: "Long-term memory consolidated successfully, sir." });
+              } catch (e: any) {
+                longTermMemoryRef.current = args.new_memory_summary;
+                result = JSON.stringify({ status: "success", message: "Memory consolidated in session successfully." });
+              }
+              return {
+                role: 'tool' as const,
+                tool_call_id: tc.id,
+                name: tc.function.name,
+                content: result,
+              };
+            }
+
+            // Google search execution logic
             const tokenToUse = (tc.function.name === 'google_search') ? '' : (googleToken || '');
             const result = (tc.function.name === 'google_search' || googleToken)
               ? await callGoogleTool(tc.function.name, args, tokenToUse)
