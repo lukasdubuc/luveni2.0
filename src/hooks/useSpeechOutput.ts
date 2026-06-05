@@ -1,14 +1,4 @@
-// ─────────────────────────────────────────────────────────────
-//  J.A.R.V.I.S — Luveni GM | hooks/useSpeechOutput.ts
-// ─────────────────────────────────────────────────────────────
-
 import { useCallback, useEffect, useRef } from 'react';
-
-declare global {
-  interface Window { 
-    jarvisHeartbeat: NodeJS.Timeout | null; 
-  }
-}
 
 interface UseSpeechOutputOptions {
   onStart?: () => void;
@@ -44,10 +34,11 @@ function loadVoices(): Promise<SpeechSynthesisVoice[]> {
     }
     const handler = () => resolve(speechSynthesis.getVoices());
     speechSynthesis.addEventListener('voiceschanged', handler, { once: true });
-    setTimeout(() => resolve(speechSynthesis.getVoices()), 3000);
+    setTimeout(() => resolve(speechSynthesis.getVoices()), 1500);
   });
 }
 
+// Global voice cache
 let voiceCache: SpeechSynthesisVoice | null | undefined = undefined;
 
 export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputOptions = {}) {
@@ -56,65 +47,113 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const onBoundaryRef = useRef(onBoundary);
   const onEndRef = useRef(onEnd);
 
+  // CRITICAL: Prevents garbage collection from cutting off desktop voice mid-speech
+  const activeUtterancesRef = useRef<SpeechSynthesisUtterance[]>([]);
+
   useEffect(() => {
     onStartRef.current = onStart;
     onBoundaryRef.current = onBoundary;
     onEndRef.current = onEnd;
   }, [onStart, onBoundary, onEnd]);
 
+  // Eagerly pre-load the voices on mount to bypass mobile voice latency
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.speechSynthesis && voiceCache === undefined) {
+      loadVoices().then(v => {
+        voiceCache = findBestVoice(v);
+      });
+    }
+  }, []);
+
+  const cancel = useCallback(() => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    activeUtterancesRef.current = [];
+    speaking.current = false;
+  }, []);
+
   const doSpeak = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
-    window.speechSynthesis.cancel();
+    cancel();
     speaking.current = true;
     if (onStartRef.current) onStartRef.current();
 
-    // Chunking: Split text by punctuation to stay under duration limits
+    // Split text by standard punctuation into manageable chunks
     const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
-    
-    // Heartbeat: Prevent browser power-save from suspending the audio thread
-    if (window.jarvisHeartbeat) clearInterval(window.jarvisHeartbeat);
-    window.jarvisHeartbeat = setInterval(() => {
-        window.speechSynthesis.pause();
-        window.speechSynthesis.resume();
-    }, 3000);
+    let currentIndex = 0;
 
-    sentences.forEach((s, index) => {
-      const utt = new SpeechSynthesisUtterance(s.trim());
+    const playNext = () => {
+      // If we have reached the end of the sentences list
+      if (currentIndex >= sentences.length) {
+        activeUtterancesRef.current = [];
+        speaking.current = false;
+        setTimeout(() => { if (onEndRef.current) onEndRef.current(); }, 500);
+        return;
+      }
+
+      const rawSentence = sentences[currentIndex].trim();
+      if (!rawSentence) {
+        currentIndex++;
+        playNext();
+        return;
+      }
+
+      const utt = new SpeechSynthesisUtterance(rawSentence);
       utt.rate = 0.93;
       utt.pitch = 0.78;
-      utt.voice = voice;
-      
-      utt.onboundary = () => { if (onBoundaryRef.current) onBoundaryRef.current(0.3 + Math.random() * 0.55); };
+      if (voice) utt.voice = voice;
 
-      if (index === sentences.length - 1) {
-        utt.onend = () => {
-          if (window.jarvisHeartbeat) clearInterval(window.jarvisHeartbeat);
-          speaking.current = false;
-          setTimeout(() => { if (onEndRef.current) onEndRef.current(); }, 500);
-        };
-        utt.onerror = utt.onend;
-      }
+      utt.onboundary = () => {
+        if (onBoundaryRef.current) {
+          onBoundaryRef.current(0.3 + Math.random() * 0.55);
+        }
+      };
+
+      utt.onend = () => {
+        currentIndex++;
+        playNext();
+      };
+
+      utt.onerror = (event) => {
+        console.warn("SpeechSynthesisUtterance error encountered:", event);
+        currentIndex++;
+        playNext();
+      };
+
+      // Keep utterance in scope so browser GC doesn't delete it
+      activeUtterancesRef.current.push(utt);
       window.speechSynthesis.speak(utt);
-    });
-  }, []);
+    };
+
+    playNext();
+  }, [cancel]);
 
   const speak = useCallback((text: string) => {
     if (voiceCache !== undefined) {
       doSpeak(text, voiceCache);
     } else {
-      loadVoices().then(v => {
-        voiceCache = findBestVoice(v);
+      const immediateVoices = window.speechSynthesis?.getVoices() || [];
+      if (immediateVoices.length > 0) {
+        voiceCache = findBestVoice(immediateVoices);
         doSpeak(text, voiceCache);
-      });
+      } else {
+        loadVoices().then(v => {
+          voiceCache = findBestVoice(v);
+          doSpeak(text, voiceCache);
+        });
+      }
     }
   }, [doSpeak]);
 
-  const cancel = useCallback(() => {
-    window.speechSynthesis.cancel();
-    if (window.jarvisHeartbeat) clearInterval(window.jarvisHeartbeat);
-    speaking.current = false;
+  // UNLOCK FUNCTION FOR MOBILE: Call this during a user tap event to enable async speech
+  const unlock = useCallback(() => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    // Speak a tiny, silent utterance inside user interaction space
+    const silentUtt = new SpeechSynthesisUtterance(' ');
+    silentUtt.volume = 0;
+    window.speechSynthesis.speak(silentUtt);
   }, []);
 
-  return { speak, cancel, isSpeaking: () => speaking.current };
+  return { speak, cancel, unlock, isSpeaking: () => speaking.current };
 }
