@@ -28,7 +28,6 @@ export function useVoiceInput({
   const recognitionRef = useRef<any>(null);
   const restartTimeoutRef = useRef<any>(null);
 
-  // Use refs to avoid stale closures in the Web Speech events and prevent frequent restarts
   const isSpeakingRef = useRef(isSpeaking);
   const preventListeningRef = useRef(preventListening);
   const lastAiResponseRef = useRef(lastAiResponse);
@@ -74,33 +73,24 @@ export function useVoiceInput({
     }
   }, [onLevelChange]);
 
-  useEffect(() => {
-    if (!enabled) {
-      if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch (e) {}
-        recognitionRef.current = null;
-      }
-      return;
-    }
+  // Always instantiate a FRESH SpeechRecognition object. Reusing a stopped instance crashes on mobile.
+  const startRecognition = useCallback(() => {
+    if (!enabledRef.current || recognitionRef.current) return;
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) return;
-
-    if (recognitionRef.current) return;
 
     const rec = new SpeechRecognition();
     rec.continuous = true;
     rec.interimResults = false; 
     rec.lang = 'en-GB';
 
-    // Start audio context synchronously upon recognition start to prevent iOS restrictions
     rec.onstart = () => {
       onStateChange('listening');
       initAudio();
     };
 
     rec.onresult = (event: any) => {
-      // SOFTWARE FIREWALL: Ignore microphone audio if Jarvis is speaking/thinking
       if (isSpeakingRef.current || preventListeningRef.current) return;
 
       for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -121,31 +111,40 @@ export function useVoiceInput({
       if (enabledRef.current) {
         restartTimeoutRef.current = setTimeout(() => {
           if (enabledRef.current && !recognitionRef.current) {
-            initAudio();
-            try {
-              rec.start();
-              recognitionRef.current = rec;
-            } catch (e) {}
+            startRecognition();
           }
         }, 300);
       }
     };
 
-    // Start recognition completely synchronously to avoid WebKit context blocks
     try { 
       rec.start(); 
       recognitionRef.current = rec; 
     } catch (e) { 
       recognitionRef.current = null;
     }
+  }, [onTranscript, onStateChange, initAudio]);
+
+  useEffect(() => {
+    if (!enabled) {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (e) {}
+        recognitionRef.current = null;
+      }
+      if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
+      return;
+    }
+
+    startRecognition();
 
     return () => {
-      try {
-        rec.stop();
-      } catch (e) {}
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (e) {}
+        recognitionRef.current = null;
+      }
       if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
     };
-  }, [enabled, onTranscript, onStateChange, initAudio]);
+  }, [enabled, startRecognition]);
 
   return null;
 }
