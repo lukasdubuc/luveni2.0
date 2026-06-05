@@ -6,8 +6,13 @@ export const DEFAULT_VAD_THRESHOLD = 15;
 export const DEFAULT_SILENCE_MS = 600;
 export const DEFAULT_MAX_HISTORY = 12;
 
+// API Endpoints
 export const MISTRAL_ENDPOINT = "https://api.mistral.ai/v1/chat/completions";
-export const GEMINI_ENDPOINT = (_apiKey: string) => MISTRAL_ENDPOINT;
+export const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+
+// Google API Configuration (Accessing Lovable secrets)
+export const GOOGLE_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
+export const MISTRAL_API_KEY = import.meta.env.VITE_MISTRAL_API_KEY || "";
 
 export const JARVIS_SYSTEM_PROMPT = `You are J.A.R.V.I.S., an exceptionally advanced, dry-witted AI Chief of Staff and Central Command Agent for Luveni GM.
 
