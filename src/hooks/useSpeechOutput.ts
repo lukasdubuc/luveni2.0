@@ -54,7 +54,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const onBoundaryRef = useRef(onBoundary);
   const onEndRef = useRef(onEnd);
 
-  // Strong reference prevents Garbage Collection mid-speech
   const activeUtterancesRef = useRef<SpeechSynthesisUtterance[]>([]);
 
   useEffect(() => {
