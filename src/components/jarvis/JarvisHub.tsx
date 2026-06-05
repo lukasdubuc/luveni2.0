@@ -66,14 +66,17 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
   
   const stateTimeoutRef = useRef<any>(null);
   const orbStateRef = useRef(orbState);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => { orbStateRef.current = orbState; }, [orbState]);
 
-  // Autocomplete focus when the text input opens up
+  // Adjust and focus text area when initialized or changed
   useEffect(() => {
     if (isTextInputActive && inputRef.current) {
       inputRef.current.focus();
+      // Ensure height is calculated correctly on first render
+      inputRef.current.style.height = 'auto';
+      inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
     }
   }, [isTextInputActive]);
 
@@ -93,9 +96,11 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
     onStart: () => changeOrbState('speaking'),
     onEnd: () => {
       if (orbStateRef.current === 'speaking') {
-        setTimeout(() => {
+        stateTimeoutRef.current = setTimeout(() => {
           if (orbStateRef.current === 'speaking') {
             changeOrbState('idle');
+            // Wipes the visual prompt from the screen when speech finishes
+            setUserQuery('');
           }
         }, 1000);
       }
@@ -124,7 +129,7 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
     }
   }, [ask, speak, cancel, changeOrbState]);
 
-  // Stops microphone capture while the user is actively typing commands
+  // Stops microphone capture while typing commands
   useVoiceInput({
     onTranscript: (text: string) => { if (isLive) handleTranscript(text); },
     onStateChange: (s: string) => {
@@ -194,16 +199,30 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
     }
   };
 
-  const handleTextInputSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const query = textInputValue.trim();
-    if (!query) {
-      setIsTextInputActive(false);
-      return;
+  // Auto-grow height function for multiline textbox
+  const handleTextAreaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setTextInputValue(e.target.value);
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+      inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
     }
-    setIsTextInputActive(false);
-    setTextInputValue('');
-    handleTranscript(query);
+  };
+
+  // Keyboard navigation listener (Enter submits, Shift+Enter makes newline)
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const query = textInputValue.trim();
+      if (!query) {
+        setIsTextInputActive(false);
+        return;
+      }
+      setIsTextInputActive(false);
+      setTextInputValue('');
+      handleTranscript(query);
+    } else if (e.key === 'Escape') {
+      setIsTextInputActive(false);
+    }
   };
 
   const shadowColor = STATE_COLOR[orbState].replace('rgba(', '').replace(/,[^,]+\)$/, '');
@@ -239,15 +258,15 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
       
       <div style={styles.transcriptContainer}>
         {isTextInputActive ? (
-          <form onSubmit={handleTextInputSubmit} style={{ width: '100%' }}>
-            <input
+          <form style={{ width: '100%' }}>
+            <textarea
               ref={inputRef}
-              type="text"
               value={textInputValue}
-              onChange={(e) => setTextInputValue(e.target.value)}
+              onChange={handleTextAreaChange}
               onBlur={() => setIsTextInputActive(false)}
-              onKeyDown={(e) => { if (e.key === 'Escape') setIsTextInputActive(false); }}
+              onKeyDown={handleKeyDown}
               placeholder="Type your command, sir..."
+              rows={1}
               style={styles.textInput}
             />
           </form>
@@ -282,11 +301,10 @@ const styles: Record<string, React.CSSProperties> = {
   orbWrap: { cursor: 'pointer', display: 'flex', justifyContent: 'center', zIndex: 5 },
   stateLabel: { marginTop: 'auto', marginBottom: '20px', fontSize: '12px', fontFamily: "'Inter', sans-serif", letterSpacing: '0.6rem', fontWeight: 300, textTransform: 'uppercase', zIndex: 10 },
   
-  // Lowered container and increased depth layer to prevent overlaps with the 400px NeuralOrb
   transcriptContainer: { position: 'absolute', top: '78%', left: '50%', transform: 'translate(-50%, -50%)', width: '90%', maxWidth: '800px', textAlign: 'center', zIndex: 10 },
   transcript: { color: '#fff', fontSize: '1.4rem', fontFamily: "'Inter', sans-serif", lineHeight: 1.5, fontWeight: 300, cursor: 'pointer', opacity: 0.9 },
   
-  // Sleek bottom-bordered input field that matches the minimal high-contrast dark style
+  // Sleek, auto-growing multiline text styling
   textInput: {
     width: '100%',
     background: 'transparent',
@@ -301,6 +319,10 @@ const styles: Record<string, React.CSSProperties> = {
     boxSizing: 'border-box',
     borderBottom: '1px solid rgba(255, 255, 255, 0.15)',
     caretColor: 'rgba(0, 180, 255, 0.8)',
+    resize: 'none',
+    overflowY: 'hidden',
+    minHeight: '40px',
+    lineHeight: 1.5,
   },
 
   gridBg: {
