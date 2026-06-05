@@ -55,15 +55,27 @@ const svgPattern = `
 
 export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, autoStart?: boolean }) {
   const [orbState, setOrbState] = useState<OrbState>('idle');
-  const [lastLine, setLastLine] = useState('');
+  const [userQuery, setUserQuery] = useState('');
   const [lastAiResponse, setLastAiResponse] = useState('');
   const [isReady, setIsReady] = useState(false);
   const [isLive, setIsLive] = useState(false);
 
+  // States for keyboard text command interaction
+  const [isTextInputActive, setIsTextInputActive] = useState(false);
+  const [textInputValue, setTextInputValue] = useState('');
+  
   const stateTimeoutRef = useRef<any>(null);
   const orbStateRef = useRef(orbState);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { orbStateRef.current = orbState; }, [orbState]);
+
+  // Autocomplete focus when the text input opens up
+  useEffect(() => {
+    if (isTextInputActive && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isTextInputActive]);
 
   const { ask } = useGemini(geminiApiKey);
 
@@ -76,7 +88,8 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
     }
   }, []);
 
-  const { speak, cancel } = useSpeechOutput({
+  // Binds the dynamically chunked visual subtitles
+  const { speak, cancel, currentSubtitle } = useSpeechOutput({
     onStart: () => changeOrbState('speaking'),
     onEnd: () => {
       if (orbStateRef.current === 'speaking') {
@@ -94,24 +107,24 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
       return;
     }
 
-    window.speechSynthesis.cancel();
-    setLastLine("Thinking...");
+    cancel();
+    setUserQuery(text);
     changeOrbState('thinking');
     
     try {
       const reply = await ask(text);
       if (!reply) throw new Error("No response received");
-      setLastLine(reply);
       setLastAiResponse(reply);
       speak(reply);
     } catch (err) {
       console.error('[Jarvis] Error:', err);
-      setLastLine("System error, sir.");
+      setUserQuery("System error, sir.");
       speak("System error, sir.");
       changeOrbState('idle');
     }
-  }, [ask, speak, changeOrbState]);
+  }, [ask, speak, cancel, changeOrbState]);
 
+  // Stops microphone capture while the user is actively typing commands
   useVoiceInput({
     onTranscript: (text: string) => { if (isLive) handleTranscript(text); },
     onStateChange: (s: string) => {
@@ -125,23 +138,20 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
       changeOrbState(s as OrbState);
     },
     onLevelChange: () => {},
-    enabled: isReady && isLive,
+    enabled: isReady && isLive && !isTextInputActive,
     isSpeaking: orbState === 'speaking',
     lastAiResponse,
-    preventListening: orbState === 'speaking' || orbState === 'thinking',
+    preventListening: orbState === 'speaking' || orbState === 'thinking' || isTextInputActive,
   });
 
   const initializeJarvis = async () => {
     if (isReady) return;
     setIsReady(true);
 
-    // 1. Speak SYNCHRONOUSLY immediately to satisfy iOS gesture constraints
     try {
       const s = new SpeechSynthesisUtterance("System online, sir.");
       s.volume = 1; 
 
-      // SEQUENTIAL STARTUP: Wait for welcome speech to finish before starting microphone.
-      // This avoids the concurrent Web Audio & Mic capture crash on iOS.
       s.onend = () => {
         setIsLive(true);
       };
@@ -155,7 +165,6 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
       setIsLive(true);
     }
     
-    // 2. Resume Web Audio context asynchronously
     try {
       const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
       const ctx = new AudioCtx();
@@ -173,12 +182,50 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
     }
   }, [autoStart]);
 
+  // Handle opening text input when clicking the subtitle/placeholder block
+  const handleContainerClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isReady) {
+      initializeJarvis();
+      return;
+    }
+    if (orbState !== 'thinking' && orbState !== 'speaking') {
+      setIsTextInputActive(true);
+    }
+  };
+
+  const handleTextInputSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const query = textInputValue.trim();
+    if (!query) {
+      setIsTextInputActive(false);
+      return;
+    }
+    setIsTextInputActive(false);
+    setTextInputValue('');
+    handleTranscript(query);
+  };
+
   const shadowColor = STATE_COLOR[orbState].replace('rgba(', '').replace(/,[^,]+\)$/, '');
+
+  // Determine standard contextual visual string display
+  let displayText = '';
+  if (orbState === 'thinking') {
+    displayText = "Thinking...";
+  } else if (orbState === 'speaking') {
+    displayText = currentSubtitle;
+  } else if (userQuery) {
+    displayText = userQuery;
+  } else if (isLive) {
+    displayText = "Click to command, sir...";
+  } else {
+    displayText = "Click to initialize J.A.R.V.I.S.";
+  }
 
   return (
     <div 
       style={styles.root} 
-      onClick={initializeJarvis}
+      onClick={!isReady ? initializeJarvis : undefined}
     >
       <style dangerouslySetInnerHTML={{ __html: `body { background-color: #020408 !important; margin: 0; overflow: hidden; }`}} />
       <div style={styles.gridBg} />
@@ -189,11 +236,40 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
       <div style={styles.orbWrap}>
         <NeuralOrb state={orbState} audioLevel={0} size={400} />
       </div>
+      
       <div style={styles.transcriptContainer}>
-        <AnimatePresence mode="wait">
-          {lastLine && <motion.div key={lastLine} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} style={styles.transcript}>{lastLine}</motion.div>}
-        </AnimatePresence>
+        {isTextInputActive ? (
+          <form onSubmit={handleTextInputSubmit} style={{ width: '100%' }}>
+            <input
+              ref={inputRef}
+              type="text"
+              value={textInputValue}
+              onChange={(e) => setTextInputValue(e.target.value)}
+              onBlur={() => setIsTextInputActive(false)}
+              onKeyDown={(e) => { if (e.key === 'Escape') setIsTextInputActive(false); }}
+              placeholder="Type your command, sir..."
+              style={styles.textInput}
+            />
+          </form>
+        ) : (
+          <div onClick={handleContainerClick} style={{ width: '100%' }}>
+            <AnimatePresence mode="wait">
+              {displayText && (
+                <motion.div 
+                  key={displayText} 
+                  initial={{ opacity: 0, y: 5 }} 
+                  animate={{ opacity: 1, y: 0 }} 
+                  exit={{ opacity: 0, y: -5 }} 
+                  style={styles.transcript}
+                >
+                  {displayText}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
       </div>
+
       <div style={{ ...styles.stateLabel, color: orbState === 'idle' && isLive ? STATE_COLOR['listening'] : STATE_COLOR[orbState] }}>
         {orbState === 'idle' && isLive ? STATE_LABEL['listening'] : STATE_LABEL[orbState]}
       </div>
@@ -205,8 +281,28 @@ const styles: Record<string, React.CSSProperties> = {
   root: { height: '100vh', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', boxSizing: 'border-box', position: 'relative', overflow: 'hidden' },
   orbWrap: { cursor: 'pointer', display: 'flex', justifyContent: 'center', zIndex: 5 },
   stateLabel: { marginTop: 'auto', marginBottom: '20px', fontSize: '12px', fontFamily: "'Inter', sans-serif", letterSpacing: '0.6rem', fontWeight: 300, textTransform: 'uppercase', zIndex: 10 },
-  transcriptContainer: { position: 'absolute', top: '70%', left: '50%', transform: 'translate(-50%, -50%)', width: '90%', maxWidth: '800px', textAlign: 'center', zIndex: 5 },
-  transcript: { color: '#fff', fontSize: '1.5rem', fontFamily: "'Inter', sans-serif", lineHeight: 1.4 },
+  
+  // Lowered container and increased depth layer to prevent overlaps with the 400px NeuralOrb
+  transcriptContainer: { position: 'absolute', top: '78%', left: '50%', transform: 'translate(-50%, -50%)', width: '90%', maxWidth: '800px', textAlign: 'center', zIndex: 10 },
+  transcript: { color: '#fff', fontSize: '1.4rem', fontFamily: "'Inter', sans-serif", lineHeight: 1.5, fontWeight: 300, cursor: 'pointer', opacity: 0.9 },
+  
+  // Sleek bottom-bordered input field that matches the minimal high-contrast dark style
+  textInput: {
+    width: '100%',
+    background: 'transparent',
+    border: 'none',
+    outline: 'none',
+    color: '#fff',
+    fontSize: '1.4rem',
+    fontFamily: "'Inter', sans-serif",
+    fontWeight: 300,
+    textAlign: 'center',
+    padding: '10px 0',
+    boxSizing: 'border-box',
+    borderBottom: '1px solid rgba(255, 255, 255, 0.15)',
+    caretColor: 'rgba(0, 180, 255, 0.8)',
+  },
+
   gridBg: {
     position: 'absolute',
     inset: 0,
