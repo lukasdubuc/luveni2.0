@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────
 //  J.A.R.V.I.S — Luveni GM  |  hooks/useGemini.ts
 // ─────────────────────────────────────────────────────────────
-import { useRef, useCallback, useEffect } from 'react'; // Add useEffect here
+import { useRef, useCallback } from 'react'; 
 import type { JarvisMessage } from '../types/jarvis';
 import { MISTRAL_ENDPOINT, JARVIS_SYSTEM_PROMPT } from '../lib/jarvis-config';
 import { supabase } from '@/integrations/supabase/client';
@@ -482,32 +482,5 @@ ${liveContext}
   );
 
   const reset = useCallback(() => { history.current = []; }, []);
-  // ─────────────────────────────────────────────────────────────
-  // TEMPORARY DISCORD REGISTRATION (Delete this block after 1 reload)
-  // ─────────────────────────────────────────────────────────────
-  useEffect(() => {
-    fetch("https://discord.com/api/v10/applications/1512408548867444766/commands", {
-      method: "POST",
-      headers: {
-        "Authorization": "Bot MTUxMjQwODU0ODg2NzQ0NDc2Ng.GdH2Af.5HGTcYx6il4E0ZQhT15xE7bu6FrkZ0zSvktAAo",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        "name": "jarvis",
-        "description": "Chat directly with J.A.R.V.I.S.",
-        "options": [
-          {
-            "name": "query",
-            "description": "What is your command, sir?",
-            "type": 3,
-            "required": true
-          }
-        ]
-      })
-    })
-    .then(res => res.json())
-    .then(data => console.log("[J.A.R.V.I.S. Discord Bot Dev] Success:", data))
-    .catch(err => console.error("[J.A.R.V.I.S. Discord Bot Dev] Failed:", err));
-  }, []);
   return { ask, reset };
 }
