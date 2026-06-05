@@ -28,8 +28,6 @@ export function useVoiceInput({
   const recognitionRef = useRef<any>(null);
   const restartTimeoutRef = useRef<NodeJS.Timeout>();
 
-  // CRITICAL: Storing variables in refs avoids stale closure bugs in Web Speech callbacks.
-  // This guarantees that callbacks (onresult, onend) always read up-to-date values.
   const isSpeakingRef = useRef(isSpeaking);
   const preventListeningRef = useRef(preventListening);
   const lastAiResponseRef = useRef(lastAiResponse);
@@ -76,7 +74,6 @@ export function useVoiceInput({
   }, [onLevelChange]);
 
   const startRecognition = useCallback(() => {
-    // Check dynamic refs instead of stale state closures
     if (isSpeakingRef.current || preventListeningRef.current || recognitionRef.current) return;
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -90,7 +87,6 @@ export function useVoiceInput({
     rec.onstart = () => onStateChange('listening');
 
     rec.onresult = (event: any) => {
-      // If the AI is speaking, discard any late-arriving audio captured during the shutdown window
       if (isSpeakingRef.current || preventListeningRef.current) return;
 
       for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -108,7 +104,6 @@ export function useVoiceInput({
       recognitionRef.current = null;
       onStateChange('idle');
       
-      // Cooldown before next attempt - uses refs to ensure absolute state accuracy
       if (enabledRef.current && !isSpeakingRef.current && !preventListeningRef.current) {
         restartTimeoutRef.current = setTimeout(startRecognition, 800);
       }
@@ -124,14 +119,12 @@ export function useVoiceInput({
 
   useEffect(() => {
     if (isSpeaking) {
-      // AI IS SPEAKING: Immediate shutdown of microphone
       clearTimeout(restartTimeoutRef.current);
       if (recognitionRef.current) {
         try { recognitionRef.current.stop(); } catch (e) {}
         recognitionRef.current = null;
       }
     } else if (enabled && !preventListening && !recognitionRef.current) {
-      // AI FINISHED: Wait for hardware/audio settle time
       clearTimeout(restartTimeoutRef.current);
       restartTimeoutRef.current = setTimeout(() => {
         if (!isSpeakingRef.current) {
