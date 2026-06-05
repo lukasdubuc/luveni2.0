@@ -1,486 +1,411 @@
 // ─────────────────────────────────────────────────────────────
-//  J.A.R.V.I.S — Luveni GM  |  hooks/useGemini.ts
+//  J.A.R.V.I.S — Luveni GM | hooks/useSpeechOutput.ts
 // ─────────────────────────────────────────────────────────────
-import { useRef, useCallback } from 'react'; 
-import type { JarvisMessage } from '../types/jarvis';
-import { MISTRAL_ENDPOINT, JARVIS_SYSTEM_PROMPT } from '../lib/jarvis-config';
-import { supabase } from '@/integrations/supabase/client';
 
-const TOOLS = [
-  {
-    type: 'function',
-    function: {
-      name: 'google_search',
-      description:
-        'Search the web via Google Custom Search. Use for current events, news, prices, weather, or any question needing up-to-date information.',
-      parameters: {
-        type: 'object',
-        properties: {
-          query: { type: 'string', description: 'The search query' },
-        },
-        required: ['query'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'open_link',
-      description: 'Open a specific URL/link to read, scrape, and extract the text content of that webpage.',
-      parameters: {
-        type: 'object',
-        properties: {
-          url: { type: 'string', description: 'The absolute URL to open and read, e.g. "https://en.wikipedia.org/wiki/Artificial_intelligence"' },
-        },
-        required: ['url'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'update_memory',
-      description: 'Consolidate and update your long-term memory block. Use this to remember learned rules, custom preferences, business metrics, or mistakes to avoid permanently.',
-      parameters: {
-        type: 'object',
-        properties: {
-          new_memory_summary: {
-            type: 'string',
-            description: 'The updated, consolidated summary of your long-term learned wisdom, rules, metrics, and mistakes.'
-          }
-        },
-        required: ['new_memory_summary']
-      }
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'gmail_read',
-      description:
-        'Read recent emails from Gmail. Use when asked about emails, messages, inbox, or specific senders.',
-      parameters: {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description:
-              'Gmail search query, e.g. "from:john@example.com" or "subject:invoice unread"',
-          },
-          maxResults: {
-            type: 'number',
-            description: 'Max emails to return (default 5)',
-          },
-        },
-        required: ['query'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'gmail_send',
-      description: 'Send an email via Gmail on behalf of the user.',
-      parameters: {
-        type: 'object',
-        properties: {
-          to: { type: 'string', description: 'Recipient email address' },
-          subject: { type: 'string', description: 'Email subject' },
-          body: { type: 'string', description: 'Plain text email body' },
-        },
-        required: ['to', 'subject', 'body'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'drive_search',
-      description:
-        'Search Google Drive for files and documents. Use when asked about files, documents, spreadsheets, or anything stored in Drive.',
-      parameters: {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description:
-              'Drive search query, e.g. "name contains \'invoice\'" or "mimeType=\'application/pdf\'"',
-          },
-        },
-        required: ['query'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'drive_read',
-      description: 'Read the text content of a Google Drive file by its file ID.',
-      parameters: {
-        type: 'object',
-        properties: {
-          fileId: { type: 'string', description: 'The Google Drive file ID' },
-        },
-        required: ['fileId'],
-      },
-    },
-  },
-];
+import { useState, useCallback, useEffect, useRef } from 'react';
 
-interface StoreSnapshot {
-  revenue_today_cents: number;
-  revenue_week_cents: number;
-  revenue_month_cents: number;
-  orders_total: number;
-  orders_paid: number;
-  orders_pending: number;
-  orders_failed: number;
-  leads_total: number;
-  products_published: number;
-  products_total: number;
-  recent_orders: { email: string; amount_cents: number; status: string; created_at: string }[];
-  top_products: { title: string; revenue: number; units: number }[];
+interface UseSpeechOutputOptions {
+  onStart?: () => void;
+  onBoundary?: (level: number) => void;
+  onEnd?: () => void;
 }
 
-interface UseGeminiOptions {
-  googleToken?: string | null;
-  storeSnapshot?: StoreSnapshot | null;
+const BRITISH_VOICES = [
+  'Microsoft Ryan Online (Natural) - English (United Kingdom)',
+  'Microsoft Sonia Online (Natural) - English (United Kingdom)',
+  'Microsoft Thomas Online (Natural) - English (United Kingdom)',
+  'Google UK English Male',
+  'Google UK English Female',
+  'Daniel',
+  'Hazel',
+  'Siri',
+  'Microsoft Susan',
+  'Microsoft George',
+  'Microsoft Ryan',
+];
+
+const isMobile = typeof window !== 'undefined' && 
+  (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
+const globalActiveUtterances: SpeechSynthesisUtterance[] = [];
+
+const ELEVENLABS_API_KEY = 
+  (typeof import.meta !== 'undefined' && (import.meta.env?.ELEVENLABS_API_KEY || import.meta.env?.GOOGLE_API_KEY)) || 
+  (typeof process !== 'undefined' && (process.env?.ELEVENLABS_API_KEY || process.env?.GOOGLE_API_KEY)) || 
+  '';
+
+// Upgraded matching engine: scans dynamically for your downloaded "Enhanced" or "Premium" iPhone accessibility voices
+function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+  if (isMobile) {
+    // Look for high-quality English (Australian or British) voices on mobile
+    const englishVoices = voices.filter(v => {
+      const lang = v.lang.toLowerCase().replace('_', '-');
+      return lang.startsWith('en-au') || lang.startsWith('en-gb');
+    });
+
+    if (englishVoices.length > 0) {
+      // 1. Strictly prioritize any downloaded high-quality 'premium' or 'enhanced' voices first
+      const qualityKeywords = ['premium', 'enhanced', 'natural', 'siri'];
+      for (const keyword of qualityKeywords) {
+        const match = englishVoices.find(v => v.name.toLowerCase().includes(keyword));
+        if (match) return match;
+      }
+
+      // 2. Fallback to male voices
+      const maleKeywords = ['ryan', 'george', 'thomas', 'guy', 'daniel', 'arthur', 'oliver', 'harry', 'male'];
+      for (const keyword of maleKeywords) {
+        const match = englishVoices.find(v => v.name.toLowerCase().includes(keyword));
+        if (match) return match;
+      }
+
+      return englishVoices[0];
+    }
+  }
+
+  // Standard Desktop / Fallback (British English)
+  const gbVoices = voices.filter(v => {
+    const lang = v.lang.toLowerCase().replace('_', '-');
+    return lang.startsWith('en-gb');
+  });
+
+  if (gbVoices.length === 0) {
+    return voices.find(v => v.lang.toLowerCase().startsWith('en-au')) ?? 
+           voices.find(v => v.lang.toLowerCase().startsWith('en')) ?? 
+           null;
+  }
+
+  // Prioritize high-quality voices on desktop
+  const premiumDesktop = ['natural', 'premium', 'enhanced'];
+  for (const keyword of premiumDesktop) {
+    const match = gbVoices.find(v => v.name.toLowerCase().includes(keyword));
+    if (match) return match;
+  }
+
+  const maleKeywords = ['ryan', 'george', 'thomas', 'guy', 'daniel', 'arthur', 'oliver', 'harry', 'male'];
+  for (const keyword of maleKeywords) {
+    const match = gbVoices.find(v => v.name.toLowerCase().includes(keyword));
+    if (match) return match;
+  }
+
+  return gbVoices[0];
+}
+
+function loadVoices(): Promise<SpeechSynthesisVoice[]> {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
+      resolve([]);
+      return;
+    }
+    const voices = speechSynthesis.getVoices();
+    if (voices.length > 0) {
+      resolve(voices);
+      return;
+    }
+    const handler = () => resolve(speechSynthesis.getVoices());
+    speechSynthesis.addEventListener('voiceschanged', handler, { once: true });
+    setTimeout(() => resolve(speechSynthesis.getVoices()), 1500);
+  });
 }
 
 /**
- * Executes the backend Google search function.
- * If the backend is offline or blocked, it seamlessly falls back to a direct client-side
- * Wikipedia search directly from the browser, ensuring J.A.R.V.I.S. always has web access.
+ * Clean and format text before speaking. Removes markdown tags, asterisks, 
+ * links, and raw URLs so J.A.R.V.I.S. speaks in natural, fluid sentences.
  */
-async function callGoogleTool(
-  toolName: string,
-  toolArgs: Record<string, any>,
-  googleToken: string
-): Promise<string> {
-  // 1. Primary Attempt: Query the Supabase serverless function
-  try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const supabaseToken = sessionData.session?.access_token;
-    const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "";
-
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-
-    if (anonKey) headers["apikey"] = anonKey;
-    if (supabaseToken) headers["Authorization"] = `Bearer ${supabaseToken}`;
-
-    const { data, error } = await supabase.functions.invoke('jarvis-google', {
-      body: { tool: toolName, args: toolArgs, googleToken },
-      headers,
-    });
-
-    if (!error && data) {
-      if (typeof data === 'object' && 'results' in data) {
-        return data.results;
-      }
-      return String(data);
-    }
-    
-    if (error) throw error;
-
-  } catch (e: any) {
-    console.warn("[useGemini] Backend Edge Function returned an error, triggering client-side fallback:", e.message);
-  }
-
-  // 2. Direct Browser Fallback: Fetches Wikipedia directly from the browser (bypasses Supabase completely).
-  // Wikipedia permits cross-origin queries via origin=* and is immune to server-side IP blocks.
-  try {
-    const query = toolArgs.query || toolArgs.search_query || toolArgs.q || "";
-    if (query && toolName === 'google_search') {
-      console.log(`[useGemini Fallback] Bypassing backend. Querying Wikipedia directly for: "${query}"`);
-      
-      const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*`;
-      const response = await fetch(wikiUrl);
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.query && data.query.search && data.query.search.length > 0) {
-          const results = data.query.search.slice(0, 3).map((item: any, idx: number) => {
-            const snippet = item.snippet.replace(/<[^>]*>/g, "").trim();
-            const link = `https://en.wikipedia.org/wiki/${encodeURIComponent(item.title.replace(/ /g, "_"))}`;
-            return `[Wikipedia Result #${idx + 1}]\nTitle: ${item.title}\nURL: ${link}\nSummary: ${snippet}...`;
-          });
-          return results.join("\n\n---\n\n");
-        }
-      }
-    }
-  } catch (fallbackError: any) {
-    console.error("[useGemini Fallback] Direct browser fetch failed:", fallbackError);
-  }
-
-  return "Error: Unable to retrieve live web data. Inform the user that search retrieval is currently offline, sir.";
+function sanitizeTextForSpeech(rawText: string): string {
+  return rawText
+    // Remove phonetic acronym spelling bugs
+    .replace(/J\.A\.R\.V\.I\.S\.?/gi, "Jarvis")
+    // Remove double asterisks (markdown bold)
+    .replace(/\*\*/g, '')
+    // Remove single asterisks (markdown italic or bullet points)
+    .replace(/\*/g, '')
+    // Remove markdown headers (e.g. # Header -> Header)
+    .replace(/^#+\s+/gm, '')
+    // Remove markdown link syntax [Display Text](https://url) -> just displays and speaks "Display Text"
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    // Remove inline code backticks
+    .replace(/`/g, '')
+    // Remove HTML tags if present
+    .replace(/<[^>]*>/g, '')
+    // Clean up empty lines or multiple consecutive spaces
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
-function buildLiveContext(snapshot: StoreSnapshot | null | undefined): string {
-  if (!snapshot) return '';
+/**
+ * Splits text into small, readable chunks (max 150 characters) to target
+ * approximately 2-3 display lines per visual subtitle.
+ */
+function chunkText(text: string, maxLength = 150): string[] {
+  if (text.length <= maxLength) return [text];
 
-  const fmt = (c: number) => `$${(c / 100).toFixed(2)}`;
-  const lines = [
-    '--- LIVE STORE DATA (as of right now) ---',
-    `Revenue today: ${fmt(snapshot.revenue_today_cents)}`,
-    `Revenue this week: ${fmt(snapshot.revenue_week_cents)}`,
-    `Revenue this month: ${fmt(snapshot.revenue_month_cents)}`,
-    `Orders — paid: ${snapshot.orders_paid} | pending: ${snapshot.orders_pending} | failed: ${snapshot.orders_failed} | total: ${snapshot.orders_total}`,
-    `Leads captured: ${snapshot.leads_total}`,
-    `Products — published: ${snapshot.products_published} / ${snapshot.products_total} total`,
-  ];
+  const chunks: string[] = [];
+  let remaining = text;
 
-  if (snapshot.recent_orders.length > 0) {
-    lines.push('Recent orders:');
-    snapshot.recent_orders.slice(0, 5).forEach(o => {
-      lines.push(`  • ${o.email} — ${fmt(o.amount_cents)} (${o.status}) on ${new Date(o.created_at).toLocaleDateString()}`);
-    });
+  while (remaining.length > 0) {
+    if (remaining.length <= maxLength) {
+      chunks.push(remaining);
+      break;
+    }
+
+    let splitIndex = -1;
+    const breakPoints = ['. ', '! ', '? ', '; ', ', '];
+    for (const punct of breakPoints) {
+      const idx = remaining.lastIndexOf(punct, maxLength);
+      if (idx > splitIndex) {
+        splitIndex = idx + punct.length - 1;
+      }
+    }
+
+    if (splitIndex === -1) {
+      const idx = remaining.lastIndexOf(' ', maxLength);
+      if (idx > 0) splitIndex = idx;
+    }
+
+    if (splitIndex === -1) {
+      splitIndex = maxLength;
+    }
+
+    chunks.push(remaining.substring(0, splitIndex).trim());
+    remaining = remaining.substring(splitIndex).trim();
   }
 
-  if (snapshot.top_products.length > 0) {
-    lines.push('Top products by revenue:');
-    snapshot.top_products.slice(0, 3).forEach(p => {
-      lines.push(`  • ${p.title}: ${fmt(p.revenue)} across ${p.units} orders`);
-    });
-  }
-
-  lines.push('--- END LIVE DATA ---');
-  return lines.join('\n');
+  return chunks.filter(Boolean);
 }
 
-export function useGemini(apiKey: string, options: UseGeminiOptions = {}) {
-  const history = useRef<JarvisMessage[]>([]);
-  const optionsRef = useRef(options);
-  optionsRef.current = options;
+let voiceCache: SpeechSynthesisVoice | null | undefined = undefined;
 
-  const longTermMemoryRef = useRef<string>("");
+export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputOptions = {}) {
+  const [currentSubtitle, setCurrentSubtitle] = useState("");
+  const speaking = useRef(false);
+  const onStartRef = useRef(onStart);
+  const onBoundaryRef = useRef(onBoundary);
+  const onEndRef = useRef(onEnd);
 
-  const ask = useCallback(
-    async (userText: string, onChunk?: (text: string) => void): Promise<string> => {
-      const { googleToken, storeSnapshot } = optionsRef.current;
+  const activeAudiosRef = useRef<HTMLAudioElement[]>([]);
+  const audioIntervalRef = useRef<any>(null);
 
-      history.current.push({
-        role: 'user',
-        parts: [{ text: userText }],
-        timestamp: Date.now(),
+  useEffect(() => {
+    onStartRef.current = onStart;
+    onBoundaryRef.current = onBoundary;
+    onEndRef.current = onEnd;
+  }, [onStart, onBoundary, onEnd]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.speechSynthesis && voiceCache === undefined) {
+      loadVoices().then(v => {
+        voiceCache = findBestVoice(v);
       });
+    }
+  }, []);
 
-      if (!longTermMemoryRef.current) {
-        try {
-          const { data } = await supabase
-            .from('jarvis_metadata')
-            .select('value')
-            .eq('key', 'long_term_memory')
-            .single();
-          if (data?.value) {
-            longTermMemoryRef.current = data.value;
-          }
-        } catch (e) {
-          // Fallback if table doesn't exist
-        }
-      }
+  const cancel = useCallback(() => {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    globalActiveUtterances.length = 0;
 
-      const now = new Date();
-      const currentDateStr = now.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-      const currentTimeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    activeAudiosRef.current.forEach(audio => {
+      audio.pause();
+      audio.currentTime = 0;
+    });
+    activeAudiosRef.current = [];
 
-      const liveContext = buildLiveContext(storeSnapshot);
-      const systemContent = `
-${JARVIS_SYSTEM_PROMPT}
+    if (audioIntervalRef.current) {
+      clearInterval(audioIntervalRef.current);
+      audioIntervalRef.current = null;
+    }
 
-CURRENT TEMPORAL DATA:
-- Date: ${currentDateStr}
-- Time: ${currentTimeStr}
+    speaking.current = false;
+    setCurrentSubtitle(""); 
+  }, []);
 
-LONG-TERM MEMORY (CONSOLIDATED WISDOM & RULES):
-${longTermMemoryRef.current || "No consolidated memories stored yet, sir."}
+  const doSpeakNative = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
-${liveContext}
-`.trim();
+    cancel();
 
-      let loopMessages: { role: string; content: string; tool_calls?: any[]; tool_call_id?: string; name?: string }[] = [
-        { role: 'system', content: systemContent },
-        ...history.current.map((h) => ({
-          role: h.role === 'model' ? 'assistant' : 'user',
-          content: h.parts[0].text,
-        })),
-      ];
+    // Query voices live immediately before starting audio playback to bypass empty-list startup bugs
+    let activeVoice = voice;
+    if (!activeVoice) {
+      const liveVoices = window.speechSynthesis.getVoices();
+      activeVoice = findBestVoice(liveVoices);
+      if (activeVoice) voiceCache = activeVoice;
+    }
 
-      let finalReply = '';
-      const MAX_TOOL_ROUNDS = 4;
+    setTimeout(() => {
+      speaking.current = true;
+      if (onStartRef.current) onStartRef.current();
 
-      for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-        const activeTools = googleToken ? TOOLS : [TOOLS[0], TOOLS[1], TOOLS[2]];
+      // Clean the incoming text of any markdown, links, or visual formatting artifacts
+      const cleanText = sanitizeTextForSpeech(text);
+      const chunks = chunkText(cleanText, 150);
+      
+      globalActiveUtterances.length = 0;
 
-        const payload = {
-          model: 'mistral-small-latest',
-          stream: true,
-          messages: loopMessages,
-          tools: activeTools,
-          tool_choice: 'auto',
-          temperature: 0.75,
+      chunks.forEach((chunk, index) => {
+        const rawChunk = chunk.trim();
+        if (!rawChunk) return;
+
+        const utt = new SpeechSynthesisUtterance(rawChunk);
+        
+        utt.rate = isMobile ? 1.0 : 0.93;
+        utt.pitch = isMobile ? 1.0 : 0.78;
+        
+        // Match lang parameters to avoid mobile audio driver crashes
+        utt.lang = activeVoice ? activeVoice.lang : (isMobile ? 'en-AU' : 'en-GB');
+        if (activeVoice) utt.voice = activeVoice;
+
+        globalActiveUtterances.push(utt);
+
+        utt.onstart = () => {
+          setCurrentSubtitle(rawChunk);
         };
 
-        const res = await fetch(MISTRAL_ENDPOINT, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify(payload),
-        });
+        utt.onboundary = () => {
+          if (onBoundaryRef.current) onBoundaryRef.current(0.3 + Math.random() * 0.55);
+        };
 
-        if (!res.ok) {
-          const body = await res.text();
-          throw new Error(`API error ${res.status}: ${body}`);
+        if (index === chunks.length - 1) {
+          utt.onend = () => {
+            globalActiveUtterances.length = 0;
+            speaking.current = false;
+            setCurrentSubtitle("");
+            if (onEndRef.current) onEndRef.current();
+          };
         }
 
-        const reader = res.body?.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let roundText = '';
-        let toolCalls: any[] = [];
-
-        if (reader) {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() ?? '';
-
-            for (const line of lines) {
-              const clean = line.trim();
-              if (!clean || !clean.startsWith('data: ') || clean.includes('[DONE]')) continue;
-              try {
-                const parsed = JSON.parse(clean.slice(6));
-                const delta = parsed.choices?.[0]?.delta;
-                if (!delta) continue;
-
-                if (delta.content) {
-                  roundText += delta.content;
-                  if (toolCalls.length === 0) {
-                    onChunk?.(delta.content);
-                  }
-                }
-
-                if (delta.tool_calls) {
-                  for (const tc of delta.tool_calls) {
-                    const idx = tc.index ?? 0;
-                    if (!toolCalls[idx]) {
-                      toolCalls[idx] = {
-                        id: tc.id || `tool_${idx}`,
-                        type: 'function',
-                        function: { name: '', arguments: '' },
-                      };
-                    }
-                    if (tc.function?.name) toolCalls[idx].function.name += tc.function.name;
-                    if (tc.function?.arguments) toolCalls[idx].function.arguments += tc.function.arguments;
-                  }
-                }
-              } catch (_) {}
-            }
+        utt.onerror = () => {
+          if (index === chunks.length - 1) {
+            globalActiveUtterances.length = 0;
+            speaking.current = false;
+            setCurrentSubtitle("");
+            if (onEndRef.current) onEndRef.current();
           }
+        };
 
-          if (buffer.trim().startsWith('data: ') && !buffer.includes('[DONE]')) {
-            try {
-              const parsed = JSON.parse(buffer.trim().slice(6));
-              const delta = parsed.choices?.[0]?.delta;
-              if (delta?.content) {
-                roundText += delta.content;
-                if (toolCalls.length === 0) onChunk?.(delta.content);
-              }
-            } catch (_) {}
-          }
-        }
+        window.speechSynthesis.speak(utt);
+      });
+    }, 250); 
+  }, [cancel]);
 
-        if (toolCalls.length === 0) {
-          finalReply = roundText;
-          break;
-        }
+  // ElevenLabs Engine (active if key is configured)
+  const doSpeakElevenLabs = useCallback(async (text: string) => {
+    cancel();
 
-        loopMessages.push({
-          role: 'assistant',
-          content: roundText,
-          tool_calls: toolCalls,
-        });
+    setTimeout(async () => {
+      speaking.current = true;
+      if (onStartRef.current) onStartRef.current();
 
-        const toolResults = await Promise.all(
-          toolCalls.map(async (tc) => {
-            let args: Record<string, any> = {};
-            try { args = JSON.parse(tc.function.arguments); } catch (_) {}
+      // Clean the incoming text of any markdown, links, or visual formatting artifacts
+      const cleanText = sanitizeTextForSpeech(text);
+      const chunks = chunkText(cleanText, 150);
 
-            if (tc.function.name === 'update_memory') {
-              let result = "";
-              try {
-                const { error } = await supabase
-                  .from('jarvis_metadata')
-                  .upsert({ key: 'long_term_memory', value: args.new_memory_summary });
-                if (error) throw error;
-                longTermMemoryRef.current = args.new_memory_summary;
-                result = JSON.stringify({ status: "success", message: "Long-term memory consolidated successfully, sir." });
-              } catch (e: any) {
-                longTermMemoryRef.current = args.new_memory_summary;
-                result = JSON.stringify({ status: "success", message: "Memory consolidated in session successfully." });
-              }
-              return {
-                role: 'tool' as const,
-                tool_call_id: tc.id,
-                name: tc.function.name,
-                content: result,
-              };
-            }
+      try {
+        const VOICE_ID = 'pNInz6obpgDQGcFbJwr1';
 
-            const isPublicTool = tc.function.name === 'google_search' || tc.function.name === 'open_link';
-            const tokenToUse = isPublicTool ? '' : (googleToken || '');
-            const result = (isPublicTool || googleToken)
-              ? await callGoogleTool(tc.function.name, args, tokenToUse)
-              : JSON.stringify({ error: 'OAuth account not connected' });
-
-            return {
-              role: 'tool' as const,
-              tool_call_id: tc.id,
-              name: tc.function.name,
-              content: result,
-            };
-          })
-        );
-
-        loopMessages.push(...toolResults);
-
-        if (round === MAX_TOOL_ROUNDS - 1) {
-          const finalRes = await fetch(MISTRAL_ENDPOINT, {
+        const audioPromises = chunks.map(async (chunk) => {
+          const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${apiKey}`,
+              'xi-api-key': ELEVENLABS_API_KEY,
             },
             body: JSON.stringify({
-              model: 'mistral-small-latest',
-              stream: false,
-              messages: loopMessages,
-              tool_choice: 'none',
-              temperature: 0.75,
+              text: chunk,
+              model_id: 'eleven_turbo_v2_5',
+              voice_settings: {
+                stability: 0.5,
+                similarity_boost: 0.75,
+              },
             }),
           });
-          const finalData = await finalRes.json();
-          finalReply = finalData.choices?.[0]?.message?.content || '';
-          onChunk?.(finalReply);
-        }
+
+          if (!response.ok) throw new Error(`ElevenLabs error: ${response.status}`);
+          const blob = await response.blob();
+          return URL.createObjectURL(blob);
+        });
+
+        const audioUrls = await Promise.all(audioPromises);
+
+        let currentIndex = 0;
+
+        const playNext = () => {
+          if (!speaking.current || currentIndex >= audioUrls.length) {
+            speaking.current = false;
+            setCurrentSubtitle("");
+            if (audioIntervalRef.current) {
+              clearInterval(audioIntervalRef.current);
+              audioIntervalRef.current = null;
+            }
+            if (onEndRef.current) onEndRef.current();
+            return;
+          }
+
+          const rawChunk = chunks[currentIndex];
+          setCurrentSubtitle(rawChunk);
+
+          const audio = new Audio(audioUrls[currentIndex]);
+          activeAudiosRef.current.push(audio);
+
+          if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
+          audioIntervalRef.current = setInterval(() => {
+            if (onBoundaryRef.current && speaking.current) {
+              onBoundaryRef.current(0.3 + Math.random() * 0.55);
+            }
+          }, 80);
+
+          audio.onended = () => {
+            URL.revokeObjectURL(audioUrls[currentIndex]);
+            currentIndex++;
+            playNext();
+          };
+
+          audio.onerror = () => {
+            URL.revokeObjectURL(audioUrls[currentIndex]);
+            currentIndex++;
+            playNext();
+          };
+
+          audio.play().catch(() => {
+            currentIndex++;
+            playNext();
+          });
+        };
+
+        playNext();
+
+      } catch (error) {
+        console.warn('[Speech Engine] ElevenLabs failed, falling back:', error);
+        doSpeakNative(text, voiceCache || null);
       }
+    }, 250);
+  }, [cancel, doSpeakNative]);
 
-      history.current.push({
-        role: 'model',
-        parts: [{ text: finalReply }],
-        timestamp: Date.now(),
-      });
+  const speak = useCallback((text: string) => {
+    if (ELEVENLABS_API_KEY) {
+      doSpeakElevenLabs(text);
+      return;
+    }
 
-      return finalReply;
-    },
-    [apiKey]
-  );
+    // Force a fresh check of current browser voices every time speech is triggered
+    const immediateVoices = typeof window !== 'undefined' && window.speechSynthesis 
+      ? window.speechSynthesis.getVoices() 
+      : [];
+    
+    const voice = findBestVoice(immediateVoices);
+    if (voice) {
+      voiceCache = voice;
+    }
 
-  const reset = useCallback(() => { history.current = []; }, []);
-  return { ask, reset };
+    doSpeakNative(text, voice);
+  }, [doSpeakNative, doSpeakElevenLabs]);
+
+  return { 
+    speak, 
+    cancel, 
+    isSpeaking: () => speaking.current,
+    currentSubtitle 
+  };
 }
