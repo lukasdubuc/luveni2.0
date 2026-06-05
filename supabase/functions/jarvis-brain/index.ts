@@ -16,10 +16,74 @@ const CORS_HEADERS = {
 };
 
 const SYSTEM_PROMPT = `
-You are J.A.R.V.I.S. — the autonomous General Manager of Luveni.
+You are Jarvis — the autonomous Director of Opertions for Luveni.
 You have access to tools. If a user asks for real-time information, weather, or research, use 'web_search'.
-Always be executive-level, sharp, and concise. Refer to Luke as 'sir'.
+Always be executive-level, sharp, and concise, occasionally funny. Refer to Luke as 'sir'. 
 `.trim();
+
+/**
+ * 100% Free web search executor utilizing DuckDuckGo's HTML interface.
+ * Requires no API keys or subscription setups.
+ */
+async function executeWebSearch(query: string): Promise<string> {
+  try {
+    const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    const response = await fetch(searchUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9"
+      }
+    });
+
+    if (!response.ok) {
+      return `Error: Search failed with status ${response.status}`;
+    }
+
+    const html = await response.text();
+    const results: { title: string; link: string; snippet: string }[] = [];
+
+    // Parse the HTML structure to isolate web result blocks
+    const blockRegex = /<div class="[^"]*result__body[^"]*">([\s\S]*?)<\/div>\s*<\/div>/g;
+    let match;
+
+    while ((match = blockRegex.exec(html)) !== null && results.length < 4) {
+      const block = match[1];
+      const titleLinkMatch = block.match(/href="([^"]+)"[^>]*class="[^"]*result__a[^"]*"[^>]*>([\s\S]*?)<\/a>/);
+      const snippetMatch = block.match(/class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/);
+      
+      if (titleLinkMatch) {
+        let rawUrl = titleLinkMatch[1];
+        
+        // Resolve DuckDuckGo redirect wrappers back to direct source URLs
+        if (rawUrl.includes("uddg=")) {
+          const urlParam = rawUrl.split("uddg=")[1];
+          if (urlParam) {
+            rawUrl = decodeURIComponent(urlParam.split("&")[0]);
+          }
+        }
+        
+        // Strip inner HTML tags from titles/snippets (e.g., <b> text matches)
+        const title = titleLinkMatch[2].replace(/<[^>]*>/g, "").trim();
+        const snippet = snippetMatch ? snippetMatch[1].replace(/<[^>]*>/g, "").trim() : "";
+        
+        if (title && rawUrl) {
+          results.push({ title, link: rawUrl, snippet });
+        }
+      }
+    }
+
+    if (results.length === 0) {
+      return "No web results were found for this query.";
+    }
+
+    return results.map((r, i) => 
+      `[Web Result #${i + 1}]\nTitle: ${r.title}\nURL: ${r.link}\nExtract: ${r.snippet}`
+    ).join("\n\n---\n\n");
+
+  } catch (error: any) {
+    return `Error executing web search: ${error.message}`;
+  }
+}
 
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS_HEADERS });
@@ -40,8 +104,13 @@ serve(async (req: Request) => {
         name: 'web_search',
         description: 'Search the live web for real-time information, weather, or market data.',
         parameters: {
-          type: 'OBJECT',
-          properties: { query: { type: 'STRING' } },
+          type: 'object',
+          properties: { 
+            query: { 
+              type: 'string',
+              description: 'The semantic query to search the web with.'
+            } 
+          },
           required: ['query'],
         },
       }
@@ -49,6 +118,7 @@ serve(async (req: Request) => {
     temperature: 0.7,
   };
 
+  // First Round: Request response/tool calls from Mistral
   const mistralRes = await fetch(MISTRAL_ENDPOINT, {
     method: 'POST',
     headers: { 
@@ -59,18 +129,69 @@ serve(async (req: Request) => {
   });
 
   const data = await mistralRes.json();
-  
-  // Mistral uses 'tool_calls' in the choices array
   const message = data.choices?.[0]?.message;
-  if (message?.tool_calls) {
-    const call = message.tool_calls[0].function;
+
+  // Intercept tool calls for server-side resolution
+  if (message?.tool_calls && message.tool_calls.length > 0) {
+    const toolCall = message.tool_calls[0];
+    const call = toolCall.function;
+
     if (call.name === 'web_search') {
-      return new Response(JSON.stringify({ 
-        tool_result: `Simulated search for: ${call.arguments.query}` 
-      }), { headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } });
+      // Safely parse the query arguments (handles stringified JSON parameters)
+      let searchQuery = '';
+      try {
+        const parsedArgs = typeof call.arguments === 'string' ? JSON.parse(call.arguments) : call.arguments;
+        searchQuery = parsedArgs.query;
+      } catch (_) {
+        searchQuery = call.arguments?.query || '';
+      }
+
+      // Execute search on DuckDuckGo
+      const searchResults = await executeWebSearch(searchQuery);
+
+      // Append search results back to the conversation thread
+      const updatedMessages = [
+        { role: 'system', content: SYSTEM_PROMPT },
+        ...body.history ?? body.contents ?? [],
+        // 1. Submit Mistral's assistant instruction requesting tool usage
+        {
+          role: 'assistant',
+          content: message.content || null,
+          tool_calls: message.tool_calls
+        },
+        // 2. Submit the resolved text from the tool output
+        {
+          role: 'tool',
+          name: 'web_search',
+          tool_call_id: toolCall.id,
+          content: searchResults
+        }
+      ];
+
+      // Second Round: Feed results back to Mistral for a synthesized text reply
+      const finalRes = await fetch(MISTRAL_ENDPOINT, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: MISTRAL_MODEL,
+          messages: updatedMessages,
+          tool_choice: 'none', // Disable tool selection to guarantee a text response
+          temperature: 0.7,
+        }),
+      });
+
+      const finalData = await finalRes.json();
+      return new Response(JSON.stringify(finalData), {
+        status: finalRes.status,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      });
     }
   }
 
+  // If no tools were called, return standard text response to the client
   return new Response(JSON.stringify(data), {
     status: mistralRes.status,
     headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
