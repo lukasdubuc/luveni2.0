@@ -10,31 +10,67 @@ interface UseSpeechOutputOptions {
   onEnd?: () => void;
 }
 
+const BRITISH_VOICES = [
+  'Microsoft Ryan Online (Natural) - English (United Kingdom)',
+  'Microsoft Sonia Online (Natural) - English (United Kingdom)',
+  'Microsoft Thomas Online (Natural) - English (United Kingdom)',
+  'Google UK English Male',
+  'Google UK English Female',
+  'Daniel',
+  'Hazel',
+  'Siri',
+  'Microsoft Susan',
+  'Microsoft George',
+  'Microsoft Ryan',
+];
+
 const isMobile = typeof window !== 'undefined' && 
   (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
 const globalActiveUtterances: SpeechSynthesisUtterance[] = [];
 
-// Resolves key from Lovable's database secrets configuration safely
 const ELEVENLABS_API_KEY = 
   (typeof import.meta !== 'undefined' && (import.meta.env?.ELEVENLABS_API_KEY || import.meta.env?.GOOGLE_API_KEY)) || 
   (typeof process !== 'undefined' && (process.env?.ELEVENLABS_API_KEY || process.env?.GOOGLE_API_KEY)) || 
   '';
 
-// Upgraded matching engine: searches case-insensitively for preferred British Male characteristics
+// Upgraded voice selector: prioritizes Australian Siri voices on mobile, and British Male on desktop
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
-  const gbVoices = voices.filter(v => v.lang.toLowerCase().startsWith('en-gb'));
-  if (gbVoices.length === 0) return null;
+  if (isMobile) {
+    // 1. Prioritize Australian English for Siri Voice 3 matching
+    const auVoices = voices.filter(v => {
+      const lang = v.lang.toLowerCase().replace('_', '-');
+      return lang.startsWith('en-au');
+    });
 
-  // Prioritize high-quality British male voice markers
+    if (auVoices.length > 0) {
+      // Look for the downloaded Siri voice specifically (e.g. Siri Australian Voice 3)
+      const siriMatch = auVoices.find(v => v.name.toLowerCase().includes('siri'));
+      if (siriMatch) return siriMatch;
+      return auVoices[0]; // Fallback to other standard Australian voice
+    }
+  }
+
+  // 2. Standard Desktop / Fallback (British English)
+  const gbVoices = voices.filter(v => {
+    const lang = v.lang.toLowerCase().replace('_', '-');
+    return lang.startsWith('en-gb');
+  });
+
+  if (gbVoices.length === 0) {
+    // Safety check: fall back to any available English voice if en-GB isn't installed
+    return voices.find(v => v.lang.toLowerCase().startsWith('en-au')) ?? 
+           voices.find(v => v.lang.toLowerCase().startsWith('en')) ?? 
+           null;
+  }
+
   const maleKeywords = ['ryan', 'george', 'thomas', 'guy', 'daniel', 'arthur', 'oliver', 'harry', 'male'];
   for (const keyword of maleKeywords) {
     const match = gbVoices.find(v => v.name.toLowerCase().includes(keyword));
     if (match) return match;
   }
 
-  // Fallback to any available British English voice (Siri, Hazel, etc.)
   return gbVoices[0];
 }
 
@@ -123,20 +159,17 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   }, []);
 
   const cancel = useCallback(() => {
-    // 1. Cancel browser system speech synthesis
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
     globalActiveUtterances.length = 0;
 
-    // 2. Stop and clear ElevenLabs audio streams
     activeAudiosRef.current.forEach(audio => {
       audio.pause();
       audio.currentTime = 0;
     });
     activeAudiosRef.current = [];
 
-    // 3. Clear visualizer timers
     if (audioIntervalRef.current) {
       clearInterval(audioIntervalRef.current);
       audioIntervalRef.current = null;
@@ -146,7 +179,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     setCurrentSubtitle(""); 
   }, []);
 
-  // Free system speech synthesis (Optimized for high-quality British synthesizers)
+  // System speech synthesis (Enforces voice language strictly for iOS matching)
   const doSpeakNative = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
@@ -170,8 +203,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         utt.rate = isMobile ? 1.0 : 0.93;
         utt.pitch = isMobile ? 1.0 : 0.78;
         
-        // Explicitly enforce British English language bounds to fix mobile synthesizers
-        utt.lang = 'en-GB';
+        // Match the language parameter exactly with the targeted voice to prevent mobile fallback bugs
+        utt.lang = voice ? voice.lang : (isMobile ? 'en-AU' : 'en-GB');
         if (voice) utt.voice = voice;
 
         globalActiveUtterances.push(utt);
@@ -207,7 +240,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }, 250); 
   }, [cancel]);
 
-  // ElevenLabs Streaming Engine (Falls back cleanly if character limit is exceeded)
+  // ElevenLabs Engine (active if key is configured)
   const doSpeakElevenLabs = useCallback(async (text: string) => {
     cancel();
 
@@ -219,7 +252,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       const chunks = chunkText(phoneticallyCleanText, 150);
 
       try {
-        const VOICE_ID = 'pNInz6obpgDQGcFbJwr1'; // George (Classic British Male)
+        const VOICE_ID = 'pNInz6obpgDQGcFbJwr1';
 
         const audioPromises = chunks.map(async (chunk) => {
           const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
@@ -238,7 +271,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
             }),
           });
 
-          // If the free tier character limit is hit, this will catch the non-200 error status
           if (!response.ok) throw new Error(`ElevenLabs error: ${response.status}`);
           const blob = await response.blob();
           return URL.createObjectURL(blob);
@@ -294,21 +326,19 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         playNext();
 
       } catch (error) {
-        console.warn('[Speech Engine] ElevenLabs unavailable (or quota met). Activating native fallback:', error);
-        // Fall back seamlessly to browser speech synthesis
+        console.warn('[Speech Engine] ElevenLabs failed, falling back:', error);
         doSpeakNative(text, voiceCache || null);
       }
     }, 250);
   }, [cancel, doSpeakNative]);
 
   const speak = useCallback((text: string) => {
-    // If ElevenLabs key is present, prioritize ElevenLabs
     if (ELEVENLABS_API_KEY) {
       doSpeakElevenLabs(text);
       return;
     }
 
-    // Default Fallback: Unified voice selector for both mobile and desktop
+    // Dynamic resolution of matching engine rules
     let voice = voiceCache;
     if (!voice) {
       const immediateVoices = window.speechSynthesis?.getVoices() || [];
