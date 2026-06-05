@@ -21,8 +21,9 @@ const BRITISH_VOICES = [
   'Microsoft Ryan',
 ];
 
-const isIOS = typeof window !== 'undefined' && 
-  (/iPad|iPhone|iPod/.test(navigator.userAgent) || 
+// Universal mobile check
+const isMobile = typeof window !== 'undefined' && 
+  (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
@@ -108,9 +109,9 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
       const utt = new SpeechSynthesisUtterance(rawSentence);
       
-      // Standardize pitch and rate to 1.0 on mobile Safari to avoid iOS engine crashes
-      utt.rate = isIOS ? 1.0 : 0.93;
-      utt.pitch = isIOS ? 1.0 : 0.78;
+      // Standardize values on mobile devices to prevent native engine crashes
+      utt.rate = isMobile ? 1.0 : 0.93;
+      utt.pitch = isMobile ? 1.0 : 0.78;
       
       if (voice) utt.voice = voice;
 
@@ -136,9 +137,9 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   }, [cancel]);
 
   const speak = useCallback((text: string) => {
-    // iOS Safari Fix: Instantly trigger synchronous speak with standard defaults.
-    // This bypasses async loadVoices().then() blocks which Safari prevents on mobile.
-    if (isIOS) {
+    // Universal Mobile Fix: Instantly trigger synchronous speak with standard defaults.
+    // This bypasses async loadVoices().then() blocks which mobile platforms prevent.
+    if (isMobile) {
       doSpeak(text, null);
       return;
     }
