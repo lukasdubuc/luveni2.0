@@ -21,6 +21,10 @@ const BRITISH_VOICES = [
   'Microsoft Ryan',
 ];
 
+const isIOS = typeof window !== 'undefined' && 
+  (/iPad|iPhone|iPod/.test(navigator.userAgent) || 
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   for (const name of BRITISH_VOICES) {
     const v = voices.find(v => v.name === name);
@@ -103,8 +107,11 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       }
 
       const utt = new SpeechSynthesisUtterance(rawSentence);
-      utt.rate = 0.93;
-      utt.pitch = 0.78;
+      
+      // Standardize pitch/rate to 1.0 on mobile Safari to avoid engine crashes
+      utt.rate = isIOS ? 1.0 : 0.93;
+      utt.pitch = isIOS ? 1.0 : 0.78;
+      
       if (voice) utt.voice = voice;
 
       utt.onboundary = () => {
