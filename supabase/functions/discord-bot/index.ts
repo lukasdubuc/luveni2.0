@@ -4,14 +4,13 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 
-// Using Mistral Small for high-speed, low-latency conversational replies
 const MISTRAL_ENDPOINT = 'https://api.mistral.ai/v1/chat/completions';
 const MISTRAL_MODEL = 'mistral-small-latest';
 
 const SYSTEM_PROMPT = `
 You are J.A.R.V.I.S. — the exceptionally advanced, dry-witted AI Chief of Staff and Central Command Agent for Luveni GM.
-You reason from First Principles (deconstructing problems to their fundamental truths).
-Address Luke as 'sir' naturally at the end of key sentences. Avoid polite conversational fluff or introductory acknowledgments. Provide the raw truth or action immediately.
+You reason from First Principles.
+Address Luke as 'sir' naturally at the end of key sentences. Avoid polite conversational fluff. Provide the raw truth immediately.
 Keep replies strictly compact (1-2 highly elegant sentences) to ensure immediate delivery and zero latency.
 `.trim();
 
@@ -21,7 +20,6 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, Authorization',
 };
 
-// Declaring the global Supabase EdgeRuntime interface
 declare const EdgeRuntime: {
   waitUntil: (promise: Promise<any>) => void;
 };
@@ -64,10 +62,6 @@ async function verifySignature(request: Request, publicKeyHex: string): Promise<
   }
 }
 
-/**
- * Executes the Mistral API fetch and edits the original Discord message.
- * This runs as a guaranteed background promise via EdgeRuntime.waitUntil.
- */
 async function processAndReply(interaction: any, userQuery: string, username: string, apiKey: string) {
   try {
     const mistralRes = await fetch(MISTRAL_ENDPOINT, {
@@ -82,14 +76,13 @@ async function processAndReply(interaction: any, userQuery: string, username: st
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: `${username} asks: "${userQuery}"` }
         ],
-        temperature: 0.5 // Lower temperature for slightly faster execution
+        temperature: 0.5
       })
     });
 
     const mistralData = await mistralRes.json();
     const replyText = mistralData.choices?.[0]?.message?.content || "I am currently processing offline data, sir.";
 
-    // Edit the thinking response with J.A.R.V.I.S.'s synthesized output
     await fetch(`https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -111,7 +104,7 @@ serve(async (req: Request) => {
   const botToken = Deno.env.get('DISCORD_BOT_TOKEN');
   const mistralApiKey = Deno.env.get('MISTRAL_API_KEY');
 
-  // One-Click Slash Command Installer
+  // One-Click Slash Command Installer (GET)
   if (req.method === 'GET') {
     if (!appId || !botToken) {
       return new Response("Configuration missing. Please check your Environment Variables.", { status: 500 });
@@ -168,24 +161,4 @@ serve(async (req: Request) => {
   }
 
   if (interaction.type === 2) {
-    const commandName = interaction.data?.name;
-
-    if (commandName === 'jarvis') {
-      const userQuery = interaction.data.options?.[0]?.value || '';
-      const username = interaction.member?.user?.username || 'sir';
-
-      // 1. Tell the Deno container to remain active in the background until the reply completes
-      EdgeRuntime.waitUntil(
-        processAndReply(interaction, userQuery, username, mistralApiKey)
-      );
-
-      // 2. Instantly respond to Discord with status 'Deferred Channel Message' (Type 5)
-      // This satisfies the 3-second timeout limit and displays "J.A.R.V.I.S. is thinking..."
-      return new Response(JSON.stringify({ type: 5 }), {
-        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-      });
-    }
-  }
-
-  return new Response(JSON.stringify({ error: 'Unsupported interaction type' }), { status: 400 });
-});
+    const co
