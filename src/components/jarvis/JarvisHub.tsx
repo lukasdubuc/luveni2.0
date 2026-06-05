@@ -53,6 +53,21 @@ const svgPattern = `
 </svg>
 `;
 
+/**
+ * Removes markdown bold/italics, bullet marks, headers, and bracketed links
+ * so that J.A.R.V.I.S. speaks in clear, conversational English and subtitles remain clean.
+ */
+function cleanResponseForSpeech(rawText: string): string {
+  return rawText
+    .replace(/\*\*/g, '') // Remove double asterisks (bold)
+    .replace(/\*/g, '')   // Remove single asterisks (italics/bullets)
+    .replace(/`/g, '')    // Remove backticks
+    .replace(/^#+\s+/gm, '') // Remove headers
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Clean markdown links [text](url) -> text
+    .replace(/\s+/g, ' ') // Clean double spaces
+    .trim();
+}
+
 export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, autoStart?: boolean }) {
   const [orbState, setOrbState] = useState<OrbState>('idle');
   const [userQuery, setUserQuery] = useState('');
@@ -80,6 +95,42 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
     }
   }, [isTextInputActive]);
 
+  // INSTANT "JUST TYPE" INTERFACE (Desktop Web Only)
+  useEffect(() => {
+    if (isMobile) return; // Completely disabled on mobile to prevent virtual keyboard popups and layout bugs
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is already typing in an input, textarea, or editable container
+      const activeEl = document.activeElement;
+      if (
+        activeEl &&
+        (activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA' ||
+          activeEl.getAttribute('contenteditable') === 'true')
+      ) {
+        return;
+      }
+
+      // Ignore command key modifications (Ctrl+C, Cmd+R, Alt, Escape, Tab, etc.)
+      if (e.ctrlKey || e.metaKey || e.altKey || e.key === 'Escape' || e.key === 'Tab') {
+        return;
+      }
+
+      // Capture single alphanumeric characters, symbols, or spacing inputs
+      if (e.key.length === 1 && !isTextInputActive) {
+        if (e.key === ' ') {
+          e.preventDefault(); // Prevents page scrolling down on space keypress
+        }
+        
+        setIsTextInputActive(true);
+        setTextInputValue(e.key); // Inserts their first typed letter directly
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [isTextInputActive]);
+
   const { ask } = useGemini(geminiApiKey);
 
   const changeOrbState = useCallback((newState: OrbState) => {
@@ -96,13 +147,19 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
     onStart: () => changeOrbState('speaking'),
     onEnd: () => {
       if (orbStateRef.current === 'speaking') {
-        stateTimeoutRef.current = setTimeout(() => {
-          if (orbStateRef.current === 'speaking') {
-            changeOrbState('idle');
-            // Wipes the visual prompt from the screen when speech finishes
-            setUserQuery('');
-          }
-        }, 1000);
+        if (!isMobile) {
+          // Web (Desktop): Instant loop-back for hands-free always-active agent
+          changeOrbState('idle');
+          setUserQuery('');
+        } else {
+          // Mobile: Remains identical with original settling timeout
+          stateTimeoutRef.current = setTimeout(() => {
+            if (orbStateRef.current === 'speaking') {
+              changeOrbState('idle');
+              setUserQuery('');
+            }
+          }, 1000);
+        }
       }
     },
   });
@@ -120,7 +177,10 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
       const reply = await ask(text);
       if (!reply) throw new Error("No response received");
       setLastAiResponse(reply);
-      speak(reply);
+      
+      // Sanitizes output formatting (e.g. bold asterisks) right before speaking
+      const cleanReply = cleanResponseForSpeech(reply);
+      speak(cleanReply);
     } catch (err) {
       console.error('[Jarvis] Error:', err);
       setUserQuery("System error, sir.");
