@@ -28,6 +28,7 @@ export function useVoiceInput({
   const recognitionRef = useRef<any>(null);
   const restartTimeoutRef = useRef<any>(null);
 
+  // Use refs to avoid stale closures in the Web Speech events and prevent frequent restarts
   const isSpeakingRef = useRef(isSpeaking);
   const preventListeningRef = useRef(preventListening);
   const lastAiResponseRef = useRef(lastAiResponse);
@@ -92,9 +93,14 @@ export function useVoiceInput({
     rec.interimResults = false; 
     rec.lang = 'en-GB';
 
-    rec.onstart = () => onStateChange('listening');
+    // Start audio context synchronously upon recognition start to prevent iOS restrictions
+    rec.onstart = () => {
+      onStateChange('listening');
+      initAudio();
+    };
 
     rec.onresult = (event: any) => {
+      // SOFTWARE FIREWALL: Ignore microphone audio if Jarvis is speaking/thinking
       if (isSpeakingRef.current || preventListeningRef.current) return;
 
       for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -115,25 +121,23 @@ export function useVoiceInput({
       if (enabledRef.current) {
         restartTimeoutRef.current = setTimeout(() => {
           if (enabledRef.current && !recognitionRef.current) {
-            initAudio().then(() => {
-              try {
-                rec.start();
-                recognitionRef.current = rec;
-              } catch (e) {}
-            });
+            initAudio();
+            try {
+              rec.start();
+              recognitionRef.current = rec;
+            } catch (e) {}
           }
         }, 300);
       }
     };
 
-    initAudio().then(() => {
-      try { 
-        rec.start(); 
-        recognitionRef.current = rec; 
-      } catch (e) { 
-        recognitionRef.current = null;
-      }
-    });
+    // Start recognition completely synchronously to avoid WebKit context blocks
+    try { 
+      rec.start(); 
+      recognitionRef.current = rec; 
+    } catch (e) { 
+      recognitionRef.current = null;
+    }
 
     return () => {
       try {
