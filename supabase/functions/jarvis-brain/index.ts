@@ -2,12 +2,13 @@
 //  J.A.R.V.I.S — Luveni GM | supabase/functions/jarvis-google/index.ts
 // ─────────────────────────────────────────────────────────────
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, Authorization',
+};
 
 /**
  * Strips conversational filler and stop-words from long queries
@@ -35,7 +36,6 @@ function cleanQuery(query: string): string {
 
 /**
  * Scrapes, cleans, and extracts readable text from any specific URL link.
- * Automatically strips JavaScript, CSS, SVGs, and other non-readable elements.
  */
 async function readWebPage(url: string): Promise<string> {
   try {
@@ -52,18 +52,15 @@ async function readWebPage(url: string): Promise<string> {
 
     let html = await response.text();
 
-    // 1. Strip out non-readable element blocks
     html = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
     html = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
     html = html.replace(/<head[^>]*>[\s\S]*?<\/head>/gi, "");
     html = html.replace(/<iframe[^>]*>[\s\S]*?<\/iframe>/gi, "");
     html = html.replace(/<svg[^>]*>[\s\S]*?<\/svg>/gi, "");
 
-    // 2. Extract content body if present
     const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
     const contentToParse = bodyMatch ? bodyMatch[1] : html;
 
-    // 3. Remove all HTML tags and normalize whitespace
     let text = contentToParse
       .replace(/<[^>]*>/g, " ")
       .replace(/&nbsp;/g, " ")
@@ -73,7 +70,6 @@ async function readWebPage(url: string): Promise<string> {
       .replace(/\s+/g, " ")
       .trim();
 
-    // 4. Truncate clean output text to safely protect the LLM context limits (~5000 characters)
     if (text.length > 5000) {
       text = text.substring(0, 5000) + "... [Content truncated due to page length]";
     }
@@ -204,7 +200,7 @@ serve(async (req) => {
       );
     }
 
-    // 2. Handle specific Web Link Scraping (Opening URLs)
+    // 2. Handle Web Link Scraping
     if (tool === 'open_link') {
       const url = args?.url;
       if (!url) {
