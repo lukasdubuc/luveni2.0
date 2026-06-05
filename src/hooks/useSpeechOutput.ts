@@ -35,20 +35,27 @@ const ELEVENLABS_API_KEY =
   (typeof process !== 'undefined' && (process.env?.ELEVENLABS_API_KEY || process.env?.GOOGLE_API_KEY)) || 
   '';
 
-// Upgraded voice selector: prioritizes Australian Siri voices on mobile, and British Male on desktop
+// Upgraded matching engine: prioritizes Australian Siri voices on mobile, and British Male on desktop
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   if (isMobile) {
-    // 1. Prioritize Australian English for Siri Voice 3 matching
+    // 1. Prioritize Australian English (en-AU) first for custom Siri Voice 3 matching
     const auVoices = voices.filter(v => {
       const lang = v.lang.toLowerCase().replace('_', '-');
       return lang.startsWith('en-au');
     });
 
     if (auVoices.length > 0) {
-      // Look for the downloaded Siri voice specifically (e.g. Siri Australian Voice 3)
+      // Seek the system-cloned Siri voice profile directly
       const siriMatch = auVoices.find(v => v.name.toLowerCase().includes('siri'));
       if (siriMatch) return siriMatch;
-      return auVoices[0]; // Fallback to other standard Australian voice
+
+      // Avoid robotic fallbacks like Karen or Tessa, look for other natural options
+      const preferredAU = ['natural', 'male', 'ryan', 'thomas', 'guy', 'daniel', 'arthur'];
+      for (const name of preferredAU) {
+        const match = auVoices.find(v => v.name.toLowerCase().includes(name));
+        if (match) return match;
+      }
+      return auVoices[0];
     }
   }
 
@@ -59,7 +66,7 @@ function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | n
   });
 
   if (gbVoices.length === 0) {
-    // Safety check: fall back to any available English voice if en-GB isn't installed
+    // Absolute fallback if en-GB isn't installed
     return voices.find(v => v.lang.toLowerCase().startsWith('en-au')) ?? 
            voices.find(v => v.lang.toLowerCase().startsWith('en')) ?? 
            null;
@@ -179,11 +186,20 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     setCurrentSubtitle(""); 
   }, []);
 
-  // System speech synthesis (Enforces voice language strictly for iOS matching)
+  // Native speech synthesis (Enforces voice language strictly for iOS matching)
   const doSpeakNative = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
     cancel();
+
+    // Game-Changer Fallback: If voice is null (because iOS list loaded empty), 
+    // re-query the freshly populated voices list immediately before synthesis runs.
+    let activeVoice = voice;
+    if (!activeVoice) {
+      const liveVoices = window.speechSynthesis.getVoices();
+      activeVoice = findBestVoice(liveVoices);
+      if (activeVoice) voiceCache = activeVoice;
+    }
 
     setTimeout(() => {
       speaking.current = true;
@@ -203,9 +219,9 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         utt.rate = isMobile ? 1.0 : 0.93;
         utt.pitch = isMobile ? 1.0 : 0.78;
         
-        // Match the language parameter exactly with the targeted voice to prevent mobile fallback bugs
-        utt.lang = voice ? voice.lang : (isMobile ? 'en-AU' : 'en-GB');
-        if (voice) utt.voice = voice;
+        // Match the language parameter exactly with the targeted voice to prevent Safari fallback bugs
+        utt.lang = activeVoice ? activeVoice.lang : (isMobile ? 'en-AU' : 'en-GB');
+        if (activeVoice) utt.voice = activeVoice;
 
         globalActiveUtterances.push(utt);
 
@@ -338,12 +354,14 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       return;
     }
 
-    // Dynamic resolution of matching engine rules
-    let voice = voiceCache;
-    if (!voice) {
-      const immediateVoices = window.speechSynthesis?.getVoices() || [];
-      voice = findBestVoice(immediateVoices);
-      if (voice) voiceCache = voice;
+    // Force a fresh check of current browser voices every time speech is triggered
+    const immediateVoices = typeof window !== 'undefined' && window.speechSynthesis 
+      ? window.speechSynthesis.getVoices() 
+      : [];
+    
+    const voice = findBestVoice(immediateVoices);
+    if (voice) {
+      voiceCache = voice;
     }
 
     doSpeakNative(text, voice);
