@@ -9,7 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 // ─── Gemini Tool Schema ───────────────────────────────────────
 // Uses correct snake_case keys per Gemini REST API v1beta spec.
 const GEMINI_TOOLS = [
-  { google_search_retrieval: {} }, // Native Google Search Grounding (no credentials needed)
+  { googleSearch: {} }, // Native Google Search Grounding (no credentials needed)
   {
     function_declarations: [
       {
