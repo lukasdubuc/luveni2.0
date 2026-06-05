@@ -39,6 +39,50 @@ const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'get_current_page_content',
+      description: 'See, read, and analyze the text contents, metadata, and URL of the active webpage the user is currently viewing on their screen.',
+      parameters: {
+        type: 'object',
+        properties: {},
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'github_list_files',
+      description: 'List directories, subfolders, and files inside a GitHub repository. (Read-only access).',
+      parameters: {
+        type: 'object',
+        properties: {
+          owner: { type: 'string', description: 'The GitHub owner or organization name (e.g. "open-jarvis")' },
+          repo: { type: 'string', description: 'The name of the repository (e.g. "OpenJarvis")' },
+          path: { type: 'string', description: 'Optional subfolder path inside the repository. Default is root ("")' },
+        },
+        required: ['owner', 'repo'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'github_read_file',
+      description: 'Read the text contents of a specific file inside a GitHub repository. (Read-only access).',
+      parameters: {
+        type: 'object',
+        properties: {
+          owner: { type: 'string', description: 'The GitHub owner or organization name' },
+          repo: { type: 'string', description: 'The name of the repository' },
+          path: { type: 'string', description: 'The absolute file path inside the repository (e.g. "src/App.tsx")' },
+          branch: { type: 'string', description: 'The branch to read from (default is "main" or "master")' },
+        },
+        required: ['owner', 'repo', 'path'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'update_memory',
       description: 'Consolidate and update your long-term memory block. Use this to remember learned rules, custom preferences, business metrics, or mistakes to avoid permanently.',
       parameters: {
@@ -147,11 +191,40 @@ interface UseGeminiOptions {
   storeSnapshot?: StoreSnapshot | null;
 }
 
+/**
+ * Executes the backend Google search function.
+ * Seamlessly upgrades to true Google search if credentials are present, or falls back to Wikipedia.
+ */
 async function callGoogleTool(
   toolName: string,
   toolArgs: Record<string, any>,
   googleToken: string
 ): Promise<string> {
+  const query = toolArgs.query || toolArgs.search_query || toolArgs.q || "";
+
+  // 1. True Google Search Client-Side Fallback (Using your custom programmable credentials)
+  const searchApiKey = import.meta.env.VITE_GOOGLE_SEARCH_API_KEY || import.meta.env.GOOGLE_SEARCH_API_KEY || "";
+  const searchCx = import.meta.env.VITE_GOOGLE_SEARCH_CX || import.meta.env.GOOGLE_SEARCH_CX || "";
+
+  if (searchApiKey && searchCx && toolName === 'google_search') {
+    try {
+      const url = `https://customsearch.googleapis.com/customsearch/v1?q=${encodeURIComponent(query)}&key=${searchApiKey}&cx=${searchCx}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.items && data.items.length > 0) {
+          const results = data.items.slice(0, 4).map((item: any, idx: number) => {
+            return `[Google Search Result #${idx + 1}]\nTitle: ${item.title}\nURL: ${item.link}\nSnippet: ${item.snippet}`;
+          });
+          return results.join("\n\n---\n\n");
+        }
+      }
+    } catch (e) {
+      console.warn("[useGemini Web Search] Programmable Custom Search failed, using next fallback:", e);
+    }
+  }
+
+  // 2. Query the Supabase serverless edge function
   try {
     const { data: sessionData } = await supabase.auth.getSession();
     const supabaseToken = sessionData.session?.access_token;
@@ -179,14 +252,12 @@ async function callGoogleTool(
     if (error) throw error;
 
   } catch (e: any) {
-    console.warn("[useGemini] Backend Edge Function returned an error, triggering client-side fallback:", e.message);
+    console.warn("[useGemini] Edge Function error, triggering Wikipedia backup:", e.message);
   }
 
+  // 3. Fallback: Query Wikipedia directly from browser
   try {
-    const query = toolArgs.query || toolArgs.search_query || toolArgs.q || "";
     if (query && toolName === 'google_search') {
-      console.log(`[useGemini Fallback] Bypassing backend. Querying Wikipedia directly for: "${query}"`);
-      
       const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*`;
       const response = await fetch(wikiUrl);
       
@@ -196,7 +267,7 @@ async function callGoogleTool(
           const results = data.query.search.slice(0, 3).map((item: any, idx: number) => {
             const snippet = item.snippet.replace(/<[^>]*>/g, "").trim();
             const link = `https://en.wikipedia.org/wiki/${encodeURIComponent(item.title.replace(/ /g, "_"))}`;
-            return `[Wikipedia Result #${idx + 1}]\nTitle: ${item.title}\nURL: ${link}\nSummary: ${snippet}...`;
+            return `[Wikipedia Backup Result #${idx + 1}]\nTitle: ${item.title}\nURL: ${link}\nSummary: ${snippet}...`;
           });
           return results.join("\n\n---\n\n");
         }
@@ -207,6 +278,57 @@ async function callGoogleTool(
   }
 
   return "Error: Unable to retrieve live web data. Inform the user that search retrieval is currently offline, sir.";
+}
+
+/**
+ * Handles read-only GitHub API interactions securely on the client side.
+ */
+async function callGithubTool(toolName: string, args: Record<string, any>): Promise<string> {
+  const githubToken = 
+    (typeof import.meta !== 'undefined' && (import.meta.env?.GITHUB_TOKEN || import.meta.env?.VITE_GITHUB_TOKEN)) || 
+    (typeof process !== 'undefined' && (process.env?.GITHUB_TOKEN || process.env?.VITE_GITHUB_TOKEN)) || 
+    '';
+
+  const headers: Record<string, string> = {
+    "Accept": "application/vnd.github+json",
+  };
+  
+  if (githubToken) {
+    headers["Authorization"] = `Bearer ${githubToken}`;
+  }
+
+  const { owner, repo, path = "", branch = "main" } = args;
+
+  try {
+    if (toolName === 'github_list_files') {
+      const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
+      const response = await fetch(url, { headers });
+      if (!response.ok) throw new Error(`GitHub returned status ${response.status}`);
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        return data.map((item: any) => `[${item.type.toUpperCase()}] ${item.path}`).join('\n');
+      }
+      return JSON.stringify(data);
+    }
+
+    if (toolName === 'github_read_file') {
+      const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
+      const response = await fetch(url, { headers });
+      if (!response.ok) throw new Error(`GitHub returned status ${response.status}`);
+      const data = await response.json();
+      
+      // Decodes base64 safely supporting broad UTF-8 character maps
+      if (data.content) {
+        const cleanBase64 = data.content.replace(/\s/g, '');
+        return decodeURIComponent(escape(window.atob(cleanBase64)));
+      }
+      return "Error: File content is empty.";
+    }
+  } catch (e: any) {
+    console.error('[GitHub Tool Error]', e);
+    return `GitHub API Error: ${e.message}`;
+  }
+  return "Unknown GitHub action.";
 }
 
 function buildLiveContext(snapshot: StoreSnapshot | null | undefined): string {
@@ -278,8 +400,6 @@ export function useGemini(apiKey: string, options: UseGeminiOptions = {}) {
       const currentTimeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
       const liveContext = buildLiveContext(storeSnapshot);
-      
-      // Strict System Formatting Directive to prevent Mistral from outputting bold asterisks or lists
       const systemContent = `
 ${JARVIS_SYSTEM_PROMPT}
 
@@ -310,7 +430,7 @@ CRITICAL CONVERSATIONAL & VOICE ASSISTANT FORMATTING INSTRUCTIONS:
       const MAX_TOOL_ROUNDS = 4;
 
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-        const activeTools = googleToken ? TOOLS : [TOOLS[0], TOOLS[1], TOOLS[2]];
+        const activeTools = [...TOOLS];
 
         const payload = {
           model: 'mistral-small-latest',
@@ -410,6 +530,52 @@ CRITICAL CONVERSATIONAL & VOICE ASSISTANT FORMATTING INSTRUCTIONS:
             let args: Record<string, any> = {};
             try { args = JSON.parse(tc.function.arguments); } catch (_) {}
 
+            // A. See Website Local Tool Execution
+            if (tc.function.name === 'get_current_page_content') {
+              try {
+                const pageTitle = document.title;
+                const pageUrl = window.location.href;
+                
+                // Read and clean the current document body
+                const clonedBody = document.body.cloneNode(true) as HTMLElement;
+                const scripts = clonedBody.querySelectorAll('script, style, iframe, noscript');
+                scripts.forEach(s => s.remove());
+                
+                const rawText = clonedBody.innerText || clonedBody.textContent || "";
+                const cleanText = rawText.replace(/\s+/g, ' ').trim().slice(0, 8000); // safety cap
+                
+                return {
+                  role: 'tool' as const,
+                  tool_call_id: tc.id,
+                  name: tc.function.name,
+                  content: JSON.stringify({
+                    url: pageUrl,
+                    title: pageTitle,
+                    content_snippet: cleanText
+                  }),
+                };
+              } catch (e: any) {
+                return {
+                  role: 'tool' as const,
+                  tool_call_id: tc.id,
+                  name: tc.function.name,
+                  content: `Error reading active web document: ${e.message}`,
+                };
+              }
+            }
+
+            // B. GitHub Tool Execution
+            if (tc.function.name === 'github_list_files' || tc.function.name === 'github_read_file') {
+              const result = await callGithubTool(tc.function.name, args);
+              return {
+                role: 'tool' as const,
+                tool_call_id: tc.id,
+                name: tc.function.name,
+                content: result,
+              };
+            }
+
+            // C. Memory Update Tool
             if (tc.function.name === 'update_memory') {
               let result = "";
               try {
@@ -431,6 +597,7 @@ CRITICAL CONVERSATIONAL & VOICE ASSISTANT FORMATTING INSTRUCTIONS:
               };
             }
 
+            // D. Standard Google Tool Pipeline
             const isPublicTool = tc.function.name === 'google_search' || tc.function.name === 'open_link';
             const tokenToUse = isPublicTool ? '' : (googleToken || '');
             const result = (isPublicTool || googleToken)
