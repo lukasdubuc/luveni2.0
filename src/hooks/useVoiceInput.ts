@@ -1,160 +1,147 @@
 // ─────────────────────────────────────────────────────────────
-//  J.A.R.V.I.S — Luveni GM | components/jarvis/JarvisHub.tsx
+//  J.A.R.V.I.S — Luveni GM | hooks/useVoiceInput.ts
 // ─────────────────────────────────────────────────────────────
 
-import { useState, useCallback, useRef, useEffect } from 'react';
-import NeuralOrb from './NeuralOrb';
-import { useVoiceInput } from '../../hooks/useVoiceInput';
-import { useSpeechOutput } from '../../hooks/useSpeechOutput';
-import { useGemini } from '../../hooks/useGemini';
-import type { OrbState } from '../../types/jarvis';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useRef, useCallback } from 'react';
 
-const STATE_LABEL: Record<OrbState, string> = {
-  idle: 'STANDBY', listening: 'LISTENING', thinking: 'PROCESSING', speaking: 'RESPONDING', error: 'MIC ERROR',
-};
+let sharedAudioContext: AudioContext | null = null;
 
-const STATE_COLOR: Record<OrbState, string> = {
-  idle: 'rgba(0,180,255,0.6)', listening: 'rgba(0,255,255,1.0)', thinking: 'rgba(180,100,255,1.0)', speaking: 'rgba(0,255,180,0.95)', error: 'rgba(255,80,80,1.0)',
-};
+interface UseVoiceInputOptions {
+  onTranscript: (text: string) => void;
+  onStateChange: (state: string) => void;
+  onLevelChange: (level: number) => void;
+  enabled: boolean;
+  isSpeaking: boolean;
+  lastAiResponse: string;
+  preventListening?: boolean;
+}
 
-const isIOS = typeof window !== 'undefined' && 
-  (/iPad|iPhone|iPod/.test(navigator.userAgent) || 
-  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+export function useVoiceInput({ 
+  onTranscript, 
+  onStateChange, 
+  onLevelChange, 
+  enabled, 
+  isSpeaking, 
+  lastAiResponse,
+  preventListening 
+}: UseVoiceInputOptions) {
+  const recognitionRef = useRef<any>(null);
+  const restartTimeoutRef = useRef<any>(null);
 
-// Named Export to prevent TanStack Router import failures
-export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, autoStart?: boolean }) {
-  const [orbState, setOrbState] = useState<OrbState>('idle');
-  const [lastLine, setLastLine] = useState('');
-  const [lastAiResponse, setLastAiResponse] = useState('');
-  const [isReady, setIsReady] = useState(false);
-  const [isLive, setIsLive] = useState(false);
+  const isSpeakingRef = useRef(isSpeaking);
+  const preventListeningRef = useRef(preventListening);
+  const lastAiResponseRef = useRef(lastAiResponse);
+  const enabledRef = useRef(enabled);
 
-  // Using any prevents NodeJS.Timeout vs browser window.setTimeout type conflicts
-  const stateTimeoutRef = useRef<any>(null);
-  const orbStateRef = useRef(orbState);
+  useEffect(() => { isSpeakingRef.current = isSpeaking; }, [isSpeaking]);
+  useEffect(() => { preventListeningRef.current = preventListening; }, [preventListening]);
+  useEffect(() => { lastAiResponseRef.current = lastAiResponse; }, [lastAiResponse]);
+  useEffect(() => { enabledRef.current = enabled; }, [enabled]);
 
-  useEffect(() => { orbStateRef.current = orbState; }, [orbState]);
-
-  const { ask } = useGemini(geminiApiKey);
-
-  const changeOrbState = useCallback((newState: OrbState) => {
-    if (stateTimeoutRef.current) clearTimeout(stateTimeoutRef.current);
-    if (newState === 'idle') {
-      stateTimeoutRef.current = setTimeout(() => setOrbState('idle'), 750);
-    } else {
-      setOrbState(newState);
+  const initAudio = useCallback(async () => {
+    if (sharedAudioContext) {
+      if (sharedAudioContext.state === 'suspended') await sharedAudioContext.resume();
+      return;
     }
-  }, []);
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { 
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true 
+        } 
+      });
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      sharedAudioContext = new AudioCtx();
+      const analyzer = sharedAudioContext.createAnalyser();
+      const source = sharedAudioContext.createMediaStreamSource(stream);
+      source.connect(analyzer);
+      analyzer.fftSize = 256;
 
-  const { speak, cancel } = useSpeechOutput({
-    onStart: () => changeOrbState('speaking'),
-    onEnd: () => {
-      if (orbStateRef.current === 'speaking') {
-        setTimeout(() => {
-          if (orbStateRef.current === 'speaking') {
-            changeOrbState('idle');
-          }
-        }, 1000);
+      const dataArray = new Uint8Array(analyzer.frequencyBinCount);
+      const updateLevel = () => {
+        if (!analyzer) return;
+        analyzer.getByteFrequencyData(dataArray);
+        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+        onLevelChange(avg / 128);
+        requestAnimationFrame(updateLevel);
+      };
+      updateLevel();
+    } catch (e) {
+      console.error('[VoiceInput] Hardware access blocked:', e);
+    }
+  }, [onLevelChange]);
+
+  useEffect(() => {
+    if (!enabled) {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (e) {}
+        recognitionRef.current = null;
       }
-    },
-  });
-
-  const handleTranscript = useCallback(async (text: string) => {
-    if (orbStateRef.current === 'thinking' || orbStateRef.current === 'speaking') {
       return;
     }
 
-    window.speechSynthesis.cancel();
-    setLastLine("Thinking...");
-    changeOrbState('thinking');
-    
-    try {
-      const reply = await ask(text);
-      if (!reply) throw new Error("No response received");
-      setLastLine(reply);
-      setLastAiResponse(reply);
-      speak(reply);
-    } catch (err) {
-      console.error('[Jarvis] Error:', err);
-      setLastLine("System error, sir.");
-      speak("System error, sir.");
-      changeOrbState('idle');
-    }
-  }, [ask, speak, changeOrbState]);
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
 
-  useVoiceInput({
-    onTranscript: (text: string) => { if (isLive) handleTranscript(text); },
-    onStateChange: (s: string) => {
-      if (!isLive) return;
-      if (s === 'listening') { cancel(); }
+    if (recognitionRef.current) return;
 
-      if ((s === 'idle' || s === 'listening') && (orbStateRef.current === 'speaking' || orbStateRef.current === 'thinking')) {
-        return;
+    const rec = new SpeechRecognition();
+    rec.continuous = true;
+    rec.interimResults = false; 
+    rec.lang = 'en-GB';
+
+    rec.onstart = () => onStateChange('listening');
+
+    rec.onresult = (event: any) => {
+      if (isSpeakingRef.current || preventListeningRef.current) return;
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          const transcript = event.results[i][0].transcript.trim();
+          
+          if (transcript && transcript.toLowerCase() !== lastAiResponseRef.current.toLowerCase()) {
+            onTranscript(transcript);
+          }
+        }
       }
+    };
 
-      changeOrbState(s as OrbState);
-    },
-    onLevelChange: () => {},
-    enabled: isReady && isLive,
-    isSpeaking: orbState === 'speaking',
-    lastAiResponse,
-    preventListening: orbState === 'speaking' || orbState === 'thinking',
-  });
-
-  const initializeJarvis = async () => {
-    if (isReady) return;
-    setIsReady(true);
-    setIsLive(true);
-    
-    try {
-      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
-      const ctx = new AudioCtx();
-      if (ctx.state === 'suspended') await ctx.resume();
+    rec.onend = () => {
+      recognitionRef.current = null;
+      onStateChange('idle');
       
-      const s = new SpeechSynthesisUtterance("System online.");
-      s.volume = 1; 
-      window.speechSynthesis.speak(s);
-    } catch (e) { 
-      console.error("Audio unlock failed", e); 
-    }
-  };
+      if (enabledRef.current) {
+        restartTimeoutRef.current = setTimeout(() => {
+          if (enabledRef.current && !recognitionRef.current) {
+            initAudio().then(() => {
+              try {
+                rec.start();
+                recognitionRef.current = rec;
+              } catch (e) {}
+            });
+          }
+        }, 300);
+      }
+    };
 
-  useEffect(() => { 
-    if (autoStart && !isIOS) {
-      initializeJarvis(); 
-    }
-  }, [autoStart]);
+    initAudio().then(() => {
+      try { 
+        rec.start(); 
+        recognitionRef.current = rec; 
+      } catch (e) { 
+        recognitionRef.current = null;
+      }
+    });
 
-  return (
-    <div 
-      style={styles.root} 
-      onClick={initializeJarvis}
-      onTouchStart={initializeJarvis}
-    >
-      <style dangerouslySetInnerHTML={{ __html: `body { background-color: #020408 !important; margin: 0; overflow: hidden; }`}} />
-      <div style={styles.orbWrap}>
-        <NeuralOrb state={orbState} audioLevel={0} size={400} />
-      </div>
-      <div style={styles.transcriptContainer}>
-        <AnimatePresence mode="wait">
-          {lastLine && <motion.div key={lastLine} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} style={styles.transcript}>{lastLine}</motion.div>}
-        </AnimatePresence>
-      </div>
-      <div style={{ ...styles.stateLabel, color: orbState === 'idle' && isLive ? STATE_COLOR['listening'] : STATE_COLOR[orbState] }}>
-        {orbState === 'idle' && isLive ? STATE_LABEL['listening'] : STATE_LABEL[orbState]}
-      </div>
-    </div>
-  );
+    return () => {
+      try {
+        rec.stop();
+      } catch (e) {}
+      if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
+    };
+  }, [enabled, onTranscript, onStateChange, initAudio]);
+
+  return null;
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  root: { height: '100vh', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', boxSizing: 'border-box' },
-  orbWrap: { cursor: 'pointer', display: 'flex', justifyContent: 'center' },
-  stateLabel: { marginTop: 'auto', marginBottom: '20px', fontSize: '12px', fontFamily: "'Inter', sans-serif", letterSpacing: '0.6rem', fontWeight: 300, textTransform: 'uppercase', zIndex: 10 },
-  transcriptContainer: { position: 'absolute', top: '70%', left: '50%', transform: 'translate(-50%, -50%)', width: '90%', maxWidth: '800px', textAlign: 'center', zIndex: 5 },
-  transcript: { color: '#fff', fontSize: '1.5rem', fontFamily: "'Inter', sans-serif", lineHeight: 1.4 }
-};
-
-// Default Export to prevent TanStack Router import failures
-export default JarvisHub;
