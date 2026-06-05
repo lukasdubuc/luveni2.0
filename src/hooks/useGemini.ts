@@ -25,6 +25,20 @@ const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'open_link',
+      description: 'Open a specific URL/link to read, scrape, and extract the text content of that webpage.',
+      parameters: {
+        type: 'object',
+        properties: {
+          url: { type: 'string', description: 'The absolute URL to open and read, e.g. "https://en.wikipedia.org/wiki/Artificial_intelligence"' },
+        },
+        required: ['url'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'update_memory',
       description: 'Consolidate and update your long-term memory block. Use this to remember learned rules, custom preferences, business metrics, or mistakes to avoid permanently.',
       parameters: {
@@ -193,7 +207,6 @@ export function useGemini(apiKey: string, options: UseGeminiOptions = {}) {
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
-  // Track the compiled long-term memory summary in reference memory
   const longTermMemoryRef = useRef<string>("");
 
   const ask = useCallback(
@@ -206,7 +219,6 @@ export function useGemini(apiKey: string, options: UseGeminiOptions = {}) {
         timestamp: Date.now(),
       });
 
-      // Eager load long-term memory summary from Supabase metadata with graceful fallback
       if (!longTermMemoryRef.current) {
         try {
           const { data } = await supabase
@@ -218,11 +230,10 @@ export function useGemini(apiKey: string, options: UseGeminiOptions = {}) {
             longTermMemoryRef.current = data.value;
           }
         } catch (e) {
-          // Self-healing database fallback: if table is not built yet, we keep session memory
+          // Fallback if table doesn't exist
         }
       }
 
-      // Inject server/device dates and times dynamically
       const now = new Date();
       const currentDateStr = now.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
       const currentTimeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -253,8 +264,7 @@ ${liveContext}
       const MAX_TOOL_ROUNDS = 4;
 
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-        // google_search and update_memory are decoupled from googleToken
-        const activeTools = googleToken ? TOOLS : [TOOLS[0], TOOLS[1]];
+        const activeTools = googleToken ? TOOLS : [TOOLS[0], TOOLS[1], TOOLS[2]];
 
         const payload = {
           model: 'mistral-small-latest',
@@ -354,7 +364,6 @@ ${liveContext}
             let args: Record<string, any> = {};
             try { args = JSON.parse(tc.function.arguments); } catch (_) {}
 
-            // Handle memory update tool call
             if (tc.function.name === 'update_memory') {
               let result = "";
               try {
@@ -376,9 +385,10 @@ ${liveContext}
               };
             }
 
-            // Google search execution logic
-            const tokenToUse = (tc.function.name === 'google_search') ? '' : (googleToken || '');
-            const result = (tc.function.name === 'google_search' || googleToken)
+            // Google search & Open link tools are public and decoupled from googleToken requirements
+            const isPublicTool = tc.function.name === 'google_search' || tc.function.name === 'open_link';
+            const tokenToUse = isPublicTool ? '' : (googleToken || '');
+            const result = (isPublicTool || googleToken)
               ? await callGoogleTool(tc.function.name, args, tokenToUse)
               : JSON.stringify({ error: 'OAuth account not connected' });
 
