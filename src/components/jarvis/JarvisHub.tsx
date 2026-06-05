@@ -22,7 +22,6 @@ const isIOS = typeof window !== 'undefined' &&
   (/iPad|iPhone|iPod/.test(navigator.userAgent) || 
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
-// Named Export to prevent TanStack Router import failures
 export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, autoStart?: boolean }) {
   const [orbState, setOrbState] = useState<OrbState>('idle');
   const [lastLine, setLastLine] = useState('');
@@ -30,7 +29,6 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
   const [isReady, setIsReady] = useState(false);
   const [isLive, setIsLive] = useState(false);
 
-  // Using any prevents NodeJS.Timeout vs browser window.setTimeout type conflicts
   const stateTimeoutRef = useRef<any>(null);
   const orbStateRef = useRef(orbState);
 
@@ -156,5 +154,4 @@ const styles: Record<string, React.CSSProperties> = {
   transcript: { color: '#fff', fontSize: '1.5rem', fontFamily: "'Inter', sans-serif", lineHeight: 1.4 }
 };
 
-// Default Export to prevent TanStack Router import failures
 export default JarvisHub;
