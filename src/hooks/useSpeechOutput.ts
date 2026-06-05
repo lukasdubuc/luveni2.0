@@ -347,4 +347,65 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
           setCurrentSubtitle(rawChunk);
 
           const audio = new Audio(audioUrls[currentIndex]);
-          activeA
+          activeAudiosRef.current.push(audio);
+
+          if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
+          audioIntervalRef.current = setInterval(() => {
+            if (onBoundaryRef.current && speaking.current) {
+              onBoundaryRef.current(0.3 + Math.random() * 0.55);
+            }
+          }, 80);
+
+          audio.onended = () => {
+            URL.revokeObjectURL(audioUrls[currentIndex]);
+            currentIndex++;
+            playNext();
+          };
+
+          audio.onerror = () => {
+            URL.revokeObjectURL(audioUrls[currentIndex]);
+            currentIndex++;
+            playNext();
+          };
+
+          audio.play().catch(() => {
+            currentIndex++;
+            playNext();
+          });
+        };
+
+        playNext();
+
+      } catch (error) {
+        console.warn('[Speech Engine] ElevenLabs failed, falling back:', error);
+        doSpeakNative(text, voiceCache || null);
+      }
+    }, 250);
+  }, [cancel, doSpeakNative]);
+
+  const speak = useCallback((text: string) => {
+    if (ELEVENLABS_API_KEY) {
+      doSpeakElevenLabs(text);
+      return;
+    }
+
+    // Force a fresh check of current browser voices every time speech is triggered
+    const immediateVoices = typeof window !== 'undefined' && window.speechSynthesis 
+      ? window.speechSynthesis.getVoices() 
+      : [];
+    
+    const voice = findBestVoice(immediateVoices);
+    if (voice) {
+      voiceCache = voice;
+    }
+
+    doSpeakNative(text, voice);
+  }, [doSpeakNative, doSpeakElevenLabs]);
+
+  return { 
+    speak, 
+    cancel, 
+    isSpeaking: () => speaking.current,
+    currentSubtitle 
+  };
+}
