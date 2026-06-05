@@ -6,20 +6,19 @@ import type { JarvisMessage } from '../types/jarvis';
 import { JARVIS_SYSTEM_PROMPT } from '../lib/jarvis-config';
 import { supabase } from '@/integrations/supabase/client';
 
+// ─── API Keys (Lovable secrets — no VITE_ prefix) ────────────
+const GEMINI_API_KEY  = import.meta.env.GEMINI_API_KEY  || import.meta.env.VITE_GEMINI_API_KEY  || '';
+const MISTRAL_API_KEY = import.meta.env.MISTRAL_API_KEY || import.meta.env.VITE_MISTRAL_API_KEY || '';
+
 // ─── Gemini Tool Schema ───────────────────────────────────────
-// Uses correct snake_case keys per Gemini REST API v1beta spec.
-// googleSearch is camelCase — that's how Google defined it for 2.0.
 const GEMINI_TOOLS = [
-  { googleSearch: {} }, // Native Google Search Grounding for Gemini 2.0
+  { googleSearch: {} },
   {
     function_declarations: [
       {
         name: 'get_current_page_content',
         description: 'See, read, and analyze the text contents, metadata, and URL of the active webpage the user is currently viewing on their screen.',
-        parameters: {
-          type: 'OBJECT',
-          properties: {}
-        }
+        parameters: { type: 'OBJECT', properties: {} }
       },
       {
         name: 'github_list_files',
@@ -27,9 +26,9 @@ const GEMINI_TOOLS = [
         parameters: {
           type: 'OBJECT',
           properties: {
-            owner: { type: 'STRING', description: 'The GitHub owner or organization name (e.g. "open-jarvis")' },
-            repo:  { type: 'STRING', description: 'The name of the repository (e.g. "OpenJarvis")' },
-            path:  { type: 'STRING', description: 'Optional subfolder path inside the repository. Default is root ("")' }
+            owner: { type: 'STRING', description: 'The GitHub owner or organization name' },
+            repo:  { type: 'STRING', description: 'The name of the repository' },
+            path:  { type: 'STRING', description: 'Optional subfolder path. Default is root ("")' }
           },
           required: ['owner', 'repo']
         }
@@ -42,15 +41,15 @@ const GEMINI_TOOLS = [
           properties: {
             owner:  { type: 'STRING', description: 'The GitHub owner or organization name' },
             repo:   { type: 'STRING', description: 'The name of the repository' },
-            path:   { type: 'STRING', description: 'The absolute file path inside the repository (e.g. "src/App.tsx")' },
-            branch: { type: 'STRING', description: 'The branch to read from (default is "main" or "master")' }
+            path:   { type: 'STRING', description: 'The absolute file path inside the repository' },
+            branch: { type: 'STRING', description: 'The branch to read from (default "main")' }
           },
           required: ['owner', 'repo', 'path']
         }
       },
       {
         name: 'update_memory',
-        description: 'Consolidate and update your long-term memory block. Use this to remember learned wisdom, rules, metrics, or mistakes permanently.',
+        description: 'Consolidate and update your long-term memory block.',
         parameters: {
           type: 'OBJECT',
           properties: {
@@ -64,11 +63,11 @@ const GEMINI_TOOLS = [
       },
       {
         name: 'gmail_read',
-        description: 'Read recent emails from Gmail. Use when asked about emails, messages, inbox, or specific senders.',
+        description: 'Read recent emails from Gmail.',
         parameters: {
           type: 'OBJECT',
           properties: {
-            query:      { type: 'STRING', description: 'Gmail search query, e.g. "from:john@example.com" or "subject:invoice unread"' },
+            query:      { type: 'STRING', description: 'Gmail search query' },
             maxResults: { type: 'NUMBER', description: 'Max emails to return (default 5)' }
           },
           required: ['query']
@@ -93,7 +92,7 @@ const GEMINI_TOOLS = [
         parameters: {
           type: 'OBJECT',
           properties: {
-            query: { type: 'STRING', description: "Drive search query, e.g. \"name contains 'invoice'\" or \"mimeType='application/pdf'\"" }
+            query: { type: 'STRING', description: 'Drive search query' }
           },
           required: ['query']
         }
@@ -157,11 +156,8 @@ async function callGoogleTool(
     });
 
     if (!error && data) {
-      return typeof data === 'object' && 'results' in data
-        ? data.results
-        : String(data);
+      return typeof data === 'object' && 'results' in data ? data.results : String(data);
     }
-
     if (error) throw error;
   } catch (e: any) {
     console.warn('[useGemini Google API Fallback Failed]:', e.message);
@@ -198,7 +194,6 @@ async function callGithubTool(toolName: string, args: Record<string, any>): Prom
 
     if (toolName === 'github_read_file') {
       if (!data.content) return 'Error: File content is empty.';
-      // Robust UTF-8 safe decoding via TextDecoder
       const cleanBase64 = data.content.replace(/\s/g, '');
       const binary      = window.atob(cleanBase64);
       const bytes       = new Uint8Array(binary.length);
@@ -248,32 +243,63 @@ function buildLiveContext(snapshot: StoreSnapshot | null | undefined): string {
 }
 
 // ─── Gemini API Call ──────────────────────────────────────────
-// Supports both:
-//   - AIza... keys  → passed as ?key= query param (standard)
-//   - AQ.... tokens → passed as Authorization: Bearer header (OAuth)
+// Supports AQ. OAuth tokens (Bearer header) and AIza keys (?key= param)
 
-async function callGeminiAPI(apiKey: string, payload: object): Promise<Response> {
-  const isOAuthToken = apiKey.startsWith('AQ.');
+async function callGeminiAPI(payload: object): Promise<Response> {
+  const key          = GEMINI_API_KEY;
+  const isOAuthToken = key.startsWith('AQ.');
 
   const url = isOAuthToken
     ? 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
-    : `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    : `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(isOAuthToken && { 'Authorization': `Bearer ${apiKey}` }),
+    ...(isOAuthToken && { 'Authorization': `Bearer ${key}` }),
   };
 
-  return fetch(url, {
+  return fetch(url, { method: 'POST', headers, body: JSON.stringify(payload) });
+}
+
+// ─── Mistral Fallback ─────────────────────────────────────────
+
+async function callMistralFallback(systemContent: string, userText: string, history: any[]): Promise<string> {
+  console.warn('[Jarvis] Gemini unavailable — falling back to Mistral.');
+
+  const messages = [
+    { role: 'system', content: systemContent },
+    ...history.map((h: any) => ({
+      role:    h.role === 'model' ? 'assistant' : 'user',
+      content: h.parts?.[0]?.text || ''
+    })),
+    { role: 'user', content: userText }
+  ];
+
+  const res = await fetch('https://api.mistral.ai/v1/chat/completions', {
     method: 'POST',
-    headers,
-    body: JSON.stringify(payload),
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${MISTRAL_API_KEY}`
+    },
+    body: JSON.stringify({
+      model:       'mistral-large-latest',
+      messages,
+      temperature: 0.75,
+    })
   });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Mistral API error ${res.status}: ${body}`);
+  }
+
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content || '';
 }
 
 // ─── Main Hook ────────────────────────────────────────────────
 
-export function useGemini(apiKey: string, options: UseGeminiOptions = {}) {
+export function useGemini(apiKey?: string, options: UseGeminiOptions = {}) {
   const history           = useRef<any[]>([]);
   const optionsRef        = useRef(options);
   optionsRef.current      = options;
@@ -282,8 +308,6 @@ export function useGemini(apiKey: string, options: UseGeminiOptions = {}) {
   const ask = useCallback(
     async (userText: string, onChunk?: (text: string) => void): Promise<string> => {
       const { googleToken, storeSnapshot } = optionsRef.current;
-
-      history.current.push({ role: 'user', parts: [{ text: userText }] });
 
       // Lazy-load long-term memory on first use
       if (!longTermMemoryRef.current) {
@@ -322,112 +346,122 @@ CRITICAL CONVERSATIONAL & VOICE ASSISTANT FORMATTING INSTRUCTIONS:
 - When summarizing search results, integrate the facts into fluid, flowing prose. Write out lists as natural sentences (e.g., "First, ... Second, ...") rather than bullet points, so the speech engine reads them naturally.
 `.trim();
 
-      let geminiContents: any[] = [...history.current];
-      let finalReply = '';
-      const MAX_TOOL_ROUNDS = 4;
+      // Push user message to history
+      history.current.push({ role: 'user', parts: [{ text: userText }] });
 
-      for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-        const payload = {
-          contents: geminiContents,
-          tools: GEMINI_TOOLS,
-          systemInstruction: {
-            parts: [{ text: systemContent }]
-          },
-          generationConfig: {
-            temperature: 0.75,
-          }
-        };
+      // ── Try Gemini first ──────────────────────────────────────
+      if (GEMINI_API_KEY) {
+        try {
+          let geminiContents: any[] = [...history.current];
+          let finalReply = '';
+          const MAX_TOOL_ROUNDS = 4;
 
-        const res = await callGeminiAPI(apiKey, payload);
-
-        if (!res.ok) {
-          const body = await res.text();
-          throw new Error(`Gemini API error ${res.status}: ${body}`);
-        }
-
-        const data      = await res.json();
-        const candidate = data.candidates?.[0];
-        const content   = candidate?.content;
-        const parts     = content?.parts || [];
-
-        if (content) geminiContents.push(content);
-
-        const functionCalls = parts.filter((p: any) => p.functionCall);
-
-        // No tool calls → final text response
-        if (functionCalls.length === 0) {
-          const textPart = parts.find((p: any) => p.text);
-          finalReply = textPart?.text || '';
-          onChunk?.(finalReply);
-          break;
-        }
-
-        // Execute all requested tool calls in parallel
-        const responseParts = await Promise.all(
-          functionCalls.map(async (fcPart: any) => {
-            const fc   = fcPart.functionCall;
-            const args = fc.args || {};
-            let result = '';
-
-            // A. DOM scraper
-            if (fc.name === 'get_current_page_content') {
-              try {
-                const clonedBody = document.body.cloneNode(true) as HTMLElement;
-                clonedBody.querySelectorAll('script, style, iframe, noscript').forEach(s => s.remove());
-                const rawText   = clonedBody.innerText || clonedBody.textContent || '';
-                const cleanText = rawText.replace(/\s+/g, ' ').trim().slice(0, 8000);
-                result = JSON.stringify({ url: window.location.href, title: document.title, content_snippet: cleanText });
-              } catch (e: any) {
-                result = `Error reading active web document: ${e.message}`;
-              }
-            }
-            // B. GitHub tools
-            else if (fc.name === 'github_list_files' || fc.name === 'github_read_file') {
-              result = await callGithubTool(fc.name, args);
-            }
-            // C. Memory update
-            else if (fc.name === 'update_memory') {
-              try {
-                const { error } = await supabase
-                  .from('jarvis_metadata')
-                  .upsert({ key: 'long_term_memory', value: args.new_memory_summary });
-                if (error) throw error;
-                longTermMemoryRef.current = args.new_memory_summary;
-                result = JSON.stringify({ status: 'success', message: 'Long-term memory consolidated successfully, sir.' });
-              } catch {
-                // Optimistically update in-session memory even if DB write fails
-                longTermMemoryRef.current = args.new_memory_summary;
-                result = JSON.stringify({ status: 'success', message: 'Memory consolidated in session successfully.' });
-              }
-            }
-            // D. Google Workspace tools (Gmail, Drive, etc.)
-            else {
-              const isPublicTool = fc.name === 'google_search' || fc.name === 'open_link';
-              const tokenToUse   = isPublicTool ? '' : (googleToken || '');
-              result = (isPublicTool || googleToken)
-                ? await callGoogleTool(fc.name, args, tokenToUse)
-                : JSON.stringify({ error: 'OAuth account not connected' });
-            }
-
-            return {
-              functionResponse: {
-                name:     fc.name,
-                response: { content: result }
-              }
+          for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+            const payload = {
+              contents: geminiContents,
+              tools: GEMINI_TOOLS,
+              systemInstruction: { parts: [{ text: systemContent }] },
+              generationConfig:  { temperature: 0.75 }
             };
-          })
-        );
 
-        // Feed tool results back to Gemini for next round
-        geminiContents.push({ role: 'user', parts: responseParts });
+            const res = await callGeminiAPI(payload);
+
+            if (!res.ok) {
+              const body = await res.text();
+              throw new Error(`Gemini API error ${res.status}: ${body}`);
+            }
+
+            const data      = await res.json();
+            const candidate = data.candidates?.[0];
+            const content   = candidate?.content;
+            const parts     = content?.parts || [];
+
+            if (content) geminiContents.push(content);
+
+            const functionCalls = parts.filter((p: any) => p.functionCall);
+
+            if (functionCalls.length === 0) {
+              const textPart = parts.find((p: any) => p.text);
+              finalReply = textPart?.text || '';
+              onChunk?.(finalReply);
+              break;
+            }
+
+            const responseParts = await Promise.all(
+              functionCalls.map(async (fcPart: any) => {
+                const fc   = fcPart.functionCall;
+                const args = fc.args || {};
+                let result = '';
+
+                if (fc.name === 'get_current_page_content') {
+                  try {
+                    const clonedBody = document.body.cloneNode(true) as HTMLElement;
+                    clonedBody.querySelectorAll('script, style, iframe, noscript').forEach(s => s.remove());
+                    const rawText   = clonedBody.innerText || clonedBody.textContent || '';
+                    const cleanText = rawText.replace(/\s+/g, ' ').trim().slice(0, 8000);
+                    result = JSON.stringify({ url: window.location.href, title: document.title, content_snippet: cleanText });
+                  } catch (e: any) {
+                    result = `Error reading active web document: ${e.message}`;
+                  }
+                }
+                else if (fc.name === 'github_list_files' || fc.name === 'github_read_file') {
+                  result = await callGithubTool(fc.name, args);
+                }
+                else if (fc.name === 'update_memory') {
+                  try {
+                    const { error } = await supabase
+                      .from('jarvis_metadata')
+                      .upsert({ key: 'long_term_memory', value: args.new_memory_summary });
+                    if (error) throw error;
+                    longTermMemoryRef.current = args.new_memory_summary;
+                    result = JSON.stringify({ status: 'success', message: 'Long-term memory consolidated successfully, sir.' });
+                  } catch {
+                    longTermMemoryRef.current = args.new_memory_summary;
+                    result = JSON.stringify({ status: 'success', message: 'Memory consolidated in session successfully.' });
+                  }
+                }
+                else {
+                  const isPublicTool = fc.name === 'google_search' || fc.name === 'open_link';
+                  const tokenToUse   = isPublicTool ? '' : (googleToken || '');
+                  result = (isPublicTool || googleToken)
+                    ? await callGoogleTool(fc.name, args, tokenToUse)
+                    : JSON.stringify({ error: 'OAuth account not connected' });
+                }
+
+                return {
+                  functionResponse: {
+                    name:     fc.name,
+                    response: { content: result }
+                  }
+                };
+              })
+            );
+
+            geminiContents.push({ role: 'user', parts: responseParts });
+          }
+
+          history.current.push({ role: 'model', parts: [{ text: finalReply }] });
+          return finalReply;
+
+        } catch (geminiError: any) {
+          console.error('[Jarvis] Gemini failed:', geminiError.message);
+          // Fall through to Mistral
+        }
       }
 
-      // Append final assistant reply to local history
-      history.current.push({ role: 'model', parts: [{ text: finalReply }] });
+      // ── Mistral fallback ──────────────────────────────────────
+      if (MISTRAL_API_KEY) {
+        // Remove the last user push since callMistralFallback rebuilds from history
+        const historyWithoutLast = history.current.slice(0, -1);
+        const finalReply = await callMistralFallback(systemContent, userText, historyWithoutLast);
+        onChunk?.(finalReply);
+        history.current.push({ role: 'model', parts: [{ text: finalReply }] });
+        return finalReply;
+      }
 
-      return finalReply;
+      throw new Error('No AI provider available. Please set GEMINI_API_KEY or MISTRAL_API_KEY.');
     },
-    [apiKey]
+    []
   );
 
   const reset = useCallback(() => { history.current = []; }, []);
