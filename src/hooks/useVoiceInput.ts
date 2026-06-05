@@ -73,7 +73,7 @@ export function useVoiceInput({
     }
   }, [onLevelChange]);
 
-  // Instantiates a brand new session safely when restarted. Reusing stopped objects is banned on mobile WebKit.
+  // Always instantiate a FRESH SpeechRecognition object. Reusing stopped objects is banned on mobile WebKit.
   const startRecognition = useCallback(() => {
     if (!enabledRef.current || recognitionRef.current) return;
 
