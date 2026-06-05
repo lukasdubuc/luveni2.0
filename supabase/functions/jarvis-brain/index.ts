@@ -21,74 +21,65 @@ Always be executive-level, sharp, and concise. Refer to Luke as 'sir'.
 `.trim();
 
 /**
- * Resilient web search query executor.
- * Mimics desktop browser headers to prevent Cloudflare/bot challenges.
+ * Robust web search resolver using Google RSS and DuckDuckGo Instant Answer APIs.
+ * This avoids scraping blocks because it targets public feeds and official APIs.
  */
 async function executeWebSearch(query: string): Promise<string> {
+  const results: string[] = [];
+
+  // Source 1: Google RSS Search (Extremely reliable, real-time news and web indexing, never blocks)
   try {
-    const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-    const response = await fetch(searchUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Cache-Control": "max-age=0",
-        "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-        "Sec-Ch-Ua-Mobile": "?0",
-        "Sec-Ch-Ua-Platform": '"Windows"',
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "none",
-        "Sec-Fetch-User": "?1",
-        "Upgrade-Insecure-Requests": "1"
-      }
+    const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
+    const response = await fetch(rssUrl, {
+      headers: { "User-Agent": "Mozilla/5.0 J.A.R.V.I.S. Bot" }
     });
 
-    if (!response.ok) {
-      return `Error: Web search failed with status ${response.status}`;
+    if (response.ok) {
+      const xml = await response.text();
+      // Match <item> blocks containing <title> and <link>
+      const itemRegex = /<item>[\s\S]*?<title>([\s\S]*?)<\/title>[\s\S]*?<link>([\s\S]*?)<\/link>[\s\S]*?<\/item>/g;
+      let match;
+      let count = 0;
+
+      while ((match = itemRegex.exec(xml)) !== null && count < 3) {
+        const title = match[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").trim();
+        const link = match[2].trim();
+        results.push(`[Google RSS Result #${count + 1}]\nTitle: ${title}\nURL: ${link}`);
+        count++;
+      }
     }
+  } catch (e) {
+    console.error("Google RSS retrieval failed:", e);
+  }
 
-    const html = await response.text();
-    const results: { title: string; link: string; snippet: string }[] = [];
-
-    const blockRegex = /<div class="[^"]*result__body[^"]*">([\s\S]*?)<\/div>\s*<\/div>/g;
-    let match;
-
-    while ((match = blockRegex.exec(html)) !== null && results.length < 4) {
-      const block = match[1];
-      const titleLinkMatch = block.match(/href="([^"]+)"[^>]*class="[^"]*result__a[^"]*"[^>]*>([\s\S]*?)<\/a>/);
-      const snippetMatch = block.match(/class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/);
-      
-      if (titleLinkMatch) {
-        let rawUrl = titleLinkMatch[1];
-        
-        if (rawUrl.includes("uddg=")) {
-          const urlParam = rawUrl.split("uddg=")[1];
-          if (urlParam) {
-            rawUrl = decodeURIComponent(urlParam.split("&")[0]);
-          }
+  // Source 2: DuckDuckGo Instant Answer API (Fallback for quick answers and definitions)
+  try {
+    if (results.length < 2) {
+      const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
+      const response = await fetch(ddgUrl);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.AbstractText) {
+          results.push(`[DDG Instant Answer]\nAnswer: ${data.AbstractText}\nSource: ${data.AbstractURL || 'DuckDuckGo'}`);
         }
-        
-        const title = titleLinkMatch[2].replace(/<[^>]*>/g, "").trim();
-        const snippet = snippetMatch ? snippetMatch[1].replace(/<[^>]*>/g, "").trim() : "";
-        
-        if (title && rawUrl) {
-          results.push({ title, link: rawUrl, snippet });
+        if (data.RelatedTopics && data.RelatedTopics.length > 0) {
+          data.RelatedTopics.slice(0, 2).forEach((topic: any, idx: number) => {
+            if (topic.Text && topic.FirstURL) {
+              results.push(`[DDG Related Fact #${idx + 1}]\nFact: ${topic.Text}\nURL: ${topic.FirstURL}`);
+            }
+          });
         }
       }
     }
-
-    if (results.length === 0) {
-      return "No web search results were found for this query.";
-    }
-
-    return results.map((r, i) => 
-      `[Web Result #${i + 1}]\nTitle: ${r.title}\nURL: ${r.link}\nExtract: ${r.snippet}`
-    ).join("\n\n---\n\n");
-
-  } catch (error: any) {
-    return `Error executing web search: ${error.message}`;
+  } catch (e) {
+    console.error("DuckDuckGo API retrieval failed:", e);
   }
+
+  if (results.length === 0) {
+    return "Error: Web search was unable to retrieve live data. Please inform the user that live retrieval is temporarily offline, sir.";
+  }
+
+  return results.join("\n\n---\n\n");
 }
 
 serve(async (req: Request) => {
