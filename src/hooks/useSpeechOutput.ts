@@ -28,9 +28,10 @@ const isMobile = typeof window !== 'undefined' &&
 const globalActiveUtterances: SpeechSynthesisUtterance[] = [];
 
 // Resolves key from Lovable's database/secrets injection or standard environment configurations safely
+// Resolves key from Lovable's database/secrets injection or standard environment configurations safely
 const GOOGLE_API_KEY = 
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GOOGLE_API_KEY) || 
-  (typeof process !== 'undefined' && process.env?.VITE_GOOGLE_API_KEY) || 
+  (typeof import.meta !== 'undefined' && (import.meta.env?.GOOGLE_API_KEY || import.meta.env?.VITE_GOOGLE_API_KEY)) || 
+  (typeof process !== 'undefined' && (process.env?.GOOGLE_API_KEY || process.env?.VITE_GOOGLE_API_KEY)) || 
   '';
 
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
