@@ -156,16 +156,39 @@ async function callGoogleTool(
     const { data: sessionData } = await supabase.auth.getSession();
     const supabaseToken = sessionData.session?.access_token;
 
+    // Safely extract the public anon key from the Supabase client
+    const anonKey = (supabase as any).supabaseKey || "";
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (anonKey) {
+      headers["apikey"] = anonKey;
+    }
+    if (supabaseToken) {
+      headers["Authorization"] = `Bearer ${supabaseToken}`;
+    }
+
     const { data, error } = await supabase.functions.invoke('jarvis-google', {
       body: { tool: toolName, args: toolArgs, googleToken },
-      headers: supabaseToken
-        ? { Authorization: `Bearer ${supabaseToken}` }
-        : {},
+      headers,
     });
 
     if (error) throw error;
-    return JSON.stringify(data);
+
+    // Extract the raw text results so Mistral receives pure search data instead of a JSON block
+    if (data && typeof data === 'object') {
+      if ('results' in data) {
+        return data.results;
+      }
+      return JSON.stringify(data);
+    }
+    
+    return String(data);
+
   } catch (e: any) {
+    console.error("[useGemini] Web Search Tool Invocation Error:", e);
     return JSON.stringify({ error: e.message || 'Tool call failed' });
   }
 }
@@ -264,6 +287,7 @@ ${liveContext}
       const MAX_TOOL_ROUNDS = 4;
 
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+        // Enforce the inclusion of both public tools (google_search, open_link)
         const activeTools = googleToken ? TOOLS : [TOOLS[0], TOOLS[1], TOOLS[2]];
 
         const payload = {
@@ -385,7 +409,6 @@ ${liveContext}
               };
             }
 
-            // Google search & Open link tools are public and decoupled from googleToken requirements
             const isPublicTool = tc.function.name === 'google_search' || tc.function.name === 'open_link';
             const tokenToUse = isPublicTool ? '' : (googleToken || '');
             const result = (isPublicTool || googleToken)
