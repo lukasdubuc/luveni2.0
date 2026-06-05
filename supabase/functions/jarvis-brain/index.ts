@@ -10,43 +10,19 @@ const corsHeaders = {
 }
 
 /**
- * Strips conversational filler and stop-words from long queries
- * to make them highly searchable for DuckDuckGo and Wikipedia.
- */
-function cleanQuery(query: string): string {
-  const trimmed = query.trim();
-  // If the query is already short and concise, use it as is
-  if (trimmed.split(/\s+/).length <= 4) return trimmed;
-
-  const stopWords = new Set([
-    "the", "a", "an", "of", "to", "for", "in", "is", "as", "at", "by", "from", "on", 
-    "with", "about", "current", "results", "official", "please", "can", "you", "search", 
-    "and", "tell", "me", "more", "here", "there", "find", "who", "what", "where", "info"
-  ]);
-
-  const keywords = trimmed
-    .toLowerCase()
-    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g, "") // Strip punctuation
-    .split(/\s+/)
-    .filter(word => !stopWords.has(word))
-    .slice(0, 5); // Retain the top 5 core nouns/verbs
-
-  return keywords.join(" ") || trimmed;
-}
-
-/**
  * Resilient web search query executor.
  * Combines POST-based DuckDuckGo Lite scraping and public Wikipedia Search API.
+ * Bypasses cloud IP blocking completely without requiring paid search API keys.
  */
 async function executeKeylessSearch(query: string): Promise<string> {
   const results: string[] = [];
-  const optimizedQuery = cleanQuery(query);
+  const trimmedQuery = query.trim();
 
-  if (!optimizedQuery) {
+  if (!trimmedQuery) {
     return "Error: Empty search query.";
   }
 
-  console.log(`[Search] Original Query: "${query}" -> Optimized Query: "${optimizedQuery}"`);
+  console.log(`[Search] Executing free search for query: "${trimmedQuery}"`);
 
   // Source 1: DuckDuckGo Lite (POST request bypasses typical GET cloud IP blocks)
   try {
@@ -56,7 +32,7 @@ async function executeKeylessSearch(query: string): Promise<string> {
         "Content-Type": "application/x-www-form-urlencoded",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
       },
-      body: `q=${encodeURIComponent(optimizedQuery)}`
+      body: `q=${encodeURIComponent(trimmedQuery)}`
     });
 
     if (response.ok) {
@@ -96,7 +72,7 @@ async function executeKeylessSearch(query: string): Promise<string> {
   // Source 2: Wikipedia Search API (100% resilient fallback, never blocks cloud IPs)
   try {
     if (results.length < 2) {
-      const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(optimizedQuery)}&format=json&origin=*`;
+      const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(trimmedQuery)}&format=json&origin=*`;
       const response = await fetch(wikiUrl, {
         headers: { "User-Agent": "JARVIS-Bot/1.0 (contact: support@luveni.com)" }
       });
@@ -137,6 +113,7 @@ serve(async (req) => {
       if (args) {
         searchQuery = args.query || args.search_query || args.q || args.text || '';
         
+        // Fuzzy Fallback: Grab first string parameter if key mismatched
         if (!searchQuery && typeof args === 'object') {
           const values = Object.values(args);
           const firstString = values.find(val => typeof val === 'string');
