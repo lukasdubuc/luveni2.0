@@ -5,7 +5,6 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 
-// Using Mistral Large for advanced reasoning
 const MISTRAL_MODEL = 'mistral-large-latest'; 
 const MISTRAL_ENDPOINT = 'https://api.mistral.ai/v1/chat/completions';
 
@@ -16,14 +15,14 @@ const CORS_HEADERS = {
 };
 
 const SYSTEM_PROMPT = `
-You are Jarvis — the autonomous General Manager of Luveni.
+You are J.A.R.V.I.S. — the autonomous General Manager of Luveni.
 You have access to tools. If a user asks for real-time information, weather, or research, use 'web_search'.
 Always be executive-level, sharp, and concise. Refer to Luke as 'sir'.
 `.trim();
 
 /**
- * Ultra-fast web search resolver using Deno fetch and optimized regex.
- * Zero external libraries or key dependencies.
+ * Resilient web search query executor.
+ * Mimics desktop browser headers to prevent Cloudflare/bot challenges.
  */
 async function executeWebSearch(query: string): Promise<string> {
   try {
@@ -31,7 +30,17 @@ async function executeWebSearch(query: string): Promise<string> {
     const response = await fetch(searchUrl, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept-Language": "en-US,en;q=0.9"
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cache-Control": "max-age=0",
+        "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Windows"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1"
       }
     });
 
@@ -42,7 +51,6 @@ async function executeWebSearch(query: string): Promise<string> {
     const html = await response.text();
     const results: { title: string; link: string; snippet: string }[] = [];
 
-    // Isolate search result blocks
     const blockRegex = /<div class="[^"]*result__body[^"]*">([\s\S]*?)<\/div>\s*<\/div>/g;
     let match;
 
@@ -54,7 +62,6 @@ async function executeWebSearch(query: string): Promise<string> {
       if (titleLinkMatch) {
         let rawUrl = titleLinkMatch[1];
         
-        // Clean redirect wrappers
         if (rawUrl.includes("uddg=")) {
           const urlParam = rawUrl.split("uddg=")[1];
           if (urlParam) {
@@ -62,7 +69,6 @@ async function executeWebSearch(query: string): Promise<string> {
           }
         }
         
-        // Strip residual HTML highlights (like <b> tags)
         const title = titleLinkMatch[2].replace(/<[^>]*>/g, "").trim();
         const snippet = snippetMatch ? snippetMatch[1].replace(/<[^>]*>/g, "").trim() : "";
         
@@ -118,7 +124,6 @@ serve(async (req: Request) => {
     temperature: 0.7,
   };
 
-  // Round 1: Send input to Mistral to see if it triggers the search tool
   const mistralRes = await fetch(MISTRAL_ENDPOINT, {
     method: 'POST',
     headers: { 
@@ -131,7 +136,6 @@ serve(async (req: Request) => {
   const data = await mistralRes.json();
   const message = data.choices?.[0]?.message;
 
-  // If Mistral requests a web search, handle it transparently on the server
   if (message?.tool_calls && message.tool_calls.length > 0) {
     const toolCall = message.tool_calls[0];
     const call = toolCall.function;
@@ -145,10 +149,8 @@ serve(async (req: Request) => {
         searchQuery = call.arguments?.query || '';
       }
 
-      // Execute live web search
       const searchResults = await executeWebSearch(searchQuery);
 
-      // Append tool execution state directly to messages thread
       const updatedMessages = [
         { role: 'system', content: SYSTEM_PROMPT },
         ...body.history ?? body.contents ?? [],
@@ -165,7 +167,6 @@ serve(async (req: Request) => {
         }
       ];
 
-      // Round 2: Feed the search results back to Mistral to synthesize the final answer
       const finalRes = await fetch(MISTRAL_ENDPOINT, {
         method: 'POST',
         headers: { 
@@ -175,7 +176,7 @@ serve(async (req: Request) => {
         body: JSON.stringify({
           model: MISTRAL_MODEL,
           messages: updatedMessages,
-          tool_choice: 'none', // Force a direct text response on this final pass
+          tool_choice: 'none', 
           temperature: 0.7,
         }),
       });
@@ -188,7 +189,6 @@ serve(async (req: Request) => {
     }
   }
 
-  // If no tools were called, return standard text response to the client
   return new Response(JSON.stringify(data), {
     status: mistralRes.status,
     headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
