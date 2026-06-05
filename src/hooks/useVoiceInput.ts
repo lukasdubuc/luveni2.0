@@ -26,7 +26,6 @@ export function useVoiceInput({
   preventListening 
 }: UseVoiceInputOptions) {
   const recognitionRef = useRef<any>(null);
-  const restartTimeoutRef = useRef<NodeJS.Timeout>();
 
   const isSpeakingRef = useRef(isSpeaking);
   const preventListeningRef = useRef(preventListening);
@@ -73,11 +72,20 @@ export function useVoiceInput({
     }
   }, [onLevelChange]);
 
-  const startRecognition = useCallback(() => {
-    if (isSpeakingRef.current || preventListeningRef.current || recognitionRef.current) return;
+  useEffect(() => {
+    if (!enabled) {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (e) {}
+        recognitionRef.current = null;
+      }
+      return;
+    }
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) return;
+
+    // Maintain a single persistent SpeechRecognition instance
+    if (recognitionRef.current) return;
 
     const rec = new SpeechRecognition();
     rec.continuous = true;
@@ -87,6 +95,7 @@ export function useVoiceInput({
     rec.onstart = () => onStateChange('listening');
 
     rec.onresult = (event: any) => {
+      // SOFTWARE FIREWALL: Simply drop the incoming audio on the floor if Jarvis is speaking/thinking
       if (isSpeakingRef.current || preventListeningRef.current) return;
 
       for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -104,37 +113,37 @@ export function useVoiceInput({
       recognitionRef.current = null;
       onStateChange('idle');
       
-      if (enabledRef.current && !isSpeakingRef.current && !preventListeningRef.current) {
-        restartTimeoutRef.current = setTimeout(startRecognition, 800);
+      // If the browser naturally ends the loop, restart it safely
+      if (enabledRef.current) {
+        setTimeout(() => {
+          if (enabledRef.current && !recognitionRef.current) {
+            initAudio().then(() => {
+              try {
+                rec.start();
+                recognitionRef.current = rec;
+              } catch (e) {}
+            });
+          }
+        }, 300);
       }
     };
 
-    try { 
-      rec.start(); 
-      recognitionRef.current = rec; 
-    } catch (e) { 
-      recognitionRef.current = null;
-    }
-  }, [onTranscript, onStateChange]);
-
-  useEffect(() => {
-    if (isSpeaking) {
-      clearTimeout(restartTimeoutRef.current);
-      if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch (e) {}
+    initAudio().then(() => {
+      try { 
+        rec.start(); 
+        recognitionRef.current = rec; 
+      } catch (e) { 
         recognitionRef.current = null;
       }
-    } else if (enabled && !preventListening && !recognitionRef.current) {
-      clearTimeout(restartTimeoutRef.current);
-      restartTimeoutRef.current = setTimeout(() => {
-        if (!isSpeakingRef.current) {
-          initAudio().then(() => startRecognition());
-        }
-      }, 1200); 
-    }
+    });
 
-    return () => clearTimeout(restartTimeoutRef.current);
-  }, [enabled, isSpeaking, preventListening, startRecognition, initAudio]);
+    return () => {
+      try {
+        rec.stop();
+      } catch (e) {}
+    };
+    // Removed isSpeaking and preventListening dependencies to maintain a continuous connection
+  }, [enabled, onTranscript, onStateChange, initAudio]);
 
   return null;
 }
