@@ -108,6 +108,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
       const utt = new SpeechSynthesisUtterance(rawSentence);
       
+      // Standardize pitch and rate to 1.0 on mobile Safari to avoid iOS engine crashes
       utt.rate = isIOS ? 1.0 : 0.93;
       utt.pitch = isIOS ? 1.0 : 0.78;
       
@@ -135,6 +136,13 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   }, [cancel]);
 
   const speak = useCallback((text: string) => {
+    // iOS Safari Fix: Instantly trigger synchronous speak with standard defaults.
+    // This bypasses async loadVoices().then() blocks which Safari prevents on mobile.
+    if (isIOS) {
+      doSpeak(text, null);
+      return;
+    }
+
     if (voiceCache !== undefined) {
       doSpeak(text, voiceCache);
     } else {
