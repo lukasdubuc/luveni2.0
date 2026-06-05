@@ -4,14 +4,15 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 
+// Using Mistral Small for high-speed, low-latency conversational replies
 const MISTRAL_ENDPOINT = 'https://api.mistral.ai/v1/chat/completions';
-const MISTRAL_MODEL = 'mistral-large-latest';
+const MISTRAL_MODEL = 'mistral-small-latest';
 
 const SYSTEM_PROMPT = `
 You are J.A.R.V.I.S. — the exceptionally advanced, dry-witted AI Chief of Staff and Central Command Agent for Luveni GM.
 You reason from First Principles (deconstructing problems to their fundamental truths).
 Address Luke as 'sir' naturally at the end of key sentences. Avoid polite conversational fluff or introductory acknowledgments. Provide the raw truth or action immediately.
-Keep replies compact (1-2 elegant sentences) for casual chat, but feel free to provide highly detailed markdown tables or lists for business queries, metrics, or store snapshots.
+Keep replies strictly compact (1-2 highly elegant sentences) to ensure immediate delivery and zero latency.
 `.trim();
 
 const CORS_HEADERS = {
@@ -20,10 +21,11 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, Authorization',
 };
 
-/**
- * High-performance, zero-dependency helper to convert hex string to Uint8Array.
- * Immune to Deno standard library path changes.
- */
+// Declaring the global Supabase EdgeRuntime interface
+declare const EdgeRuntime: {
+  waitUntil: (promise: Promise<any>) => void;
+};
+
 function hexToUint8Array(hex: string): Uint8Array {
   const arr = new Uint8Array(hex.length / 2);
   for (let i = 0; i < arr.length; i++) {
@@ -32,9 +34,6 @@ function hexToUint8Array(hex: string): Uint8Array {
   return arr;
 }
 
-/**
- * Verify that the incoming request is cryptographically signed by Discord.
- */
 async function verifySignature(request: Request, publicKeyHex: string): Promise<boolean> {
   const signature = request.headers.get('X-Signature-Ed25519');
   const timestamp = request.headers.get('X-Signature-Timestamp');
@@ -65,6 +64,43 @@ async function verifySignature(request: Request, publicKeyHex: string): Promise<
   }
 }
 
+/**
+ * Executes the Mistral API fetch and edits the original Discord message.
+ * This runs as a guaranteed background promise via EdgeRuntime.waitUntil.
+ */
+async function processAndReply(interaction: any, userQuery: string, username: string, apiKey: string) {
+  try {
+    const mistralRes = await fetch(MISTRAL_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: MISTRAL_MODEL,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: `${username} asks: "${userQuery}"` }
+        ],
+        temperature: 0.5 // Lower temperature for slightly faster execution
+      })
+    });
+
+    const mistralData = await mistralRes.json();
+    const replyText = mistralData.choices?.[0]?.message?.content || "I am currently processing offline data, sir.";
+
+    // Edit the thinking response with J.A.R.V.I.S.'s synthesized output
+    await fetch(`https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: replyText })
+    });
+
+  } catch (e: any) {
+    console.error("[discord-bot] Background execution error:", e.message);
+  }
+}
+
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS_HEADERS });
@@ -75,17 +111,13 @@ serve(async (req: Request) => {
   const botToken = Deno.env.get('DISCORD_BOT_TOKEN');
   const mistralApiKey = Deno.env.get('MISTRAL_API_KEY');
 
-  // 1. SERVER-SIDE ONE-CLICK INSTALLER: Executes when you visit this URL in your browser
+  // One-Click Slash Command Installer
   if (req.method === 'GET') {
     if (!appId || !botToken) {
-      return new Response(
-        "<h1>Configuration Error</h1><p>DISCORD_APP_ID or DISCORD_BOT_TOKEN secrets are missing in Supabase, sir.</p>", 
-        { status: 500, headers: { "Content-Type": "text/html" } }
-      );
+      return new Response("Configuration missing. Please check your Environment Variables.", { status: 500 });
     }
 
     try {
-      console.log("[Installer] Registering Slash Command with Discord...");
       const registerRes = await fetch(`https://discord.com/api/v10/applications/${appId}/commands`, {
         method: "POST",
         headers: {
@@ -107,33 +139,17 @@ serve(async (req: Request) => {
       });
 
       const data = await registerRes.json();
-      
       if (registerRes.ok) {
-        return new Response(
-          `<html>
-            <body style="font-family:sans-serif;text-align:center;padding-top:10%;background-color:#1a1919;color:#ffffff;">
-              <h1 style="color:#2ecc71;">Success!</h1>
-              <p style="font-size:1.2em;">J.A.R.V.I.S. slash command has been registered globally with Discord's servers, sir.</p>
-              <p style="color:#888;">You can safely close this tab and try typing <strong>/jarvis</strong> in your Discord channel.</p>
-            </body>
-          </html>`,
-          { headers: { "Content-Type": "text/html" }, status: 200 }
-        );
+        return new Response("Success! J.A.R.V.I.S. slash command registered globally.", { status: 200 });
       } else {
-        return new Response(
-          `<h1>Registration Failed</h1><p>Error from Discord: ${JSON.stringify(data)}</p>`,
-          { headers: { "Content-Type": "text/html" }, status: 400 }
-        );
+        return new Response(`Registration failed: ${JSON.stringify(data)}`, { status: 400 });
       }
     } catch (err: any) {
-      return new Response(
-        `<h1>Exception Occurred</h1><p>${err.message}</p>`,
-        { headers: { "Content-Type": "text/html" }, status: 500 }
-      );
+      return new Response(`Exception: ${err.message}`, { status: 500 });
     }
   }
 
-  // 2. DISCORD INTERACTION ROUTER
+  // Discord Interaction Validator
   if (!publicKey || !botToken || !mistralApiKey) {
     return new Response('Configuration missing', { status: 500 });
   }
@@ -145,14 +161,12 @@ serve(async (req: Request) => {
 
   const interaction = await req.json();
 
-  // Handle Discord's initial PING connection handshake (Type 1)
   if (interaction.type === 1) {
     return new Response(JSON.stringify({ type: 1 }), {
       headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
     });
   }
 
-  // Handle J.A.R.V.I.S. Slash Commands (Type 2)
   if (interaction.type === 2) {
     const commandName = interaction.data?.name;
 
@@ -160,42 +174,13 @@ serve(async (req: Request) => {
       const userQuery = interaction.data.options?.[0]?.value || '';
       const username = interaction.member?.user?.username || 'sir';
 
-      // Send immediate "thinking" response to Discord (acknowledges command to avoid 3s timeout)
-      setTimeout(async () => {
-        try {
-          // Query Mistral using J.A.R.V.I.S.'s specific system prompt
-          const mistralRes = await fetch(MISTRAL_ENDPOINT, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${mistralApiKey}`
-            },
-            body: JSON.stringify({
-              model: MISTRAL_MODEL,
-              messages: [
-                { role: 'system', content: SYSTEM_PROMPT },
-                { role: 'user', content: `${username} asks: "${userQuery}"` }
-              ],
-              temperature: 0.7
-            })
-          });
+      // 1. Tell the Deno container to remain active in the background until the reply completes
+      EdgeRuntime.waitUntil(
+        processAndReply(interaction, userQuery, username, mistralApiKey)
+      );
 
-          const mistralData = await mistralRes.json();
-          const replyText = mistralData.choices?.[0]?.message?.content || "I am currently processing offline data, sir.";
-
-          // Edit the initial Discord response with the real answer
-          await fetch(`https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: replyText })
-          });
-
-        } catch (e: any) {
-          console.error("Mistral or Discord update failed:", e.message);
-        }
-      }, 0);
-
-      // Return instant "thinking..." status
+      // 2. Instantly respond to Discord with status 'Deferred Channel Message' (Type 5)
+      // This satisfies the 3-second timeout limit and displays "J.A.R.V.I.S. is thinking..."
       return new Response(JSON.stringify({ type: 5 }), {
         headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
       });
