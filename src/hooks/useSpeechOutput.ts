@@ -108,7 +108,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
       const utt = new SpeechSynthesisUtterance(rawSentence);
       
-      // Standardize pitch/rate to 1.0 on mobile Safari to avoid engine crashes
       utt.rate = isIOS ? 1.0 : 0.93;
       utt.pitch = isIOS ? 1.0 : 0.78;
       
