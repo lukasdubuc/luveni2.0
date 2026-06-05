@@ -8,7 +8,6 @@ import type { JarvisMessage } from '../types/jarvis';
 import { MISTRAL_ENDPOINT, JARVIS_SYSTEM_PROMPT } from '../lib/jarvis-config';
 import { supabase } from '@/integrations/supabase/client';
 
-// ── Tool definitions Mistral can call ───────────────────────
 const TOOLS = [
   {
     type: 'function',
@@ -99,7 +98,6 @@ const TOOLS = [
   },
 ];
 
-// ── Types ────────────────────────────────────────────────────
 interface StoreSnapshot {
   revenue_today_cents: number;
   revenue_week_cents: number;
@@ -120,7 +118,6 @@ interface UseGeminiOptions {
   storeSnapshot?: StoreSnapshot | null;
 }
 
-// ── Edge function caller ─────────────────────────────────────
 async function callGoogleTool(
   toolName: string,
   toolArgs: Record<string, any>,
@@ -144,7 +141,6 @@ async function callGoogleTool(
   }
 }
 
-// ── Build live context block injected into system prompt ─────
 function buildLiveContext(snapshot: StoreSnapshot | null | undefined): string {
   if (!snapshot) return '';
 
@@ -177,7 +173,6 @@ function buildLiveContext(snapshot: StoreSnapshot | null | undefined): string {
   return lines.join('\n');
 }
 
-// ── Main hook ────────────────────────────────────────────────
 export function useGemini(apiKey: string, options: UseGeminiOptions = {}) {
   const history = useRef<JarvisMessage[]>([]);
   const optionsRef = useRef(options);
@@ -193,13 +188,22 @@ export function useGemini(apiKey: string, options: UseGeminiOptions = {}) {
         timestamp: Date.now(),
       });
 
-      // Build system prompt with injected live data
-      const liveContext = buildLiveContext(storeSnapshot);
-      const systemContent = liveContext
-        ? `${JARVIS_SYSTEM_PROMPT}\n\n${liveContext}`
-        : JARVIS_SYSTEM_PROMPT;
+      // Inject real-time temporal parameters dynamically
+      const now = new Date();
+      const currentDateStr = now.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      const currentTimeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
-      // Agentic loop — Mistral may call tools multiple times before final answer
+      const liveContext = buildLiveContext(storeSnapshot);
+      const systemContent = `
+${JARVIS_SYSTEM_PROMPT}
+
+CURRENT TEMPORAL DATA:
+- Date: ${currentDateStr}
+- Time: ${currentTimeStr}
+
+${liveContext}
+`.trim();
+
       let loopMessages: { role: string; content: string; tool_calls?: any[]; tool_call_id?: string; name?: string }[] = [
         { role: 'system', content: systemContent },
         ...history.current.map((h) => ({
@@ -212,12 +216,15 @@ export function useGemini(apiKey: string, options: UseGeminiOptions = {}) {
       const MAX_TOOL_ROUNDS = 4;
 
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+        // google_search is index 0; always enable search, only add Gmail/Drive if googleToken exists
+        const activeTools = googleToken ? TOOLS : [TOOLS[0]];
+
         const payload = {
           model: 'mistral-small-latest',
           stream: true,
           messages: loopMessages,
-          tools: googleToken ? TOOLS : [],
-          tool_choice: googleToken ? 'auto' : 'none',
+          tools: activeTools,
+          tool_choice: 'auto',
           temperature: 0.75,
         };
 
@@ -235,7 +242,6 @@ export function useGemini(apiKey: string, options: UseGeminiOptions = {}) {
           throw new Error(`API error ${res.status}: ${body}`);
         }
 
-        // Stream the response, collecting both text and tool_calls
         const reader = res.body?.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
@@ -258,16 +264,13 @@ export function useGemini(apiKey: string, options: UseGeminiOptions = {}) {
                 const delta = parsed.choices?.[0]?.delta;
                 if (!delta) continue;
 
-                // Accumulate text content
                 if (delta.content) {
                   roundText += delta.content;
-                  // Only stream text to speech if no tool calls happening
                   if (toolCalls.length === 0) {
                     onChunk?.(delta.content);
                   }
                 }
 
-                // Accumulate tool calls (streamed in chunks)
                 if (delta.tool_calls) {
                   for (const tc of delta.tool_calls) {
                     const idx = tc.index ?? 0;
@@ -286,7 +289,6 @@ export function useGemini(apiKey: string, options: UseGeminiOptions = {}) {
             }
           }
 
-          // Flush buffer remainder
           if (buffer.trim().startsWith('data: ') && !buffer.includes('[DONE]')) {
             try {
               const parsed = JSON.parse(buffer.trim().slice(6));
@@ -299,29 +301,27 @@ export function useGemini(apiKey: string, options: UseGeminiOptions = {}) {
           }
         }
 
-        // No tool calls → this is the final answer
         if (toolCalls.length === 0) {
           finalReply = roundText;
           break;
         }
 
-        // Tool calls requested — execute them all, then loop back
-        // Add assistant message with tool_calls to history
         loopMessages.push({
           role: 'assistant',
           content: roundText,
           tool_calls: toolCalls,
         });
 
-        // Execute each tool call in parallel
         const toolResults = await Promise.all(
           toolCalls.map(async (tc) => {
             let args: Record<string, any> = {};
             try { args = JSON.parse(tc.function.arguments); } catch (_) {}
 
-            const result = googleToken
-              ? await callGoogleTool(tc.function.name, args, googleToken)
-              : JSON.stringify({ error: 'No Google account connected' });
+            // Decouple search so it executes empty token; only require token for GSuite
+            const tokenToUse = (tc.function.name === 'google_search') ? '' : (googleToken || '');
+            const result = (tc.function.name === 'google_search' || googleToken)
+              ? await callGoogleTool(tc.function.name, args, tokenToUse)
+              : JSON.stringify({ error: 'OAuth account not connected' });
 
             return {
               role: 'tool' as const,
@@ -332,10 +332,8 @@ export function useGemini(apiKey: string, options: UseGeminiOptions = {}) {
           })
         );
 
-        // Add all tool results to message history
         loopMessages.push(...toolResults);
 
-        // If this was the last allowed round, force a final answer
         if (round === MAX_TOOL_ROUNDS - 1) {
           const finalRes = await fetch(MISTRAL_ENDPOINT, {
             method: 'POST',
