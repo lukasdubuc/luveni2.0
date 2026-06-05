@@ -21,7 +21,6 @@ const BRITISH_VOICES = [
   'Microsoft Ryan',
 ];
 
-// Universal mobile check
 const isMobile = typeof window !== 'undefined' && 
   (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
@@ -89,7 +88,10 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     speaking.current = true;
     if (onStartRef.current) onStartRef.current();
 
-    const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+    // INTERCEPT SPELLING: Replace J.A.R.V.I.S. with Jarvis so the TTS engines pronounce it naturally
+    const phoneticallyCleanText = text.replace(/J\.A\.R\.V\.I\.S\.?/gi, "Jarvis");
+
+    const sentences = phoneticallyCleanText.match(/[^.!?]+[.!?]+/g) || [phoneticallyCleanText];
     let currentIndex = 0;
 
     const playNext = () => {
@@ -109,7 +111,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
       const utt = new SpeechSynthesisUtterance(rawSentence);
       
-      // Standardize values on mobile devices to prevent native engine crashes
       utt.rate = isMobile ? 1.0 : 0.93;
       utt.pitch = isMobile ? 1.0 : 0.78;
       
