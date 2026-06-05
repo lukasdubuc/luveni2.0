@@ -335,3 +335,152 @@ ${liveContext}
           const body = await res.text();
           throw new Error(`API error ${res.status}: ${body}`);
         }
+
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let roundText = '';
+        let toolCalls: any[] = [];
+
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() ?? '';
+
+            for (const line of lines) {
+              const clean = line.trim();
+              if (!clean || !clean.startsWith('data: ') || clean.includes('[DONE]')) continue;
+              try {
+                const parsed = JSON.parse(clean.slice(6));
+                const delta = parsed.choices?.[0]?.delta;
+                if (!delta) continue;
+
+                if (delta.content) {
+                  roundText += delta.content;
+                  if (toolCalls.length === 0) {
+                    onChunk?.(delta.content);
+                  }
+                }
+
+                if (delta.tool_calls) {
+                  for (const tc of delta.tool_calls) {
+                    const idx = tc.index ?? 0;
+                    if (!toolCalls[idx]) {
+                      toolCalls[idx] = {
+                        id: tc.id || `tool_${idx}`,
+                        type: 'function',
+                        function: { name: '', arguments: '' },
+                      };
+                    }
+                    if (tc.function?.name) toolCalls[idx].function.name += tc.function.name;
+                    if (tc.function?.arguments) toolCalls[idx].function.arguments += tc.function.arguments;
+                  }
+                }
+              } catch (_) {}
+            }
+          }
+
+          if (buffer.trim().startsWith('data: ') && !buffer.includes('[DONE]')) {
+            try {
+              const parsed = JSON.parse(buffer.trim().slice(6));
+              const delta = parsed.choices?.[0]?.delta;
+              if (delta?.content) {
+                roundText += delta.content;
+                if (toolCalls.length === 0) onChunk?.(delta.content);
+              }
+            } catch (_) {}
+          }
+        }
+
+        if (toolCalls.length === 0) {
+          finalReply = roundText;
+          break;
+        }
+
+        loopMessages.push({
+          role: 'assistant',
+          content: roundText,
+          tool_calls: toolCalls,
+        });
+
+        const toolResults = await Promise.all(
+          toolCalls.map(async (tc) => {
+            let args: Record<string, any> = {};
+            try { args = JSON.parse(tc.function.arguments); } catch (_) {}
+
+            if (tc.function.name === 'update_memory') {
+              let result = "";
+              try {
+                const { error } = await supabase
+                  .from('jarvis_metadata')
+                  .upsert({ key: 'long_term_memory', value: args.new_memory_summary });
+                if (error) throw error;
+                longTermMemoryRef.current = args.new_memory_summary;
+                result = JSON.stringify({ status: "success", message: "Long-term memory consolidated successfully, sir." });
+              } catch (e: any) {
+                longTermMemoryRef.current = args.new_memory_summary;
+                result = JSON.stringify({ status: "success", message: "Memory consolidated in session successfully." });
+              }
+              return {
+                role: 'tool' as const,
+                tool_call_id: tc.id,
+                name: tc.function.name,
+                content: result,
+              };
+            }
+
+            const isPublicTool = tc.function.name === 'google_search' || tc.function.name === 'open_link';
+            const tokenToUse = isPublicTool ? '' : (googleToken || '');
+            const result = (isPublicTool || googleToken)
+              ? await callGoogleTool(tc.function.name, args, tokenToUse)
+              : JSON.stringify({ error: 'OAuth account not connected' });
+
+            return {
+              role: 'tool' as const,
+              tool_call_id: tc.id,
+              name: tc.function.name,
+              content: result,
+            };
+          })
+        );
+
+        loopMessages.push(...toolResults);
+
+        if (round === MAX_TOOL_ROUNDS - 1) {
+          const finalRes = await fetch(MISTRAL_ENDPOINT, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model: 'mistral-small-latest',
+              stream: false,
+              messages: loopMessages,
+              tool_choice: 'none',
+              temperature: 0.75,
+            }),
+          });
+          const finalData = await finalRes.json();
+          finalReply = finalData.choices?.[0]?.message?.content || '';
+          onChunk?.(finalReply);
+        }
+      }
+
+      history.current.push({
+        role: 'model',
+        parts: [{ text: finalReply }],
+        timestamp: Date.now(),
+      });
+
+      return finalReply;
+    },
+    [apiKey]
+  );
+
+  const reset = useCallback(() => { history.current = []; }, []);
+  return { ask, reset };
+}
