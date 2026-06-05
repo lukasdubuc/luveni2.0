@@ -208,18 +208,27 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
     }
   };
 
+  // Central submission handler to avoid duplicate calls and race conditions
+  const submitCommand = (queryText: string) => {
+    const query = queryText.trim();
+    setIsTextInputActive(false);
+    setTextInputValue('');
+    if (query) {
+      handleTranscript(query);
+    }
+  };
+
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    submitCommand(textInputValue);
+  };
+
   // Keyboard navigation listener (Enter submits, Shift+Enter makes newline)
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      const query = textInputValue.trim();
-      if (!query) {
-        setIsTextInputActive(false);
-        return;
-      }
-      setIsTextInputActive(false);
-      setTextInputValue('');
-      handleTranscript(query);
+      e.currentTarget.blur(); // Dismisses mobile keyboard layout cleanly
+      submitCommand(textInputValue);
     } else if (e.key === 'Escape') {
       setIsTextInputActive(false);
     }
@@ -241,6 +250,9 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
     displayText = "Click to initialize J.A.R.V.I.S.";
   }
 
+  // Adjust orb radius to cleanly support compact mobile viewports without overflowing
+  const orbSize = isMobile ? 280 : 400;
+
   return (
     <div 
       style={styles.root} 
@@ -252,13 +264,19 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
         ...styles.orbShadow,
         background: `radial-gradient(circle 350px at 50% 50%, rgba(${shadowColor}, 0.12) 0%, transparent 100%)`,
       }} />
+      
+      {/* Dynamic space block at top of viewport layout */}
+      <div style={{ flex: '0 0 40px' }} />
+
+      {/* Center flex-grow wrapper for the visual core */}
       <div style={styles.orbWrap}>
-        <NeuralOrb state={orbState} audioLevel={0} size={400} />
+        <NeuralOrb state={orbState} audioLevel={0} size={orbSize} />
       </div>
       
+      {/* Standard document-flow container to naturally stack text/inputs below the orb */}
       <div style={styles.transcriptContainer}>
         {isTextInputActive ? (
-          <form style={{ width: '100%' }}>
+          <form style={{ width: '100%' }} onSubmit={handleFormSubmit}>
             <textarea
               ref={inputRef}
               value={textInputValue}
@@ -297,14 +315,54 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  root: { height: '100vh', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', boxSizing: 'border-box', position: 'relative', overflow: 'hidden' },
-  orbWrap: { cursor: 'pointer', display: 'flex', justifyContent: 'center', zIndex: 5 },
-  stateLabel: { marginTop: 'auto', marginBottom: '20px', fontSize: '12px', fontFamily: "'Inter', sans-serif", letterSpacing: '0.6rem', fontWeight: 300, textTransform: 'uppercase', zIndex: 10 },
+  root: { 
+    height: typeof window !== 'undefined' && window.CSS?.supports?.('height', '100dvh') ? '100dvh' : '100vh', 
+    width: '100%', 
+    display: 'flex', 
+    flexDirection: 'column', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    padding: '20px', 
+    boxSizing: 'border-box', 
+    position: 'relative', 
+    overflow: 'hidden' 
+  },
+  orbWrap: { 
+    cursor: 'pointer', 
+    display: 'flex', 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    flex: '1 1 auto', 
+    maxHeight: '50vh', // Keeps visual footprint bounded
+    zIndex: 5 
+  },
+  stateLabel: { 
+    marginTop: 'auto', 
+    marginBottom: '20px', 
+    fontSize: '12px', 
+    fontFamily: "'Inter', sans-serif", 
+    letterSpacing: '0.6rem', 
+    fontWeight: 300, 
+    textTransform: 'uppercase', 
+    zIndex: 10,
+    flexShrink: 0
+  },
   
-  transcriptContainer: { position: 'absolute', top: '78%', left: '50%', transform: 'translate(-50%, -50%)', width: '90%', maxWidth: '800px', textAlign: 'center', zIndex: 10 },
+  // Repositioned out of position: absolute to flow naturally and prevent obstruction
+  transcriptContainer: { 
+    width: '90%', 
+    maxWidth: '800px', 
+    textAlign: 'center', 
+    zIndex: 10, 
+    margin: '20px auto',
+    minHeight: '48px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
+  },
   transcript: { color: '#fff', fontSize: '1.4rem', fontFamily: "'Inter', sans-serif", lineHeight: 1.5, fontWeight: 300, cursor: 'pointer', opacity: 0.9 },
   
-  // Sleek, auto-growing multiline text styling
   textInput: {
     width: '100%',
     background: 'transparent',
