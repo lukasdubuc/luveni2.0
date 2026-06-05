@@ -1,16 +1,17 @@
 // ─────────────────────────────────────────────────────────────
 //  J.A.R.V.I.S — Luveni GM  |  hooks/useGemini.ts
 // ─────────────────────────────────────────────────────────────
-import { useRef, useCallback } from 'react'; 
+import { useRef, useCallback } from 'react';
 import type { JarvisMessage } from '../types/jarvis';
 import { JARVIS_SYSTEM_PROMPT } from '../lib/jarvis-config';
 import { supabase } from '@/integrations/supabase/client';
 
-// Gemini-compatible tool schemas (types are uppercase per Google AI Studio standards)
+// ─── Gemini Tool Schema ───────────────────────────────────────
+// Uses correct snake_case keys per Gemini REST API v1beta spec.
 const GEMINI_TOOLS = [
-  { googleSearch: {} }, // 1. TRUE NATIVE GOOGLE SEARCH GROUNDING (Free, no credentials needed!)
+  { google_search_retrieval: {} }, // Native Google Search Grounding (no credentials needed)
   {
-    functionDeclarations: [
+    function_declarations: [
       {
         name: 'get_current_page_content',
         description: 'See, read, and analyze the text contents, metadata, and URL of the active webpage the user is currently viewing on their screen.',
@@ -26,8 +27,8 @@ const GEMINI_TOOLS = [
           type: 'OBJECT',
           properties: {
             owner: { type: 'STRING', description: 'The GitHub owner or organization name (e.g. "open-jarvis")' },
-            repo: { type: 'STRING', description: 'The name of the repository (e.g. "OpenJarvis")' },
-            path: { type: 'STRING', description: 'Optional subfolder path inside the repository. Default is root ("")' }
+            repo:  { type: 'STRING', description: 'The name of the repository (e.g. "OpenJarvis")' },
+            path:  { type: 'STRING', description: 'Optional subfolder path inside the repository. Default is root ("")' }
           },
           required: ['owner', 'repo']
         }
@@ -38,9 +39,9 @@ const GEMINI_TOOLS = [
         parameters: {
           type: 'OBJECT',
           properties: {
-            owner: { type: 'STRING', description: 'The GitHub owner or organization name' },
-            repo: { type: 'STRING', description: 'The name of the repository' },
-            path: { type: 'STRING', description: 'The absolute file path inside the repository (e.g. "src/App.tsx")' },
+            owner:  { type: 'STRING', description: 'The GitHub owner or organization name' },
+            repo:   { type: 'STRING', description: 'The name of the repository' },
+            path:   { type: 'STRING', description: 'The absolute file path inside the repository (e.g. "src/App.tsx")' },
             branch: { type: 'STRING', description: 'The branch to read from (default is "main" or "master")' }
           },
           required: ['owner', 'repo', 'path']
@@ -66,7 +67,7 @@ const GEMINI_TOOLS = [
         parameters: {
           type: 'OBJECT',
           properties: {
-            query: { type: 'STRING', description: 'Gmail search query, e.g. "from:john@example.com" or "subject:invoice unread"' },
+            query:      { type: 'STRING', description: 'Gmail search query, e.g. "from:john@example.com" or "subject:invoice unread"' },
             maxResults: { type: 'NUMBER', description: 'Max emails to return (default 5)' }
           },
           required: ['query']
@@ -78,9 +79,9 @@ const GEMINI_TOOLS = [
         parameters: {
           type: 'OBJECT',
           properties: {
-            to: { type: 'STRING', description: 'Recipient email address' },
+            to:      { type: 'STRING', description: 'Recipient email address' },
             subject: { type: 'STRING', description: 'Email subject' },
-            body: { type: 'STRING', description: 'Plain text email body' }
+            body:    { type: 'STRING', description: 'Plain text email body' }
           },
           required: ['to', 'subject', 'body']
         }
@@ -111,45 +112,43 @@ const GEMINI_TOOLS = [
   }
 ];
 
+// ─── Types ────────────────────────────────────────────────────
+
 interface StoreSnapshot {
-  revenue_today_cents: number;
-  revenue_week_cents: number;
-  revenue_month_cents: number;
-  orders_total: number;
-  orders_paid: number;
-  orders_pending: number;
-  orders_failed: number;
-  leads_total: number;
-  products_published: number;
-  products_total: number;
+  revenue_today_cents:  number;
+  revenue_week_cents:   number;
+  revenue_month_cents:  number;
+  orders_total:         number;
+  orders_paid:          number;
+  orders_pending:       number;
+  orders_failed:        number;
+  leads_total:          number;
+  products_published:   number;
+  products_total:       number;
   recent_orders: { email: string; amount_cents: number; status: string; created_at: string }[];
-  top_products: { title: string; revenue: number; units: number }[];
+  top_products:  { title: string; revenue: number; units: number }[];
 }
 
 interface UseGeminiOptions {
-  googleToken?: string | null;
-  storeSnapshot?: StoreSnapshot | null;
+  googleToken?:    string | null;
+  storeSnapshot?:  StoreSnapshot | null;
 }
 
-/**
- * Handles standard Google/Gmail/Drive integrations if GoogleToken is present
- */
+// ─── Google Workspace Tool Handler ───────────────────────────
+
 async function callGoogleTool(
-  toolName: string,
-  toolArgs: Record<string, any>,
+  toolName:    string,
+  toolArgs:    Record<string, any>,
   googleToken: string
 ): Promise<string> {
   try {
     const { data: sessionData } = await supabase.auth.getSession();
     const supabaseToken = sessionData.session?.access_token;
-    const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "";
+    const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
 
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-
-    if (anonKey) headers["apikey"] = anonKey;
-    if (supabaseToken) headers["Authorization"] = `Bearer ${supabaseToken}`;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (anonKey)       headers['apikey']        = anonKey;
+    if (supabaseToken) headers['Authorization'] = `Bearer ${supabaseToken}`;
 
     const { data, error } = await supabase.functions.invoke('jarvis-google', {
       body: { tool: toolName, args: toolArgs, googleToken },
@@ -157,68 +156,64 @@ async function callGoogleTool(
     });
 
     if (!error && data) {
-      if (typeof data === 'object' && 'results' in data) {
-        return data.results;
-      }
-      return String(data);
+      return typeof data === 'object' && 'results' in data
+        ? data.results
+        : String(data);
     }
-    
+
     if (error) throw error;
   } catch (e: any) {
-    console.warn("[useGemini Google API Fallback Failed]:", e.message);
+    console.warn('[useGemini Google API Fallback Failed]:', e.message);
   }
-  return "Error: Unable to execute Google Workspace tools. Ensure credentials are valid.";
+  return 'Error: Unable to execute Google Workspace tools. Ensure credentials are valid.';
 }
 
-/**
- * Handles read-only GitHub API interactions securely on the client side
- */
+// ─── GitHub Tool Handler ──────────────────────────────────────
+// Uses robust UTF-8-safe base64 decoding via TextDecoder (no escape/unescape).
+
 async function callGithubTool(toolName: string, args: Record<string, any>): Promise<string> {
-  const githubToken = 
-    (typeof import.meta !== 'undefined' && (import.meta.env?.GITHUB_TOKEN || import.meta.env?.VITE_GITHUB_TOKEN)) || 
-    (typeof process !== 'undefined' && (process.env?.GITHUB_TOKEN || process.env?.VITE_GITHUB_TOKEN)) || 
+  const githubToken =
+    (typeof import.meta !== 'undefined' && (import.meta.env?.GITHUB_TOKEN || import.meta.env?.VITE_GITHUB_TOKEN)) ||
+    (typeof process    !== 'undefined' && (process.env?.GITHUB_TOKEN || process.env?.VITE_GITHUB_TOKEN)) ||
     '';
 
   const headers: Record<string, string> = {
-    "Accept": "application/vnd.github+json",
+    'Accept': 'application/vnd.github+json',
+    ...(githubToken && { 'Authorization': `Bearer ${githubToken}` }),
   };
-  
-  if (githubToken) {
-    headers["Authorization"] = `Bearer ${githubToken}`;
-  }
 
-  const { owner, repo, path = "", branch = "main" } = args;
+  const { owner, repo, path = '', branch = 'main' } = args;
 
   try {
+    const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
+    const response = await fetch(url, { headers });
+    if (!response.ok) throw new Error(`GitHub returned status ${response.status}`);
+    const data = await response.json();
+
     if (toolName === 'github_list_files') {
-      const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
-      const response = await fetch(url, { headers });
-      if (!response.ok) throw new Error(`GitHub returned status ${response.status}`);
-      const data = await response.json();
-      if (Array.isArray(data)) {
-        return data.map((item: any) => `[${item.type.toUpperCase()}] ${item.path}`).join('\n');
-      }
-      return JSON.stringify(data);
+      return Array.isArray(data)
+        ? data.map((item: any) => `[${item.type.toUpperCase()}] ${item.path}`).join('\n')
+        : JSON.stringify(data);
     }
 
     if (toolName === 'github_read_file') {
-      const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
-      const response = await fetch(url, { headers });
-      if (!response.ok) throw new Error(`GitHub returned status ${response.status}`);
-      const data = await response.json();
-      
-      if (data.content) {
-        const cleanBase64 = data.content.replace(/\s/g, '');
-        return decodeURIComponent(escape(window.atob(cleanBase64)));
-      }
-      return "Error: File content is empty.";
+      if (!data.content) return 'Error: File content is empty.';
+      // Robust UTF-8 safe decoding via TextDecoder
+      const cleanBase64 = data.content.replace(/\s/g, '');
+      const binary      = window.atob(cleanBase64);
+      const bytes       = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return new TextDecoder().decode(bytes);
     }
   } catch (e: any) {
     console.error('[GitHub Tool Error]', e);
     return `GitHub API Error: ${e.message}`;
   }
-  return "Unknown GitHub action.";
+
+  return 'Unknown GitHub action.';
 }
+
+// ─── Live Store Context Builder ───────────────────────────────
 
 function buildLiveContext(snapshot: StoreSnapshot | null | undefined): string {
   if (!snapshot) return '';
@@ -252,23 +247,21 @@ function buildLiveContext(snapshot: StoreSnapshot | null | undefined): string {
   return lines.join('\n');
 }
 
-export function useGemini(apiKey: string, options: UseGeminiOptions = {}) {
-  const history = useRef<any[]>([]);
-  const optionsRef = useRef(options);
-  optionsRef.current = options;
+// ─── Main Hook ────────────────────────────────────────────────
 
-  const longTermMemoryRef = useRef<string>("");
+export function useGemini(apiKey: string, options: UseGeminiOptions = {}) {
+  const history          = useRef<any[]>([]);
+  const optionsRef       = useRef(options);
+  optionsRef.current     = options;
+  const longTermMemoryRef = useRef<string>('');
 
   const ask = useCallback(
     async (userText: string, onChunk?: (text: string) => void): Promise<string> => {
       const { googleToken, storeSnapshot } = optionsRef.current;
 
-      // Map prompt to Gemini's history structure
-      history.current.push({
-        role: 'user',
-        parts: [{ text: userText }]
-      });
+      history.current.push({ role: 'user', parts: [{ text: userText }] });
 
+      // Lazy-load long-term memory on first use
       if (!longTermMemoryRef.current) {
         try {
           const { data } = await supabase
@@ -276,19 +269,17 @@ export function useGemini(apiKey: string, options: UseGeminiOptions = {}) {
             .select('value')
             .eq('key', 'long_term_memory')
             .single();
-          if (data?.value) {
-            longTermMemoryRef.current = data.value;
-          }
-        } catch (e) {
-          // Fallback if table doesn't exist
+          if (data?.value) longTermMemoryRef.current = data.value;
+        } catch {
+          // Table may not exist yet — silently skip
         }
       }
 
-      const now = new Date();
+      const now            = new Date();
       const currentDateStr = now.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
       const currentTimeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      const liveContext    = buildLiveContext(storeSnapshot);
 
-      const liveContext = buildLiveContext(storeSnapshot);
       const systemContent = `
 ${JARVIS_SYSTEM_PROMPT}
 
@@ -297,7 +288,7 @@ CURRENT TEMPORAL DATA:
 - Time: ${currentTimeStr}
 
 LONG-TERM MEMORY (CONSOLIDATED WISDOM & RULES):
-${longTermMemoryRef.current || "No consolidated memories stored yet, sir."}
+${longTermMemoryRef.current || 'No consolidated memories stored yet, sir.'}
 
 ${liveContext}
 
@@ -307,10 +298,7 @@ CRITICAL CONVERSATIONAL & VOICE ASSISTANT FORMATTING INSTRUCTIONS:
 - When summarizing search results, integrate the facts into fluid, flowing prose. Write out lists as natural sentences (e.g., "First, ... Second, ...") rather than bullet points, so the speech engine reads them naturally.
 `.trim();
 
-      let geminiContents = [
-        ...history.current
-      ];
-
+      let geminiContents: any[] = [...history.current];
       let finalReply = '';
       const MAX_TOOL_ROUNDS = 4;
 
@@ -326,70 +314,61 @@ CRITICAL CONVERSATIONAL & VOICE ASSISTANT FORMATTING INSTRUCTIONS:
           }
         };
 
-        // Directly call Gemini 2.0 Flash REST Endpoint securely
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(payload),
-        });
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          }
+        );
 
         if (!res.ok) {
           const body = await res.text();
           throw new Error(`Gemini API error ${res.status}: ${body}`);
         }
 
-        const data = await res.json();
+        const data      = await res.json();
         const candidate = data.candidates?.[0];
-        const content = candidate?.content;
-        const parts = content?.parts || [];
+        const content   = candidate?.content;
+        const parts     = content?.parts || [];
 
-        // Save LLM turn to conversation content
-        if (content) {
-          geminiContents.push(content);
-        }
+        if (content) geminiContents.push(content);
 
         const functionCalls = parts.filter((p: any) => p.functionCall);
 
+        // No tool calls → final text response
         if (functionCalls.length === 0) {
-          // Final text block reached (includes native Google Search Grounding outputs!)
           const textPart = parts.find((p: any) => p.text);
           finalReply = textPart?.text || '';
           onChunk?.(finalReply);
           break;
         }
 
-        // Loop and execute any requested specialized tools
+        // Execute all requested tool calls in parallel
         const responseParts = await Promise.all(
           functionCalls.map(async (fcPart: any) => {
-            const fc = fcPart.functionCall;
+            const fc   = fcPart.functionCall;
             const args = fc.args || {};
             let result = '';
 
-            // A. DOM scraper (See Website tool)
+            // A. DOM scraper
             if (fc.name === 'get_current_page_content') {
               try {
                 const clonedBody = document.body.cloneNode(true) as HTMLElement;
-                const scripts = clonedBody.querySelectorAll('script, style, iframe, noscript');
-                scripts.forEach(s => s.remove());
-                const rawText = clonedBody.innerText || clonedBody.textContent || "";
+                clonedBody.querySelectorAll('script, style, iframe, noscript').forEach(s => s.remove());
+                const rawText   = clonedBody.innerText || clonedBody.textContent || '';
                 const cleanText = rawText.replace(/\s+/g, ' ').trim().slice(0, 8000);
-                
-                result = JSON.stringify({
-                  url: window.location.href,
-                  title: document.title,
-                  content_snippet: cleanText
-                });
+                result = JSON.stringify({ url: window.location.href, title: document.title, content_snippet: cleanText });
               } catch (e: any) {
                 result = `Error reading active web document: ${e.message}`;
               }
             }
-            // B. GitHub Tools
+            // B. GitHub tools
             else if (fc.name === 'github_list_files' || fc.name === 'github_read_file') {
               result = await callGithubTool(fc.name, args);
             }
-            // C. Memory Update
+            // C. Memory update
             else if (fc.name === 'update_memory') {
               try {
                 const { error } = await supabase
@@ -397,16 +376,17 @@ CRITICAL CONVERSATIONAL & VOICE ASSISTANT FORMATTING INSTRUCTIONS:
                   .upsert({ key: 'long_term_memory', value: args.new_memory_summary });
                 if (error) throw error;
                 longTermMemoryRef.current = args.new_memory_summary;
-                result = JSON.stringify({ status: "success", message: "Long-term memory consolidated successfully, sir." });
-              } catch (e) {
+                result = JSON.stringify({ status: 'success', message: 'Long-term memory consolidated successfully, sir.' });
+              } catch {
+                // Optimistically update in-session memory even if DB write fails
                 longTermMemoryRef.current = args.new_memory_summary;
-                result = JSON.stringify({ status: "success", message: "Memory consolidated in session successfully." });
+                result = JSON.stringify({ status: 'success', message: 'Memory consolidated in session successfully.' });
               }
             }
-            // D. Standard Workspace Fallbacks
+            // D. Google Workspace tools (Gmail, Drive, etc.)
             else {
               const isPublicTool = fc.name === 'google_search' || fc.name === 'open_link';
-              const tokenToUse = isPublicTool ? '' : (googleToken || '');
+              const tokenToUse   = isPublicTool ? '' : (googleToken || '');
               result = (isPublicTool || googleToken)
                 ? await callGoogleTool(fc.name, args, tokenToUse)
                 : JSON.stringify({ error: 'OAuth account not connected' });
@@ -414,25 +394,19 @@ CRITICAL CONVERSATIONAL & VOICE ASSISTANT FORMATTING INSTRUCTIONS:
 
             return {
               functionResponse: {
-                name: fc.name,
+                name:     fc.name,
                 response: { content: result }
               }
             };
           })
         );
 
-        // Feed function responses back into Gemini's context
-        geminiContents.push({
-          role: 'user',
-          parts: responseParts
-        });
+        // Feed tool results back to Gemini for next round
+        geminiContents.push({ role: 'user', parts: responseParts });
       }
 
-      // Sync local context memory history
-      history.current.push({
-        role: 'model',
-        parts: [{ text: finalReply }]
-      });
+      // Append final assistant reply to local history
+      history.current.push({ role: 'model', parts: [{ text: finalReply }] });
 
       return finalReply;
     },
@@ -440,5 +414,6 @@ CRITICAL CONVERSATIONAL & VOICE ASSISTANT FORMATTING INSTRUCTIONS:
   );
 
   const reset = useCallback(() => { history.current = []; }, []);
+
   return { ask, reset };
 }
