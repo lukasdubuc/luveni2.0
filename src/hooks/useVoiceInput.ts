@@ -73,7 +73,7 @@ export function useVoiceInput({
     }
   }, [onLevelChange]);
 
-  // Always instantiate a FRESH SpeechRecognition object. Reusing a stopped instance crashes on mobile.
+  // Instantiates a brand new session safely when restarted. Reusing stopped objects is banned on mobile WebKit.
   const startRecognition = useCallback(() => {
     if (!enabledRef.current || recognitionRef.current) return;
 
@@ -135,16 +135,29 @@ export function useVoiceInput({
       return;
     }
 
-    startRecognition();
-
-    return () => {
+    if (isSpeaking || preventListening) {
+      // STOP mic during speech output. This prevents echo loops & correctly coordinates iOS hardware focus
       if (recognitionRef.current) {
         try { recognitionRef.current.stop(); } catch (e) {}
         recognitionRef.current = null;
       }
       if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
+    } else {
+      // START fresh session 1200ms after speaking ends
+      if (!recognitionRef.current) {
+        clearTimeout(restartTimeoutRef.current);
+        restartTimeoutRef.current = setTimeout(() => {
+          if (!isSpeakingRef.current && !preventListeningRef.current) {
+            startRecognition();
+          }
+        }, 1200);
+      }
+    }
+
+    return () => {
+      if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
     };
-  }, [enabled, startRecognition]);
+  }, [enabled, isSpeaking, preventListening, startRecognition]);
 
   return null;
 }
