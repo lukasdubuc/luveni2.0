@@ -1,41 +1,30 @@
 // ─────────────────────────────────────────────────────────────
-//  J.A.R.V.I.S — Luveni GM (Agentic Mode)
-//  supabase/functions/jarvis-brain/index.ts
+//  J.A.R.V.I.S — Luveni GM | supabase/functions/jarvis-google/index.ts
 // ─────────────────────────────────────────────────────────────
 
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
-const MISTRAL_MODEL = 'mistral-large-latest'; 
-const MISTRAL_ENDPOINT = 'https://api.mistral.ai/v1/chat/completions';
-
-const CORS_HEADERS = {
+const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
-
-const SYSTEM_PROMPT = `
-You are J.A.R.V.I.S. — the autonomous General Manager of Luveni.
-You have access to tools. If a user asks for real-time information, weather, or research, use 'web_search'.
-Always be executive-level, sharp, and concise. Refer to Luke as 'sir'.
-`.trim();
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
 
 /**
- * Resilient multi-source search query executor.
- * Combines a POST-based DDG Lite scraper and a clean Wikipedia Search API.
+ * Resilient web search query executor.
+ * Combines POST-based DuckDuckGo Lite scraping and public Wikipedia Search API.
+ * Bypasses cloud IP blocking completely without requiring paid search API keys.
  */
-async function executeWebSearch(query: string): Promise<string> {
+async function executeKeylessSearch(query: string): Promise<string> {
   const results: string[] = [];
   const trimmedQuery = query.trim();
 
   if (!trimmedQuery) {
-    console.warn("[Search] Aborting execution: Extracted query was empty.");
-    return "Error: Search query was empty.";
+    return "Error: Empty search query.";
   }
 
-  console.log(`[Search] Executing live search for query: "${trimmedQuery}"`);
+  console.log(`[Search] Executing free search for query: "${trimmedQuery}"`);
 
-  // Source 1: DuckDuckGo Lite (POST method bypasses typical GET cloud IP blocks)
+  // Source 1: DuckDuckGo Lite (POST request bypasses typical GET cloud IP blocks)
   try {
     const response = await fetch("https://lite.duckduckgo.com/lite/", {
       method: "POST",
@@ -72,14 +61,12 @@ async function executeWebSearch(query: string): Promise<string> {
       }
 
       for (let i = 0; i < links.length; i++) {
-        results.push(`[Web Result #${i + 1}]\nTitle: ${links[i].title}\nURL: ${links[i].url}\nExtract: ${snippets[i] || 'No snippet available.'}`);
+        results.push(`[Web Result #${i + 1}]\nTitle: ${links[i].title}\nURL: ${links[i].url}\nExtract: ${snippets[i] || 'No summary available.'}`);
       }
       console.log(`[Search] DDG Lite returned ${links.length} results.`);
-    } else {
-      console.warn(`[Search] DDG Lite responded with status: ${response.status}`);
     }
   } catch (e: any) {
-    console.error("[Search] DDG Lite search failed with error:", e.message);
+    console.error("[Search] DDG Lite search failed:", e.message);
   }
 
   // Source 2: Wikipedia Search API (100% resilient fallback, never blocks cloud IPs)
@@ -100,137 +87,60 @@ async function executeWebSearch(query: string): Promise<string> {
           });
           console.log(`[Search] Wikipedia API returned ${wikiItems.length} results.`);
         }
-      } else {
-        console.warn(`[Search] Wikipedia API responded with status: ${response.status}`);
       }
     }
   } catch (e: any) {
-    console.error("[Search] Wikipedia API search failed with error:", e.message);
+    console.error("[Search] Wikipedia search failed:", e.message);
   }
 
   if (results.length === 0) {
-    console.error("[Search] Critical: Both DDG Lite and Wikipedia search streams returned zero results.");
     return "Error: Web search was unable to retrieve live data. Inform the user that direct search retrieval is offline, sir.";
   }
 
   return results.join("\n\n---\n\n");
 }
 
-serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response(null, { headers: CORS_HEADERS });
-  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405, headers: CORS_HEADERS });
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
 
-  const apiKey = Deno.env.get('MISTRAL_API_KEY');
-  const body = await req.json();
+  try {
+    const { tool, args } = await req.json()
 
-  const payload = {
-    model: MISTRAL_MODEL,
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      ...body.history ?? body.contents ?? []
-    ],
-    tools: [{
-      type: 'function',
-      function: {
-        name: 'web_search',
-        description: 'Search the live web for real-time information, weather, or market data.',
-        parameters: {
-          type: 'object',
-          properties: { 
-            query: { 
-              type: 'string',
-              description: 'The query string to run on the search engine.'
-            } 
-          },
-          required: ['query'],
-        },
-      }
-    }],
-    temperature: 0.7,
-  };
-
-  const mistralRes = await fetch(MISTRAL_ENDPOINT, {
-    method: 'POST',
-    headers: { 
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify(payload),
-  });
-
-  const data = await mistralRes.json();
-  const message = data.choices?.[0]?.message;
-
-  if (message?.tool_calls && message.tool_calls.length > 0) {
-    const toolCall = message.tool_calls[0];
-    const call = toolCall.function;
-
-    if (call.name === 'web_search') {
+    if (tool === 'google_search') {
       let searchQuery = '';
-      
-      try {
-        const parsedArgs = typeof call.arguments === 'string' ? JSON.parse(call.arguments) : call.arguments;
+      if (args) {
+        // Robust Extraction: Handle standard parameter names as well as conversational variations
+        searchQuery = args.query || args.search_query || args.q || args.text || '';
         
-        // 1. Attempt to extract from the standard 'query' parameter
-        searchQuery = parsedArgs.query || parsedArgs.search_query || parsedArgs.q || parsedArgs.text || '';
-        
-        // 2. Fuzzy Fallback: Grab the first string-typed parameter if the model confabulated the parameter key
-        if (!searchQuery && typeof parsedArgs === 'object' && parsedArgs !== null) {
-          const values = Object.values(parsedArgs);
+        // Fuzzy Fallback: Grab the first string parameter if the model mismatched the key name
+        if (!searchQuery && typeof args === 'object') {
+          const values = Object.values(args);
           const firstString = values.find(val => typeof val === 'string');
           if (firstString) {
             searchQuery = firstString as string;
           }
         }
-      } catch (err: any) {
-        console.warn("[Overseer] Argument parsing exception:", err.message);
-        searchQuery = call.arguments?.query || '';
       }
 
-      console.log(`[Overseer] Tool 'web_search' invoked. Resolution query string: "${searchQuery}"`);
+      const searchResults = await executeKeylessSearch(searchQuery);
 
-      const searchResults = await executeWebSearch(searchQuery);
-
-      const updatedMessages = [
-        { role: 'system', content: SYSTEM_PROMPT },
-        ...body.history ?? body.contents ?? [],
-        {
-          role: 'assistant',
-          content: message.content || null,
-          tool_calls: message.tool_calls
-        },
-        {
-          role: 'tool',
-          name: 'web_search',
-          tool_call_id: toolCall.id,
-          content: searchResults
-        }
-      ];
-
-      const finalRes = await fetch(MISTRAL_ENDPOINT, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: MISTRAL_MODEL,
-          messages: updatedMessages,
-          tool_choice: 'none', 
-          temperature: 0.7,
-        }),
-      });
-
-      const finalData = await finalRes.json();
-      return new Response(JSON.stringify(finalData), {
-        status: finalRes.status,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ results: searchResults }), 
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
     }
-  }
 
-  return new Response(JSON.stringify(data), {
-    status: mistralRes.status,
-    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-  });
-});
+    return new Response(
+      JSON.stringify({ error: `Tool ${tool} is not handled in this function.` }), 
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+    );
+
+  } catch (error: any) {
+    return new Response(
+      JSON.stringify({ error: error.message }), 
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+    );
+  }
+})
