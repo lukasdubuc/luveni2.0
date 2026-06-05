@@ -1,3 +1,7 @@
+// ─────────────────────────────────────────────────────────────
+//  J.A.R.V.I.S — Luveni GM | hooks/useSpeechOutput.ts
+// ─────────────────────────────────────────────────────────────
+
 import { useCallback, useEffect, useRef } from 'react';
 
 interface UseSpeechOutputOptions {
@@ -6,15 +10,19 @@ interface UseSpeechOutputOptions {
   onEnd?: () => void;
 }
 
-const MALE_BRITISH_NAMES = [
+const BRITISH_VOICES = [
+  'Google UK English Female',
   'Google UK English Male',
   'Daniel',
+  'Hazel',
+  'Siri',
+  'Microsoft Susan',
   'Microsoft George',
   'Microsoft Ryan',
 ];
 
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
-  for (const name of MALE_BRITISH_NAMES) {
+  for (const name of BRITISH_VOICES) {
     const v = voices.find(v => v.name === name);
     if (v) return v;
   }
@@ -38,7 +46,6 @@ function loadVoices(): Promise<SpeechSynthesisVoice[]> {
   });
 }
 
-// Global voice cache
 let voiceCache: SpeechSynthesisVoice | null | undefined = undefined;
 
 export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputOptions = {}) {
@@ -47,7 +54,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const onBoundaryRef = useRef(onBoundary);
   const onEndRef = useRef(onEnd);
 
-  // CRITICAL: Prevents garbage collection from cutting off desktop voice mid-speech
+  // Strong reference prevents Garbage Collection mid-speech
   const activeUtterancesRef = useRef<SpeechSynthesisUtterance[]>([]);
 
   useEffect(() => {
@@ -56,7 +63,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     onEndRef.current = onEnd;
   }, [onStart, onBoundary, onEnd]);
 
-  // Eagerly pre-load the voices on mount to bypass mobile voice latency
   useEffect(() => {
     if (typeof window !== 'undefined' && window.speechSynthesis && voiceCache === undefined) {
       loadVoices().then(v => {
@@ -79,16 +85,14 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     speaking.current = true;
     if (onStartRef.current) onStartRef.current();
 
-    // Split text by standard punctuation into manageable chunks
     const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
     let currentIndex = 0;
 
     const playNext = () => {
-      // If we have reached the end of the sentences list
       if (currentIndex >= sentences.length) {
         activeUtterancesRef.current = [];
         speaking.current = false;
-        setTimeout(() => { if (onEndRef.current) onEndRef.current(); }, 500);
+        setTimeout(() => { if (onEndRef.current) onEndRef.current(); }, 300);
         return;
       }
 
@@ -105,9 +109,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       if (voice) utt.voice = voice;
 
       utt.onboundary = () => {
-        if (onBoundaryRef.current) {
-          onBoundaryRef.current(0.3 + Math.random() * 0.55);
-        }
+        if (onBoundaryRef.current) onBoundaryRef.current(0.3 + Math.random() * 0.55);
       };
 
       utt.onend = () => {
@@ -115,13 +117,11 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         playNext();
       };
 
-      utt.onerror = (event) => {
-        console.warn("SpeechSynthesisUtterance error encountered:", event);
+      utt.onerror = () => {
         currentIndex++;
         playNext();
       };
 
-      // Keep utterance in scope so browser GC doesn't delete it
       activeUtterancesRef.current.push(utt);
       window.speechSynthesis.speak(utt);
     };
@@ -146,14 +146,5 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
   }, [doSpeak]);
 
-  // UNLOCK FUNCTION FOR MOBILE: Call this during a user tap event to enable async speech
-  const unlock = useCallback(() => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    // Speak a tiny, silent utterance inside user interaction space
-    const silentUtt = new SpeechSynthesisUtterance(' ');
-    silentUtt.volume = 0;
-    window.speechSynthesis.speak(silentUtt);
-  }, []);
-
-  return { speak, cancel, unlock, isSpeaking: () => speaking.current };
+  return { speak, cancel, isSpeaking: () => speaking.current };
 }
