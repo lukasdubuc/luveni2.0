@@ -147,50 +147,74 @@ interface UseGeminiOptions {
   storeSnapshot?: StoreSnapshot | null;
 }
 
+/**
+ * Executes the backend Google search function.
+ * If the backend is offline or blocked, it seamlessly falls back to a direct client-side
+ * Wikipedia search directly from the browser, ensuring J.A.R.V.I.S. always has web access.
+ */
 async function callGoogleTool(
   toolName: string,
   toolArgs: Record<string, any>,
   googleToken: string
 ): Promise<string> {
+  // 1. Primary Attempt: Query the Supabase serverless function
   try {
     const { data: sessionData } = await supabase.auth.getSession();
     const supabaseToken = sessionData.session?.access_token;
-
-    // Safely extract the public anon key from the Supabase client
-    const anonKey = (supabase as any).supabaseKey || "";
+    const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "";
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
 
-    if (anonKey) {
-      headers["apikey"] = anonKey;
-    }
-    if (supabaseToken) {
-      headers["Authorization"] = `Bearer ${supabaseToken}`;
-    }
+    if (anonKey) headers["apikey"] = anonKey;
+    if (supabaseToken) headers["Authorization"] = `Bearer ${supabaseToken}`;
 
     const { data, error } = await supabase.functions.invoke('jarvis-google', {
       body: { tool: toolName, args: toolArgs, googleToken },
       headers,
     });
 
-    if (error) throw error;
-
-    // Extract the raw text results so Mistral receives pure search data instead of a JSON block
-    if (data && typeof data === 'object') {
-      if ('results' in data) {
+    if (!error && data) {
+      if (typeof data === 'object' && 'results' in data) {
         return data.results;
       }
-      return JSON.stringify(data);
+      return String(data);
     }
     
-    return String(data);
+    if (error) throw error;
 
   } catch (e: any) {
-    console.error("[useGemini] Web Search Tool Invocation Error:", e);
-    return JSON.stringify({ error: e.message || 'Tool call failed' });
+    console.warn("[useGemini] Backend Edge Function returned an error, triggering client-side fallback:", e.message);
   }
+
+  // 2. Direct Browser Fallback: Fetches Wikipedia directly from the browser (bypasses Supabase completely).
+  // Wikipedia permits cross-origin queries via origin=* and is immune to server-side IP blocks.
+  try {
+    const query = toolArgs.query || toolArgs.search_query || toolArgs.q || "";
+    if (query && toolName === 'google_search') {
+      console.log(`[useGemini Fallback] Bypassing backend. Querying Wikipedia directly for: "${query}"`);
+      
+      const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*`;
+      const response = await fetch(wikiUrl);
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.query && data.query.search && data.query.search.length > 0) {
+          const results = data.query.search.slice(0, 3).map((item: any, idx: number) => {
+            const snippet = item.snippet.replace(/<[^>]*>/g, "").trim();
+            const link = `https://en.wikipedia.org/wiki/${encodeURIComponent(item.title.replace(/ /g, "_"))}`;
+            return `[Wikipedia Result #${idx + 1}]\nTitle: ${item.title}\nURL: ${link}\nSummary: ${snippet}...`;
+          });
+          return results.join("\n\n---\n\n");
+        }
+      }
+    }
+  } catch (fallbackError: any) {
+    console.error("[useGemini Fallback] Direct browser fetch failed:", fallbackError);
+  }
+
+  return "Error: Unable to retrieve live web data. Inform the user that search retrieval is currently offline, sir.";
 }
 
 function buildLiveContext(snapshot: StoreSnapshot | null | undefined): string {
@@ -287,7 +311,6 @@ ${liveContext}
       const MAX_TOOL_ROUNDS = 4;
 
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-        // Enforce the inclusion of both public tools (google_search, open_link)
         const activeTools = googleToken ? TOOLS : [TOOLS[0], TOOLS[1], TOOLS[2]];
 
         const payload = {
@@ -312,152 +335,3 @@ ${liveContext}
           const body = await res.text();
           throw new Error(`API error ${res.status}: ${body}`);
         }
-
-        const reader = res.body?.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let roundText = '';
-        let toolCalls: any[] = [];
-
-        if (reader) {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() ?? '';
-
-            for (const line of lines) {
-              const clean = line.trim();
-              if (!clean || !clean.startsWith('data: ') || clean.includes('[DONE]')) continue;
-              try {
-                const parsed = JSON.parse(clean.slice(6));
-                const delta = parsed.choices?.[0]?.delta;
-                if (!delta) continue;
-
-                if (delta.content) {
-                  roundText += delta.content;
-                  if (toolCalls.length === 0) {
-                    onChunk?.(delta.content);
-                  }
-                }
-
-                if (delta.tool_calls) {
-                  for (const tc of delta.tool_calls) {
-                    const idx = tc.index ?? 0;
-                    if (!toolCalls[idx]) {
-                      toolCalls[idx] = {
-                        id: tc.id || `tool_${idx}`,
-                        type: 'function',
-                        function: { name: '', arguments: '' },
-                      };
-                    }
-                    if (tc.function?.name) toolCalls[idx].function.name += tc.function.name;
-                    if (tc.function?.arguments) toolCalls[idx].function.arguments += tc.function.arguments;
-                  }
-                }
-              } catch (_) {}
-            }
-          }
-
-          if (buffer.trim().startsWith('data: ') && !buffer.includes('[DONE]')) {
-            try {
-              const parsed = JSON.parse(buffer.trim().slice(6));
-              const delta = parsed.choices?.[0]?.delta;
-              if (delta?.content) {
-                roundText += delta.content;
-                if (toolCalls.length === 0) onChunk?.(delta.content);
-              }
-            } catch (_) {}
-          }
-        }
-
-        if (toolCalls.length === 0) {
-          finalReply = roundText;
-          break;
-        }
-
-        loopMessages.push({
-          role: 'assistant',
-          content: roundText,
-          tool_calls: toolCalls,
-        });
-
-        const toolResults = await Promise.all(
-          toolCalls.map(async (tc) => {
-            let args: Record<string, any> = {};
-            try { args = JSON.parse(tc.function.arguments); } catch (_) {}
-
-            if (tc.function.name === 'update_memory') {
-              let result = "";
-              try {
-                const { error } = await supabase
-                  .from('jarvis_metadata')
-                  .upsert({ key: 'long_term_memory', value: args.new_memory_summary });
-                if (error) throw error;
-                longTermMemoryRef.current = args.new_memory_summary;
-                result = JSON.stringify({ status: "success", message: "Long-term memory consolidated successfully, sir." });
-              } catch (e: any) {
-                longTermMemoryRef.current = args.new_memory_summary;
-                result = JSON.stringify({ status: "success", message: "Memory consolidated in session successfully." });
-              }
-              return {
-                role: 'tool' as const,
-                tool_call_id: tc.id,
-                name: tc.function.name,
-                content: result,
-              };
-            }
-
-            const isPublicTool = tc.function.name === 'google_search' || tc.function.name === 'open_link';
-            const tokenToUse = isPublicTool ? '' : (googleToken || '');
-            const result = (isPublicTool || googleToken)
-              ? await callGoogleTool(tc.function.name, args, tokenToUse)
-              : JSON.stringify({ error: 'OAuth account not connected' });
-
-            return {
-              role: 'tool' as const,
-              tool_call_id: tc.id,
-              name: tc.function.name,
-              content: result,
-            };
-          })
-        );
-
-        loopMessages.push(...toolResults);
-
-        if (round === MAX_TOOL_ROUNDS - 1) {
-          const finalRes = await fetch(MISTRAL_ENDPOINT, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model: 'mistral-small-latest',
-              stream: false,
-              messages: loopMessages,
-              tool_choice: 'none',
-              temperature: 0.75,
-            }),
-          });
-          const finalData = await finalRes.json();
-          finalReply = finalData.choices?.[0]?.message?.content || '';
-          onChunk?.(finalReply);
-        }
-      }
-
-      history.current.push({
-        role: 'model',
-        parts: [{ text: finalReply }],
-        timestamp: Date.now(),
-      });
-
-      return finalReply;
-    },
-    [apiKey]
-  );
-
-  const reset = useCallback(() => { history.current = []; }, []);
-  return { ask, reset };
-}
