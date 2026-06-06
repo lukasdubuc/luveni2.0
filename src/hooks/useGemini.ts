@@ -376,7 +376,7 @@ export function useGemini(apiKey?: string, options: UseGeminiOptions = {}) {
 
       if (!longTermMemoryRef.current) {
         try {
-          const { data } = await supabase
+          const { data } = await (supabase as any)
             .from('jarvis_metadata')
             .select('value')
             .eq('key', 'long_term_memory')
