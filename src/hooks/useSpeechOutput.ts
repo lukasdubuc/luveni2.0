@@ -41,6 +41,7 @@ const ELEVENLABS_API_KEY =
 
 // Upgraded matching engine: scans dynamically for your downloaded "Enhanced" or "Premium" iPhone accessibility voices
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+  const isMobile = detectMobileDevice();
   if (isMobile) {
     // Look for high-quality English (Australian or British) voices on mobile
     const englishVoices = voices.filter(v => {

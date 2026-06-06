@@ -5,6 +5,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import JarvisHub from '../components/jarvis/JarvisHub';
 
 export const Route = createFileRoute('/admin/jarvis')({
+  ssr: false,
   component: () => (
     <div style={{ 
       minHeight: '100vh', 
