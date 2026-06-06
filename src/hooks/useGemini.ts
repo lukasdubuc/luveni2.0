@@ -6,7 +6,6 @@ import { JARVIS_SYSTEM_PROMPT } from '../lib/jarvis-config';
 import { supabase } from '@/integrations/supabase/client';
 
 // ─── API Keys ─────────────────────────────────────────────────
-const GEMINI_API_KEY  = import.meta.env.GEMINI_API_KEY  || import.meta.env.VITE_GEMINI_API_KEY  || '';
 const MISTRAL_API_KEY = import.meta.env.MISTRAL_API_KEY || import.meta.env.VITE_MISTRAL_API_KEY || '';
 const TAVILY_API_KEY  = import.meta.env.TAVILY_API_KEY  || import.meta.env.VITE_TAVILY_API_KEY  || '';
 
@@ -76,20 +75,18 @@ async function callTavily(query: string): Promise<string> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        api_key:                TAVILY_API_KEY,
+        api_key:             TAVILY_API_KEY,
         query,
-        search_depth:           'basic',
-        include_answer:         true,
-        include_raw_content:    false,
-        max_results:            5,
+        search_depth:        'basic',
+        include_answer:      true,
+        include_raw_content: false,
+        max_results:         5,
       })
     });
 
     if (!res.ok) throw new Error(`Tavily error ${res.status}: ${await res.text()}`);
 
     const data = await res.json();
-
-    // Return the AI-synthesised answer + top source snippets
     const lines: string[] = [];
     if (data.answer) lines.push(`Summary: ${data.answer}`);
     if (data.results?.length) {
@@ -98,7 +95,6 @@ async function callTavily(query: string): Promise<string> {
         lines.push(`• ${r.title} (${r.url}): ${r.content?.slice(0, 300)}`);
       });
     }
-
     return lines.join('\n') || 'No results found.';
   } catch (e: any) {
     console.warn('[Jarvis] Tavily search failed:', e.message);
@@ -107,7 +103,6 @@ async function callTavily(query: string): Promise<string> {
 }
 
 // ─── Edge Function Tool Handler ───────────────────────────────
-// Handles: open_link, gmail_read, gmail_send, drive_search, drive_read
 
 async function callEdgeTool(toolName: string, args: Record<string, any>, googleToken?: string | null): Promise<string> {
   try {
@@ -144,386 +139,4 @@ async function callGithubTool(toolName: string, args: Record<string, any>): Prom
 
   const headers: Record<string, string> = {
     'Accept': 'application/vnd.github+json',
-    ...(githubToken && { 'Authorization': `Bearer ${githubToken}` }),
-  };
-
-  const { owner, repo, path = '', branch = 'main' } = args;
-
-  try {
-    const url      = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
-    const response = await fetch(url, { headers });
-    if (!response.ok) throw new Error(`GitHub returned status ${response.status}`);
-    const data = await response.json();
-
-    if (toolName === 'github_list_files') {
-      return Array.isArray(data)
-        ? data.map((item: any) => `[${item.type.toUpperCase()}] ${item.path}`).join('\n')
-        : JSON.stringify(data);
-    }
-
-    if (toolName === 'github_read_file') {
-      if (!data.content) return 'Error: File content is empty.';
-      const cleanBase64 = data.content.replace(/\s/g, '');
-      const binary      = window.atob(cleanBase64);
-      const bytes       = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      return new TextDecoder().decode(bytes);
-    }
-  } catch (e: any) {
-    console.error('[GitHub Tool Error]', e);
-    return `GitHub API Error: ${e.message}`;
-  }
-
-  return 'Unknown GitHub action.';
-}
-
-// ─── Memory Handler ───────────────────────────────────────────
-
-async function handleMemoryUpdate(newSummary: string, memoryRef: React.MutableRefObject<string>): Promise<string> {
-  try {
-    const { error } = await supabase
-      .from('jarvis_metadata')
-      .upsert({ key: 'long_term_memory', value: newSummary });
-    if (error) throw error;
-  } catch {
-    // Silently fall through — still update in-session memory
-  }
-  memoryRef.current = newSummary;
-  return JSON.stringify({ status: 'success', message: 'Long-term memory consolidated successfully, sir.' });
-}
-
-// ─── DOM Scraper ──────────────────────────────────────────────
-
-function scrapeCurrentPage(): string {
-  try {
-    const cloned    = document.body.cloneNode(true) as HTMLElement;
-    cloned.querySelectorAll('script, style, iframe, noscript').forEach(s => s.remove());
-    const rawText   = cloned.innerText || cloned.textContent || '';
-    const cleanText = rawText.replace(/\s+/g, ' ').trim().slice(0, 8000);
-    return JSON.stringify({ url: window.location.href, title: document.title, content_snippet: cleanText });
-  } catch (e: any) {
-    return `Error reading active web document: ${e.message}`;
-  }
-}
-
-// ─── Tool Executor ────────────────────────────────────────────
-
-async function executeTool(
-  name:        string,
-  args:        Record<string, any>,
-  googleToken: string | null | undefined,
-  memoryRef:   React.MutableRefObject<string>
-): Promise<string> {
-  if (name === 'google_search')                                    return callTavily(args.query || '');
-  if (name === 'get_current_page_content')                         return scrapeCurrentPage();
-  if (name === 'github_list_files' || name === 'github_read_file') return callGithubTool(name, args);
-  if (name === 'update_memory')                                    return handleMemoryUpdate(args.new_memory_summary, memoryRef);
-  // open_link, gmail_*, drive_* → edge function
-  return callEdgeTool(name, args, googleToken);
-}
-
-// ─── Gemini Tool Schema ───────────────────────────────────────
-// No { googleSearch: {} } — Tavily handles search via declared function
-
-const GEMINI_TOOLS_SCHEMA = [
-  {
-    function_declarations: [
-      {
-        name:        'google_search',
-        description: 'Search the web for current information, news, or any topic.',
-        parameters:  { type: 'OBJECT', properties: { query: { type: 'STRING', description: 'Concise keyword search query' } }, required: ['query'] }
-      },
-      { name: 'open_link',              description: 'Scrape and read the full text of any URL.',    parameters: { type: 'OBJECT', properties: { url:    { type: 'STRING' } }, required: ['url'] } },
-      { name: 'get_current_page_content', description: 'Read the active webpage.',                  parameters: { type: 'OBJECT', properties: {} } },
-      { name: 'github_list_files',      description: 'List files in a GitHub repo.',                parameters: { type: 'OBJECT', properties: { owner: { type: 'STRING' }, repo: { type: 'STRING' }, path: { type: 'STRING' } }, required: ['owner', 'repo'] } },
-      { name: 'github_read_file',       description: 'Read a file in a GitHub repo.',               parameters: { type: 'OBJECT', properties: { owner: { type: 'STRING' }, repo: { type: 'STRING' }, path: { type: 'STRING' }, branch: { type: 'STRING' } }, required: ['owner', 'repo', 'path'] } },
-      { name: 'update_memory',          description: 'Save to long-term memory.',                   parameters: { type: 'OBJECT', properties: { new_memory_summary: { type: 'STRING' } }, required: ['new_memory_summary'] } },
-      { name: 'gmail_read',             description: 'Read Gmail.',                                 parameters: { type: 'OBJECT', properties: { query: { type: 'STRING' }, maxResults: { type: 'NUMBER' } }, required: ['query'] } },
-      { name: 'gmail_send',             description: 'Send Gmail.',                                 parameters: { type: 'OBJECT', properties: { to: { type: 'STRING' }, subject: { type: 'STRING' }, body: { type: 'STRING' } }, required: ['to', 'subject', 'body'] } },
-      { name: 'drive_search',           description: 'Search Google Drive.',                        parameters: { type: 'OBJECT', properties: { query: { type: 'STRING' } }, required: ['query'] } },
-      { name: 'drive_read',             description: 'Read a Google Drive file.',                   parameters: { type: 'OBJECT', properties: { fileId: { type: 'STRING' } }, required: ['fileId'] } },
-    ]
-  }
-];
-
-// ─── Mistral Tool Definitions ─────────────────────────────────
-
-const MISTRAL_TOOLS = [
-  {
-    type: 'function',
-    function: {
-      name:        'google_search',
-      description: 'Search the web for current information, news, or any topic.',
-      parameters:  { type: 'object', properties: { query: { type: 'string', description: 'Concise keyword search query' } }, required: ['query'] }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name:        'open_link',
-      description: 'Scrape and read the full text content of any URL.',
-      parameters:  { type: 'object', properties: { url: { type: 'string', description: 'The full URL to open and read' } }, required: ['url'] }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name:        'get_current_page_content',
-      description: 'Read the text contents and URL of the active webpage the user is viewing.',
-      parameters:  { type: 'object', properties: {} }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name:        'github_list_files',
-      description: 'List directories and files inside a GitHub repository.',
-      parameters:  { type: 'object', properties: { owner: { type: 'string' }, repo: { type: 'string' }, path: { type: 'string' } }, required: ['owner', 'repo'] }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name:        'github_read_file',
-      description: 'Read the contents of a file in a GitHub repository.',
-      parameters:  { type: 'object', properties: { owner: { type: 'string' }, repo: { type: 'string' }, path: { type: 'string' }, branch: { type: 'string' } }, required: ['owner', 'repo', 'path'] }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name:        'update_memory',
-      description: 'Save consolidated wisdom, rules, and lessons to long-term memory.',
-      parameters:  { type: 'object', properties: { new_memory_summary: { type: 'string' } }, required: ['new_memory_summary'] }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name:        'gmail_read',
-      description: 'Read emails from Gmail.',
-      parameters:  { type: 'object', properties: { query: { type: 'string' }, maxResults: { type: 'number' } }, required: ['query'] }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name:        'gmail_send',
-      description: 'Send an email via Gmail.',
-      parameters:  { type: 'object', properties: { to: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' } }, required: ['to', 'subject', 'body'] }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name:        'drive_search',
-      description: 'Search Google Drive for files.',
-      parameters:  { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name:        'drive_read',
-      description: 'Read a Google Drive file by ID.',
-      parameters:  { type: 'object', properties: { fileId: { type: 'string' } }, required: ['fileId'] }
-    }
-  }
-];
-
-// ─── Gemini API Call ──────────────────────────────────────────
-
-async function askGemini(
-  systemContent: string,
-  history:       any[],
-  googleToken:   string | null | undefined,
-  memoryRef:     React.MutableRefObject<string>,
-  onChunk?:      (text: string) => void
-): Promise<string> {
-  const key = GEMINI_API_KEY;
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
-
-  let contents: any[] = [...history];
-  let finalReply      = '';
-  const MAX_ROUNDS    = 4;
-
-  for (let round = 0; round < MAX_ROUNDS; round++) {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents,
-        tools:             GEMINI_TOOLS_SCHEMA,
-        systemInstruction: { parts: [{ text: systemContent }] },
-        generationConfig:  { temperature: 0.75 }
-      })
-    });
-
-    if (!res.ok) throw new Error(`Gemini API error ${res.status}: ${await res.text()}`);
-
-    const data    = await res.json();
-    const content = data.candidates?.[0]?.content;
-    const parts   = content?.parts || [];
-    if (content) contents.push(content);
-
-    const calls = parts.filter((p: any) => p.functionCall);
-    if (calls.length === 0) {
-      finalReply = parts.find((p: any) => p.text)?.text || '';
-      onChunk?.(finalReply);
-      break;
-    }
-
-    const responses = await Promise.all(calls.map(async (fcPart: any) => {
-      const fc     = fcPart.functionCall;
-      const result = await executeTool(fc.name, fc.args || {}, googleToken, memoryRef);
-      return { functionResponse: { name: fc.name, response: { content: result } } };
-    }));
-
-    contents.push({ role: 'user', parts: responses });
-  }
-
-  return finalReply;
-}
-
-// ─── Mistral API Call ─────────────────────────────────────────
-
-async function askMistral(
-  systemContent: string,
-  history:       any[],
-  userText:      string,
-  googleToken:   string | null | undefined,
-  memoryRef:     React.MutableRefObject<string>,
-  onChunk?:      (text: string) => void
-): Promise<string> {
-  const messages: any[] = [
-    { role: 'system', content: systemContent },
-    ...history.slice(0, -1).map((h: any) => ({
-      role:    h.role === 'model' ? 'assistant' : 'user',
-      content: h.parts?.[0]?.text || ''
-    })),
-    { role: 'user', content: userText }
-  ];
-
-  const MAX_ROUNDS = 4;
-  let finalReply   = '';
-
-  for (let round = 0; round < MAX_ROUNDS; round++) {
-    const res = await fetch('https://api.mistral.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${MISTRAL_API_KEY}`
-      },
-      body: JSON.stringify({
-        model:       'mistral-large-latest',
-        messages,
-        tools:       MISTRAL_TOOLS,
-        tool_choice: 'auto',
-        temperature: 0.75,
-      })
-    });
-
-    if (!res.ok) throw new Error(`Mistral API error ${res.status}: ${await res.text()}`);
-
-    const data    = await res.json();
-    const choice  = data.choices?.[0];
-    const message = choice?.message;
-
-    messages.push(message);
-
-    const toolCalls = message?.tool_calls;
-    if (!toolCalls || toolCalls.length === 0) {
-      finalReply = message?.content || '';
-      onChunk?.(finalReply);
-      break;
-    }
-
-    for (const tc of toolCalls) {
-      const args   = typeof tc.function.arguments === 'string'
-        ? JSON.parse(tc.function.arguments)
-        : tc.function.arguments;
-      const result = await executeTool(tc.function.name, args, googleToken, memoryRef);
-      messages.push({ role: 'tool', tool_call_id: tc.id, content: result });
-    }
-  }
-
-  return finalReply;
-}
-
-// ─── Main Hook ────────────────────────────────────────────────
-
-export function useGemini(apiKey?: string, options: UseGeminiOptions = {}) {
-  const history           = useRef<any[]>([]);
-  const optionsRef        = useRef(options);
-  optionsRef.current      = options;
-  const longTermMemoryRef = useRef<string>('');
-
-  const ask = useCallback(
-    async (userText: string, onChunk?: (text: string) => void): Promise<string> => {
-      const { googleToken, storeSnapshot } = optionsRef.current;
-
-      if (!longTermMemoryRef.current) {
-        try {
-          const { data } = await supabase
-            .from('jarvis_metadata')
-            .select('value')
-            .eq('key', 'long_term_memory')
-            .single();
-          if (data?.value) longTermMemoryRef.current = data.value;
-        } catch { /* silent */ }
-      }
-
-      const now            = new Date();
-      const currentDateStr = now.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-      const currentTimeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-      const liveContext    = buildLiveContext(storeSnapshot);
-
-      const systemContent = `
-${JARVIS_SYSTEM_PROMPT}
-
-CURRENT TEMPORAL DATA:
-- Date: ${currentDateStr}
-- Time: ${currentTimeStr}
-
-LONG-TERM MEMORY (CONSOLIDATED WISDOM & RULES):
-${longTermMemoryRef.current || 'No consolidated memories stored yet, sir.'}
-
-${liveContext}
-
-CRITICAL CONVERSATIONAL & VOICE ASSISTANT FORMATTING INSTRUCTIONS:
-- You are a voice-first assistant. Write in conversational, spoken-friendly English.
-- NEVER output markdown characters, bold indicators (**), bullet points (*), or hashtags (#).
-- Integrate search results into fluid, flowing prose. Write lists as natural sentences.
-`.trim();
-
-      history.current.push({ role: 'user', parts: [{ text: userText }] });
-
-      let finalReply = '';
-
-      // ── 1. Try Gemini ─────────────────────────────────────────
-      if (GEMINI_API_KEY) {
-        try {
-          finalReply = await askGemini(systemContent, history.current, googleToken, longTermMemoryRef, onChunk);
-          history.current.push({ role: 'model', parts: [{ text: finalReply }] });
-          return finalReply;
-        } catch (e: any) {
-          console.error('[Jarvis] Gemini failed, falling back to Mistral:', e.message);
-        }
-      }
-
-      // ── 2. Mistral fallback ───────────────────────────────────
-      if (MISTRAL_API_KEY) {
-        finalReply = await askMistral(systemContent, history.current, userText, googleToken, longTermMemoryRef, onChunk);
-        history.current.push({ role: 'model', parts: [{ text: finalReply }] });
-        return finalReply;
-      }
-
-      throw new Error('No AI provider available. Please set GEMINI_API_KEY or MISTRAL_API_KEY in Lovable secrets.');
-    },
-    []
-  );
-
-  const reset = useCallback(() => { history.current = []; }, []);
-
-  return { ask, reset };
-}
+    ...(githubToken && { 'Authorization'
