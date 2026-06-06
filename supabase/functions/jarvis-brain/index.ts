@@ -232,7 +232,6 @@ async function callGithub(toolName: string, args: any): Promise<string> {
   }
   return "Unknown GitHub action.";
 }
-
 async function fetchGitHubRepoTree(owner: string, repo: string, branch = "main"): Promise<any[]> {
   if (!owner || !repo) return [];
   try {
@@ -340,11 +339,14 @@ function buildStoreContext(snapshot: any): string {
 async function executeTool(
   name: string,
   args: any,
-  webSearchState: { used: boolean },
+  webSearchState: { used: boolean; repoAvailable?: boolean },
 ): Promise<string> {
   console.log(`[Jarvis] Tool: ${name}`, args);
   switch (name) {
     case "google_search":
+      if (webSearchState.repoAvailable) {
+        return "Error: Repository context is available; use the GitHub tools to inspect the codebase instead of web search.";
+      }
       if (webSearchState.used) {
         return "Error: Only one web search is allowed per request. Please use the first search result and do not call google_search again.";
       }
@@ -460,13 +462,14 @@ async function runJarvisChat(
   systemContent: string,
   history: any[],
   userText: string,
+  repoAvailable = false,
 ): Promise<string> {
   const messages = [
     { role: "system", content: systemContent },
     ...history,
     { role: "user", content: userText },
   ];
-  const webSearchState = { used: false };
+  const webSearchState = { used: false, repoAvailable };
   async function callModel(msgs: any[], useFunctions = true): Promise<any> {
     const body: any = {
       model: MISTRAL_MODEL,
@@ -543,7 +546,7 @@ serve(async (req) => {
     }
 
     if (tool === "chat") {
-      const { userText, history, storeSnapshot, timezone } = args;
+      const { userText, history, storeSnapshot, timezone, repoOwner, repoName, repoBranch } = args;
 
       if (!MISTRAL_API_KEY) {
         throw new Error("MISTRAL_API_KEY is not configured in Supabase secrets.");
@@ -552,10 +555,16 @@ serve(async (req) => {
       const memories = await loadMemories(20);
       const storeCtx = buildStoreContext(storeSnapshot);
 
-      // Dynamic repository discovery context
+      // Dynamic repository discovery context. Prefer explicit repository parameters from the request.
       let githubCtx = "";
       let repoSummary = "";
-      if (GITHUB_TOKEN) {
+      if (repoOwner && repoName) {
+        const owner = repoOwner;
+        const repo = repoName;
+        const branch = repoBranch || "main";
+        githubCtx = `--- EXPLICIT REPOSITORY ---\nPrimary Default Repository (explicit):\n- Owner: ${owner}\n- Repo: ${repo}\n- Branch: ${branch}\n\nWhen the user refers to \"my repo\", \"the codebase\", \"the repository\", or \"the code\", use the explicit repository provided in the request.`;
+        repoSummary = await buildRepoContext(owner, repo, branch);
+      } else if (GITHUB_TOKEN) {
         const repos = await fetchUserRepos(GITHUB_TOKEN);
         if (repos.length > 0) {
           const preferred =
@@ -570,16 +579,7 @@ serve(async (req) => {
           const repo = preferred.name;
           const branch = preferred.default_branch || "main";
 
-          githubCtx = `--- ACCESSIBLE GITHUB REPOSITORIES ---
-Your integrated GITHUB_TOKEN has access to the following repositories:
-${repoList}
-
-Primary Default Repository:
-- Owner: ${owner}
-- Repo: ${repo}
-- Branch: ${branch}
-
-When the user refers to "my repo", "the codebase", "the repository", or "the code", use the default repository ("${owner}/${repo}"). Avoid guessing other repositories or using web search to find them.`;
+          githubCtx = `--- ACCESSIBLE GITHUB REPOSITORIES ---\nYour integrated GITHUB_TOKEN has access to the following repositories:\n${repoList}\n\nPrimary Default Repository:\n- Owner: ${owner}\n- Repo: ${repo}\n- Branch: ${branch}\n\nWhen the user refers to \"my repo\", \"the codebase\", \"the repository\", or \"the code\", use the default repository (\"${owner}/${repo}\"). Avoid guessing other repositories or using web search to find them.`;
 
           repoSummary = await buildRepoContext(owner, repo, branch);
         }
@@ -624,7 +624,7 @@ FORMATTING:
 - Integrate search results into fluid prose.
 `.trim();
 
-      const reply = await runJarvisChat(systemContent, history || [], userText);
+      const reply = await runJarvisChat(systemContent, history || [], userText, !!repoSummary);
 
       return new Response(JSON.stringify({ reply }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
