@@ -172,7 +172,7 @@ async function callGithubTool(toolName: string, args: Record<string, any>): Prom
 
 async function handleMemoryUpdate(newSummary: string, memoryRef: React.MutableRefObject<string>): Promise<string> {
   try {
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from('jarvis_metadata')
       .upsert({ key: 'long_term_memory', value: newSummary });
     if (error) throw error;
