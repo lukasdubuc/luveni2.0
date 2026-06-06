@@ -24,9 +24,13 @@ const BRITISH_VOICES = [
   'Microsoft Ryan',
 ];
 
-const isMobile = typeof window !== 'undefined' && 
-  (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
-  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+function detectMobileDevice() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  return (
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+}
 
 const globalActiveUtterances: SpeechSynthesisUtterance[] = [];
 
@@ -37,6 +41,7 @@ const ELEVENLABS_API_KEY =
 
 // Upgraded matching engine: scans dynamically for your downloaded "Enhanced" or "Premium" iPhone accessibility voices
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+  const isMobile = detectMobileDevice();
   if (isMobile) {
     // Look for high-quality English (Australian or British) voices on mobile
     const englishVoices = voices.filter(v => {
@@ -178,6 +183,7 @@ let voiceCache: SpeechSynthesisVoice | null | undefined = undefined;
 
 export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputOptions = {}) {
   const [currentSubtitle, setCurrentSubtitle] = useState("");
+  const [isMobile, setIsMobile] = useState(false);
   const speaking = useRef(false);
   const onStartRef = useRef(onStart);
   const onBoundaryRef = useRef(onBoundary);
@@ -191,6 +197,10 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     onBoundaryRef.current = onBoundary;
     onEndRef.current = onEnd;
   }, [onStart, onBoundary, onEnd]);
+
+  useEffect(() => {
+    setIsMobile(detectMobileDevice());
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.speechSynthesis && voiceCache === undefined) {

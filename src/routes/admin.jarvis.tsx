@@ -5,6 +5,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import JarvisHub from '../components/jarvis/JarvisHub';
 
 export const Route = createFileRoute('/admin/jarvis')({
+  ssr: false,
   component: () => (
     <div style={{ 
       minHeight: '100vh', 
@@ -19,7 +20,7 @@ export const Route = createFileRoute('/admin/jarvis')({
       overflow: 'hidden'
     }}>
       <JarvisHub 
-        geminiApiKey="P00nSEM2W2H1qV0KuvyonA08Ns1tV0hL" 
+        geminiApiKey="" 
         autoStart={true} 
       />
     </div>

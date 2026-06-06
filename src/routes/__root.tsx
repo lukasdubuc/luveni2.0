@@ -135,9 +135,11 @@ function RootComponent() {
   useEffect(() => {
     let canceled = false;
     const fetchConfig = async () => {
-      const { data } = await supabase.from("site_config").select("*").eq("id", "main").maybeSingle();
-      if (canceled || !data) return;
-      const config = mergeSiteConfig(data as any);
+      const { data } = await supabase.from("site_config").select("*").eq("id", "main").limit(1);
+      if (canceled || !data?.length) return;
+      const configRow = data[0];
+      if (!configRow) return;
+      const config = mergeSiteConfig(configRow as any);
       setFooterDescription(config.metadata?.footer_description ?? "");
       setTheme(config.theme || "light");
     };
