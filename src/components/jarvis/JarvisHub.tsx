@@ -18,9 +18,13 @@ const STATE_COLOR: Record<OrbState, string> = {
   idle: 'rgba(0,180,255,0.6)', listening: 'rgba(0,255,255,1.0)', thinking: 'rgba(180,100,255,1.0)', speaking: 'rgba(0,255,180,0.95)', error: 'rgba(255,80,80,1.0)',
 };
 
-const isMobile = typeof window !== 'undefined' && 
-  (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
-  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+function detectMobileDevice() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  return (
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+}
 
 const svgPattern = `
 <svg width="120" height="138.56" viewBox="0 0 120 138.56" xmlns="http://www.w3.org/2000/svg">
@@ -74,6 +78,7 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
   const [lastAiResponse, setLastAiResponse] = useState('');
   const [isReady, setIsReady] = useState(false);
   const [isLive, setIsLive] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   // States for keyboard text command interaction
   const [isTextInputActive, setIsTextInputActive] = useState(false);
@@ -84,6 +89,7 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => { orbStateRef.current = orbState; }, [orbState]);
+  useEffect(() => { setIsMobile(detectMobileDevice()); }, []);
 
   // Adjust and focus text area when initialized or changed
   useEffect(() => {
@@ -375,8 +381,9 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  root: { 
-    height: typeof window !== 'undefined' && window.CSS?.supports?.('height', '100dvh') ? '100dvh' : '100vh', 
+  root: {
+    height: '100dvh',
+    minHeight: '100vh',
     width: '100%', 
     display: 'flex', 
     flexDirection: 'column', 
