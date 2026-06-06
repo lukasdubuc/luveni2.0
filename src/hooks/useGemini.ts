@@ -37,7 +37,7 @@ export function useGemini(apiKey?: string, options: UseGeminiOptions = {}) {
       history.current.push({ role: 'user', content: userText });
 
       try {
-        const { data, error } = await supabase.functions.invoke('jarvis-google', {
+        const { data, error } = await supabase.functions.invoke('jarvis-brain', {
           body: {
             tool:          'chat',
             args: {
