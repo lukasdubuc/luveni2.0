@@ -2,12 +2,8 @@
 //  J.A.R.V.I.S — Luveni GM  |  hooks/useGemini.ts
 // ─────────────────────────────────────────────────────────────
 import { useRef, useCallback } from 'react';
-import { JARVIS_SYSTEM_PROMPT } from '../lib/jarvis-config';
+import { JARVIS_SYSTEM_PROMPT, MISTRAL_API_KEY, TAVILY_API_KEY } from '../lib/jarvis-config';
 import { supabase } from '@/integrations/supabase/client';
-
-// ─── API Keys ─────────────────────────────────────────────────
-const MISTRAL_API_KEY = import.meta.env.MISTRAL_API_KEY || '';
-const TAVILY_API_KEY  = import.meta.env.TAVILY_API_KEY  || '';
 
 // ─── Types ────────────────────────────────────────────────────
 
