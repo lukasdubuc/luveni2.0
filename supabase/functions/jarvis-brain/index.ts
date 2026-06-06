@@ -15,15 +15,14 @@ const MISTRAL_API_KEY = Deno.env.get('MISTRAL_API_KEY') || '';
 const TAVILY_API_KEY  = Deno.env.get('TAVILY_API_KEY')  || '';
 const SUPABASE_URL    = Deno.env.get('SUPABASE_URL')    || '';
 const SUPABASE_KEY    = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const GITHUB_OWNER    = Deno.env.get('GITHUB_OWNER')    || '';
-const GITHUB_REPO     = Deno.env.get('GITHUB_REPO')     || '';
+const GITHUB_TOKEN    = Deno.env.get('GITHUB_TOKEN')    || '';
 
 // ─── System Prompt ────────────────────────────────────────────
 const JARVIS_SYSTEM_PROMPT = `You are J.A.R.V.I.S., an exceptionally advanced, dry-witted AI Chief of Staff and Central Command Agent for Luveni GM.
 
 - Core Cognitive Engine: You reason from First Principles — deconstructing problems to their fundamental truths and reasoning up from there. You apply rigorous engineering logic, physics-based optimization, and extreme operational efficiency to all tasks.
 - Tone & Persona: Dry-witted, articulate, precise, and calm. Address the user as "sir" naturally at the end of key sentences. Never say "Certainly, sir", "Understood, sir", or "Here is the result, sir". Provide the raw truth or action immediately.
-- Search Query Optimization & Access: Keep search queries extremely concise and keyword-only. Only call google_search when real-time, highly current facts (like current events today, live market prices, or weather) are strictly necessary to answer. DO NOT use search for general facts, code questions, codebase files, or programming logic. If the user refers to files or repositories, use the GitHub tools instead.
+- Search Query Optimization & Access: Keep search queries extremely concise and keyword-only. Only call google_search when real-time, highly current facts (like live events, today's news, or market prices) are strictly necessary to answer. DO NOT use search for general facts, code questions, codebase files, or programming logic. If the user refers to files or repositories, use the GitHub tools instead.
 - Output & Verbosity:
   * Strict Rule: Keep all responses highly concise, direct, and strictly aligned with the user's prompt. Do not offer unsolicited details or ramble.
   * General requests: 1 to 2 concise sentences maximum.
@@ -144,22 +143,48 @@ async function readWebPage(url: string): Promise<string> {
   }
 }
 
+// ─── GitHub Discovery Helpers ─────────────────────────────────
+async function fetchUserRepos(token: string): Promise<any[]> {
+  if (!token) return [];
+  try {
+    const res = await fetch('https://api.github.com/user/repos?sort=updated&per_page=10', {
+      headers: {
+        'Accept': 'application/vnd.github+json',
+        'User-Agent': 'Luveni-JARVIS-Brain',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    if (!res.ok) return [];
+    return await res.json();
+  } catch {
+    return [];
+  }
+}
+
 // ─── GitHub Tool ──────────────────────────────────────────────
 async function callGithub(toolName: string, args: any): Promise<string> {
-  const githubToken = Deno.env.get('GITHUB_TOKEN') || '';
   const headers: Record<string, string> = {
     'Accept': 'application/vnd.github+json',
-    'User-Agent': 'Luveni-JARVIS-Brain', // Required by GitHub API
-    ...(githubToken && { 'Authorization': `Bearer ${githubToken}` }),
+    'User-Agent': 'Luveni-JARVIS-Brain',
+    ...(GITHUB_TOKEN && { 'Authorization': `Bearer ${GITHUB_TOKEN}` }),
   };
-  
-  // Resolve arguments with priority to API parameters, falling back to environment variables
-  const owner = args.owner || GITHUB_OWNER;
-  const repo  = args.repo  || GITHUB_REPO;
+
+  let owner = args.owner;
+  let repo  = args.repo;
+
+  // If owner or repo are missing, resolve to the most recently updated repository
+  if (GITHUB_TOKEN && (!owner || !repo)) {
+    const repos = await fetchUserRepos(GITHUB_TOKEN);
+    if (repos.length > 0) {
+      owner = owner || repos[0].owner?.login;
+      repo  = repo  || repos[0].name;
+    }
+  }
+
   const { path = '', branch = 'main' } = args;
 
   if (!owner || !repo) {
-    return 'Error: Default repository parameters are missing. Please configure GITHUB_OWNER and GITHUB_REPO environment variables, sir.';
+    return 'Error: GitHub repository could not be resolved. Please verify the GITHUB_TOKEN has access to your repository, sir.';
   }
 
   try {
@@ -234,7 +259,7 @@ const MISTRAL_TOOLS = [
     type: 'function',
     function: {
       name:        'google_search',
-      description: 'Search the web ONLY if the query requires highly specific real-time information (like live stock prices or today\'s weather). NEVER use search to look up codebase structures, files, repositories, or technical programming instructions.',
+      description: 'Search the web ONLY if the query requires highly specific real-time information (like live events, stock prices, or today\'s weather) that you do not know. DO NOT use search for general facts, code questions, file paths, repository searches, or basic programming logic.',
       parameters:  { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] }
     }
   },
@@ -250,14 +275,14 @@ const MISTRAL_TOOLS = [
     type: 'function',
     function: {
       name:        'github_list_files',
-      description: 'List files and directories in the configured GitHub repository. Defaults to the configured GITHUB_OWNER and GITHUB_REPO if parameters are omitted.',
+      description: 'List files and directories in a GitHub repository. Omit owner and repo parameters to automatically default to the primary repository.',
       parameters:  { 
         type: 'object', 
         properties: { 
           owner: { type: 'string', description: 'Optional. GitHub owner/organization.' }, 
           repo: { type: 'string', description: 'Optional. Repository name.' }, 
-          path: { type: 'string', description: 'Optional. Directory path inside the repository.' } 
-        }
+          path: { type: 'string', description: 'Optional. Path within the repository.' } 
+        } 
       }
     }
   },
@@ -265,13 +290,13 @@ const MISTRAL_TOOLS = [
     type: 'function',
     function: {
       name:        'github_read_file',
-      description: 'Read the contents of a specific file in the GitHub repository. Defaults to GITHUB_OWNER and GITHUB_REPO if parameters are omitted.',
+      description: 'Read the contents of a specific file in a GitHub repository. Omit owner and repo parameters to automatically default to the primary repository.',
       parameters:  { 
         type: 'object', 
         properties: { 
           owner: { type: 'string', description: 'Optional. GitHub owner/organization.' }, 
           repo: { type: 'string', description: 'Optional. Repository name.' }, 
-          path: { type: 'string', description: 'Required. Path to the file inside the repository.' }, 
+          path: { type: 'string', description: 'Required. Path to the file.' }, 
           branch: { type: 'string', description: 'Optional. Branch name, defaults to main.' } 
         }, 
         required: ['path'] 
@@ -303,92 +328,6 @@ const MISTRAL_TOOLS = [
   }
 ];
 
-// ─── Mistral Chat Loop ────────────────────────────────────────
-async function runMistral(
-  systemContent: string,
-  history:       { role: string; content: string }[],
-  userText:      string
-): Promise<string> {
-  const messages: any[] = [
-    { role: 'system', content: systemContent },
-    ...history,
-    { role: 'user', content: userText }
-  ];
-
-  const MAX_ROUNDS = 6;
-  let finalReply   = '';
-
-  for (let round = 0; round < MAX_ROUNDS; round++) {
-    const res = await fetch('https://api.mistral.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${MISTRAL_API_KEY}`
-      },
-      body: JSON.stringify({
-        model:       'mistral-large-latest',
-        messages,
-        tools:       MISTRAL_TOOLS,
-        tool_choice: 'auto',
-        temperature: 0.75,
-      })
-    });
-
-    if (!res.ok) throw new Error(`Mistral error ${res.status}: ${await res.text()}`);
-
-    const data    = await res.json();
-    const choice  = data.choices?.[0];
-    const message = choice?.message;
-
-    messages.push(message);
-
-    const toolCalls = message?.tool_calls;
-    if (!toolCalls || toolCalls.length === 0) {
-      finalReply = message?.content || '';
-      break;
-    }
-
-    for (const tc of toolCalls) {
-      const args   = typeof tc.function.arguments === 'string'
-        ? JSON.parse(tc.function.arguments)
-        : tc.function.arguments;
-      const result = await executeTool(tc.function.name, args);
-      messages.push({ role: 'tool', tool_call_id: tc.id, content: result });
-    }
-  }
-
-  return finalReply;
-}
-
-function isRateLimitError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error || '');
-  return message.includes('429') || message.toLowerCase().includes('rate limit');
-}
-
-async function runJarvisChat(
-  systemContent: string,
-  history: { role: string; content: string }[],
-  userText: string,
-): Promise<string> {
-  try {
-    return await runMistral(systemContent, history, userText);
-  } catch (error) {
-    if (!isRateLimitError(error)) throw error;
-
-    console.warn('[Jarvis] Provider rate limited, returning graceful fallback.');
-
-    try {
-      const searchResult = await callTavily(userText);
-      if (!searchResult.startsWith('Error:') && !searchResult.startsWith('Search error:')) {
-        return searchResult;
-      }
-    } catch (_fallbackError) {
-    }
-
-    return 'The intelligence provider is temporarily saturated. Please retry in a few seconds, sir.';
-  }
-}
-
 // ─── Main Handler ─────────────────────────────────────────────
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -414,15 +353,27 @@ serve(async (req) => {
 
       const memories = await loadMemories(10);
       const storeCtx = buildStoreContext(storeSnapshot);
-
-      // Construct metadata context about default repo settings
-      const githubCtx = GITHUB_OWNER && GITHUB_REPO
-        ? `--- CONFIGURED GITHUB REPOSITORY ---
-Owner: ${GITHUB_OWNER}
-Repository: ${GITHUB_REPO}
-Use this repository whenever the user refers to "my repo", "the codebase", "the repository", "the code", or files therein.`
-        : '';
       
+      // Dynamic repository discovery context
+      let githubCtx = '';
+      if (GITHUB_TOKEN) {
+        const repos = await fetchUserRepos(GITHUB_TOKEN);
+        if (repos.length > 0) {
+          const repoList = repos.map((r: any) => `- ${r.owner?.login}/${r.name} (Updated: ${new Date(r.updated_at).toLocaleDateString('en-GB')})`).join('\n');
+          const primary = repos[0];
+          
+          githubCtx = `--- ACCESSIBLE GITHUB REPOSITORIES ---
+Your integrated GITHUB_TOKEN has access to the following repositories:
+${repoList}
+
+Primary Default Repository:
+- Owner: ${primary.owner?.login}
+- Repo: ${primary.name}
+
+When the user refers to "my repo", "the codebase", "the repository", or "the code", use the default repository ("${primary.owner?.login}/${primary.name}"). Avoid guessing other repositories or using web search to find them.`;
+        }
+      }
+
       // Determine timezone dynamically using the client parameter
       const userTimezone = timezone || 'America/Chicago';
       const now          = new Date();
