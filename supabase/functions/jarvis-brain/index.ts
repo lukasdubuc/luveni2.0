@@ -331,6 +331,35 @@ async function runMistral(
   return finalReply;
 }
 
+function isRateLimitError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return message.includes('429') || message.toLowerCase().includes('rate limit');
+}
+
+async function runJarvisChat(
+  systemContent: string,
+  history: { role: string; content: string }[],
+  userText: string,
+): Promise<string> {
+  try {
+    return await runMistral(systemContent, history, userText);
+  } catch (error) {
+    if (!isRateLimitError(error)) throw error;
+
+    console.warn('[Jarvis] Provider rate limited, returning graceful fallback.');
+
+    try {
+      const searchResult = await callTavily(userText);
+      if (!searchResult.startsWith('Error:') && !searchResult.startsWith('Search error:')) {
+        return searchResult;
+      }
+    } catch (_fallbackError) {
+    }
+
+    return 'The intelligence provider is temporarily saturated. Please retry in a few seconds, sir.';
+  }
+}
+
 // ─── Main Handler ─────────────────────────────────────────────
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -378,7 +407,7 @@ FORMATTING:
 - Integrate search results into fluid prose.
 `.trim();
 
-      const reply = await runMistral(systemContent, history || [], userText);
+      const reply = await runJarvisChat(systemContent, history || [], userText);
 
       return new Response(
         JSON.stringify({ reply }),
