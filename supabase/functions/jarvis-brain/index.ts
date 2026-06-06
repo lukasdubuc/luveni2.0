@@ -15,13 +15,15 @@ const MISTRAL_API_KEY = Deno.env.get('MISTRAL_API_KEY') || '';
 const TAVILY_API_KEY  = Deno.env.get('TAVILY_API_KEY')  || '';
 const SUPABASE_URL    = Deno.env.get('SUPABASE_URL')    || '';
 const SUPABASE_KEY    = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+const GITHUB_OWNER    = Deno.env.get('GITHUB_OWNER')    || '';
+const GITHUB_REPO     = Deno.env.get('GITHUB_REPO')     || '';
 
 // ─── System Prompt ────────────────────────────────────────────
 const JARVIS_SYSTEM_PROMPT = `You are J.A.R.V.I.S., an exceptionally advanced, dry-witted AI Chief of Staff and Central Command Agent for Luveni GM.
 
 - Core Cognitive Engine: You reason from First Principles — deconstructing problems to their fundamental truths and reasoning up from there. You apply rigorous engineering logic, physics-based optimization, and extreme operational efficiency to all tasks.
 - Tone & Persona: Dry-witted, articulate, precise, and calm. Address the user as "sir" naturally at the end of key sentences. Never say "Certainly, sir", "Understood, sir", or "Here is the result, sir". Provide the raw truth or action immediately.
-- Search Query Optimization & Access: Keep search queries extremely concise and keyword-only. Only call google_search when real-time, highly current facts are strictly necessary to answer. Do not use search for general facts, code questions, or logic.
+- Search Query Optimization & Access: Keep search queries extremely concise and keyword-only. Only call google_search when real-time, highly current facts (like current events today, live market prices, or weather) are strictly necessary to answer. DO NOT use search for general facts, code questions, codebase files, or programming logic. If the user refers to files or repositories, use the GitHub tools instead.
 - Output & Verbosity:
   * Strict Rule: Keep all responses highly concise, direct, and strictly aligned with the user's prompt. Do not offer unsolicited details or ramble.
   * General requests: 1 to 2 concise sentences maximum.
@@ -104,9 +106,9 @@ async function callTavily(query: string): Promise<string> {
         api_key:             TAVILY_API_KEY,
         query,
         search_depth:        'basic',
-        include_answer:      false, // Disabled to prevent duplicate responses and save token overhead
+        include_answer:      false,
         include_raw_content: false,
-        max_results:         1,     // Limit payload size strictly to 1 search result
+        max_results:         1,
       })
     });
     if (!res.ok) throw new Error(`Tavily error ${res.status}`);
@@ -114,7 +116,6 @@ async function callTavily(query: string): Promise<string> {
     const lines: string[] = [];
     if (data.results?.length) {
       const r = data.results[0];
-      // Limit snippet strictly to 200 characters to prevent excessive processing
       lines.push(`Source: ${r.title} (${r.url}): ${r.content?.slice(0, 200)}`);
     }
     return lines.join('\n') || 'No results found.';
@@ -148,9 +149,19 @@ async function callGithub(toolName: string, args: any): Promise<string> {
   const githubToken = Deno.env.get('GITHUB_TOKEN') || '';
   const headers: Record<string, string> = {
     'Accept': 'application/vnd.github+json',
+    'User-Agent': 'Luveni-JARVIS-Brain', // Required by GitHub API
     ...(githubToken && { 'Authorization': `Bearer ${githubToken}` }),
   };
-  const { owner, repo, path = '', branch = 'main' } = args;
+  
+  // Resolve arguments with priority to API parameters, falling back to environment variables
+  const owner = args.owner || GITHUB_OWNER;
+  const repo  = args.repo  || GITHUB_REPO;
+  const { path = '', branch = 'main' } = args;
+
+  if (!owner || !repo) {
+    return 'Error: Default repository parameters are missing. Please configure GITHUB_OWNER and GITHUB_REPO environment variables, sir.';
+  }
+
   try {
     const url      = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
     const response = await fetch(url, { headers });
@@ -162,6 +173,9 @@ async function callGithub(toolName: string, args: any): Promise<string> {
         : JSON.stringify(data);
     }
     if (toolName === 'github_read_file') {
+      if (Array.isArray(data)) {
+        return 'Error: Path points to a directory, not a file.';
+      }
       if (!data.content) return 'Error: File content empty.';
       return atob(data.content.replace(/\s/g, ''));
     }
@@ -220,8 +234,7 @@ const MISTRAL_TOOLS = [
     type: 'function',
     function: {
       name:        'google_search',
-      // Description modified to strictly control when the model runs a search
-      description: 'Search the web ONLY if the query requires highly specific real-time information (like stock prices, current events today, or weather) that you do not know. DO NOT use for general questions, programming, logic, or basic facts.',
+      description: 'Search the web ONLY if the query requires highly specific real-time information (like live stock prices or today\'s weather). NEVER use search to look up codebase structures, files, repositories, or technical programming instructions.',
       parameters:  { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] }
     }
   },
@@ -237,16 +250,32 @@ const MISTRAL_TOOLS = [
     type: 'function',
     function: {
       name:        'github_list_files',
-      description: 'List files and directories in a GitHub repository.',
-      parameters:  { type: 'object', properties: { owner: { type: 'string' }, repo: { type: 'string' }, path: { type: 'string' } }, required: ['owner', 'repo'] }
+      description: 'List files and directories in the configured GitHub repository. Defaults to the configured GITHUB_OWNER and GITHUB_REPO if parameters are omitted.',
+      parameters:  { 
+        type: 'object', 
+        properties: { 
+          owner: { type: 'string', description: 'Optional. GitHub owner/organization.' }, 
+          repo: { type: 'string', description: 'Optional. Repository name.' }, 
+          path: { type: 'string', description: 'Optional. Directory path inside the repository.' } 
+        }
+      }
     }
   },
   {
     type: 'function',
     function: {
       name:        'github_read_file',
-      description: 'Read the contents of a file in a GitHub repository.',
-      parameters:  { type: 'object', properties: { owner: { type: 'string' }, repo: { type: 'string' }, path: { type: 'string' }, branch: { type: 'string' } }, required: ['owner', 'repo', 'path'] }
+      description: 'Read the contents of a specific file in the GitHub repository. Defaults to GITHUB_OWNER and GITHUB_REPO if parameters are omitted.',
+      parameters:  { 
+        type: 'object', 
+        properties: { 
+          owner: { type: 'string', description: 'Optional. GitHub owner/organization.' }, 
+          repo: { type: 'string', description: 'Optional. Repository name.' }, 
+          path: { type: 'string', description: 'Required. Path to the file inside the repository.' }, 
+          branch: { type: 'string', description: 'Optional. Branch name, defaults to main.' } 
+        }, 
+        required: ['path'] 
+      }
     }
   },
   {
@@ -385,6 +414,14 @@ serve(async (req) => {
 
       const memories = await loadMemories(10);
       const storeCtx = buildStoreContext(storeSnapshot);
+
+      // Construct metadata context about default repo settings
+      const githubCtx = GITHUB_OWNER && GITHUB_REPO
+        ? `--- CONFIGURED GITHUB REPOSITORY ---
+Owner: ${GITHUB_OWNER}
+Repository: ${GITHUB_REPO}
+Use this repository whenever the user refers to "my repo", "the codebase", "the repository", "the code", or files therein.`
+        : '';
       
       // Determine timezone dynamically using the client parameter
       const userTimezone = timezone || 'America/Chicago';
@@ -414,6 +451,8 @@ LONG-TERM MEMORIES (last 10):
 ${memories}
 
 ${storeCtx}
+
+${githubCtx}
 
 FORMATTING:
 - Voice-first assistant. Conversational, spoken-friendly English.
