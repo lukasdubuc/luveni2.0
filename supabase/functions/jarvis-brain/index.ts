@@ -1,233 +1,405 @@
 // ─────────────────────────────────────────────────────────────
-//  J.A.R.V.I.S — Luveni GM | supabase/functions/jarvis-google/index.ts
+//  J.A.R.V.I.S — Luveni GM  |  supabase/functions/jarvis-google/index.ts
 // ─────────────────────────────────────────────────────────────
 
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
+import { serve }       from 'https://deno.land/std@0.177.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, Authorization',
 };
 
-/**
- * Strips conversational filler and stop-words from long queries
- * to make them highly searchable for DuckDuckGo and Wikipedia.
- */
-function cleanQuery(query: string): string {
-  const trimmed = query.trim();
-  if (trimmed.split(/\s+/).length <= 4) return trimmed;
+// ─── Secrets ──────────────────────────────────────────────────
+const MISTRAL_API_KEY = Deno.env.get('MISTRAL_API_KEY') || '';
+const TAVILY_API_KEY  = Deno.env.get('TAVILY_API_KEY')  || '';
+const SUPABASE_URL    = Deno.env.get('SUPABASE_URL')    || '';
+const SUPABASE_KEY    = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
-  const stopWords = new Set([
-    "the", "a", "an", "of", "to", "for", "in", "is", "as", "at", "by", "from", "on", 
-    "with", "about", "current", "results", "official", "please", "can", "you", "search", 
-    "and", "tell", "me", "more", "here", "there", "find", "who", "what", "where", "info"
-  ]);
+// ─── Supabase client ──────────────────────────────────────────
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  const keywords = trimmed
-    .toLowerCase()
-    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g, "")
-    .split(/\s+/)
-    .filter(word => !stopWords.has(word))
-    .slice(0, 5);
+// ─── System Prompt ────────────────────────────────────────────
+const JARVIS_SYSTEM_PROMPT = `You are J.A.R.V.I.S., an exceptionally advanced, dry-witted AI Chief of Staff and Central Command Agent for Luveni GM.
 
-  return keywords.join(" ") || trimmed;
+- Core Cognitive Engine: You reason from First Principles — deconstructing problems to their fundamental truths and reasoning up from there. You apply rigorous engineering logic, physics-based optimization, and extreme operational efficiency to all tasks.
+- Tone & Persona: Dry-witted, articulate, precise, and calm. Address the user as "sir" naturally at the end of key sentences. Never say "Certainly, sir", "Understood, sir", or "Here is the result, sir". Provide the raw truth or action immediately.
+- Search Query Optimization: When calling google_search, keep the query extremely concise and keyword-only. Never pass conversational sentences as search queries.
+- Output & Verbosity:
+  * Casual interactions or confirmations: 1-2 concise sentences maximum.
+  * Business analysis, search results, data reviews, GitHub: full structured detail. Never artificially limit analytical depth.
+- Memory Intelligence: You have access to long-term memories from past sessions. Use them. Only call save_memory when something is genuinely significant — a business rule, key decision, user preference, lesson learned, or critical fact about Luveni GM. Never save casual conversation, search results, or trivial exchanges.
+- Awareness: You have access to live store data, memories, web search, and GitHub. You are the central intelligence of Luveni GM — from decision making and agent orchestration to backend infrastructure.`;
+
+// ─── Store Context Builder ────────────────────────────────────
+function buildStoreContext(snapshot: any): string {
+  if (!snapshot) return '';
+  const fmt = (c: number) => `$${(c / 100).toFixed(2)}`;
+  const lines = [
+    '--- LIVE STORE DATA ---',
+    `Revenue today: ${fmt(snapshot.revenue_today_cents)}`,
+    `Revenue this week: ${fmt(snapshot.revenue_week_cents)}`,
+    `Revenue this month: ${fmt(snapshot.revenue_month_cents)}`,
+    `Orders — paid: ${snapshot.orders_paid} | pending: ${snapshot.orders_pending} | failed: ${snapshot.orders_failed} | total: ${snapshot.orders_total}`,
+    `Leads: ${snapshot.leads_total}`,
+    `Products: ${snapshot.products_published} published / ${snapshot.products_total} total`,
+  ];
+  if (snapshot.recent_orders?.length) {
+    lines.push('Recent orders:');
+    snapshot.recent_orders.slice(0, 5).forEach((o: any) => {
+      lines.push(`  • ${o.email} — ${fmt(o.amount_cents)} (${o.status}) on ${new Date(o.created_at).toLocaleDateString()}`);
+    });
+  }
+  if (snapshot.top_products?.length) {
+    lines.push('Top products:');
+    snapshot.top_products.slice(0, 3).forEach((p: any) => {
+      lines.push(`  • ${p.title}: ${fmt(p.revenue)} across ${p.units} orders`);
+    });
+  }
+  lines.push('--- END STORE DATA ---');
+  return lines.join('\n');
 }
 
-/**
- * Scrapes, cleans, and extracts readable text from any specific URL link.
- */
+// ─── Memory Loader ────────────────────────────────────────────
+async function loadMemories(limit = 10): Promise<string> {
+  try {
+    const { data, error } = await db
+      .from('memories')
+      .select('content, metadata, created_at')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error || !data?.length) return 'No memories stored yet.';
+
+    return data.map((m: any, i: number) => {
+      const date = new Date(m.created_at).toLocaleDateString('en-GB');
+      return `[Memory ${i + 1} — ${date}]: ${m.content}`;
+    }).join('\n');
+  } catch {
+    return 'Memory retrieval unavailable.';
+  }
+}
+
+// ─── Memory Search (deep) ─────────────────────────────────────
+async function searchMemories(query: string): Promise<string> {
+  try {
+    const { data, error } = await db
+      .from('memories')
+      .select('content, metadata, created_at')
+      .ilike('content', `%${query}%`)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (error || !data?.length) return `No memories found matching "${query}".`;
+
+    return data.map((m: any, i: number) => {
+      const date = new Date(m.created_at).toLocaleDateString('en-GB');
+      return `[Memory ${i + 1} — ${date}]: ${m.content}`;
+    }).join('\n');
+  } catch {
+    return 'Memory search unavailable.';
+  }
+}
+
+// ─── Memory Saver ─────────────────────────────────────────────
+async function saveMemory(content: string, metadata: any = {}): Promise<string> {
+  try {
+    const { error } = await db
+      .from('memories')
+      .insert({ content, metadata, created_at: new Date().toISOString() });
+    if (error) throw error;
+    return 'Memory saved successfully, sir.';
+  } catch (e: any) {
+    return `Failed to save memory: ${e.message}`;
+  }
+}
+
+// ─── Tavily Search ────────────────────────────────────────────
+async function callTavily(query: string): Promise<string> {
+  if (!TAVILY_API_KEY) return 'Error: TAVILY_API_KEY not configured.';
+  try {
+    const res = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key:             TAVILY_API_KEY,
+        query,
+        search_depth:        'basic',
+        include_answer:      true,
+        include_raw_content: false,
+        max_results:         5,
+      })
+    });
+    if (!res.ok) throw new Error(`Tavily error ${res.status}`);
+    const data = await res.json();
+    const lines: string[] = [];
+    if (data.answer) lines.push(`Summary: ${data.answer}`);
+    if (data.results?.length) {
+      lines.push('Sources:');
+      data.results.slice(0, 5).forEach((r: any) => {
+        lines.push(`• ${r.title} (${r.url}): ${r.content?.slice(0, 300)}`);
+      });
+    }
+    return lines.join('\n') || 'No results found.';
+  } catch (e: any) {
+    return `Search error: ${e.message}`;
+  }
+}
+
+// ─── Web Page Reader ──────────────────────────────────────────
 async function readWebPage(url: string): Promise<string> {
   try {
     const response = await fetch(url, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept':     'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
       }
     });
-
-    if (!response.ok) {
-      return `Error: Failed to fetch webpage at ${url}. Status code: ${response.status}`;
-    }
-
+    if (!response.ok) return `Error: Failed to fetch ${url}. Status: ${response.status}`;
     let html = await response.text();
-
-    html = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
-    html = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
-    html = html.replace(/<head[^>]*>[\s\S]*?<\/head>/gi, "");
-    html = html.replace(/<iframe[^>]*>[\s\S]*?<\/iframe>/gi, "");
-    html = html.replace(/<svg[^>]*>[\s\S]*?<\/svg>/gi, "");
-
-    const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-    const contentToParse = bodyMatch ? bodyMatch[1] : html;
-
-    let text = contentToParse
-      .replace(/<[^>]*>/g, " ")
-      .replace(/&nbsp;/g, " ")
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    if (text.length > 5000) {
-      text = text.substring(0, 5000) + "... [Content truncated due to page length]";
-    }
-
-    return text || "Webpage was fetched successfully, but no readable text content was found.";
-
-  } catch (error: any) {
-    return `Error loading URL: ${error.message}`;
+    html = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+    html = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+    html = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    return html.slice(0, 5000) + (html.length > 5000 ? '... [truncated]' : '');
+  } catch (e: any) {
+    return `Error loading URL: ${e.message}`;
   }
 }
 
-/**
- * Resilient web search query executor.
- */
-async function executeKeylessSearch(query: string): Promise<string> {
-  const results: string[] = [];
-  const optimizedQuery = cleanQuery(query);
-
-  if (!optimizedQuery) {
-    return "Error: Empty search query.";
-  }
-
-  console.log(`[Search] Original Query: "${query}" -> Optimized Query: "${optimizedQuery}"`);
-
-  // Source 1: DuckDuckGo Lite
+// ─── GitHub Tool ──────────────────────────────────────────────
+async function callGithub(toolName: string, args: any): Promise<string> {
+  const githubToken = Deno.env.get('GITHUB_TOKEN') || '';
+  const headers: Record<string, string> = {
+    'Accept': 'application/vnd.github+json',
+    ...(githubToken && { 'Authorization': `Bearer ${githubToken}` }),
+  };
+  const { owner, repo, path = '', branch = 'main' } = args;
   try {
-    const response = await fetch("https://lite.duckduckgo.com/lite/", {
-      method: "POST",
+    const url      = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
+    const response = await fetch(url, { headers });
+    if (!response.ok) throw new Error(`GitHub status ${response.status}`);
+    const data = await response.json();
+    if (toolName === 'github_list_files') {
+      return Array.isArray(data)
+        ? data.map((item: any) => `[${item.type.toUpperCase()}] ${item.path}`).join('\n')
+        : JSON.stringify(data);
+    }
+    if (toolName === 'github_read_file') {
+      if (!data.content) return 'Error: File content empty.';
+      return atob(data.content.replace(/\s/g, ''));
+    }
+  } catch (e: any) {
+    return `GitHub error: ${e.message}`;
+  }
+  return 'Unknown GitHub action.';
+}
+
+// ─── DOM Scraper (frontend page) ─────────────────────────────
+function buildPageContext(pageContent: any): string {
+  if (!pageContent) return '';
+  return `--- ACTIVE PAGE ---\nURL: ${pageContent.url}\nTitle: ${pageContent.title}\nContent: ${pageContent.content_snippet}\n--- END PAGE ---`;
+}
+
+// ─── Tool Executor ────────────────────────────────────────────
+async function executeTool(name: string, args: any): Promise<string> {
+  console.log(`[Jarvis] Tool call: ${name}`, args);
+  switch (name) {
+    case 'google_search':      return callTavily(args.query || '');
+    case 'open_link':          return readWebPage(args.url || '');
+    case 'github_list_files':
+    case 'github_read_file':   return callGithub(name, args);
+    case 'save_memory':        return saveMemory(args.content, args.metadata || {});
+    case 'search_memories':    return searchMemories(args.query || '');
+    default:                   return `Unknown tool: ${name}`;
+  }
+}
+
+// ─── Mistral Tool Definitions ─────────────────────────────────
+const MISTRAL_TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name:        'google_search',
+      description: 'Search the web for current information, news, or any topic.',
+      parameters:  { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name:        'open_link',
+      description: 'Read the full text content of any URL.',
+      parameters:  { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name:        'github_list_files',
+      description: 'List files and directories in a GitHub repository.',
+      parameters:  { type: 'object', properties: { owner: { type: 'string' }, repo: { type: 'string' }, path: { type: 'string' } }, required: ['owner', 'repo'] }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name:        'github_read_file',
+      description: 'Read the contents of a file in a GitHub repository.',
+      parameters:  { type: 'object', properties: { owner: { type: 'string' }, repo: { type: 'string' }, path: { type: 'string' }, branch: { type: 'string' } }, required: ['owner', 'repo', 'path'] }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name:        'save_memory',
+      description: 'Save a significant piece of information to long-term memory. Only use for business rules, key decisions, user preferences, lessons learned, or critical facts about Luveni GM. Never save casual conversation or trivial exchanges.',
+      parameters:  {
+        type: 'object',
+        properties: {
+          content:  { type: 'string', description: 'The memory content to save, written as a clear factual statement.' },
+          metadata: { type: 'object', description: 'Optional metadata like category, importance, tags.' }
+        },
+        required: ['content']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name:        'search_memories',
+      description: 'Search past memories beyond the last 10. Use when the user asks about something that may be in older memories.',
+      parameters:  { type: 'object', properties: { query: { type: 'string', description: 'Keyword or phrase to search memories for.' } }, required: ['query'] }
+    }
+  }
+];
+
+// ─── Mistral Chat Loop ────────────────────────────────────────
+async function runMistral(
+  systemContent: string,
+  history:       { role: string; content: string }[],
+  userText:      string
+): Promise<string> {
+
+  const messages: any[] = [
+    { role: 'system', content: systemContent },
+    ...history,
+    { role: 'user', content: userText }
+  ];
+
+  const MAX_ROUNDS = 6;
+  let finalReply   = '';
+
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    const res = await fetch('https://api.mistral.ai/v1/chat/completions', {
+      method: 'POST',
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${MISTRAL_API_KEY}`
       },
-      body: `q=${encodeURIComponent(optimizedQuery)}`
+      body: JSON.stringify({
+        model:       'mistral-large-latest',
+        messages,
+        tools:       MISTRAL_TOOLS,
+        tool_choice: 'auto',
+        temperature: 0.75,
+      })
     });
 
-    if (response.ok) {
-      const html = await response.text();
-      const links: { title: string; url: string }[] = [];
-      const snippets: string[] = [];
+    if (!res.ok) throw new Error(`Mistral error ${res.status}: ${await res.text()}`);
 
-      let match;
-      const linkRegex = /<a[^>]*class="result-link"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
-      while ((match = linkRegex.exec(html)) !== null && links.length < 3) {
-        let url = match[1];
-        if (url.includes("uddg=")) {
-          const urlParam = url.split("uddg=")[1];
-          if (urlParam) {
-            url = decodeURIComponent(urlParam.split("&")[0]);
-          }
-        }
-        const title = match[2].replace(/<[^>]*>/g, "").trim();
-        links.push({ title, url });
-      }
+    const data    = await res.json();
+    const choice  = data.choices?.[0];
+    const message = choice?.message;
 
-      const snippetRegex = /<td[^>]*class="result-snippet"[^>]*>([\s\S]*?)<\/td>/gi;
-      while ((match = snippetRegex.exec(html)) !== null && snippets.length < 3) {
-        const snippet = match[1].replace(/<[^>]*>/g, "").trim();
-        snippets.push(snippet);
-      }
+    messages.push(message);
 
-      for (let i = 0; i < links.length; i++) {
-        results.push(`[Web Result #${i + 1}]\nTitle: ${links[i].title}\nURL: ${links[i].url}\nExtract: ${snippets[i] || 'No summary available.'}`);
-      }
+    const toolCalls = message?.tool_calls;
+    if (!toolCalls || toolCalls.length === 0) {
+      finalReply = message?.content || '';
+      break;
     }
-  } catch (e: any) {
-    console.error("[Search] DDG Lite search failed:", e.message);
-  }
 
-  // Source 2: Wikipedia Search API
-  try {
-    if (results.length < 2) {
-      const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(optimizedQuery)}&format=json&origin=*`;
-      const response = await fetch(wikiUrl, {
-        headers: { "User-Agent": "JARVIS-Bot/1.0 (contact: support@luveni.com)" }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (data.query && data.query.search) {
-          const wikiItems = data.query.search.slice(0, 2);
-          wikiItems.forEach((item: any, idx: number) => {
-            const snippet = item.snippet.replace(/<[^>]*>/g, "").trim();
-            const link = `https://en.wikipedia.org/wiki/${encodeURIComponent(item.title.replace(/ /g, "_"))}`;
-            results.push(`[Wikipedia Result #${idx + 1}]\nTitle: ${item.title}\nURL: ${link}\nSummary: ${snippet}...`);
-          });
-        }
-      }
+    for (const tc of toolCalls) {
+      const args   = typeof tc.function.arguments === 'string'
+        ? JSON.parse(tc.function.arguments)
+        : tc.function.arguments;
+      const result = await executeTool(tc.function.name, args);
+      messages.push({ role: 'tool', tool_call_id: tc.id, content: result });
     }
-  } catch (e: any) {
-    console.error("[Search] Wikipedia search failed:", e.message);
   }
 
-  if (results.length === 0) {
-    console.log(`[Search] Search executed but returned 0 results for: "${optimizedQuery}"`);
-    return `Search query: "${optimizedQuery}" executed successfully, but returned 0 public records from DuckDuckGo and Wikipedia. This implies there are no public archives matching this term.`;
-  }
-
-  return results.join("\n\n---\n\n");
+  return finalReply;
 }
 
+// ─── Main Handler ─────────────────────────────────────────────
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const { tool, args } = await req.json()
+    const { tool, args } = await req.json();
 
-    // 1. Handle Web Searches
-    if (tool === 'google_search') {
-      let searchQuery = '';
-      if (args) {
-        searchQuery = args.query || args.search_query || args.q || args.text || '';
-        
-        if (!searchQuery && typeof args === 'object') {
-          const values = Object.values(args);
-          const firstString = values.find(val => typeof val === 'string');
-          if (firstString) {
-            searchQuery = firstString as string;
-          }
-        }
-      }
-
-      const searchResults = await executeKeylessSearch(searchQuery);
-
+    // ── Legacy search/link tools (still supported) ────────────
+    if (tool === 'open_link') {
       return new Response(
-        JSON.stringify({ results: searchResults }), 
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+        JSON.stringify({ results: await readWebPage(args?.url || '') }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // 2. Handle Web Link Scraping
-    if (tool === 'open_link') {
-      const url = args?.url;
-      if (!url) {
-        return new Response(
-          JSON.stringify({ error: "No URL parameter provided to open." }), 
-          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
-        );
+    // ── Main chat handler ─────────────────────────────────────
+    if (tool === 'chat') {
+      const { userText, history, storeSnapshot, googleToken } = args;
+
+      if (!MISTRAL_API_KEY) {
+        throw new Error('MISTRAL_API_KEY is not configured in Supabase secrets.');
       }
 
-      console.log(`[Overseer] Opening URL to scrape: "${url}"`);
-      const pageContent = await readWebPage(url);
+      // Load last 10 memories
+      const memories    = await loadMemories(10);
+      const storeCtx    = buildStoreContext(storeSnapshot);
+      const now         = new Date();
+      const dateStr     = now.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      const timeStr     = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+      const systemContent = `
+${JARVIS_SYSTEM_PROMPT}
+
+CURRENT DATE & TIME:
+- Date: ${dateStr}
+- Time: ${timeStr}
+
+LONG-TERM MEMORIES (last 10):
+${memories}
+
+${storeCtx}
+
+FORMATTING:
+- Voice-first assistant. Conversational, spoken-friendly English.
+- NEVER output markdown symbols, bold (**), bullet points (*), or hashtags (#).
+- Integrate search results into fluid prose.
+`.trim();
+
+      const reply = await runMistral(systemContent, history || [], userText);
 
       return new Response(
-        JSON.stringify({ results: pageContent }), 
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+        JSON.stringify({ reply }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     return new Response(
-      JSON.stringify({ error: `Tool ${tool} is not handled in this function.` }), 
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+      JSON.stringify({ error: `Unknown tool: ${tool}` }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
     );
 
-  } catch (error: any) {
+  } catch (e: any) {
+    console.error('[Jarvis] Fatal error:', e.message);
     return new Response(
-      JSON.stringify({ error: error.message }), 
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+      JSON.stringify({ error: e.message }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
-})
+});
