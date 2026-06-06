@@ -102,20 +102,30 @@ function RootComponent() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const isBare = path.startsWith("/admin") || path === "/login" || path.startsWith("/offer");
   const [footerDescription, setFooterDescription] = useState<string | undefined>(undefined);
-  // ── FIX: read the class the blocking script already stamped on <html>
-  //    instead of re-reading localStorage. This means the initial render
-  //    matches the DOM exactly, so there is no hydration mismatch or flash.
-  const [theme, setTheme] = useState<"light" | "dark">(() => {
-    if (typeof window === "undefined") return "light";
-    return document.documentElement.classList.contains("dark") ? "dark" : "light";
-  });
+  // ── FIX: always start with "light" so SSR HTML and the first client render
+  //    match exactly. After hydration, sync to whatever the blocking script
+  //    already stamped onto <html> (from localStorage). This prevents the
+  //    hydration mismatch caused by SSR rendering light while the client
+  //    immediately reads a "dark" class from the DOM.
+  const [theme, setThemeState] = useState<"light" | "dark">("light");
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
+    // Sync from the class the blocking script already applied.
+    const initial = document.documentElement.classList.contains("dark") ? "dark" : "light";
+    setThemeState(initial);
+    setHydrated(true);
+  }, []);
+
+  const setTheme = setThemeState;
+
+  useEffect(() => {
+    if (!hydrated) return;
     localStorage.setItem('theme', theme);
     document.documentElement.classList.remove("light", "dark");
     document.documentElement.classList.add(theme);
     document.documentElement.style.backgroundColor = theme === 'dark' ? '#000000' : '#FFFFFF';
-  }, [theme]);
+  }, [theme, hydrated]);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(() => { router.invalidate(); queryClient.invalidateQueries(); });
