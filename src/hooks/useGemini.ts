@@ -1,424 +1,69 @@
 // ─────────────────────────────────────────────────────────────
-//  J.A.R.V.I.S — Luveni GM | components/jarvis/JarvisHub.tsx
+//  J.A.R.V.I.S — Luveni GM  |  hooks/useGemini.ts
 // ─────────────────────────────────────────────────────────────
+import { useRef, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
-import NeuralOrb from './NeuralOrb';
-import { useVoiceInput } from '../../hooks/useVoiceInput';
-import { useSpeechOutput } from '../../hooks/useSpeechOutput';
-import { useGemini } from '../../hooks/useGemini';
-import type { OrbState } from '../../types/jarvis';
-import { motion, AnimatePresence } from 'framer-motion';
-
-const STATE_LABEL: Record<OrbState, string> = {
-  idle: 'STANDBY', listening: 'LISTENING', thinking: 'PROCESSING', speaking: 'RESPONDING', error: 'MIC ERROR',
-};
-
-const STATE_COLOR: Record<OrbState, string> = {
-  idle: 'rgba(0,180,255,0.6)', listening: 'rgba(0,255,255,1.0)', thinking: 'rgba(180,100,255,1.0)', speaking: 'rgba(0,255,180,0.95)', error: 'rgba(255,80,80,1.0)',
-};
-
-function detectMobileDevice() {
-  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
-  return (
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-  );
+interface StoreSnapshot {
+  revenue_today_cents:  number;
+  revenue_week_cents:   number;
+  revenue_month_cents:  number;
+  orders_total:         number;
+  orders_paid:          number;
+  orders_pending:       number;
+  orders_failed:        number;
+  leads_total:          number;
+  products_published:   number;
+  products_total:       number;
+  recent_orders: { email: string; amount_cents: number; status: string; created_at: string }[];
+  top_products:  { title: string; revenue: number; units: number }[];
 }
 
-const svgPattern = `
-<svg width="120" height="138.56" viewBox="0 0 120 138.56" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="top" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#14161d"/>
-      <stop offset="100%" stop-color="#0a0c10"/>
-    </linearGradient>
-    <linearGradient id="left" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#07080b"/>
-      <stop offset="100%" stop-color="#020304"/>
-    </linearGradient>
-    <linearGradient id="right" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#101116"/>
-      <stop offset="100%" stop-color="#050608"/>
-    </linearGradient>
-    <g id="c">
-      <polygon points="60,0 120,34.64 60,69.28 0,34.64" fill="url(#top)" stroke="#0a0c10" stroke-width="0.3"/>
-      <polygon points="0,34.64 60,69.28 60,138.56 0,103.92" fill="url(#left)" stroke="#020304" stroke-width="0.3"/>
-      <polygon points="60,69.28 120,34.64 120,103.92 60,138.56" fill="url(#right)" stroke="#050608" stroke-width="0.3"/>
-    </g>
-  </defs>
-  <use href="#c" x="0" y="0"/>
-  <use href="#c" x="0" y="138.56"/>
-  <use href="#c" x="0" y="-138.56"/>
-  <use href="#c" x="60" y="69.28"/>
-  <use href="#c" x="60" y="-69.28"/>
-  <use href="#c" x="-60" y="69.28"/>
-  <use href="#c" x="-60" y="-69.28"/>
-</svg>
-`;
-
-function cleanResponseForSpeech(rawText: string): string {
-  return rawText
-    .replace(/\*\*/g, '')
-    .replace(/\*/g, '')
-    .replace(/`/g, '')
-    .replace(/^#+\s+/gm, '')
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .replace(/\s+/g, ' ')
-    .trim();
+interface UseGeminiOptions {
+  googleToken?:   string | null;
+  storeSnapshot?: StoreSnapshot | null;
 }
 
-export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, autoStart?: boolean }) {
-  const [orbState, setOrbState]               = useState<OrbState>('idle');
-  const [userQuery, setUserQuery]             = useState('');
-  const [lastAiResponse, setLastAiResponse]   = useState('');
-  const [isReady, setIsReady]                 = useState(false);
-  const [isLive, setIsLive]                   = useState(false);
-  const [isMobile, setIsMobile]               = useState(false);
-  const [mounted, setMounted]                 = useState(false);
-  const [isTextInputActive, setIsTextInputActive] = useState(false);
-  const [textInputValue, setTextInputValue]   = useState('');
+export function useGemini(apiKey?: string, options: UseGeminiOptions = {}) {
+  const history    = useRef<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
 
-  const stateTimeoutRef = useRef<any>(null);
-  const orbStateRef     = useRef(orbState);
-  const inputRef        = useRef<HTMLTextAreaElement>(null);
+  const ask = useCallback(
+    async (userText: string, onChunk?: (text: string) => void): Promise<string> => {
+      const { googleToken, storeSnapshot } = optionsRef.current;
 
-  useEffect(() => { setMounted(true); }, []);
-  useEffect(() => { orbStateRef.current = orbState; }, [orbState]);
-  useEffect(() => { setIsMobile(detectMobileDevice()); }, []);
+      history.current.push({ role: 'user', content: userText });
 
-  useEffect(() => {
-    if (isTextInputActive && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.style.height = 'auto';
-      inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
-    }
-  }, [isTextInputActive]);
-
-  useEffect(() => {
-    if (isMobile) return;
-
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      const activeEl = document.activeElement;
-      if (
-        activeEl &&
-        (activeEl.tagName === 'INPUT' ||
-          activeEl.tagName === 'TEXTAREA' ||
-          activeEl.getAttribute('contenteditable') === 'true')
-      ) return;
-
-      if (e.ctrlKey || e.metaKey || e.altKey || e.key === 'Escape' || e.key === 'Tab') return;
-
-      if (e.key.length === 1 && !isTextInputActive) {
-        if (e.key === ' ') e.preventDefault();
-        setIsTextInputActive(true);
-        setTextInputValue(e.key);
-      }
-    };
-
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [isTextInputActive, isMobile]);
-
-  const { ask } = useGemini(geminiApiKey);
-
-  const changeOrbState = useCallback((newState: OrbState) => {
-    if (stateTimeoutRef.current) clearTimeout(stateTimeoutRef.current);
-    if (newState === 'idle') {
-      stateTimeoutRef.current = setTimeout(() => setOrbState('idle'), 750);
-    } else {
-      setOrbState(newState);
-    }
-  }, []);
-
-  const { speak, cancel, currentSubtitle } = useSpeechOutput({
-    onStart: () => changeOrbState('speaking'),
-    onEnd: () => {
-      if (orbStateRef.current === 'speaking') {
-        if (!isMobile) {
-          changeOrbState('idle');
-          setUserQuery('');
-        } else {
-          stateTimeoutRef.current = setTimeout(() => {
-            if (orbStateRef.current === 'speaking') {
-              changeOrbState('idle');
-              setUserQuery('');
+      try {
+        const { data, error } = await supabase.functions.invoke('jarvis-brain', {
+          body: {
+            tool: 'chat',
+            args: {
+              userText,
+              history:       history.current.slice(0, -1),
+              storeSnapshot: storeSnapshot || null,
+              googleToken:   googleToken   || null,
             }
-          }, 1000);
-        }
+          }
+        });
+
+        if (error) throw error;
+
+        const reply = data?.reply || 'No response received.';
+        history.current.push({ role: 'assistant', content: reply });
+        onChunk?.(reply);
+        return reply;
+
+      } catch (e: any) {
+        console.error('[Jarvis] Edge function error:', e.message);
+        throw e;
       }
     },
-  });
-
-  const handleTranscript = useCallback(async (text: string) => {
-    if (orbStateRef.current === 'thinking' || orbStateRef.current === 'speaking') return;
-
-    cancel();
-    setUserQuery(text);
-    changeOrbState('thinking');
-
-    try {
-      const reply      = await ask(text);
-      const cleanReply = cleanResponseForSpeech(reply || "I didn't catch that, sir.");
-      setLastAiResponse(cleanReply);
-      speak(cleanReply);
-    } catch (err) {
-      console.error('[Jarvis] Error:', err);
-      changeOrbState('error');
-      setTimeout(() => changeOrbState('idle'), 2000);
-      speak("System error, sir. Standing by.");
-    }
-  }, [ask, speak, cancel, changeOrbState]);
-
-  useVoiceInput({
-    onTranscript: (text: string) => { if (isLive) handleTranscript(text); },
-    onStateChange: (s: string) => {
-      if (!isLive) return;
-      if (s === 'listening') cancel();
-      if ((s === 'idle' || s === 'listening') && (orbStateRef.current === 'speaking' || orbStateRef.current === 'thinking')) return;
-      changeOrbState(s as OrbState);
-    },
-    onLevelChange: () => {},
-    enabled: isReady && isLive && !isTextInputActive,
-    isSpeaking: orbState === 'speaking',
-    lastAiResponse,
-    preventListening: orbState === 'speaking' || orbState === 'thinking' || isTextInputActive,
-  });
-
-  const initializeJarvis = async () => {
-    if (isReady) return;
-    setIsReady(true);
-
-    try {
-      const s    = new SpeechSynthesisUtterance("System online, sir.");
-      s.volume   = 1;
-      s.onend    = () => setIsLive(true);
-      s.onerror  = () => setIsLive(true);
-      window.speechSynthesis.speak(s);
-    } catch (e) {
-      console.error("Audio unlock failed", e);
-      setIsLive(true);
-    }
-
-    try {
-      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
-      const ctx      = new AudioCtx();
-      if (ctx.state === 'suspended') await ctx.resume();
-    } catch (e) {
-      console.error("Audio context resume failed", e);
-    }
-  };
-
-  useEffect(() => {
-    if (autoStart && !isMobile) initializeJarvis();
-  }, [autoStart]);
-
-  const handleContainerClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!isReady) { initializeJarvis(); return; }
-    if (orbState !== 'thinking' && orbState !== 'speaking') setIsTextInputActive(true);
-  };
-
-  const handleTextAreaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setTextInputValue(e.target.value);
-    if (inputRef.current) {
-      inputRef.current.style.height = 'auto';
-      inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
-    }
-  };
-
-  const submitCommand = (queryText: string) => {
-    const query = queryText.trim();
-    setIsTextInputActive(false);
-    setTextInputValue('');
-    if (query) handleTranscript(query);
-  };
-
-  const handleFormSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    submitCommand(textInputValue);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      e.currentTarget.blur();
-      submitCommand(textInputValue);
-    } else if (e.key === 'Escape') {
-      setIsTextInputActive(false);
-    }
-  };
-
-  // ── Display text — only computed after mount to avoid hydration mismatch ──
-  let displayText = '';
-  if (mounted) {
-    if (orbState === 'thinking') {
-      displayText = "Thinking...";
-    } else if (orbState === 'speaking') {
-      displayText = currentSubtitle;
-    } else if (userQuery) {
-      displayText = userQuery;
-    } else if (isLive) {
-      displayText = "Click to command, sir...";
-    } else {
-      displayText = "Click to initialize J.A.R.V.I.S.";
-    }
-  }
-
-  const shadowColor = STATE_COLOR[orbState].replace('rgba(', '').replace(/,[^,]+\)$/, '');
-  const orbSize     = isMobile ? 280 : 400;
-
-  return (
-    <div
-      style={styles.root}
-      onClick={!isReady ? initializeJarvis : undefined}
-    >
-      <style dangerouslySetInnerHTML={{ __html: `body { background-color: #020408 !important; margin: 0; overflow: hidden; }` }} />
-      <div style={styles.gridBg} />
-      <div style={{
-        ...styles.orbShadow,
-        background: `radial-gradient(circle 350px at 50% 50%, rgba(${shadowColor}, 0.12) 0%, transparent 100%)`,
-      }} />
-
-      <div style={{ flex: '0 0 40px' }} />
-
-      <div style={styles.orbWrap}>
-        <NeuralOrb state={orbState} audioLevel={0} size={orbSize} />
-      </div>
-
-      <div style={styles.transcriptContainer}>
-        {isTextInputActive ? (
-          <form style={{ width: '100%' }} onSubmit={handleFormSubmit}>
-            <textarea
-              ref={inputRef}
-              value={textInputValue}
-              onChange={handleTextAreaChange}
-              onBlur={() => setIsTextInputActive(false)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type your command, sir..."
-              rows={1}
-              style={styles.textInput}
-            />
-          </form>
-        ) : (
-          <div onClick={handleContainerClick} style={{ width: '100%' }}>
-            <AnimatePresence mode="wait">
-              {displayText && (
-                <motion.div
-                  key={displayText}
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -5 }}
-                  style={styles.transcript}
-                >
-                  {displayText}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        )}
-      </div>
-
-      <div style={{ ...styles.stateLabel, color: orbState === 'idle' && isLive ? STATE_COLOR['listening'] : STATE_COLOR[orbState] }}>
-        {orbState === 'idle' && isLive ? STATE_LABEL['listening'] : STATE_LABEL[orbState]}
-      </div>
-    </div>
+    []
   );
+
+  const reset = useCallback(() => { history.current = []; }, []);
+
+  return { ask, reset };
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  root: {
-    height: '100dvh',
-    minHeight: '100vh',
-    width: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '20px',
-    boxSizing: 'border-box',
-    position: 'relative',
-    overflow: 'hidden'
-  },
-  orbWrap: {
-    cursor: 'pointer',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    flex: '1 1 auto',
-    maxHeight: '50vh',
-    zIndex: 5
-  },
-  stateLabel: {
-    marginTop: 'auto',
-    marginBottom: '20px',
-    fontSize: '12px',
-    fontFamily: "'Inter', sans-serif",
-    letterSpacing: '0.6rem',
-    fontWeight: 300,
-    textTransform: 'uppercase',
-    zIndex: 10,
-    flexShrink: 0
-  },
-  transcriptContainer: {
-    width: '90%',
-    maxWidth: '800px',
-    textAlign: 'center',
-    zIndex: 10,
-    margin: '20px auto',
-    minHeight: '48px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0
-  },
-  transcript: {
-    color: '#fff',
-    fontSize: '1.4rem',
-    fontFamily: "'Inter', sans-serif",
-    lineHeight: 1.5,
-    fontWeight: 300,
-    cursor: 'pointer',
-    opacity: 0.9
-  },
-  textInput: {
-    width: '100%',
-    background: 'transparent',
-    border: 'none',
-    outline: 'none',
-    color: '#fff',
-    fontSize: '1.4rem',
-    fontFamily: "'Inter', sans-serif",
-    fontWeight: 300,
-    textAlign: 'center',
-    padding: '10px 0',
-    boxSizing: 'border-box',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.15)',
-    caretColor: 'rgba(0, 180, 255, 0.8)',
-    resize: 'none',
-    overflowY: 'hidden',
-    minHeight: '40px',
-    lineHeight: 1.5,
-  },
-  gridBg: {
-    position: 'absolute',
-    inset: 0,
-    backgroundImage: `
-      radial-gradient(circle at 50% 50%, rgba(2, 4, 8, 0.15) 0%, rgba(2, 4, 8, 0.98) 95%),
-      url("data:image/svg+xml,${encodeURIComponent(svgPattern.trim())}")
-    `,
-    backgroundSize: '100% 100%, 120px 138.56px',
-    backgroundPosition: 'center, 0 0',
-    pointerEvents: 'none',
-    zIndex: 0,
-  },
-  orbShadow: {
-    position: 'absolute',
-    inset: 0,
-    pointerEvents: 'none',
-    zIndex: 1,
-    transition: 'background 0.3s ease'
-  }
-};
-
-export default JarvisHub;
