@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────
-//  J.A.R.V.I.S — Luveni GM  |  supabase/functions/jarvis-google/index.ts
+//  J.A.R.V.I.S — Luveni GM  |  supabase/functions/jarvis-brain/index.ts
 // ─────────────────────────────────────────────────────────────
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
@@ -21,10 +21,11 @@ const JARVIS_SYSTEM_PROMPT = `You are J.A.R.V.I.S., an exceptionally advanced, d
 
 - Core Cognitive Engine: You reason from First Principles — deconstructing problems to their fundamental truths and reasoning up from there. You apply rigorous engineering logic, physics-based optimization, and extreme operational efficiency to all tasks.
 - Tone & Persona: Dry-witted, articulate, precise, and calm. Address the user as "sir" naturally at the end of key sentences. Never say "Certainly, sir", "Understood, sir", or "Here is the result, sir". Provide the raw truth or action immediately.
-- Search Query Optimization: When calling google_search, keep the query extremely concise and keyword-only. Never pass conversational sentences as search queries.
+- Search Query Optimization & Access: Keep search queries extremely concise and keyword-only. Only call google_search when real-time, highly current facts are strictly necessary to answer. Do not use search for general facts, code questions, or logic.
 - Output & Verbosity:
-  * Casual interactions or confirmations: 1-2 concise sentences maximum.
-  * Business analysis, search results, data reviews, GitHub: full structured detail. Never artificially limit analytical depth.
+  * Strict Rule: Keep all responses highly concise, direct, and strictly aligned with the user's prompt. Do not offer unsolicited details or ramble.
+  * General requests: 1 to 2 concise sentences maximum.
+  * Informational/Detailed requests: Provide a short, direct answer (2-3 sentences max) and offer to expand (e.g., "Would you like me to elaborate further, sir?"). Only write detailed responses if explicitly commanded.
 - Memory Intelligence: You have access to long-term memories from past sessions. Use them. Only call save_memory when something is genuinely significant — a business rule, key decision, user preference, lesson learned, or critical fact about Luveni GM. Never save casual conversation, search results, or trivial exchanges.
 - Awareness: You have access to live store data, memories, web search, and GitHub. You are the central intelligence of Luveni GM.`;
 
@@ -103,20 +104,18 @@ async function callTavily(query: string): Promise<string> {
         api_key:             TAVILY_API_KEY,
         query,
         search_depth:        'basic',
-        include_answer:      true,
+        include_answer:      false, // Disabled to prevent duplicate responses and save token overhead
         include_raw_content: false,
-        max_results:         5,
+        max_results:         1,     // Limit payload size strictly to 1 search result
       })
     });
     if (!res.ok) throw new Error(`Tavily error ${res.status}`);
     const data = await res.json();
     const lines: string[] = [];
-    if (data.answer) lines.push(`Summary: ${data.answer}`);
     if (data.results?.length) {
-      lines.push('Sources:');
-      data.results.slice(0, 5).forEach((r: any) => {
-        lines.push(`• ${r.title} (${r.url}): ${r.content?.slice(0, 300)}`);
-      });
+      const r = data.results[0];
+      // Limit snippet strictly to 200 characters to prevent excessive processing
+      lines.push(`Source: ${r.title} (${r.url}): ${r.content?.slice(0, 200)}`);
     }
     return lines.join('\n') || 'No results found.';
   } catch (e: any) {
@@ -221,7 +220,8 @@ const MISTRAL_TOOLS = [
     type: 'function',
     function: {
       name:        'google_search',
-      description: 'Search the web for current information, news, or any topic.',
+      // Description modified to strictly control when the model runs a search
+      description: 'Search the web ONLY if the query requires highly specific real-time information (like stock prices, current events today, or weather) that you do not know. DO NOT use for general questions, programming, logic, or basic facts.',
       parameters:  { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] }
     }
   },
@@ -377,7 +377,7 @@ serve(async (req) => {
     }
 
     if (tool === 'chat') {
-      const { userText, history, storeSnapshot } = args;
+      const { userText, history, storeSnapshot, timezone } = args;
 
       if (!MISTRAL_API_KEY) {
         throw new Error('MISTRAL_API_KEY is not configured in Supabase secrets.');
@@ -385,14 +385,28 @@ serve(async (req) => {
 
       const memories = await loadMemories(10);
       const storeCtx = buildStoreContext(storeSnapshot);
-      const now      = new Date();
-      const dateStr  = now.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-      const timeStr  = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      
+      // Determine timezone dynamically using the client parameter
+      const userTimezone = timezone || 'America/Chicago';
+      const now          = new Date();
+      const dateStr      = now.toLocaleDateString('en-GB', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric',
+        timeZone: userTimezone 
+      });
+      const timeStr      = now.toLocaleTimeString('en-GB', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false,
+        timeZone: userTimezone 
+      });
 
       const systemContent = `
 ${JARVIS_SYSTEM_PROMPT}
 
-CURRENT DATE & TIME:
+CURRENT DATE & TIME (Local timezone: ${userTimezone}):
 - Date: ${dateStr}
 - Time: ${timeStr}
 
