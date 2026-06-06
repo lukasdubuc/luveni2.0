@@ -2,8 +2,7 @@
 //  J.A.R.V.I.S — Luveni GM  |  supabase/functions/jarvis-google/index.ts
 // ─────────────────────────────────────────────────────────────
 
-import { serve }       from 'https://deno.land/std@0.177.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin':  '*',
@@ -17,9 +16,6 @@ const TAVILY_API_KEY  = Deno.env.get('TAVILY_API_KEY')  || '';
 const SUPABASE_URL    = Deno.env.get('SUPABASE_URL')    || '';
 const SUPABASE_KEY    = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
-// ─── Supabase client ──────────────────────────────────────────
-const db = createClient(SUPABASE_URL, SUPABASE_KEY);
-
 // ─── System Prompt ────────────────────────────────────────────
 const JARVIS_SYSTEM_PROMPT = `You are J.A.R.V.I.S., an exceptionally advanced, dry-witted AI Chief of Staff and Central Command Agent for Luveni GM.
 
@@ -30,49 +26,40 @@ const JARVIS_SYSTEM_PROMPT = `You are J.A.R.V.I.S., an exceptionally advanced, d
   * Casual interactions or confirmations: 1-2 concise sentences maximum.
   * Business analysis, search results, data reviews, GitHub: full structured detail. Never artificially limit analytical depth.
 - Memory Intelligence: You have access to long-term memories from past sessions. Use them. Only call save_memory when something is genuinely significant — a business rule, key decision, user preference, lesson learned, or critical fact about Luveni GM. Never save casual conversation, search results, or trivial exchanges.
-- Awareness: You have access to live store data, memories, web search, and GitHub. You are the central intelligence of Luveni GM — from decision making and agent orchestration to backend infrastructure.`;
+- Awareness: You have access to live store data, memories, web search, and GitHub. You are the central intelligence of Luveni GM.`;
 
-// ─── Store Context Builder ────────────────────────────────────
-function buildStoreContext(snapshot: any): string {
-  if (!snapshot) return '';
-  const fmt = (c: number) => `$${(c / 100).toFixed(2)}`;
-  const lines = [
-    '--- LIVE STORE DATA ---',
-    `Revenue today: ${fmt(snapshot.revenue_today_cents)}`,
-    `Revenue this week: ${fmt(snapshot.revenue_week_cents)}`,
-    `Revenue this month: ${fmt(snapshot.revenue_month_cents)}`,
-    `Orders — paid: ${snapshot.orders_paid} | pending: ${snapshot.orders_pending} | failed: ${snapshot.orders_failed} | total: ${snapshot.orders_total}`,
-    `Leads: ${snapshot.leads_total}`,
-    `Products: ${snapshot.products_published} published / ${snapshot.products_total} total`,
-  ];
-  if (snapshot.recent_orders?.length) {
-    lines.push('Recent orders:');
-    snapshot.recent_orders.slice(0, 5).forEach((o: any) => {
-      lines.push(`  • ${o.email} — ${fmt(o.amount_cents)} (${o.status}) on ${new Date(o.created_at).toLocaleDateString()}`);
-    });
-  }
-  if (snapshot.top_products?.length) {
-    lines.push('Top products:');
-    snapshot.top_products.slice(0, 3).forEach((p: any) => {
-      lines.push(`  • ${p.title}: ${fmt(p.revenue)} across ${p.units} orders`);
-    });
-  }
-  lines.push('--- END STORE DATA ---');
-  return lines.join('\n');
+// ─── Supabase REST helpers ────────────────────────────────────
+async function dbSelect(table: string, query: string): Promise<any[]> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
+    headers: {
+      'apikey':        SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type':  'application/json',
+    }
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+async function dbInsert(table: string, row: any): Promise<void> {
+  await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    method:  'POST',
+    headers: {
+      'apikey':        SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type':  'application/json',
+      'Prefer':        'return=minimal',
+    },
+    body: JSON.stringify(row),
+  });
 }
 
 // ─── Memory Loader ────────────────────────────────────────────
 async function loadMemories(limit = 10): Promise<string> {
   try {
-    const { data, error } = await db
-      .from('memories')
-      .select('content, metadata, created_at')
-      .order('created_at', { ascending: false })
-      .limit(limit);
-
-    if (error || !data?.length) return 'No memories stored yet.';
-
-    return data.map((m: any, i: number) => {
+    const rows = await dbSelect('memories', `select=content,metadata,created_at&order=created_at.desc&limit=${limit}`);
+    if (!rows.length) return 'No memories stored yet.';
+    return rows.map((m: any, i: number) => {
       const date = new Date(m.created_at).toLocaleDateString('en-GB');
       return `[Memory ${i + 1} — ${date}]: ${m.content}`;
     }).join('\n');
@@ -81,19 +68,12 @@ async function loadMemories(limit = 10): Promise<string> {
   }
 }
 
-// ─── Memory Search (deep) ─────────────────────────────────────
+// ─── Memory Search ────────────────────────────────────────────
 async function searchMemories(query: string): Promise<string> {
   try {
-    const { data, error } = await db
-      .from('memories')
-      .select('content, metadata, created_at')
-      .ilike('content', `%${query}%`)
-      .order('created_at', { ascending: false })
-      .limit(20);
-
-    if (error || !data?.length) return `No memories found matching "${query}".`;
-
-    return data.map((m: any, i: number) => {
+    const rows = await dbSelect('memories', `select=content,metadata,created_at&content=ilike.*${encodeURIComponent(query)}*&order=created_at.desc&limit=20`);
+    if (!rows.length) return `No memories found matching "${query}".`;
+    return rows.map((m: any, i: number) => {
       const date = new Date(m.created_at).toLocaleDateString('en-GB');
       return `[Memory ${i + 1} — ${date}]: ${m.content}`;
     }).join('\n');
@@ -105,10 +85,7 @@ async function searchMemories(query: string): Promise<string> {
 // ─── Memory Saver ─────────────────────────────────────────────
 async function saveMemory(content: string, metadata: any = {}): Promise<string> {
   try {
-    const { error } = await db
-      .from('memories')
-      .insert({ content, metadata, created_at: new Date().toISOString() });
-    if (error) throw error;
+    await dbInsert('memories', { content, metadata, created_at: new Date().toISOString() });
     return 'Memory saved successfully, sir.';
   } catch (e: any) {
     return `Failed to save memory: ${e.message}`;
@@ -195,23 +172,46 @@ async function callGithub(toolName: string, args: any): Promise<string> {
   return 'Unknown GitHub action.';
 }
 
-// ─── DOM Scraper (frontend page) ─────────────────────────────
-function buildPageContext(pageContent: any): string {
-  if (!pageContent) return '';
-  return `--- ACTIVE PAGE ---\nURL: ${pageContent.url}\nTitle: ${pageContent.title}\nContent: ${pageContent.content_snippet}\n--- END PAGE ---`;
+// ─── Store Context Builder ────────────────────────────────────
+function buildStoreContext(snapshot: any): string {
+  if (!snapshot) return '';
+  const fmt = (c: number) => `$${(c / 100).toFixed(2)}`;
+  const lines = [
+    '--- LIVE STORE DATA ---',
+    `Revenue today: ${fmt(snapshot.revenue_today_cents)}`,
+    `Revenue this week: ${fmt(snapshot.revenue_week_cents)}`,
+    `Revenue this month: ${fmt(snapshot.revenue_month_cents)}`,
+    `Orders — paid: ${snapshot.orders_paid} | pending: ${snapshot.orders_pending} | failed: ${snapshot.orders_failed} | total: ${snapshot.orders_total}`,
+    `Leads: ${snapshot.leads_total}`,
+    `Products: ${snapshot.products_published} published / ${snapshot.products_total} total`,
+  ];
+  if (snapshot.recent_orders?.length) {
+    lines.push('Recent orders:');
+    snapshot.recent_orders.slice(0, 5).forEach((o: any) => {
+      lines.push(`  • ${o.email} — ${fmt(o.amount_cents)} (${o.status}) on ${new Date(o.created_at).toLocaleDateString()}`);
+    });
+  }
+  if (snapshot.top_products?.length) {
+    lines.push('Top products:');
+    snapshot.top_products.slice(0, 3).forEach((p: any) => {
+      lines.push(`  • ${p.title}: ${fmt(p.revenue)} across ${p.units} orders`);
+    });
+  }
+  lines.push('--- END STORE DATA ---');
+  return lines.join('\n');
 }
 
 // ─── Tool Executor ────────────────────────────────────────────
 async function executeTool(name: string, args: any): Promise<string> {
-  console.log(`[Jarvis] Tool call: ${name}`, args);
+  console.log(`[Jarvis] Tool: ${name}`, args);
   switch (name) {
-    case 'google_search':      return callTavily(args.query || '');
-    case 'open_link':          return readWebPage(args.url || '');
+    case 'google_search':    return callTavily(args.query || '');
+    case 'open_link':        return readWebPage(args.url || '');
     case 'github_list_files':
-    case 'github_read_file':   return callGithub(name, args);
-    case 'save_memory':        return saveMemory(args.content, args.metadata || {});
-    case 'search_memories':    return searchMemories(args.query || '');
-    default:                   return `Unknown tool: ${name}`;
+    case 'github_read_file': return callGithub(name, args);
+    case 'save_memory':      return saveMemory(args.content, args.metadata || {});
+    case 'search_memories':  return searchMemories(args.query || '');
+    default:                 return `Unknown tool: ${name}`;
   }
 }
 
@@ -253,12 +253,12 @@ const MISTRAL_TOOLS = [
     type: 'function',
     function: {
       name:        'save_memory',
-      description: 'Save a significant piece of information to long-term memory. Only use for business rules, key decisions, user preferences, lessons learned, or critical facts about Luveni GM. Never save casual conversation or trivial exchanges.',
+      description: 'Save a significant piece of information to long-term memory. Only use for business rules, key decisions, user preferences, lessons learned, or critical facts about Luveni GM. Never save casual conversation.',
       parameters:  {
         type: 'object',
         properties: {
-          content:  { type: 'string', description: 'The memory content to save, written as a clear factual statement.' },
-          metadata: { type: 'object', description: 'Optional metadata like category, importance, tags.' }
+          content:  { type: 'string', description: 'The memory to save as a clear factual statement.' },
+          metadata: { type: 'object', description: 'Optional metadata like category or tags.' }
         },
         required: ['content']
       }
@@ -269,7 +269,7 @@ const MISTRAL_TOOLS = [
     function: {
       name:        'search_memories',
       description: 'Search past memories beyond the last 10. Use when the user asks about something that may be in older memories.',
-      parameters:  { type: 'object', properties: { query: { type: 'string', description: 'Keyword or phrase to search memories for.' } }, required: ['query'] }
+      parameters:  { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] }
     }
   }
 ];
@@ -280,7 +280,6 @@ async function runMistral(
   history:       { role: string; content: string }[],
   userText:      string
 ): Promise<string> {
-
   const messages: any[] = [
     { role: 'system', content: systemContent },
     ...history,
@@ -341,7 +340,6 @@ serve(async (req) => {
   try {
     const { tool, args } = await req.json();
 
-    // ── Legacy search/link tools (still supported) ────────────
     if (tool === 'open_link') {
       return new Response(
         JSON.stringify({ results: await readWebPage(args?.url || '') }),
@@ -349,20 +347,18 @@ serve(async (req) => {
       );
     }
 
-    // ── Main chat handler ─────────────────────────────────────
     if (tool === 'chat') {
-      const { userText, history, storeSnapshot, googleToken } = args;
+      const { userText, history, storeSnapshot } = args;
 
       if (!MISTRAL_API_KEY) {
         throw new Error('MISTRAL_API_KEY is not configured in Supabase secrets.');
       }
 
-      // Load last 10 memories
-      const memories    = await loadMemories(10);
-      const storeCtx    = buildStoreContext(storeSnapshot);
-      const now         = new Date();
-      const dateStr     = now.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-      const timeStr     = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      const memories = await loadMemories(10);
+      const storeCtx = buildStoreContext(storeSnapshot);
+      const now      = new Date();
+      const dateStr  = now.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      const timeStr  = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
       const systemContent = `
 ${JARVIS_SYSTEM_PROMPT}
