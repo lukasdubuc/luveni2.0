@@ -6,8 +6,8 @@ import { JARVIS_SYSTEM_PROMPT } from '../lib/jarvis-config';
 import { supabase } from '@/integrations/supabase/client';
 
 // ─── API Keys ─────────────────────────────────────────────────
-const MISTRAL_API_KEY = import.meta.env.MISTRAL_API_KEY || import.meta.env.VITE_MISTRAL_API_KEY || '';
-const TAVILY_API_KEY  = import.meta.env.TAVILY_API_KEY  || import.meta.env.VITE_TAVILY_API_KEY  || '';
+const MISTRAL_API_KEY = import.meta.env.MISTRAL_API_KEY || '';
+const TAVILY_API_KEY  = import.meta.env.TAVILY_API_KEY  || '';
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -415,7 +415,7 @@ CRITICAL CONVERSATIONAL & VOICE ASSISTANT FORMATTING INSTRUCTIONS:
       history.current.push({ role: 'user', parts: [{ text: userText }] });
 
       if (!MISTRAL_API_KEY) {
-        throw new Error('No AI provider available. Please set VITE_MISTRAL_API_KEY in Lovable secrets.');
+        throw new Error('No AI provider available. Please set MISTRAL_API_KEY in Lovable secrets.');
       }
 
       const finalReply = await askMistral(
