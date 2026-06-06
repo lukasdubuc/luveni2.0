@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────
-//  J.A.R.V.I.S — Luveni GM  |  hooks/useGemini.ts
+//  J.A.R.V.I.S — Luveni GM  |  hooks/useGemini.tsx
 // ─────────────────────────────────────────────────────────────
 import { useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -33,9 +33,13 @@ export function useGemini(apiKey?: string, options: UseGeminiOptions = {}) {
     async (userText: string, onChunk?: (text: string) => void): Promise<string> => {
       const { googleToken, storeSnapshot } = optionsRef.current;
 
+      // Extract client's local timezone dynamically (e.g. "America/Chicago")
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
       history.current.push({ role: 'user', content: userText });
 
       try {
+        // Invoking 'jarvis-brain' as requested
         const { data, error } = await supabase.functions.invoke('jarvis-brain', {
           body: {
             tool: 'chat',
@@ -44,6 +48,7 @@ export function useGemini(apiKey?: string, options: UseGeminiOptions = {}) {
               history:       history.current.slice(0, -1),
               storeSnapshot: storeSnapshot || null,
               googleToken:   googleToken   || null,
+              timezone,
             }
           }
         });
