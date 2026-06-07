@@ -160,6 +160,7 @@ function RootComponent() {
         <div className="min-h-screen bg-background text-foreground">
           {isBare ? <Outlet /> : <SiteShell footerDescription={footerDescription} theme={theme}><Outlet /></SiteShell>}
         </div>
+        {!isBare && <ContactPopup />}
         <Toaster position="top-center" richColors theme={theme} />
       </CartProvider>
     </QueryClientProvider>
