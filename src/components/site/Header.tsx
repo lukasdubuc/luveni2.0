@@ -5,9 +5,8 @@ import { site } from "@/config/site";
 import { useCart } from "@/context/CartContext";
 
 const navLinks = [
-  { to: "/shop",    label: "SHOP"    },
-  { to: "/about",   label: "ABOUT"   },
-  { to: "/contact", label: "CONTACT" },
+  { to: "/shop",  label: "SHOP"  },
+  { to: "/about", label: "ABOUT" },
 ] as const;
 
 // ── Yeezy-style minimal shopping bag SVG icon ─────────────────────────────────
