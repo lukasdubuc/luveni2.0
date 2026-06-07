@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { CartProvider } from "@/context/CartContext";
 import appCss from "../styles.css?url";
 import { SiteShell } from "@/components/site/SiteShell";
+import { ContactPopup } from "@/components/site/ContactPopup";
 import { supabase } from "@/integrations/supabase/client";
 import { mergeSiteConfig } from "@/lib/site-config";
 
