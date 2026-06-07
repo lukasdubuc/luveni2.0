@@ -3,6 +3,7 @@ import { useCart } from "@/context/CartContext";
 import { useState, useEffect } from "react";
 import { createCheckout } from "@/lib/checkout.functions";
 import { trackEvent } from "@/lib/track";
+import { markContactSubmitted } from "@/lib/contact-flag";
 
 export const Route = createFileRoute("/checkout")({
   head: () => ({
@@ -42,6 +43,7 @@ function CheckoutPage() {
         },
       });
       if (!result.ok) { setError(result.error ?? "Something went wrong."); return; }
+      markContactSubmitted();
       if (result.redirectUrl) window.location.href = result.redirectUrl;
     } catch (err: any) {
       setError(err?.message ?? "Something went wrong.");

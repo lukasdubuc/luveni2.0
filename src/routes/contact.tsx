@@ -5,6 +5,7 @@ import { Loader2, Mail } from "lucide-react";
 import { z } from "zod";
 import { toast } from "sonner";
 import { captureLead } from "@/lib/leads.functions";
+import { markContactSubmitted } from "@/lib/contact-flag";
 import { site } from "@/config/site";
 
 export const Route = createFileRoute("/contact")({
@@ -48,6 +49,7 @@ function Contact() {
         },
       });
       if (res?.ok) {
+        markContactSubmitted();
         setSent(true);
         setForm({ name: "", email: "", message: "" });
         toast.success("Message received. We'll be in touch shortly.");
