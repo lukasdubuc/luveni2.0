@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { toast } from "sonner";
 import { captureLead } from "@/lib/leads.functions";
+import { hasSubmittedContact, markContactSubmitted } from "@/lib/contact-flag";
 
 const Schema = z.object({
   name: z.string().trim().min(1).max(120),
