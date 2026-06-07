@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase'; // Adjust import based on configuration
+import { supabase } from '@/integrations/supabase/client';
 
 interface Agent {
   id: string;
