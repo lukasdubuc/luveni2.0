@@ -49,6 +49,7 @@ function Contact() {
         },
       });
       if (res?.ok) {
+        markContactSubmitted();
         setSent(true);
         setForm({ name: "", email: "", message: "" });
         toast.success("Message received. We'll be in touch shortly.");
