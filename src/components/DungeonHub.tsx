@@ -27,13 +27,13 @@ export default function DungeonHub() {
 
   const fetchAgents = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('agents')
         .select('*')
         .order('name', { ascending: true });
 
       if (error) throw error;
-      setAgents(data || []);
+      setAgents((data as Agent[]) || []);
     } catch (err) {
       console.error('Error fetching corporate agents:', err);
     } finally {
