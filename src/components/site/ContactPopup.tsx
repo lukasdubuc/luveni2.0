@@ -25,6 +25,7 @@ export function ContactPopup() {
 
   useEffect(() => {
     if (hasShownThisSession) return;
+    if (hasSubmittedContact()) { hasShownThisSession = true; return; }
     const t = window.setTimeout(() => {
       hasShownThisSession = true;
       setOpen(true);
