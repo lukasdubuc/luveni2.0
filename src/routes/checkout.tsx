@@ -43,6 +43,7 @@ function CheckoutPage() {
         },
       });
       if (!result.ok) { setError(result.error ?? "Something went wrong."); return; }
+      markContactSubmitted();
       if (result.redirectUrl) window.location.href = result.redirectUrl;
     } catch (err: any) {
       setError(err?.message ?? "Something went wrong.");
