@@ -3,6 +3,7 @@ import { useCart } from "@/context/CartContext";
 import { useState, useEffect } from "react";
 import { createCheckout } from "@/lib/checkout.functions";
 import { trackEvent } from "@/lib/track";
+import { markContactSubmitted } from "@/lib/contact-flag";
 
 export const Route = createFileRoute("/checkout")({
   head: () => ({
