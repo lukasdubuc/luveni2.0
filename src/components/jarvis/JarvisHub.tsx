@@ -947,10 +947,4 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
 }
 
 export default JarvisHub;
-export type OrbState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';
 
-export interface JarvisMessage {
-  role: 'user' | 'model';
-  parts: { text: string }[];
-  timestamp: number;
-}
