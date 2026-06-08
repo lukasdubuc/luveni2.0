@@ -2,13 +2,17 @@
 //  J.A.R.V.I.S — Luveni GM | components/jarvis/JarvisHub.tsx
 // ─────────────────────────────────────────────────────────────
 
-import { useState, useCallback, useRef, useEffect } from 'react';
-import NeuralOrb from './NeuralOrb';
+import { useState, useCallback, useRef, useEffect, lazy, Suspense } from 'react';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useSpeechOutput } from '../../hooks/useSpeechOutput';
 import { useGemini } from '../../hooks/useGemini';
 import type { OrbState } from '../../types/jarvis';
 import { motion, AnimatePresence } from 'framer-motion';
+
+// Decouple the circular reference by lazy-loading the NeuralOrb graphic element.
+// This allows the JarvisHub module to complete evaluation and register the 'OrbState' type 
+// in the browser's cache before NeuralOrb is evaluated.
+const NeuralOrb = lazy(() => import('./NeuralOrb'));
 
 const STATE_LABEL: Record<OrbState, string> = {
   idle: 'STANDBY', listening: 'LISTENING', thinking: 'PROCESSING', speaking: 'RESPONDING', error: 'MIC ERROR',
@@ -317,7 +321,9 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
 
       {/* Center flex-grow wrapper for the visual core */}
       <div style={styles.orbWrap}>
-        <NeuralOrb state={orbState} audioLevel={0} size={orbSize} />
+        <Suspense fallback={<div style={{ width: orbSize, height: orbSize }} />}>
+          <NeuralOrb state={orbState} audioLevel={0} size={orbSize} />
+        </Suspense>
       </div>
       
       {/* Standard document-flow container to naturally stack text/inputs below the orb */}
