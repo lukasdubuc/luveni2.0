@@ -51,7 +51,7 @@ function LoginPage() {
   useEffect(() => {
     const probeSupabaseDNS = async () => {
       try {
-        const url = supabase.supabaseUrl;
+        const url = (supabase as any).supabaseUrl as string;
         await fetch(`${url}/auth/v1/health`, { method: "HEAD", mode: "no-cors" });
         setConnectionStatus("online");
       } catch (e) {
