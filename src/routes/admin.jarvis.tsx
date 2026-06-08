@@ -2,11 +2,7 @@
 //  J.A.R.V.I.S — Luveni GM | src/routes/admin.jarvis.tsx
 // ─────────────────────────────────────────────────────────────
 import { createFileRoute } from '@tanstack/react-router';
-import { lazy, Suspense } from 'react';
-
-// Lazy load the component to break the ESM circular dependency loop 
-// and prevent runtime 'Cannot access before initialization' crashes.
-const JarvisHub = lazy(() => import('@/components/jarvis/JarvisHub'));
+import JarvisHub from '@/components/jarvis/JarvisHub';
 
 export const Route = createFileRoute('/admin/jarvis')({
   ssr: false,
@@ -25,9 +21,7 @@ export const Route = createFileRoute('/admin/jarvis')({
       position: 'relative',
       boxSizing: 'border-box'
     }}>
-      <Suspense fallback={null}>
-        <JarvisHub autoStart={true} />
-      </Suspense>
+      <JarvisHub autoStart={true} />
     </div>
   ),
 });
