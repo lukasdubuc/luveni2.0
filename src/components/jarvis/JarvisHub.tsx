@@ -748,6 +748,16 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     setOrbState(newState);
   }, []);
   
+  const { speak, cancel, currentSubtitle } = useSpeechOutput({
+    onStart: () => changeOrbState('speaking'),
+    onEnd: () => {
+      if (orbStateRef.current === 'speaking') {
+        changeOrbState('idle');
+        setUserQuery('');
+      }
+    },
+  });
+
   const handleFinalTranscript = useCallback(async (text: string) => {
     if (orbStateRef.current === 'thinking' || orbStateRef.current === 'speaking' || !text) {
       return;
@@ -769,16 +779,6 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       changeOrbState('idle');
     }
   }, [ask, speak, changeOrbState]);
-  
-  const { speak, cancel, currentSubtitle } = useSpeechOutput({
-    onStart: () => changeOrbState('speaking'),
-    onEnd: () => {
-      if (orbStateRef.current === 'speaking') {
-        changeOrbState('idle');
-        setUserQuery('');
-      }
-    },
-  });
 
   useVoiceInput({
     onInterim: (text: string) => {
