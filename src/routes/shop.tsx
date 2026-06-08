@@ -89,7 +89,9 @@ const ProductCell = memo(({ product }: { product: Product }) => {
           <img
             src={imageUrl}
             alt={product.title}
-            className="max-h-full max-w-full object-contain"
+            width={400}
+            height={400}
+            className="max-h-full max-w-full object-contain aspect-square"
             loading="lazy"
             decoding="async"
             style={{ willChange: "transform", backfaceVisibility: "hidden" }}
