@@ -292,7 +292,7 @@ async function buildRepoContext(owner: string, repo: string, branch = "main"): P
     const content = await readRepoFile(owner, repo, path, branch);
     if (!content.startsWith("Error:")) {
       fileSummaries.push(`--- FILE: ${path} ---
-${content.slice(0, 6000)}`);
+${content.slice(0, 2000)}`); // Reduced slice to prevent timeout
     }
   }
   const summaryLines = [
