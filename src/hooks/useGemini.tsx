@@ -24,7 +24,7 @@ interface UseGeminiOptions {
   storeSnapshot?: StoreSnapshot | null;
 }
 
-export function useGemini(apiKey?: string, options: UseGeminiOptions = {}) {
+export function useGemini(options: UseGeminiOptions = {}) {
   const history = useRef<{ role: "user" | "assistant"; content: string }[]>([]);
   const optionsRef = useRef(options);
   optionsRef.current = options;
