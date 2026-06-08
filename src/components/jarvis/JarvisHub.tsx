@@ -217,13 +217,10 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       if (ctx.state === 'suspended') {
         await ctx.resume();
       }
-      // This is a silent unlock, no speech needed.
       setIsReady(true);
       setIsLive(true);
-      console.log("[Jarvis] Audio context unlocked. System is live.");
     } catch (e) { 
-      console.error("[Jarvis] Audio context resume failed. This can happen if the user has not interacted with the page yet.", e); 
-      // Still try to go live, some browsers are more permissive.
+      console.error("[Jarvis] Audio context resume failed.", e); 
       setIsReady(true);
       setIsLive(true);
     }
@@ -231,8 +228,7 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
 
   useEffect(() => { 
     if (autoStart && !isMobile) {
-      // We don't call initializeJarvis directly to respect autoplay policies.
-      // The UI will guide the user to click once.
+      // Direct call omitted to respect browser strict security policies.
     }
   }, [autoStart, isMobile]);
 
@@ -451,3 +447,24 @@ const styles: Record<string, React.CSSProperties> = {
 };
 
 export default JarvisHub;
+export type OrbState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';
+
+export interface JarvisMessage {
+  role: 'user' | 'model';
+  parts: { text: string }[];
+  timestamp: number;
+}
+
+// Minimal Web Speech API types (browser-only)
+declare global {
+  interface SpeechRecognition extends EventTarget {
+    continuous: boolean;
+    interimResults: boolean;
+    lang: string;
+    onresult: ((e: any) => void) | null;
+    onerror: ((e: Event) => void) | null;
+    onend: (() => void) | null;
+    start(): void;
+    stop(): void;
+  }
+}
