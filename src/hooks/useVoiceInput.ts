@@ -81,12 +81,14 @@ export function useVoiceInput({
     };
 
     rec.onerror = (event: any) => {
-        console.error("Speech recognition error", event.error);
-        if (event.error === 'no-speech' || event.error === 'network') {
-            // These are recoverable, allow onend to handle restart
-        } else {
-            onStateChange('error');
+        const err = event?.error;
+        // 'aborted', 'no-speech', and 'network' are routine/recoverable —
+        // onend will restart. Silently ignore to avoid console spam.
+        if (err === 'no-speech' || err === 'network' || err === 'aborted') {
+            return;
         }
+        console.error("Speech recognition error", err);
+        onStateChange('error');
     };
 
     try { 
