@@ -72,9 +72,10 @@ function cleanResponseForSpeech(rawText: string): string {
     .trim();
 }
 
-export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, autoStart?: boolean }) {
+export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
   const [orbState, setOrbState] = useState<OrbState>('idle');
   const [userQuery, setUserQuery] = useState('');
+  const [interimTranscript, setInterimTranscript] = useState('');
   const [lastAiResponse, setLastAiResponse] = useState('');
   const [isReady, setIsReady] = useState(false);
   const [isLive, setIsLive] = useState(false);
@@ -135,47 +136,21 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [isTextInputActive]);
+  }, [isTextInputActive, isMobile]);
 
-  const { ask } = useGemini(geminiApiKey);
+  const { ask } = useGemini();
 
   const changeOrbState = useCallback((newState: OrbState) => {
     if (stateTimeoutRef.current) clearTimeout(stateTimeoutRef.current);
-    if (newState === 'idle') {
-      stateTimeoutRef.current = setTimeout(() => setOrbState('idle'), 750);
-    } else {
-      setOrbState(newState);
-    }
+    setOrbState(newState);
   }, []);
-
-  // Binds the dynamically chunked visual subtitles
-  const { speak, cancel, currentSubtitle } = useSpeechOutput({
-    onStart: () => changeOrbState('speaking'),
-    onEnd: () => {
-      if (orbStateRef.current === 'speaking') {
-        if (!isMobile) {
-          // Web (Desktop): Instant loop-back for hands-free always-active agent
-          changeOrbState('idle');
-          setUserQuery('');
-        } else {
-          // Mobile: Remains identical with original settling timeout
-          stateTimeoutRef.current = setTimeout(() => {
-            if (orbStateRef.current === 'speaking') {
-              changeOrbState('idle');
-              setUserQuery('');
-            }
-          }, 1000);
-        }
-      }
-    },
-  });
-
-  const handleTranscript = useCallback(async (text: string) => {
-    if (orbStateRef.current === 'thinking' || orbStateRef.current === 'speaking') {
+  
+  const handleFinalTranscript = useCallback(async (text: string) => {
+    if (orbStateRef.current === 'thinking' || orbStateRef.current === 'speaking' || !text) {
       return;
     }
-
-    cancel();
+    
+    setInterimTranscript('');
     setUserQuery(text);
     changeOrbState('thinking');
     
@@ -184,20 +159,39 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
       if (!reply) throw new Error("No response received");
       setLastAiResponse(reply);
       
-      // Sanitizes output formatting (e.g. bold asterisks) right before speaking
       const cleanReply = cleanResponseForSpeech(reply);
       speak(cleanReply);
     } catch (err) {
       console.error('[Jarvis] Error:', err);
-      setUserQuery("System error, sir.");
-      speak("System error, sir.");
+      const errorMessage = "System error, sir.";
+      setLastAiResponse(errorMessage);
+      speak(errorMessage);
       changeOrbState('idle');
     }
-  }, [ask, speak, cancel, changeOrbState]);
+  }, [ask, speak, changeOrbState]);
+  
+  // Binds the dynamically chunked visual subtitles
+  const { speak, cancel, currentSubtitle } = useSpeechOutput({
+    onStart: () => changeOrbState('speaking'),
+    onEnd: () => {
+      if (orbStateRef.current === 'speaking') {
+        changeOrbState('idle');
+        setUserQuery('');
+      }
+    },
+  });
 
   // Stops microphone capture while typing commands
   useVoiceInput({
-    onTranscript: (text: string) => { if (isLive) handleTranscript(text); },
+    onInterim: (text: string) => {
+      if (isLive) setInterimTranscript(text);
+    },
+    onTranscript: (text: string) => { 
+      if (isLive) {
+        cancel(); // Interrupts any ongoing speech immediately
+        handleFinalTranscript(text);
+      }
+    },
     onStateChange: (s: string) => {
       if (!isLive) return;
       if (s === 'listening') { cancel(); }
@@ -210,48 +204,37 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
     },
     onLevelChange: () => {},
     enabled: isReady && isLive && !isTextInputActive,
-    isSpeaking: orbState === 'speaking',
-    lastAiResponse,
-    preventListening: orbState === 'speaking' || orbState === 'thinking' || isTextInputActive,
+    cancelSpeech: cancel
   });
 
-  const initializeJarvis = async () => {
+  const initializeJarvis = useCallback(async () => {
     if (isReady) return;
-    setIsReady(true);
-
-    try {
-      const s = new SpeechSynthesisUtterance("System online, sir.");
-      s.volume = 1; 
-
-      s.onend = () => {
-        setIsLive(true);
-      };
-      s.onerror = () => {
-        setIsLive(true);
-      };
-
-      window.speechSynthesis.speak(s);
-    } catch (e) { 
-      console.error("Audio unlock failed", e); 
-      setIsLive(true);
-    }
     
+    // Unlocks browser audio context. Must be tied to a user gesture.
     try {
       const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
       const ctx = new AudioCtx();
       if (ctx.state === 'suspended') {
         await ctx.resume();
       }
+      // This is a silent unlock, no speech needed.
+      setIsReady(true);
+      setIsLive(true);
+      console.log("[Jarvis] Audio context unlocked. System is live.");
     } catch (e) { 
-      console.error("Audio context resume failed", e); 
+      console.error("[Jarvis] Audio context resume failed. This can happen if the user has not interacted with the page yet.", e); 
+      // Still try to go live, some browsers are more permissive.
+      setIsReady(true);
+      setIsLive(true);
     }
-  };
+  }, [isReady]);
 
   useEffect(() => { 
     if (autoStart && !isMobile) {
-      initializeJarvis(); 
+      // We don't call initializeJarvis directly to respect autoplay policies.
+      // The UI will guide the user to click once.
     }
-  }, [autoStart]);
+  }, [autoStart, isMobile]);
 
   // Handle opening text input when clicking the subtitle/placeholder block
   const handleContainerClick = (e: React.MouseEvent) => {
@@ -280,7 +263,7 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
     setIsTextInputActive(false);
     setTextInputValue('');
     if (query) {
-      handleTranscript(query);
+      handleFinalTranscript(query);
     }
   };
 
@@ -308,10 +291,12 @@ export function JarvisHub({ geminiApiKey, autoStart }: { geminiApiKey: string, a
     displayText = "Thinking...";
   } else if (orbState === 'speaking') {
     displayText = currentSubtitle;
+  } else if (interimTranscript) {
+    displayText = interimTranscript;
   } else if (userQuery) {
     displayText = userQuery;
   } else if (isLive) {
-    displayText = "Click to command, sir...";
+    displayText = "Click or start speaking, sir...";
   } else {
     displayText = "Click to initialize J.A.R.V.I.S.";
   }
