@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, ShieldCheck, Wifi, WifiOff } from "lucide-react";
+import { Loader2, ShieldCheck } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -22,7 +22,6 @@ async function isAdminUser(userId: string): Promise<boolean> {
   return !error && data === true;
 }
 
-// Simple pulsing LED indicator for connection status and hardware modes
 function LedIndicator({ color, active = true }: { color: "green" | "yellow" | "red" | "cyan" | "neutral"; active?: boolean }) {
   const colorMap = {
     green: "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]",
@@ -43,16 +42,13 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Read dark mode state from root layout/localstorage to avoid theme mismatch flashes
   const [isDark, setIsDark] = useState<boolean>(
     () => typeof document !== "undefined" && document.documentElement.classList.contains("dark")
   );
 
-  // Live DNS connection status to diagnose errors like ERR_NAME_NOT_RESOLVED
   const [connectionStatus, setConnectionStatus] = useState<"checking" | "online" | "offline">("checking");
 
   useEffect(() => {
-    // Pings the Supabase endpoint to verify the DNS resolves successfully
     const probeSupabaseDNS = async () => {
       try {
         const url = supabase.supabaseUrl;
@@ -137,7 +133,6 @@ function LoginPage() {
     <section className={`min-h-screen flex items-center justify-center p-4 font-mono relative transition-colors duration-300 ${
       isDark ? "bg-black text-white" : "bg-neutral-50 text-black"
     }`}>
-      {/* Background Matrix Dotted Grid */}
       <div 
         className="fixed inset-0 pointer-events-none opacity-[0.03] dark:opacity-[0.04] z-0"
         style={{
@@ -149,7 +144,6 @@ function LoginPage() {
       <div className={`w-full max-w-md border p-8 rounded relative z-10 shadow-sm transition-all ${
         isDark ? "bg-neutral-950/40 border-neutral-850" : "bg-white border-neutral-200"
       }`}>
-        {/* Connection Diagnostics Overlay */}
         <div className="absolute -top-4 left-6 flex items-center gap-2 px-3 py-1 text-[8px] font-mono font-bold tracking-widest border rounded uppercase transition-colors z-20 shadow-sm bg-neutral-100 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-850">
           {connectionStatus === "checking" && (
             <>
@@ -195,7 +189,6 @@ function LoginPage() {
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Authorize with Google"}
         </button>
 
-        {/* Dev-only guest bypass trigger */}
         {typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || import.meta.env.DEV) && (
           <button
             onClick={() => {
