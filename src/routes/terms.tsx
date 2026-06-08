@@ -5,7 +5,7 @@ import { site } from "@/config/site";
 export const Route = createFileRoute("/terms")({
   head: () => ({
     meta: [
-      { title: `Terms of Service — ${site.brand}` },
+      { title: `Terms of Service ${site.brand}` },
       { name: "description", content: `The terms that govern your use of ${site.brand}.` },
     ],
   }),
