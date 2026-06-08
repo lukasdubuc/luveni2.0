@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts } from "@/lib/useProducts";
 import { offer } from "@/config/site";
 import { toast } from "sonner";
-import { Edit3, Archive, X, Menu, RefreshCw, BarChart2, Lock, CheckSquare, Square, Trash2, Eye, EyeOff, GripVertical, Users, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Edit3, Archive, X, Menu, RefreshCw, BarChart2, Lock, CheckSquare, Square, Trash2, Eye, EyeOff, GripVertical, Users, TrendingUp, TrendingDown, Minus, Terminal, Cpu, Zap, Activity, AlertTriangle, Play } from "lucide-react";
 import { requireAdmin } from "@/lib/admin-guard";
 
 
@@ -69,30 +69,401 @@ type AdminUser = {
   created_at: string;
 };
 
-// ── NavSection type defined at module level (outside the component) ──────────
 type NavSection = "overview" | "products" | "orders" | "leads" | "analytics" | "settings";
 
 export const Route = createFileRoute("/admin/")({
   head: () => ({
-    meta: [{ title: "Admin" }],
+    meta: [{ title: "Command Center" }],
   }),
   beforeLoad: requireAdmin,
   component: AdminPage,
 });
 
+// ────────────────────────────────────────────────────────────────────────────
+// BULLETPROOF EVENT NORMALIZATION PARSER
+// ────────────────────────────────────────────────────────────────────────────
+const getAddToCartCount = (eventsList: PageEvent[]): number => {
+  return eventsList.filter(e => {
+    const type = e.event_type?.toLowerCase() || "";
+    return type === "add_to_cart" || type === "add-to-cart" || type === "cart" || type === "addtocart";
+  }).length;
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+// LED VISUAL GLOW COMPONENT
+// ────────────────────────────────────────────────────────────────────────────
+function LedPulse({ color, active = true }: { color: "green" | "yellow" | "red" | "cyan" | "purple" | "neutral"; active?: boolean }) {
+  const colorMap = {
+    green: "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.9)]",
+    yellow: "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.9)]",
+    red: "bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.9)]",
+    cyan: "bg-sky-400 shadow-[0_0_10px_rgba(56,189,248,0.9)]",
+    purple: "bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.9)]",
+    neutral: "bg-neutral-400 shadow-[0_0_6px_rgba(163,163,163,0.5)]",
+  };
+  return (
+    <span className={`inline-block w-2.5 h-2.5 rounded-full transition-all duration-300 ${colorMap[color]} ${active ? "animate-pulse" : ""}`} />
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// INTERACTIVE TELEMETRY CANVAS COMPONENT (TRAVERSAL EMULATOR)
+// ────────────────────────────────────────────────────────────────────────────
+interface TelemetryCanvasRef {
+  triggerSimulatedPacket: (type: "view" | "click" | "cart" | "checkout" | "purchase") => void;
+}
+
+const TelemetryCanvas = ({ events, isDark, canvasRefExternal }: { events: PageEvent[]; isDark: boolean; canvasRefExternal?: React.RefObject<TelemetryCanvasRef | null> }) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const prevEventsLength = useRef(events.length);
+
+  const packets = useRef<Array<{
+    x: number;
+    y: number;
+    targetNode: number;
+    speed: number;
+    color: string;
+    size: number;
+  }>>([]);
+
+  const spawnPacket = useCallback((eventType: string) => {
+    let targetNode = 0;
+    let color = isDark ? "rgba(255, 255, 255, 0.85)" : "rgba(0, 0, 0, 0.85)";
+
+    const normalized = eventType.toLowerCase();
+    if (normalized === "product_click") {
+      targetNode = 1;
+      color = "rgba(56, 189, 248, 0.95)"; 
+    } else if (normalized === "add_to_cart" || normalized === "add-to-cart" || normalized === "cart") {
+      targetNode = 2;
+      color = "rgba(245, 158, 11, 0.95)"; 
+    } else if (normalized === "checkout_start") {
+      targetNode = 3;
+      color = "rgba(168, 85, 247, 0.95)"; 
+    } else if (normalized === "purchase" || normalized === "paid") {
+      targetNode = 4;
+      color = "rgba(16, 185, 129, 0.95)"; 
+    }
+
+    packets.current.push({
+      x: 40,
+      y: 70,
+      targetNode,
+      speed: 1.8 + Math.random() * 1.5,
+      color,
+      size: 4.5 + Math.random() * 2.5,
+    });
+  }, [isDark]);
+
+  // Expose manual trigger API to other modules/buttons
+  useEffect(() => {
+    if (canvasRefExternal) {
+      (canvasRefExternal as any).current = {
+        triggerSimulatedPacket: (type: "view" | "click" | "cart" | "checkout" | "purchase") => {
+          const map = {
+            view: "page_view",
+            click: "product_click",
+            cart: "add_to_cart",
+            checkout: "checkout_start",
+            purchase: "purchase",
+          };
+          spawnPacket(map[type]);
+        }
+      };
+    }
+  }, [canvasRefExternal, spawnPacket]);
+
+  useEffect(() => {
+    if (events.length > prevEventsLength.current) {
+      const difference = events.length - prevEventsLength.current;
+      for (let i = 0; i < difference; i++) {
+        const ev = events[i];
+        if (ev) {
+          spawnPacket(ev.event_type);
+        }
+      }
+    }
+    prevEventsLength.current = events.length;
+  }, [events, spawnPacket]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let animationId: number;
+    const nodes = [
+      { name: "VIEW", x: 40, y: 70 },
+      { name: "CLICK", x: 140, y: 70 },
+      { name: "CART", x: 240, y: 70 },
+      { name: "CHECKOUT", x: 340, y: 70 },
+      { name: "PAID", x: 440, y: 70 },
+    ];
+
+    const resize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+    };
+
+    resize();
+    window.addEventListener("resize", resize);
+
+    const render = () => {
+      const width = canvas.width / (window.devicePixelRatio || 1);
+      const height = canvas.height / (window.devicePixelRatio || 1);
+      ctx.clearRect(0, 0, width, height);
+
+      // System background grid
+      ctx.strokeStyle = isDark ? "rgba(255, 255, 255, 0.03)" : "rgba(0, 0, 0, 0.03)";
+      ctx.lineWidth = 1;
+      const gridSpacing = 16;
+      for (let x = 0; x < width; x += gridSpacing) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+      }
+      for (let y = 0; y < height; y += gridSpacing) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
+
+      const spacingX = (width - 80) / 4;
+      nodes.forEach((n, idx) => {
+        n.x = 40 + spacingX * idx;
+        n.y = height / 2;
+      });
+
+      // Node path tracks
+      ctx.strokeStyle = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(nodes[0].x, nodes[0].y);
+      for (let i = 1; i < nodes.length; i++) {
+        ctx.lineTo(nodes[i].x, nodes[i].y);
+      }
+      ctx.stroke();
+
+      // Ambient stream simulation
+      if (Math.random() < 0.015) {
+        packets.current.push({
+          x: nodes[0].x,
+          y: nodes[0].y,
+          targetNode: Math.floor(Math.random() * 4) + 1,
+          speed: 1.0 + Math.random() * 1.0,
+          color: isDark ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.12)",
+          size: 2.5,
+        });
+      }
+
+      // Draw active traveling packets
+      packets.current.forEach((p, idx) => {
+        const nextNode = nodes[p.targetNode];
+
+        if (p.x < nextNode.x) {
+          p.x += p.speed;
+        } else {
+          p.x = nextNode.x;
+        }
+
+        p.y = nextNode.y;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = isDark ? 10 : 0;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        if (p.x >= nextNode.x) {
+          packets.current.splice(idx, 1);
+        }
+      });
+
+      // Draw node terminals
+      nodes.forEach((n) => {
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, 6, 0, Math.PI * 2);
+        ctx.fillStyle = isDark ? "#000000" : "#ffffff";
+        ctx.strokeStyle = isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.3)";
+        ctx.lineWidth = 2;
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, 2, 0, Math.PI * 2);
+        ctx.fillStyle = isDark ? "#ffffff" : "#000000";
+        ctx.fill();
+
+        ctx.font = "bold 9px monospace";
+        ctx.fillStyle = isDark ? "rgba(255, 255, 255, 0.45)" : "rgba(0, 0, 0, 0.5)";
+        ctx.textAlign = "center";
+        ctx.fillText(n.name, n.x, n.y + 24);
+      });
+
+      animationId = requestAnimationFrame(render);
+    };
+
+    render();
+
+    return () => {
+      cancelAnimationFrame(animationId);
+      window.removeEventListener("resize", resize);
+    };
+  }, [isDark]);
+
+  return (
+    <div className="relative w-full h-32 md:h-36 rounded border border-neutral-200/50 dark:border-neutral-800/50 bg-neutral-50/30 dark:bg-neutral-900/10">
+      <div className="absolute top-3 left-4 flex items-center gap-2 pointer-events-none">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+        <span className="text-[8px] font-mono tracking-widest text-neutral-400 dark:text-neutral-500 uppercase">SYS_TELEMETRY_STREAM</span>
+      </div>
+      <canvas ref={canvasRef} className="w-full h-full block" />
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// COGNITIVE INTEL INTERACTIVE AI ENGINE MODULE
+// ────────────────────────────────────────────────────────────────────────────
+function AiAgentConsole({ isDark, onSimulatePacket }: { isDark: boolean; onSimulatePacket: (type: "view" | "click" | "cart" | "checkout" | "purchase") => void }) {
+  const [logs, setLogs] = useState<string[]>([
+    "SYS_COGNITIVE_ENGINE: Initializing analytical sequence...",
+    "COGNITIVE_AGENT: Thread pool mounted. Listening on pg_realtime...",
+  ]);
+  const [thinkingSpeed, setThinkingSpeed] = useState(3000); // ms per check
+  const [activeTask, setActiveTask] = useState("Awaiting telemetry...");
+
+  // Generate automated diagnostics logs based on system tasks
+  useEffect(() => {
+    const tasks = [
+      "Evaluating cart-to-checkout progression anomalies...",
+      "Correlating landing page traffic spikes with active leads...",
+      "Analyzing pricing elasticity indices on store config...",
+      "Optimizing real-time cache indices for catalog retrieval...",
+      "Auditing active administrator operational permissions...",
+    ];
+
+    const interval = setInterval(() => {
+      const selectedTask = tasks[Math.floor(Math.random() * tasks.length)];
+      setActiveTask(selectedTask);
+      
+      const timestamp = new Date().toLocaleTimeString("en-US", { hour12: false });
+      setLogs(prev => {
+        const updated = [`[${timestamp}] Jarvis_AI: ${selectedTask}`, ...prev];
+        return updated.slice(0, 15); // keep log history light
+      });
+    }, thinkingSpeed);
+
+    return () => clearInterval(interval);
+  }, [thinkingSpeed]);
+
+  return (
+    <div className={`p-6 border rounded-md relative overflow-hidden transition-all ${
+      isDark ? "bg-neutral-950/45 border-neutral-800/80" : "bg-white border-neutral-200/80 shadow-sm"
+    }`}>
+      {/* Grid line indicator background */}
+      <div className="absolute top-0 right-0 p-3 flex items-center gap-1.5 pointer-events-none text-[8px] font-mono tracking-widest text-neutral-400 dark:text-neutral-500 uppercase">
+        <Cpu size={12} className="animate-spin" style={{ animationDuration: "10s" }} />
+        <span>Jarvis Cognitive Core v4.1</span>
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-xs font-mono font-black uppercase tracking-wider flex items-center gap-1.5">
+            <LedPulse color="purple" />
+            <span>Jarvis Cognitive Engine Diagnostics</span>
+          </h3>
+          <p className={`text-[10px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>
+            ACTIVE REASONING: <span className="text-purple-400 font-bold">{activeTask}</span>
+          </p>
+        </div>
+
+        {/* Live typing diagnostic output console */}
+        <div className={`p-4 border rounded font-mono text-[9px] h-32 overflow-y-auto space-y-1.5 ${
+          isDark ? "bg-black/80 border-neutral-900 text-purple-300" : "bg-neutral-50 border-neutral-100 text-purple-700"
+        }`}>
+          {logs.map((log, index) => (
+            <div key={index} className="flex items-start gap-2 animate-in fade-in duration-300">
+              <span className="opacity-40">❯</span>
+              <span className="leading-relaxed whitespace-pre-wrap">{log}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Interactable Telemetry Slider & Simulation Buttons */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-[8px] font-mono font-bold tracking-widest uppercase text-neutral-400">
+              <span>Reasoning Throttle (Delay: {thinkingSpeed}ms)</span>
+              <Zap size={10} className="text-purple-400" />
+            </div>
+            <input 
+              type="range" 
+              min={1000} 
+              max={8000} 
+              step={500}
+              value={thinkingSpeed} 
+              onChange={e => setThinkingSpeed(Number(e.target.value))}
+              className="w-full h-1 bg-neutral-200 dark:bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <span className="text-[8px] font-mono font-bold tracking-widest uppercase text-neutral-400 block">
+              Inject Telemetry Signal (Manual Override)
+            </span>
+            <div className="flex gap-1.5 flex-wrap">
+              {(["view", "click", "cart", "checkout", "purchase"] as const).map(signal => (
+                <button
+                  key={signal}
+                  onClick={() => {
+                    onSimulatePacket(signal);
+                    setLogs(prev => {
+                      const t = new Date().toLocaleTimeString("en-US", { hour12: false });
+                      return [`[${t}] SYSTEM: Manual telemetry override payload [${signal.toUpperCase()}] injected.`, ...prev];
+                    });
+                  }}
+                  className="flex-1 min-w-[50px] text-[8px] font-mono font-black uppercase tracking-widest border py-1.5 rounded hover:bg-purple-500/10 hover:border-purple-500/40 transition-all dark:border-neutral-850 dark:text-neutral-400 dark:hover:text-purple-300 border-neutral-200 text-neutral-600"
+                >
+                  {signal}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// MAIN ADMIN PAGE COMPONENT
+// ────────────────────────────────────────────────────────────────────────────
 function AdminPage() {
   const navigate = useNavigate();
 
-  // ── navSections defined inside the component ─────────────────────────────
   const navSections: NavSection[] = ["overview", "products", "orders", "leads", "analytics", "settings"];
-
-  // ── section state uses the NavSection type ───────────────────────────────
   const [section, setSection] = useState<NavSection>("overview");
 
   const [isDark, setIsDark] = useState<boolean>(
     () => typeof document !== "undefined" && document.documentElement.classList.contains("dark")
   );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Secure Handshake & Authentication Gate States
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [isAuthorized, setIsAuthorized] = useState(false);
+
+  // External Ref to connect AI Engine Simulator with the Telemetry Canvas
+  const telemetryCanvasRef = useRef<TelemetryCanvasRef | null>(null);
 
   // ── Data State ──────────────────────────────────────────────────────────
   const [products, setProducts] = useState<Product[]>([]);
@@ -180,16 +551,25 @@ function AdminPage() {
   // ── Auth & Data Fetch ───────────────────────────────────────────────────
   useEffect(() => {
     const init = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        window.location.href = "/login";
-        return;
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setIsLoadingAuth(false);
+          navigate({ to: "/login", replace: true } as any);
+          return;
+        }
+        setUserEmail(user.email || null);
+        await fetchData();
+        setIsAuthorized(true);
+      } catch (error) {
+        console.error("Auth initialization failure:", error);
+        navigate({ to: "/login", replace: true } as any);
+      } finally {
+        setIsLoadingAuth(false);
       }
-      setUserEmail(user.email || null);
-      await fetchData();
     };
     init();
-  }, []);
+  }, [navigate]);
 
   // ── Realtime ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -238,7 +618,6 @@ function AdminPage() {
       });
 
     return () => { supabase.removeChannel(channel); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchData = async () => {
@@ -543,7 +922,6 @@ function AdminPage() {
     }
   };
 
-  // ── Handler: Navigate to Jarvis with fullscreen ─────────────────────────
   const handleOpenJarvis = async () => {
     try {
       if (
@@ -606,17 +984,26 @@ function AdminPage() {
 
   const convRate = activeOrders.length > 0 ? Math.round((paidOrders.length / activeOrders.length) * 100) : 0;
 
-  const fmt$ = (cents: number) => `$${(cents / 100).toFixed(0)}`;
+  const fmt$ = (cents: number) => `$${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
   const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
   // ── Computed: Funnel ────────────────────────────────────────────────────
   const hasEventData = pageEvents.length > 0;
   const funnelViews = hasEventData ? pageEvents.filter(e => e.event_type === "page_view").length : 0;
   const funnelProductClicks = hasEventData ? pageEvents.filter(e => e.event_type === "product_click").length : 0;
-  const funnelAddToCart = hasEventData ? pageEvents.filter(e => e.event_type === "add_to_cart").length : 0;
+  const funnelAddToCart = hasEventData ? getAddToCartCount(pageEvents) : 0;
   const funnelCheckoutStart = hasEventData ? pageEvents.filter(e => e.event_type === "checkout_start").length : 0;
   const funnelPurchase = paidOrders.length;
   const funnelMax = Math.max(funnelViews, funnelProductClicks, funnelAddToCart, funnelCheckoutStart, funnelPurchase, 1);
+
+  // ── Computed: Live events matching the current selected period ────────────
+  const currentPeriodEvents = useMemo(() => {
+    return pageEvents.filter(e => filterByRange(new Date(e.created_at), revenueRange));
+  }, [pageEvents, revenueRange]);
+
+  const currentPeriodAddToCart = useMemo(() => {
+    return getAddToCartCount(currentPeriodEvents);
+  }, [currentPeriodEvents]);
 
   // ── Computed: Top Products ──────────────────────────────────────────────
   const topProducts = useMemo(() => {
@@ -724,42 +1111,86 @@ function AdminPage() {
     return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 6);
   }, [analyticsEvents]);
 
-  // ── RENDER ──────────────────────────────────────────────────────────────
+  // ── RENDER SECURITY SAFEGUARD LOADERS ───────────────────────────────────
+  if (isLoadingAuth) {
+    return (
+      <div className={`min-h-screen flex flex-col items-center justify-center font-mono ${isDark ? "bg-black text-white" : "bg-neutral-50 text-black"}`}>
+        <div className="space-y-4 text-center max-w-sm px-6">
+          <div className="relative w-12 h-12 mx-auto">
+            <div className={`absolute inset-0 rounded-full border-2 border-t-transparent animate-spin ${isDark ? "border-white" : "border-black"}`} />
+            <div className={`absolute inset-2 rounded-full border border-b-transparent animate-spin ${isDark ? "border-neutral-800" : "border-neutral-300"}`} style={{ animationDirection: "reverse" }} />
+          </div>
+          <div className="space-y-1">
+            <p className="text-[10px] uppercase tracking-[0.2em] font-bold">INITIALIZING CORE CONTROL</p>
+            <p className="text-[8px] uppercase tracking-widest text-neutral-500 animate-pulse">AUTHORIZING CREDENTIALS & MOUNTING SYSTEMS</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthorized) {
+    return null;
+  }
+
   return (
-    <div className={`min-h-screen ${isDark ? "bg-black text-white" : "bg-white text-black"}`}>
+    <div className={`min-h-screen font-sans relative ${isDark ? "bg-black text-neutral-100 selection:bg-neutral-800" : "bg-neutral-50 text-neutral-900 selection:bg-neutral-200"}`}>
+      <div className="absolute top-0 left-0 w-full h-[2px] bg-sky-500/10 dark:bg-white/5 pointer-events-none animate-bounce z-40 opacity-40" style={{ animationDuration: "12s" }} />
+
+      <div 
+        className="fixed inset-0 pointer-events-none opacity-[0.03] dark:opacity-[0.04] z-0"
+        style={{
+          backgroundImage: `radial-gradient(${isDark ? '#ffffff' : '#000000'} 1px, transparent 1px)`,
+          backgroundSize: '16px 16px'
+        }}
+      />
+
       {/* ── NAV ── */}
-      <nav className={`sticky top-0 z-50 md:border-b-0 ${isDark ? "md:bg-black md:border-0 border-b border-white/10 bg-black" : "md:bg-white md:border-0 border-b border-gray-100 bg-white"}`}>
-        <div className="flex items-center justify-between px-6 py-4">
-          <div className="md:hidden text-[10px] font-bold uppercase tracking-widest">ADMIN</div>
-          <div className="hidden md:flex items-center justify-center gap-8 flex-1">
+      <nav className={`sticky top-0 z-50 backdrop-blur-md border-b ${isDark ? "bg-black/80 border-neutral-800/60" : "bg-white/80 border-neutral-200/60"}`}>
+        <div className="max-w-7xl mx-auto flex items-center justify-between px-6 py-3.5">
+          <div className="flex items-center gap-3">
+            <span className={`text-[10px] font-mono tracking-[0.3em] font-semibold border px-2 py-0.5 uppercase ${isDark ? "border-neutral-800 text-neutral-400" : "border-neutral-200 text-neutral-500"}`}>
+              COMMAND CENTER
+            </span>
+            <LedPulse color="green" />
+          </div>
+
+          <div className="hidden md:flex items-center justify-center gap-7">
             {navSections.map(s => (
               <button
                 key={s}
                 onClick={() => setSection(s)}
-                className={`text-[10px] font-bold uppercase tracking-widest transition-all ${
+                className={`text-[10px] font-mono font-medium uppercase tracking-widest transition-all relative py-1 ${
                   section === s
                     ? isDark ? "text-white" : "text-black"
-                    : isDark ? "text-white/50 hover:text-white/70" : "text-black/50 hover:text-black/70"
+                    : isDark ? "text-neutral-500 hover:text-neutral-300" : "text-neutral-455 hover:text-neutral-800"
                 }`}
               >
                 {s}
+                {section === s && (
+                  <span className={`absolute bottom-0 left-0 w-full h-[1px] ${isDark ? "bg-white" : "bg-black"}`} />
+                )}
               </button>
             ))}
           </div>
-          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden">
-            <Menu size={18} />
-          </button>
+
+          <div className="flex items-center gap-4">
+            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100">
+              <Menu size={16} />
+            </button>
+          </div>
         </div>
+
         {mobileMenuOpen && (
-          <div className={`md:hidden border-t ${isDark ? "border-white/10 bg-black" : "border-gray-100 bg-white"} p-4 space-y-3`}>
+          <div className={`md:hidden border-t ${isDark ? "border-neutral-900 bg-black" : "border-neutral-100 bg-white"} px-6 py-4 space-y-2`}>
             {navSections.map(s => (
               <button
                 key={s}
                 onClick={() => { setSection(s); setMobileMenuOpen(false); }}
-                className={`block w-full text-left text-[10px] font-bold uppercase tracking-widest py-2 ${
+                className={`block w-full text-left text-[10px] font-mono uppercase tracking-widest py-2 ${
                   section === s
                     ? isDark ? "text-white" : "text-black"
-                    : isDark ? "text-white/50" : "text-black/50"
+                    : isDark ? "text-neutral-500" : "text-neutral-400"
                 }`}
               >
                 {s}
@@ -769,39 +1200,43 @@ function AdminPage() {
         )}
       </nav>
 
-      <main className="max-w-7xl mx-auto px-6 py-12 space-y-12">
+      <main className="relative max-w-7xl mx-auto px-6 py-10 space-y-10 z-10">
 
         {/* ════════════════════════════════════════════════════════════════
             OVERVIEW
         ════════════════════════════════════════════════════════════════ */}
         {section === "overview" && (
-          <div className="space-y-12">
+          <div className="space-y-10 animate-in fade-in duration-500">
             <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-bold uppercase tracking-tighter">Overview</h1>
+              <div>
+                <h1 className="text-xl font-medium tracking-tight flex items-center gap-2">
+                  Command Center Console
+                </h1>
+                <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>JARVIS_AI OPTIMIZATION CORE DEPLOYED</p>
+              </div>
 
-              {/* ── JARVIS BUTTON — requests fullscreen then navigates ── */}
               <button
                 onClick={handleOpenJarvis}
-                className={`text-[10px] font-bold uppercase px-6 py-3 border transition-all ${
+                className={`text-[9px] font-mono font-semibold tracking-wider uppercase px-4 py-2 border transition-all ${
                   isDark
-                    ? "border-white/20 text-white hover:bg-white/5"
-                    : "border-black/10 text-black hover:bg-black/5"
+                    ? "border-neutral-800 text-neutral-300 hover:bg-neutral-900/50 hover:text-white"
+                    : "border-neutral-200 text-neutral-700 hover:bg-neutral-100 hover:text-black"
                 }`}
               >
-                JARVIS HUB →
+                JARVIS CONSOLE →
               </button>
             </div>
 
             {/* Period Selector */}
-            <div className="flex gap-4">
+            <div className="flex gap-2">
               {["day", "week", "month", "all"].map(r => (
                 <button
                   key={r}
                   onClick={() => setRevenueRange(r as any)}
-                  className={`text-[9px] font-bold uppercase px-4 py-2 transition-all ${
+                  className={`text-[9px] font-mono font-bold uppercase px-3 py-1.5 transition-all ${
                     revenueRange === r
                       ? isDark ? "bg-white text-black" : "bg-black text-white"
-                      : isDark ? "text-white/50 hover:text-white" : "text-black/50 hover:text-black"
+                      : isDark ? "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/50" : "text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100"
                   }`}
                 >
                   {r}
@@ -810,125 +1245,161 @@ function AdminPage() {
             </div>
 
             {/* ── REVENUE HERO ── */}
-            <div className={`p-8 space-y-4 ${isDark ? "bg-white/5" : "bg-gray-50/50"}`}>
-              <p className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Revenue</p>
-              <div className="flex items-end gap-4 flex-wrap">
-                <p className="text-5xl font-bold tracking-tighter leading-none">{fmt$(filteredRevenue)}</p>
-                {revenueDelta !== null && (
-                  <div className={`flex items-center gap-1 px-3 py-1 text-[9px] font-bold uppercase ${
-                    revenueDelta > 0
-                      ? "bg-green-500/10 text-green-500"
-                      : revenueDelta < 0
-                      ? "bg-red-500/10 text-red-500"
-                      : isDark ? "bg-white/10 text-white/50" : "bg-black/5 text-black/40"
-                  }`}>
-                    {revenueDelta > 0 ? <TrendingUp size={10} /> : revenueDelta < 0 ? <TrendingDown size={10} /> : <Minus size={10} />}
-                    {revenueDelta > 0 ? "+" : ""}{revenueDelta}% vs prior {revenueRange}
+            <div className={`p-6 border rounded-md relative overflow-hidden ${isDark ? "bg-neutral-950/40 border-neutral-800/80" : "bg-white border-neutral-200/80 shadow-sm"}`}>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <LedPulse color="cyan" />
+                    <p className={`text-[9px] font-mono font-medium uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>System Revenue</p>
                   </div>
-                )}
-              </div>
-              {/* 7-day sparkline */}
-              <div className="flex items-end gap-1 h-12 mt-4">
-                {sparklineData.map((d, i) => (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-1 group relative">
-                    <div
-                      className={`w-full transition-all duration-300 ${isDark ? "bg-white/20 group-hover:bg-white/40" : "bg-black/10 group-hover:bg-black/30"}`}
-                      style={{ height: `${(d.value / sparkMax) * 100}%`, minHeight: d.value > 0 ? "2px" : "1px" }}
-                    />
-                    <span className={`text-[7px] uppercase ${isDark ? "text-white/30" : "text-black/30"}`}>{d.label.slice(0, 1)}</span>
-                    {d.value > 0 && (
-                      <div className={`absolute -top-6 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[7px] font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity ${isDark ? "bg-white text-black" : "bg-black text-white"}`}>
-                        {fmt$(d.value)}
+                  <div className="flex items-baseline gap-3 flex-wrap">
+                    <p 
+                      className="text-4xl font-semibold tracking-tight font-sans transition-all"
+                      style={{ textShadow: isDark ? "0 0 15px rgba(255,255,255,0.12)" : "0 0 10px rgba(0,0,0,0.04)" }}
+                    >
+                      {fmt$(filteredRevenue)}
+                    </p>
+                    {revenueDelta !== null && (
+                      <div className={`flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase ${
+                        revenueDelta > 0
+                          ? "bg-emerald-500/10 text-emerald-500"
+                          : revenueDelta < 0
+                          ? "bg-rose-500/10 text-rose-500"
+                          : isDark ? "bg-neutral-800 text-neutral-400" : "bg-neutral-100 text-neutral-550"
+                      }`}>
+                        {revenueDelta > 0 ? <TrendingUp size={10} /> : revenueDelta < 0 ? <TrendingDown size={10} /> : <Minus size={10} />}
+                        {revenueDelta > 0 ? "+" : ""}{revenueDelta}% vs prior {revenueRange}
                       </div>
                     )}
                   </div>
-                ))}
+                </div>
+
+                {/* 7-day sparkline bar style */}
+                <div className="flex items-end gap-1.5 h-14 w-full md:w-56 pt-2">
+                  {sparklineData.map((d, i) => (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group relative">
+                      <div
+                        className={`w-full transition-all duration-300 rounded-[1px] ${isDark ? "bg-neutral-800 group-hover:bg-neutral-600" : "bg-neutral-200 group-hover:bg-neutral-400"}`}
+                        style={{ height: `${(d.value / sparkMax) * 100}%`, minHeight: d.value > 0 ? "3px" : "1px" }}
+                      />
+                      <span className={`text-[8px] font-mono ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>{d.label.slice(0, 1)}</span>
+                      {d.value > 0 && (
+                        <div className={`absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[8px] font-mono font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border ${isDark ? "bg-neutral-900 text-white border-neutral-700" : "bg-white text-black border-neutral-300 shadow-sm"}`}>
+                          {fmt$(d.value)}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
-            {/* ── SUPPORTING STATS ── */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-12">
+            {/* ── SUPPORTING STATS GRID (NOW INCLUDING ADD TO CART!) ── */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
               <StatWithDelta label="Orders" value={ordersInPeriod} sub="paid this period" delta={ordersDelta} isDark={isDark} />
               <StatWithDelta label="Avg Ticket" value={fmt$(avgTicket)} sub="per paid order" delta={avgTicketDelta} isDark={isDark} />
               <Stat label="Conv Rate" value={`${convRate}%`} sub="checkout to paid" isDark={isDark} />
               <Stat label="Leads" value={activeLeads.length} sub="total captured" isDark={isDark} />
+              <Stat label="Add to Cart" value={currentPeriodAddToCart.toLocaleString()} sub="cart conversions" isDark={isDark} led="cyan" />
             </div>
 
             {/* ── ORDER STATUS BREAKDOWN ── */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
-                { label: "Paid", count: paidOrders.length, color: "text-green-500" },
-                { label: "Pending", count: pendingOrders.length, color: isDark ? "text-yellow-400" : "text-yellow-600" },
-                { label: "Failed", count: failedOrders.length, color: "text-red-500" },
-                { label: "Published", count: products.filter(p => p.is_published).length, color: isDark ? "text-white" : "text-black" },
+                { label: "Paid Orders", count: paidOrders.length, color: "text-emerald-500", led: "green" as const },
+                { label: "Pending Orders", count: pendingOrders.length, color: isDark ? "text-amber-400" : "text-amber-600", led: "yellow" as const },
+                { label: "Failed Orders", count: failedOrders.length, color: "text-rose-500", led: "red" as const },
+                { label: "Published Items", count: products.filter(p => p.is_published).length, color: isDark ? "text-neutral-300" : "text-neutral-800", led: "neutral" as const },
               ].map(item => (
-                <div key={item.label} className={`p-4 border ${isDark ? "border-white/10" : "border-gray-100"}`}>
-                  <p className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? "text-white/40" : "text-gray-400"}`}>{item.label}</p>
-                  <p className={`text-xl font-bold tracking-tighter mt-1 ${item.color}`}>{item.count}</p>
+                <div key={item.label} className={`p-4 border rounded ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200/50"}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className={`text-[8px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{item.label}</p>
+                    <LedPulse color={item.led} />
+                  </div>
+                  <p className={`text-lg font-semibold tracking-tight mt-1 ${item.color}`}>{item.count}</p>
                 </div>
               ))}
             </div>
 
+            {/* ── TELEMETRY CANVAS PLACED EXACTLY BELOW MAIN METRICS ── */}
+            <div className="space-y-3">
+              <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-450"}`}>Real-Time Telemetry Pipeline</p>
+              <TelemetryCanvas events={pageEvents} isDark={isDark} canvasRefExternal={telemetryCanvasRef} />
+            </div>
+
+            {/* ── COGNITIVE INTEL AI DICTATOR (THE "SHOW-OFF" MODULE) ── */}
+            <AiAgentConsole 
+              isDark={isDark} 
+              onSimulatePacket={(type) => {
+                if (telemetryCanvasRef.current) {
+                  telemetryCanvasRef.current.triggerSimulatedPacket(type);
+                }
+              }} 
+            />
+
             {/* ── CONVERSION FUNNEL ── */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-4">
-                <p className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Conversion Funnel</p>
+            <div className={`p-6 border rounded ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200/60"} space-y-4`}>
+              <div className="flex items-center gap-4 justify-between">
+                <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Live Conversion Flow</p>
                 {!hasEventData && (
-                  <span className={`text-[8px] uppercase tracking-widest px-2 py-0.5 ${isDark ? "bg-white/5 text-white/30" : "bg-gray-100 text-gray-400"}`}>
-                    Install tracker to see visitor data
+                  <span className={`text-[8px] font-mono tracking-wider uppercase px-2 py-0.5 border ${isDark ? "border-neutral-800 text-neutral-500" : "border-neutral-200 text-neutral-400"}`}>
+                    Telemetry hook standby
                   </span>
                 )}
               </div>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {[
-                  { label: "Page Views", value: hasEventData ? funnelViews : null },
-                  { label: "Product Clicks", value: hasEventData ? funnelProductClicks : null },
-                  { label: "Add to Cart", value: hasEventData ? funnelAddToCart : null },
-                  { label: "Checkout Started", value: hasEventData ? funnelCheckoutStart : null },
-                  { label: "Purchased", value: funnelPurchase },
+                  { label: "Page Views", value: hasEventData ? funnelViews : null, led: "cyan" as const },
+                  { label: "Product Clicks", value: hasEventData ? funnelProductClicks : null, led: "cyan" as const },
+                  { label: "Add to Cart", value: hasEventData ? funnelAddToCart : null, led: "yellow" as const },
+                  { label: "Checkout Inits", value: hasEventData ? funnelCheckoutStart : null, led: "yellow" as const },
+                  { label: "Purchases", value: funnelPurchase, led: "green" as const },
                 ].map((step, i) => (
                   <div key={step.label} className="flex items-center gap-4">
-                    <span className={`text-[9px] font-bold uppercase w-32 flex-shrink-0 ${isDark ? "text-white/50" : "text-gray-400"}`}>{step.label}</span>
-                    <div className={`flex-1 h-1.5 ${isDark ? "bg-white/5" : "bg-gray-100"}`}>
+                    <div className="w-32 flex-shrink-0 flex items-center gap-2">
+                      <LedPulse color={step.led} active={step.value !== null && step.value > 0} />
+                      <span className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-500" : "text-neutral-450"}`}>{step.label}</span>
+                    </div>
+                    <div className={`flex-1 h-2 relative rounded overflow-hidden ${isDark ? "bg-neutral-900" : "bg-neutral-100"}`}>
                       {step.value !== null && (
                         <div
-                          className={`h-full transition-all duration-500 ${isDark ? "bg-white" : "bg-black"}`}
-                          style={{ width: `${((step.value ?? 0) / funnelMax) * 100}%`, opacity: 1 - i * 0.15 }}
+                          className={`h-full transition-all duration-700 ease-out rounded ${isDark ? "bg-neutral-300" : "bg-neutral-800"}`}
+                          style={{ width: `${((step.value ?? 0) / funnelMax) * 100}%`, opacity: 1 - i * 0.12 }}
                         />
                       )}
                     </div>
-                    <span className={`text-[9px] font-bold w-12 text-right ${isDark ? "text-white/70" : "text-black/70"}`}>
+                    <span className={`text-[10px] font-mono font-medium w-16 text-right ${isDark ? "text-neutral-300" : "text-neutral-700"}`}>
                       {step.value !== null ? step.value.toLocaleString() : "—"}
                     </span>
                   </div>
                 ))}
               </div>
               {hasEventData && funnelViews > 0 && funnelPurchase > 0 && (
-                <p className={`text-[9px] uppercase tracking-widest ${isDark ? "text-white/30" : "text-gray-400"}`}>
-                  Overall: {((funnelPurchase / funnelViews) * 100).toFixed(2)}% visitor-to-purchase
+                <p className={`text-[8px] font-mono uppercase text-right ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>
+                  Overall Ratio: {((funnelPurchase / funnelViews) * 100).toFixed(2)}% visitor-to-purchase
                 </p>
               )}
             </div>
 
             {/* ── TOP PRODUCTS ── */}
             {topProducts.length > 0 && (
-              <div className="space-y-4">
-                <p className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Top Products by Revenue</p>
-                <div className={`border ${isDark ? "border-white/10" : "border-gray-100"}`}>
+              <div className="space-y-3">
+                <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-450"}`}>Top Products by Revenue</p>
+                <div className={`border rounded overflow-hidden ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200/60"}`}>
                   <table className="w-full text-left">
                     <thead>
-                      <tr className={`text-[8px] font-bold uppercase tracking-widest border-b ${isDark ? "text-white/30 border-white/10" : "text-gray-400 border-gray-100"}`}>
-                        <th className="px-4 py-3">Product</th>
-                        <th className="px-4 py-3 text-right">Revenue</th>
-                        <th className="px-4 py-3 text-right">Orders</th>
+                      <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${isDark ? "text-neutral-500 border-neutral-900 bg-neutral-950/50" : "text-neutral-500 border-neutral-100 bg-neutral-50"}`}>
+                        <th className="px-5 py-3 font-semibold">Product Title</th>
+                        <th className="px-5 py-3 font-semibold text-right">Revenue</th>
+                        <th className="px-5 py-3 font-semibold text-right">Orders</th>
                       </tr>
                     </thead>
                     <tbody>
                       {topProducts.map((p, i) => (
-                        <tr key={i} className={`border-b last:border-0 ${isDark ? "border-white/5 hover:bg-white/3" : "border-gray-50 hover:bg-gray-50/50"}`}>
-                          <td className="px-4 py-3 text-[10px] font-bold uppercase truncate max-w-[180px]">{p.title}</td>
-                          <td className={`px-4 py-3 text-[10px] font-bold text-right ${isDark ? "text-white" : "text-black"}`}>{fmt$(p.revenue)}</td>
-                          <td className={`px-4 py-3 text-[10px] text-right ${isDark ? "text-white/50" : "text-gray-400"}`}>{p.units}</td>
+                        <tr key={i} className={`border-b last:border-0 ${isDark ? "border-neutral-900 hover:bg-neutral-900/30" : "border-neutral-100 hover:bg-neutral-50/50"}`}>
+                          <td className="px-5 py-3 text-[11px] font-medium uppercase truncate max-w-[180px]">{p.title}</td>
+                          <td className={`px-5 py-3 text-[11px] font-mono font-medium text-right ${isDark ? "text-white" : "text-black"}`}>{fmt$(p.revenue)}</td>
+                          <td className={`px-5 py-3 text-[11px] font-mono text-right ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>{p.units}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -943,54 +1414,58 @@ function AdminPage() {
             PRODUCTS
         ════════════════════════════════════════════════════════════════ */}
         {section === "products" && (
-          <div className="space-y-12">
-            <div className="flex items-end justify-between flex-wrap gap-4">
-              <h1 className="text-2xl font-bold uppercase tracking-tighter">Products</h1>
-              <div className="flex gap-4 flex-wrap">
+          <div className="space-y-10 animate-in fade-in duration-500">
+            <div className="flex items-end justify-between flex-wrap gap-4 border-b pb-4 dark:border-neutral-900 border-neutral-200">
+              <div>
+                <h1 className="text-xl font-medium tracking-tight">Products</h1>
+                <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>MANAGE DEPLOYED ITEMS</p>
+              </div>
+
+              <div className="flex gap-2 flex-wrap">
                 <button
                   onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
-                  className={`text-[10px] font-bold uppercase px-6 py-3 border transition-all ${
+                  className={`text-[9px] font-mono font-semibold uppercase px-4 py-2 border transition-all ${
                     selectMode
                       ? isDark ? "border-white bg-white text-black" : "border-black bg-black text-white"
-                      : isDark ? "border-white/20 text-white hover:bg-white/5" : "border-black/10 text-black hover:bg-black/5"
+                      : isDark ? "border-neutral-800 text-neutral-355 hover:bg-neutral-900/40" : "border-neutral-200 text-neutral-705 hover:bg-neutral-50"
                   }`}>
-                  {selectMode ? "CANCEL" : "SELECT"}
+                  {selectMode ? "Cancel" : "Select"}
                 </button>
                 <button onClick={handleSyncPrintful} disabled={isSyncing}
-                  className={`flex items-center gap-2 text-[10px] font-bold uppercase px-6 py-3 border transition-all ${
-                    isDark ? "border-white/20 text-white hover:bg-white/5" : "border-black/10 text-black hover:bg-black/5"
+                  className={`flex items-center gap-1.5 text-[9px] font-mono font-semibold uppercase px-4 py-2 border transition-all ${
+                    isDark ? "border-neutral-800 text-neutral-355 hover:bg-neutral-900/40" : "border-neutral-200 text-neutral-705 hover:bg-neutral-50"
                   }`}>
-                  <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />
-                  {isSyncing ? "SYNCING…" : "SYNC PRINTFUL"}
+                  <RefreshCw size={11} className={isSyncing ? "animate-spin" : ""} />
+                  {isSyncing ? "Syncing" : "Sync Printful"}
                 </button>
                 <button onClick={() => setProductFormOpen(!productFormOpen)}
-                  className={`text-[10px] font-bold uppercase px-8 py-3 transition-all ${
-                    isDark ? "bg-white text-black hover:bg-gray-200" : "bg-black text-white hover:bg-gray-800"
+                  className={`text-[9px] font-mono font-bold uppercase px-5 py-2 transition-all ${
+                    isDark ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800"
                   }`}>
-                  {productFormOpen ? "CLOSE" : "NEW PRODUCT"}
+                  {productFormOpen ? "Close Form" : "New Product"}
                 </button>
               </div>
             </div>
 
             {/* ── Bulk Toolbar ── */}
             {selectMode && selectedIds.size > 0 && (
-              <div className={`flex items-center gap-4 p-4 animate-in slide-in-from-top duration-200 ${isDark ? "bg-white/5" : "bg-gray-50/50"}`}>
-                <span className={`text-[9px] font-bold uppercase ${isDark ? "text-white/50" : "text-gray-400"}`}>{selectedIds.size} selected</span>
-                <div className="flex gap-3 ml-auto">
-                  <button onClick={selectAllProducts} className={`text-[9px] font-bold uppercase px-3 py-2 border transition-all ${isDark ? "border-white/20 text-white/70 hover:text-white" : "border-black/10 text-black/50 hover:text-black"}`}>
-                    {selectedIds.size === orderedProducts.length ? "DESELECT ALL" : "SELECT ALL"}
+              <div className={`flex items-center gap-4 p-3 rounded-md animate-in slide-in-from-top-2 duration-200 border ${isDark ? "bg-neutral-950 border-neutral-800" : "bg-white border-neutral-200 shadow-sm"}`}>
+                <span className={`text-[9px] font-mono font-semibold uppercase ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>{selectedIds.size} selected</span>
+                <div className="flex gap-2 ml-auto">
+                  <button onClick={selectAllProducts} className={`text-[9px] font-mono uppercase px-3 py-1.5 border rounded transition-all ${isDark ? "border-neutral-800 text-neutral-400 hover:text-white" : "border-neutral-200 text-neutral-600 hover:text-black"}`}>
+                    {selectedIds.size === orderedProducts.length ? "Deselect All" : "Select All"}
                   </button>
                   <button onClick={() => bulkPublish(true)} disabled={isBulkActing}
-                    className="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-2 bg-green-500/10 text-green-500 hover:bg-green-500/20 transition-all">
-                    <Eye size={10} /> PUBLISH
+                    className="flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 rounded transition-all">
+                    <Eye size={10} /> Publish
                   </button>
                   <button onClick={() => bulkPublish(false)} disabled={isBulkActing}
-                    className={`flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-2 ${isDark ? "bg-white/5 text-white/50 hover:bg-white/10" : "bg-black/5 text-black/40 hover:bg-black/10"} transition-all`}>
-                    <EyeOff size={10} /> UNPUBLISH
+                    className={`flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 rounded transition-all ${isDark ? "bg-neutral-900 text-neutral-400 hover:bg-neutral-800" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"}`}>
+                    <EyeOff size={10} /> Unpublish
                   </button>
                   <button onClick={bulkDelete} disabled={isBulkActing}
-                    className="flex items-center gap-1.5 text-[9px] font-bold uppercase px-3 py-2 bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all">
-                    <Trash2 size={10} /> DELETE
+                    className="flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 rounded transition-all">
+                    <Trash2 size={10} /> Delete
                   </button>
                 </div>
               </div>
@@ -998,37 +1473,37 @@ function AdminPage() {
 
             {/* ── Product Form ── */}
             {productFormOpen && (
-              <div className={`p-8 space-y-8 animate-in slide-in-from-top duration-300 ${isDark ? "bg-white/5" : "bg-gray-50/50"}`}>
-                <h2 className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>
-                  {productForm.editingId ? "Edit Product" : "Create Product"}
+              <div className={`p-6 border rounded-md space-y-6 animate-in slide-in-from-top-3 duration-300 ${isDark ? "bg-neutral-950/40 border-neutral-800" : "bg-white border-neutral-200 shadow-sm"}`}>
+                <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>
+                  {productForm.editingId ? "Modify Product Engine" : "Create Product Hook"}
                 </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <Input label="Title" value={productForm.title} onChange={v => setProductForm(f => ({ ...f, title: v }))} isDark={isDark} />
                   <Input label="Price (USD)" value={productForm.price_cents} onChange={v => setProductForm(f => ({ ...f, price_cents: v }))} type="number" isDark={isDark} />
                   <Input label="Slug" value={productForm.slug} onChange={v => setProductForm(f => ({ ...f, slug: v }))} isDark={isDark} />
                   <Input label="Source URL" value={productForm.source_url} onChange={v => setProductForm(f => ({ ...f, source_url: v }))} isDark={isDark} />
                 </div>
                 <Input label="Image URL(s)" value={productForm.image_url} onChange={v => setProductForm(f => ({ ...f, image_url: v }))} isDark={isDark} />
-                <div className="space-y-2">
-                  <label className={`text-[9px] font-bold uppercase ${isDark ? "text-white/50" : "text-gray-400"}`}>Description</label>
+                <div className="space-y-1.5">
+                  <label className={`text-[9px] font-mono font-semibold uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Description</label>
                   <textarea value={productForm.description} onChange={e => setProductForm(f => ({ ...f, description: e.target.value }))}
-                    className={`w-full bg-transparent border-b focus:border-current outline-none py-2 text-xs font-bold uppercase resize-none ${
-                      isDark ? "border-white/20 text-white" : "border-gray-200 text-black"
-                    }`} rows={2} />
+                    className={`w-full bg-transparent border rounded px-3 py-2 text-xs font-mono resize-none focus:outline-none focus:ring-1 ${
+                      isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-neutral-200 text-black focus:border-black focus:ring-black/5"
+                    }`} rows={3} />
                 </div>
                 <div className="flex items-center justify-between">
                   <button onClick={() => setProductForm(f => ({ ...f, is_published: !f.is_published }))}
-                    className={`text-[10px] font-bold uppercase px-4 py-2 rounded-full border transition-all ${
-                      productForm.is_published ? "bg-green-50 text-green-600 border-green-200" : "bg-red-50 text-red-600 border-red-200"
+                    className={`text-[9px] font-mono font-semibold uppercase px-3 py-1.5 rounded border transition-all ${
+                      productForm.is_published ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-rose-500/10 text-rose-500 border-rose-500/20"
                     }`}>
-                    {productForm.is_published ? "PUBLISHED" : "DRAFT"}
+                    {productForm.is_published ? "Status: Deployed" : "Status: Draft"}
                   </button>
-                  <div className="flex gap-4">
-                    <button onClick={resetProductForm} className={`text-[10px] font-bold uppercase ${isDark ? "text-white/50 hover:text-white" : "text-gray-400 hover:text-black"}`}>Cancel</button>
-                    <button onClick={saveProduct} className={`text-[10px] font-bold uppercase px-8 py-3 transition-all ${
-                      isDark ? "bg-white text-black hover:bg-gray-200" : "bg-black text-white hover:bg-gray-800"
+                  <div className="flex gap-2">
+                    <button onClick={resetProductForm} className={`text-[9px] font-mono uppercase px-3 py-2 ${isDark ? "text-neutral-500 hover:text-white" : "text-neutral-450 hover:text-black"}`}>Cancel</button>
+                    <button onClick={saveProduct} className={`text-[9px] font-mono font-bold uppercase px-6 py-2 transition-all ${
+                      isDark ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800"
                     }`}>
-                      {productForm.editingId ? "SAVE" : "CREATE"}
+                      {productForm.editingId ? "Save Engine" : "Build Hook"}
                     </button>
                   </div>
                 </div>
@@ -1036,13 +1511,13 @@ function AdminPage() {
             )}
 
             {!selectMode && (
-              <p className={`text-[8px] uppercase tracking-widest ${isDark ? "text-white/20" : "text-black/20"}`}>
-                Drag cards to reorder · Click SELECT for bulk actions
+              <p className={`text-[9px] font-mono uppercase tracking-wider ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>
+                ● Drag items to sort directory · Click SELECT for directory operations
               </p>
             )}
 
             {/* ── Product Grid ── */}
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-5">
               {orderedProducts.map(p => {
                 const isPrintful = !!p.printful_id;
                 const isSelected = selectedIds.has(p.id);
@@ -1052,7 +1527,11 @@ function AdminPage() {
                 return (
                   <div
                     key={p.id}
-                    className={`group relative transition-all duration-200 ${isDragging ? "opacity-40 scale-95" : ""} ${isDragTarget ? isDark ? "ring-1 ring-white/40" : "ring-1 ring-black/20" : ""}`}
+                    className={`group relative transition-all duration-200 rounded overflow-hidden border ${
+                      isDark 
+                        ? isSelected ? "border-neutral-100 bg-neutral-900/40" : "border-neutral-900 bg-neutral-950/20 hover:border-neutral-800" 
+                        : isSelected ? "border-black bg-white shadow-md" : "border-neutral-200/60 bg-white hover:border-neutral-300 shadow-sm"
+                    } ${isDragging ? "opacity-35 scale-95" : ""} ${isDragTarget ? isDark ? "ring-1 ring-white/30" : "ring-1 ring-black/10" : ""}`}
                     draggable={!selectMode}
                     onDragStart={() => handleDragStart(p.id)}
                     onDragOver={e => handleDragOver(e, p.id)}
@@ -1061,52 +1540,52 @@ function AdminPage() {
                     onClick={() => selectMode && toggleSelectProduct(p.id)}
                   >
                     {selectMode && (
-                      <div className="absolute top-2 left-2 z-10">
+                      <div className="absolute top-2.5 left-2.5 z-10">
                         {isSelected
-                          ? <CheckSquare size={14} className={isDark ? "text-white" : "text-black"} />
-                          : <Square size={14} className={isDark ? "text-white/40" : "text-black/30"} />
+                          ? <CheckSquare size={13} className={isDark ? "text-white" : "text-black"} />
+                          : <Square size={13} className={isDark ? "text-neutral-600" : "text-neutral-400"} />
                         }
                       </div>
                     )}
                     {!selectMode && (
-                      <div className={`absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 cursor-grab transition-opacity ${isDark ? "text-white/40" : "text-black/30"}`}>
-                        <GripVertical size={12} />
+                      <div className={`absolute top-2.5 left-2.5 z-10 opacity-0 group-hover:opacity-100 cursor-grab transition-opacity ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>
+                        <GripVertical size={11} />
                       </div>
                     )}
                     {isPrintful && (
-                      <div className="absolute top-2 right-2 z-10 flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-500/20 text-blue-400 text-[7px] font-bold uppercase">
-                        <Lock size={7} /> PF
+                      <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-0.5 px-1.5 py-0.5 rounded-[2px] bg-sky-500/10 text-sky-400 text-[7px] font-mono font-bold uppercase border border-sky-500/10">
+                        <Lock size={6} /> PF
                       </div>
                     )}
-                    <div className={`relative flex aspect-[2/3] items-center justify-center overflow-hidden p-3 sm:p-4 transition-all duration-300 ${
-                      isDark ? "bg-white/5" : "bg-gray-50/50"
-                    } ${isSelected ? isDark ? "ring-1 ring-white" : "ring-1 ring-black" : ""} ${selectMode ? "cursor-pointer" : ""}`}>
+                    <div className="relative flex aspect-[4/5] items-center justify-center overflow-hidden p-4">
                       {p.image_urls && p.image_urls.length > 1 ? (
-                        <img src={p.image_urls[1]} alt={p.title} className="max-h-full max-w-full object-contain group-hover:scale-105 transition-all duration-300" />
+                        <img src={p.image_urls[1]} alt={p.title} className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500" />
+                      ) : p.image_urls && p.image_urls[0] ? (
+                        <img src={p.image_urls[0]} alt={p.title} className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500" />
                       ) : (
-                        <span className={`text-[7px] uppercase tracking-[0.3em] ${isDark ? "text-white/20" : "text-black/20"}`}>No Image</span>
+                        <span className={`text-[8px] font-mono uppercase tracking-widest ${isDark ? "text-neutral-800" : "text-neutral-300"}`}>Empty visual</span>
                       )}
                     </div>
-                    <div className="px-2 text-center mt-2">
-                      <p className={`mb-1 text-[9px] uppercase leading-tight tracking-[0.1em] truncate font-bold ${isDark ? "text-white" : "text-black"}`}>{p.title}</p>
-                      <p className={`text-[9px] tracking-[0.05em] ${isDark ? "text-white/70" : "text-black/70"}`}>
-                        ${(p.price_cents / 100).toFixed(0)}
+                    <div className={`px-3.5 pb-3.5 pt-2 ${isDark ? "bg-neutral-950/40" : "bg-neutral-50/20"}`}>
+                      <p className={`mb-0.5 text-[10px] uppercase tracking-wider truncate font-medium ${isDark ? "text-neutral-200" : "text-neutral-800"}`}>{p.title}</p>
+                      <p className={`text-[10px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-550"}`}>
+                        ${(p.price_cents / 100).toFixed(2)}
                       </p>
                       {!selectMode && (
-                        <div className="flex items-center justify-center gap-3 mt-3">
+                        <div className="flex items-center justify-end gap-2.5 mt-2 pt-2 border-t border-neutral-200/20 dark:border-neutral-900/40">
                           <button onClick={e => { e.stopPropagation(); togglePublished(p.id, p.is_published); }}
-                            className={`w-2 h-2 rounded-full transition-all ${p.is_published ? "bg-green-500" : "bg-red-500"}`} />
+                            className={`w-1.5 h-1.5 rounded-full transition-all ${p.is_published ? "bg-emerald-500" : "bg-rose-500"}`} />
                           {isPrintful ? (
-                            <span className={`${isDark ? "text-white/20" : "text-black/20"} cursor-not-allowed`} title="Printful products can only be edited in Printful">
-                              <Edit3 size={12} />
+                            <span className={`${isDark ? "text-neutral-800" : "text-neutral-305"} cursor-not-allowed`} title="Printful products are synced from supplier hub">
+                              <Edit3 size={11} />
                             </span>
                           ) : (
-                            <button onClick={e => { e.stopPropagation(); startEditProduct(p); }} className={`${isDark ? "text-white/40 hover:text-white" : "text-black/30 hover:text-black"} transition-colors`}>
-                              <Edit3 size={12} />
+                            <button onClick={e => { e.stopPropagation(); startEditProduct(p); }} className={`${isDark ? "text-neutral-500 hover:text-white" : "text-neutral-400 hover:text-black"} transition-colors`}>
+                              <Edit3 size={11} />
                             </button>
                           )}
-                          <button onClick={e => { e.stopPropagation(); archiveProduct(p.id); }} className={`${isDark ? "text-white/40 hover:text-red-400" : "text-black/30 hover:text-red-500"} transition-colors`}>
-                            <Archive size={12} />
+                          <button onClick={e => { e.stopPropagation(); archiveProduct(p.id); }} className={`${isDark ? "text-neutral-500 hover:text-rose-455" : "text-neutral-400 hover:text-rose-600"} transition-colors`}>
+                            <Archive size={11} />
                           </button>
                         </div>
                       )}
@@ -1122,18 +1601,22 @@ function AdminPage() {
             ORDERS
         ════════════════════════════════════════════════════════════════ */}
         {section === "orders" && (
-          <div className="space-y-8">
-            <div className="flex items-end justify-between flex-wrap gap-4">
-              <h1 className="text-2xl font-bold uppercase tracking-tighter">Orders</h1>
-              <input type="text" placeholder="SEARCH…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                className={`text-[10px] font-bold uppercase border-b focus:outline-none pb-1 w-48 bg-transparent ${
-                  isDark ? "border-white/20 text-white placeholder-white/30" : "border-black text-black placeholder-black/30"
+          <div className="space-y-8 animate-in fade-in duration-500">
+            <div className="flex items-end justify-between flex-wrap gap-4 border-b pb-4 dark:border-neutral-900 border-neutral-200">
+              <div>
+                <h1 className="text-xl font-medium tracking-tight">Ledger Registry</h1>
+                <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>ORDER INVOICING RECORDS</p>
+              </div>
+
+              <input type="text" placeholder="FILTER LEDGER…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                className={`text-[9px] font-mono border rounded px-3 py-2 w-48 bg-transparent focus:outline-none focus:ring-1 ${
+                  isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-neutral-250 text-black focus:border-black focus:ring-black/10"
                 }`} />
             </div>
 
-            <div className={`flex gap-0 border-b ${isDark ? "border-white/10" : "border-gray-100"}`}>
+            <div className={`flex gap-0 border-b ${isDark ? "border-neutral-900" : "border-neutral-200"}`}>
               {([
-                { key: "all", label: "All", count: activeOrders.length },
+                { key: "all", label: "Registry", count: activeOrders.length },
                 { key: "paid", label: "Paid", count: paidOrders.length },
                 { key: "pending", label: "Pending", count: pendingOrders.length },
                 { key: "failed", label: "Failed", count: failedOrders.length },
@@ -1141,59 +1624,62 @@ function AdminPage() {
                 <button
                   key={tab.key}
                   onClick={() => setOrderStatusFilter(tab.key)}
-                  className={`flex items-center gap-2 px-5 py-3 text-[9px] font-bold uppercase tracking-widest border-b-2 transition-all -mb-px ${
+                  className={`flex items-center gap-2 px-4 py-2.5 text-[9px] font-mono font-semibold uppercase tracking-widest border-b-2 transition-all -mb-px ${
                     orderStatusFilter === tab.key
                       ? isDark ? "border-white text-white" : "border-black text-black"
-                      : isDark ? "border-transparent text-white/40 hover:text-white/60" : "border-transparent text-gray-400 hover:text-black/60"
+                      : isDark ? "border-transparent text-neutral-550 hover:text-neutral-350" : "border-transparent text-neutral-455 hover:text-neutral-800"
                   }`}
                 >
                   {tab.label}
-                  <span className={`text-[8px] px-1.5 py-0.5 rounded-full ${
+                  <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded ${
                     orderStatusFilter === tab.key
                       ? isDark ? "bg-white text-black" : "bg-black text-white"
-                      : isDark ? "bg-white/10 text-white/50" : "bg-gray-100 text-gray-500"
+                      : isDark ? "bg-neutral-900 text-neutral-500" : "bg-neutral-100 text-neutral-500"
                   }`}>{tab.count}</span>
                 </button>
               ))}
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto border dark:border-neutral-900 border-neutral-200 rounded overflow-hidden">
               <table className="w-full text-left">
                 <thead>
-                  <tr className={`text-[9px] font-bold uppercase tracking-widest border-b ${
-                    isDark ? "text-white/50 border-white/10" : "text-gray-400 border-gray-100"
+                  <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${
+                    isDark ? "text-neutral-500 border-neutral-900 bg-neutral-950/50" : "text-neutral-500 border-neutral-200 bg-neutral-50"
                   }`}>
-                    <th className="pb-4">Email</th>
-                    <th className="pb-4">Name</th>
-                    <th className="pb-4">Amount</th>
-                    <th className="pb-4">Status</th>
-                    <th className="pb-4">Date</th>
+                    <th className="px-5 py-3 font-semibold">Invoicing Email</th>
+                    <th className="px-5 py-3 font-semibold">Recipient Identity</th>
+                    <th className="px-5 py-3 font-semibold">Invoice Payload</th>
+                    <th className="px-5 py-3 font-semibold">Pipeline State</th>
+                    <th className="px-5 py-3 font-semibold">Timestamp</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredOrders.map(o => (
                     <tr key={o.id}
-                      className={`border-b cursor-pointer ${isDark ? "border-white/5 hover:bg-white/5" : "border-gray-50 hover:bg-gray-50/50"}`}
+                      className={`border-b last:border-0 cursor-pointer ${isDark ? "border-neutral-900 hover:bg-neutral-900/30" : "border-neutral-100 hover:bg-neutral-50/50"}`}
                       onClick={() => setSelectedRow({ ...o, _type: "order" })}
                     >
-                      <td className="py-5 text-xs font-bold uppercase">{o.email}</td>
-                      <td className={`py-5 text-[10px] uppercase ${isDark ? "text-white/60" : "text-gray-500"}`}>{o.name || "—"}</td>
-                      <td className="py-5 text-xs font-bold uppercase">{fmt$(o.amount_cents)}</td>
-                      <td className="py-5">
-                        <span className={`text-[8px] font-bold uppercase px-2 py-1 ${
-                          o.status === "paid" ? "bg-green-500/10 text-green-500" :
-                          o.status === "pending" ? "bg-yellow-500/10 text-yellow-500" :
-                          "bg-red-500/10 text-red-500"
-                        }`}>{o.status}</span>
+                      <td className="px-5 py-3.5 text-xs font-semibold lowercase font-mono">{o.email}</td>
+                      <td className={`px-5 py-3.5 text-[10px] uppercase font-mono ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>{o.name || "—"}</td>
+                      <td className="px-5 py-3.5 text-xs font-mono font-medium">{fmt$(o.amount_cents)}</td>
+                      <td className="px-5 py-3.5">
+                        <span className={`text-[8px] font-mono font-bold uppercase px-2 py-0.5 rounded flex items-center gap-1.5 w-fit ${
+                          o.status === "paid" ? "bg-emerald-500/10 text-emerald-500" :
+                          o.status === "pending" ? "bg-amber-500/10 text-amber-500" :
+                          "bg-rose-500/10 text-rose-500"
+                        }`}>
+                          <LedPulse color={o.status === "paid" ? "green" : o.status === "pending" ? "yellow" : "red"} active={false} />
+                          {o.status}
+                        </span>
                       </td>
-                      <td className={`py-5 text-[10px] uppercase ${isDark ? "text-white/50" : "text-gray-400"}`}>{fmtDate(o.created_at)}</td>
+                      <td className={`px-5 py-3.5 text-[10px] font-mono uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>{fmtDate(o.created_at)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               {filteredOrders.length === 0 && (
-                <p className={`text-center py-12 text-[10px] uppercase tracking-widest ${isDark ? "text-white/20" : "text-gray-300"}`}>
-                  No orders found
+                <p className={`text-center py-10 text-[9px] font-mono uppercase tracking-widest ${isDark ? "text-neutral-750" : "text-neutral-300"}`}>
+                  Registry empty
                 </p>
               )}
             </div>
@@ -1204,29 +1690,33 @@ function AdminPage() {
             LEADS
         ════════════════════════════════════════════════════════════════ */}
         {section === "leads" && (
-          <div className="space-y-8">
-            <div className="flex items-end justify-between">
-              <h1 className="text-2xl font-bold uppercase tracking-tighter">Leads</h1>
-              <input type="text" placeholder="SEARCH…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                className={`text-[10px] font-bold uppercase border-b focus:outline-none pb-1 w-48 bg-transparent ${
-                  isDark ? "border-white/20 text-white placeholder-white/30" : "border-black text-black placeholder-black/30"
+          <div className="space-y-8 animate-in fade-in duration-500">
+            <div className="flex items-end justify-between flex-wrap gap-4 border-b pb-4 dark:border-neutral-900 border-neutral-200">
+              <div>
+                <h1 className="text-xl font-medium tracking-tight">Leads Engine</h1>
+                <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>MARKETING CAPTURE HOOKS</p>
+              </div>
+
+              <input type="text" placeholder="FILTER LEADS…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                className={`text-[9px] font-mono border rounded px-3 py-2 w-48 bg-transparent focus:outline-none focus:ring-1 ${
+                  isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-neutral-250 text-black focus:border-black focus:ring-black/10"
                 }`} />
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto border dark:border-neutral-900 border-neutral-200 rounded overflow-hidden">
               <table className="w-full text-left">
                 <thead>
-                  <tr className={`text-[9px] font-bold uppercase tracking-widest border-b ${
-                    isDark ? "text-white/50 border-white/10" : "text-gray-400 border-gray-100"
+                  <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${
+                    isDark ? "text-neutral-500 border-neutral-900 bg-neutral-950/50" : "text-neutral-500 border-neutral-200 bg-neutral-50"
                   }`}>
-                    <th className="pb-4">Email</th>
-                    <th className="pb-4">Date</th>
+                    <th className="px-5 py-3 font-semibold">Capture email</th>
+                    <th className="px-5 py-3 font-semibold">Registered</th>
                   </tr>
                 </thead>
-                <tbody className={isDark ? "divide-white/10" : "divide-gray-50"}>
+                <tbody>
                   {filteredLeads.map(l => (
-                    <tr key={l.id} className={isDark ? "hover:bg-white/5" : "hover:bg-gray-50/50"}>
-                      <td className="py-6 text-xs font-bold uppercase">{l.email}</td>
-                      <td className={`py-6 text-[10px] uppercase ${isDark ? "text-white/50" : "text-gray-400"}`}>{fmtDate(l.created_at)}</td>
+                    <tr key={l.id} className={`border-b last:border-0 ${isDark ? "border-neutral-900 hover:bg-neutral-900/30" : "border-neutral-100 hover:bg-neutral-50/50"}`}>
+                      <td className="px-5 py-4 text-xs font-semibold lowercase font-mono">{l.email}</td>
+                      <td className={`px-5 py-4 text-[10px] font-mono uppercase ${isDark ? "text-neutral-500" : "text-neutral-450"}`}>{fmtDate(l.created_at)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1239,16 +1729,20 @@ function AdminPage() {
             ANALYTICS
         ════════════════════════════════════════════════════════════════ */}
         {section === "analytics" && (
-          <div className="space-y-12">
-            <div className="flex items-end justify-between flex-wrap gap-4">
-              <h1 className="text-2xl font-bold uppercase tracking-tighter">Analytics</h1>
-              <div className="flex gap-3">
+          <div className="space-y-10 animate-in fade-in duration-500">
+            <div className="flex items-end justify-between flex-wrap gap-4 border-b pb-4 dark:border-neutral-900 border-neutral-200">
+              <div>
+                <h1 className="text-xl font-medium tracking-tight">System Telemetry</h1>
+                <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>USER ACTIVITY CORE LOGS</p>
+              </div>
+
+              <div className="flex gap-1">
                 {(["7", "14", "30"] as const).map(r => (
                   <button key={r} onClick={() => setAnalyticsRange(r)}
-                    className={`text-[9px] font-bold uppercase px-4 py-2 transition-all ${
+                    className={`text-[9px] font-mono font-bold uppercase px-3 py-1.5 transition-all ${
                       analyticsRange === r
                         ? isDark ? "bg-white text-black" : "bg-black text-white"
-                        : isDark ? "text-white/50 hover:text-white" : "text-black/50 hover:text-black"
+                        : isDark ? "text-neutral-450 hover:text-white" : "text-neutral-500 hover:text-black"
                     }`}>
                     {r}D
                   </button>
@@ -1257,12 +1751,12 @@ function AdminPage() {
             </div>
 
             {!hasEventData && (
-              <div className={`p-8 border space-y-4 ${isDark ? "border-white/10 bg-white/3" : "border-gray-100 bg-gray-50/50"}`}>
-                <p className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Tracker Not Installed</p>
-                <p className={`text-[10px] ${isDark ? "text-white/30" : "text-gray-400"}`}>
-                  Add the snippet below to your frontend to start tracking page views, product clicks, add-to-cart, and checkout events.
+              <div className={`p-6 border rounded space-y-4 ${isDark ? "border-neutral-900 bg-neutral-950/30" : "border-neutral-200 bg-white shadow-sm"}`}>
+                <p className={`text-[10px] font-mono font-bold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Tracker Inactive</p>
+                <p className={`text-xs leading-relaxed ${isDark ? "text-neutral-400" : "text-neutral-600"}`}>
+                  Bind the client-side telemetry dispatcher to monitor user sessions, clicks, and page view triggers.
                 </p>
-                <pre className={`text-[9px] p-4 overflow-x-auto font-mono ${isDark ? "bg-white/5 text-white/60" : "bg-gray-100 text-gray-600"}`}>
+                <pre className={`text-[9px] p-4 overflow-x-auto font-mono rounded ${isDark ? "bg-neutral-950 border border-neutral-900 text-neutral-400" : "bg-neutral-50 border border-neutral-200 text-neutral-600"}`}>
 {`export function trackEvent(type, data = {}) {
   supabase.from('page_events').insert([{
     event_type: type,
@@ -1280,61 +1774,63 @@ function AdminPage() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-12">
+            {/* ANALYTICS STATS WITH ADD TO CART INTEGRATED */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
               <Stat label="Page Views" value={analyticsEvents.filter(e => e.event_type === "page_view").length.toLocaleString()} sub={`last ${analyticsRange} days`} isDark={isDark} />
               <Stat label="Sessions" value={uniqueSessions.toLocaleString()} sub="unique visitors" isDark={isDark} />
               <Stat label="Product Clicks" value={analyticsEvents.filter(e => e.event_type === "product_click").length.toLocaleString()} sub="product page views" isDark={isDark} />
+              <Stat label="Add to Carts" value={getAddToCartCount(analyticsEvents).toLocaleString()} sub="add to cart conversions" isDark={isDark} led="cyan" />
               <Stat label="Checkout Starts" value={analyticsEvents.filter(e => e.event_type === "checkout_start").length.toLocaleString()} sub="initiated checkout" isDark={isDark} />
             </div>
 
-            <div className="space-y-4">
-              <p className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Daily Page Views</p>
-              <div className="flex items-end gap-1 h-32">
+            <div className={`p-6 border rounded ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200/60"} space-y-4`}>
+              <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Daily Telemetry Pulse</p>
+              <div className="flex items-end gap-1.5 h-32 pt-4">
                 {analyticsChartData.map((d, i) => (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-1 group relative">
+                  <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group relative">
                     <div
-                      className={`w-full transition-all duration-300 ${isDark ? "bg-white/20 group-hover:bg-white/40" : "bg-black/10 group-hover:bg-black/25"}`}
-                      style={{ height: `${(d.views / chartMax) * 100}%`, minHeight: d.views > 0 ? "2px" : "1px" }}
+                      className={`w-full transition-all duration-300 rounded-[1px] ${isDark ? "bg-neutral-800 group-hover:bg-neutral-550" : "bg-neutral-200 group-hover:bg-neutral-355"}`}
+                      style={{ height: `${(d.views / chartMax) * 100}%`, minHeight: d.views > 0 ? "3px" : "1px" }}
                     />
                     {d.views > 0 && (
-                      <div className={`absolute -top-6 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[7px] font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity ${isDark ? "bg-white text-black" : "bg-black text-white"}`}>
+                      <div className={`absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[8px] font-mono font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border ${isDark ? "bg-neutral-900 text-white border-neutral-850" : "bg-white text-black border-neutral-250 shadow-sm"}`}>
                         {d.views}
                       </div>
                     )}
                     {i % Math.ceil(analyticsRangeDays / 7) === 0 && (
-                      <span className={`text-[7px] uppercase hidden sm:block ${isDark ? "text-white/20" : "text-black/20"}`}>{d.label}</span>
+                      <span className={`text-[8px] font-mono hidden sm:block ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>{d.label}</span>
                     )}
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-              <div className="space-y-4">
-                <p className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Top Referrers</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+              <div className="space-y-3">
+                <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Origin Referrers</p>
                 {topReferrers.length === 0 ? (
-                  <p className={`text-[9px] uppercase ${isDark ? "text-white/20" : "text-gray-300"}`}>No referrer data yet</p>
+                  <p className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-700" : "text-neutral-300"}`}>Empty logs</p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className={`p-4 border rounded ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200/60"} space-y-2.5`}>
                     {topReferrers.map(([ref, count]) => (
-                      <div key={ref} className="flex items-center justify-between gap-4">
-                        <span className={`text-[9px] truncate font-bold uppercase ${isDark ? "text-white/60" : "text-black/60"}`}>{ref || "direct"}</span>
-                        <span className={`text-[9px] font-bold ${isDark ? "text-white" : "text-black"}`}>{count}</span>
+                      <div key={ref} className="flex items-center justify-between gap-4 py-1.5 border-b last:border-0 dark:border-neutral-900/40 border-neutral-100">
+                        <span className={`text-[10px] font-mono truncate uppercase ${isDark ? "text-neutral-400" : "text-neutral-600"}`}>{ref || "direct"}</span>
+                        <span className={`text-[10px] font-mono font-semibold ${isDark ? "text-white" : "text-black"}`}>{count}</span>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-              <div className="space-y-4">
-                <p className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Top Pages</p>
+              <div className="space-y-3">
+                <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Node Access Directory</p>
                 {topPaths.length === 0 ? (
-                  <p className={`text-[9px] uppercase ${isDark ? "text-white/20" : "text-gray-300"}`}>No path data yet</p>
+                  <p className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-700" : "text-neutral-300"}`}>Empty logs</p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className={`p-4 border rounded ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200/60"} space-y-2.5`}>
                     {topPaths.map(([path, count]) => (
-                      <div key={path} className="flex items-center justify-between gap-4">
-                        <span className={`text-[9px] truncate font-mono ${isDark ? "text-white/60" : "text-black/60"}`}>{path}</span>
-                        <span className={`text-[9px] font-bold ${isDark ? "text-white" : "text-black"}`}>{count}</span>
+                      <div key={path} className="flex items-center justify-between gap-4 py-1.5 border-b last:border-0 dark:border-neutral-900/40 border-neutral-100">
+                        <span className={`text-[9px] font-mono truncate ${isDark ? "text-neutral-400" : "text-neutral-600"}`}>{path}</span>
+                        <span className={`text-[10px] font-mono font-semibold ${isDark ? "text-white" : "text-black"}`}>{count}</span>
                       </div>
                     ))}
                   </div>
@@ -1343,14 +1839,14 @@ function AdminPage() {
             </div>
 
             {Object.keys(productClickMap).length > 0 && (
-              <div className="space-y-4">
-                <p className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Product Click-Through</p>
-                <div className={`border ${isDark ? "border-white/10" : "border-gray-100"}`}>
+              <div className="space-y-3">
+                <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Interaction CTR</p>
+                <div className={`border rounded overflow-hidden ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200/60"}`}>
                   <table className="w-full text-left">
                     <thead>
-                      <tr className={`text-[8px] font-bold uppercase tracking-widest border-b ${isDark ? "text-white/30 border-white/10" : "text-gray-400 border-gray-100"}`}>
-                        <th className="px-4 py-3">Product</th>
-                        <th className="px-4 py-3 text-right">Clicks</th>
+                      <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${isDark ? "text-neutral-500 border-neutral-900 bg-neutral-950/50" : "text-neutral-500 border-neutral-200 bg-neutral-50"}`}>
+                        <th className="px-5 py-3 font-semibold">Node Item</th>
+                        <th className="px-5 py-3 font-semibold text-right">Activity Pulses</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1360,9 +1856,9 @@ function AdminPage() {
                         .map(([pid, clicks]) => {
                           const prod = products.find(p => p.id === pid);
                           return (
-                            <tr key={pid} className={`border-b last:border-0 ${isDark ? "border-white/5" : "border-gray-50"}`}>
-                              <td className="px-4 py-3 text-[10px] font-bold uppercase">{prod?.title || pid}</td>
-                              <td className="px-4 py-3 text-[10px] font-bold text-right">{clicks}</td>
+                            <tr key={pid} className={`border-b last:border-0 ${isDark ? "border-neutral-900" : "border-neutral-100"}`}>
+                              <td className="px-5 py-3 text-[10px] font-medium uppercase">{prod?.title || pid}</td>
+                              <td className="px-5 py-3 text-[11px] font-mono font-medium text-right">{clicks}</td>
                             </tr>
                           );
                         })}
@@ -1373,13 +1869,13 @@ function AdminPage() {
             )}
 
             {geoBreakdown.length > 0 && (
-              <div className="space-y-4">
-                <p className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Geographic Breakdown</p>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="space-y-3">
+                <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Geographic Distribution</p>
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
                   {geoBreakdown.map(([country, count]) => (
-                    <div key={country} className={`p-4 border ${isDark ? "border-white/10" : "border-gray-100"}`}>
-                      <p className={`text-[9px] font-bold uppercase ${isDark ? "text-white/50" : "text-gray-400"}`}>{country}</p>
-                      <p className="text-xl font-bold tracking-tighter mt-1">{count}</p>
+                    <div key={country} className={`p-4 border rounded ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200/50"}`}>
+                      <p className={`text-[8px] font-mono uppercase tracking-wider ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{country}</p>
+                      <p className="text-lg font-bold tracking-tight mt-1">{count}</p>
                     </div>
                   ))}
                 </div>
@@ -1392,16 +1888,20 @@ function AdminPage() {
             SETTINGS
         ════════════════════════════════════════════════════════════════ */}
         {section === "settings" && (
-          <div className="max-w-2xl space-y-12">
-            <h1 className="text-2xl font-bold uppercase tracking-tighter">Settings</h1>
-            <div className="space-y-8">
+          <div className="max-w-2xl space-y-10 animate-in fade-in duration-500">
+            <div className="border-b pb-4 dark:border-neutral-900 border-neutral-200">
+              <h1 className="text-xl font-medium tracking-tight">System Settings</h1>
+              <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>ROOT HOOK CONTROL</p>
+            </div>
 
-              <div className="space-y-4">
-                <h2 className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Appearance</h2>
-                <div className={`p-6 space-y-6 ${isDark ? "bg-white/5" : "bg-gray-50/50"}`}>
+            <div className="space-y-10">
+
+              <div className="space-y-3">
+                <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Theme Adaptation</h2>
+                <div className={`p-5 border rounded ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-neutral-200 shadow-sm"} space-y-4`}>
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase tracking-widest">Theme</span>
-                    <div className={`flex border overflow-hidden ${isDark ? "border-white/20" : "border-black/20"}`}>
+                    <span className="text-[10px] font-mono uppercase tracking-widest">Interface Mode</span>
+                    <div className={`flex border rounded overflow-hidden ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
                       <button
                         onClick={() => {
                           setIsDark(false);
@@ -1409,7 +1909,7 @@ function AdminPage() {
                           document.documentElement.classList.remove("dark");
                           saveSiteConfig({ ...siteContent, theme: "light" });
                         }}
-                        className={`px-4 py-2 text-[9px] font-bold uppercase transition-all ${!isDark ? "bg-black text-white" : "hover:bg-white/10"}`}
+                        className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all ${!isDark ? "bg-black text-white" : "text-neutral-400 hover:bg-neutral-900"}`}
                       >
                         LIGHT
                       </button>
@@ -1420,7 +1920,7 @@ function AdminPage() {
                           localStorage.setItem("theme", "dark");
                           saveSiteConfig({ ...siteContent, theme: "dark" });
                         }}
-                        className={`px-4 py-2 text-[9px] font-bold uppercase transition-all ${isDark ? "bg-white text-black" : "hover:bg-black/10"}`}
+                        className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all ${isDark ? "bg-white text-black" : "text-neutral-550 hover:bg-neutral-100"}`}
                       >
                         DARK
                       </button>
@@ -1429,90 +1929,96 @@ function AdminPage() {
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <h2 className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Team Access</h2>
-                <div className={`p-6 space-y-6 ${isDark ? "bg-white/5" : "bg-gray-50/50"}`}>
-                  <div className="flex gap-3 flex-wrap">
-                    <input
-                      type="email"
-                      placeholder="EMAIL ADDRESS"
-                      value={newUserEmail}
-                      onChange={e => setNewUserEmail(e.target.value)}
-                      className={`flex-1 min-w-0 bg-transparent border-b focus:outline-none pb-1 text-[10px] font-bold uppercase ${
-                        isDark ? "border-white/20 text-white placeholder-white/30" : "border-black/20 text-black placeholder-black/30"
-                      }`}
-                    />
-                    <select
-                      value={newUserRole}
-                      onChange={e => setNewUserRole(e.target.value as any)}
-                      className={`text-[9px] font-bold uppercase bg-transparent border-b pb-1 focus:outline-none ${
-                        isDark ? "border-white/20 text-white" : "border-black/20 text-black"
-                      }`}
-                    >
-                      <option value="viewer">VIEWER</option>
-                      <option value="manager">MANAGER</option>
-                      <option value="admin">ADMIN</option>
-                    </select>
+              <div className="space-y-3">
+                <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Team Registry Access</h2>
+                <div className={`p-5 border rounded ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-neutral-200 shadow-sm"} space-y-6`}>
+                  <div className="flex gap-3 flex-wrap items-end">
+                    <div className="flex-1 min-w-[200px] space-y-1.5">
+                      <label className={`text-[8px] font-mono font-semibold uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>ADD TEAM MEMBER</label>
+                      <input
+                        type="email"
+                        placeholder="EMAIL ADDR…"
+                        value={newUserEmail}
+                        onChange={e => setNewUserEmail(e.target.value)}
+                        className={`w-full bg-transparent border rounded px-3 py-1.5 text-[10px] font-mono uppercase focus:outline-none focus:ring-1 ${
+                          isDark ? "border-neutral-850 text-white placeholder-neutral-700 focus:border-white focus:ring-white/25" : "border-neutral-200 text-black placeholder-neutral-350 focus:border-black focus:ring-black/10"
+                        }`}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className={`text-[8px] font-mono font-semibold uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>PIPELINE ROLE</label>
+                      <select
+                        value={newUserRole}
+                        onChange={e => setNewUserRole(e.target.value as any)}
+                        className={`text-[9px] font-mono font-semibold uppercase bg-transparent border rounded px-2 py-1.5 focus:outline-none focus:ring-1 ${
+                          isDark ? "border-neutral-850 text-white focus:border-white focus:ring-white/25" : "border-neutral-200 text-black focus:border-black focus:ring-black/10"
+                        }`}
+                      >
+                        <option value="viewer">VIEWER</option>
+                        <option value="manager">MANAGER</option>
+                        <option value="admin">ADMIN</option>
+                      </select>
+                    </div>
                     <button
                       onClick={handleAddAdminUser}
                       disabled={isAddingUser || !newUserEmail.trim()}
-                      className={`text-[9px] font-bold uppercase px-6 py-2 transition-all ${
-                        isDark ? "bg-white text-black hover:bg-gray-200 disabled:opacity-30" : "bg-black text-white hover:bg-gray-800 disabled:opacity-30"
+                      className={`text-[9px] font-mono font-bold uppercase px-4 py-1.5 rounded transition-all ${
+                        isDark ? "bg-white text-black hover:bg-neutral-200 disabled:opacity-30" : "bg-black text-white hover:bg-neutral-800 disabled:opacity-30"
                       }`}
                     >
-                      {isAddingUser ? "ADDING…" : "ADD"}
+                      {isAddingUser ? "Deploying" : "Deploy"}
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     {[
-                      { role: "viewer", desc: "Read-only access to all data" },
-                      { role: "manager", desc: "Edit products & orders" },
-                      { role: "admin", desc: "Full access including settings" },
+                      { role: "viewer", desc: "Read-only access to diagnostics" },
+                      { role: "manager", desc: "Write access to database & inventory" },
+                      { role: "admin", desc: "Root execution permissions on settings" },
                     ].map(r => (
-                      <div key={r.role} className={`p-3 border ${isDark ? "border-white/10" : "border-gray-100"}`}>
-                        <p className={`text-[8px] font-bold uppercase ${isDark ? "text-white" : "text-black"}`}>{r.role}</p>
-                        <p className={`text-[8px] mt-1 ${isDark ? "text-white/40" : "text-gray-400"}`}>{r.desc}</p>
+                      <div key={r.role} className={`p-3 border rounded ${isDark ? "border-neutral-900 bg-neutral-950/10" : "border-neutral-100 bg-neutral-50"}`}>
+                        <p className={`text-[8px] font-mono font-bold uppercase ${isDark ? "text-neutral-300" : "text-neutral-800"}`}>{r.role}</p>
+                        <p className={`text-[8px] font-mono mt-1 leading-relaxed ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{r.desc}</p>
                       </div>
                     ))}
                   </div>
 
                   {adminUsers.length > 0 ? (
-                    <div className="space-y-2">
+                    <div className="space-y-1.5 pt-4 border-t dark:border-neutral-900 border-neutral-100">
                       {adminUsers.map(u => (
-                        <div key={u.id} className={`flex items-center justify-between gap-4 py-3 border-b ${isDark ? "border-white/5" : "border-gray-50"}`}>
-                          <span className="text-[10px] font-bold uppercase truncate flex-1">{u.email}</span>
+                        <div key={u.id} className="flex items-center justify-between gap-4 py-2 border-b last:border-0 dark:border-neutral-900 border-neutral-100">
+                          <span className="text-[10px] font-mono font-semibold truncate flex-1">{u.email}</span>
                           <select
                             value={u.role}
                             onChange={e => handleUpdateUserRole(u.id, e.target.value as any)}
-                            className={`text-[8px] font-bold uppercase bg-transparent focus:outline-none ${isDark ? "text-white/60" : "text-black/60"}`}
+                            className={`text-[8px] font-mono font-semibold uppercase bg-transparent focus:outline-none focus:ring-1 border rounded px-1.5 py-0.5 ${isDark ? "text-neutral-400 border-neutral-800" : "text-neutral-550 border-neutral-200"}`}
                           >
                             <option value="viewer">VIEWER</option>
                             <option value="manager">MANAGER</option>
                             <option value="admin">ADMIN</option>
                           </select>
                           <button onClick={() => handleRemoveAdminUser(u.id)}
-                            className={`${isDark ? "text-white/30 hover:text-red-400" : "text-black/20 hover:text-red-500"} transition-colors`}>
-                            <X size={12} />
+                            className={`${isDark ? "text-neutral-650 hover:text-rose-455" : "text-neutral-400 hover:text-rose-600"} transition-colors`}>
+                            <X size={11} />
                           </button>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className={`text-[9px] uppercase tracking-widest ${isDark ? "text-white/20" : "text-gray-300"}`}>No team members added yet</p>
+                    <p className={`text-[9px] font-mono uppercase tracking-widest ${isDark ? "text-neutral-750" : "text-neutral-300"}`}>Registry empty</p>
                   )}
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <h2 className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Account</h2>
-                <div className={`p-6 space-y-4 ${isDark ? "bg-white/5" : "bg-gray-50/50"}`}>
+              <div className="space-y-3">
+                <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Identity Verification</h2>
+                <div className={`p-5 border rounded ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-neutral-200 shadow-sm"} space-y-4`}>
                   <div>
-                    <p className={`text-[10px] ${isDark ? "text-white/50" : "text-gray-400"}`}>Signed in as</p>
-                    <p className="text-xs font-bold uppercase">{userEmail || "…"}</p>
+                    <p className={`text-[9px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Identified Payload</p>
+                    <p className="text-xs font-mono font-semibold uppercase">{userEmail || "…"}</p>
                   </div>
-                  <button onClick={handleSignOut} className={`w-full text-[10px] font-bold uppercase px-4 py-3 hover:transition-all ${isDark ? "bg-red-500/10 text-red-400 hover:bg-red-500/20" : "bg-red-500/10 text-red-500 hover:bg-red-500/20"}`}>
-                    LOGOUT
+                  <button onClick={handleSignOut} className={`w-full rounded text-[10px] font-mono font-semibold uppercase px-4 py-2.5 transition-all ${isDark ? "bg-rose-500/10 text-rose-455 hover:bg-rose-500/20" : "bg-rose-50 text-rose-655 hover:bg-rose-100"}`}>
+                    TERMINATE SESSION
                   </button>
                 </div>
               </div>
@@ -1524,29 +2030,29 @@ function AdminPage() {
 
       {/* ── ORDER DETAIL MODAL ── */}
       {selectedRow && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
-          <div className={`absolute inset-0 backdrop-blur-sm ${isDark ? "bg-black/90" : "bg-white/90"}`} onClick={() => setSelectedRow(null)} />
-          <div className={`relative w-full max-w-lg p-12 space-y-8 border max-h-[90vh] overflow-y-auto ${
-            isDark ? "bg-black border-white/10" : "bg-white border-gray-100"
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 animate-in fade-in duration-355">
+          <div className="absolute inset-0 backdrop-blur-md bg-black/60 dark:bg-black/80" onClick={() => setSelectedRow(null)} />
+          <div className={`relative w-full max-w-lg p-8 border rounded-md space-y-6 max-h-[85vh] overflow-y-auto ${
+            isDark ? "bg-neutral-950 border-neutral-850" : "bg-white border-neutral-250 shadow-xl"
           }`}>
-            <div className="flex items-center justify-between">
-              <h3 className={`text-sm font-bold uppercase tracking-widest ${isDark ? "text-white" : "text-black"}`}>Details</h3>
-              <button onClick={() => setSelectedRow(null)}><X size={18} /></button>
+            <div className="flex items-center justify-between border-b pb-3 dark:border-neutral-900 border-neutral-150">
+              <h3 className={`text-xs font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-300" : "text-neutral-800"}`}>System Ledger Metadata</h3>
+              <button onClick={() => setSelectedRow(null)} className={`${isDark ? "text-neutral-500 hover:text-white" : "text-neutral-400 hover:text-black"}`}><X size={14} /></button>
             </div>
-            <div className="space-y-4">
+            <div className="space-y-2">
               {Object.entries(selectedRow).map(([k, v]) => (
                 k !== "_type" && (
-                  <div key={k} className={`flex justify-between py-2 border-b gap-4 ${isDark ? "border-white/10" : "border-gray-50"}`}>
-                    <span className={`text-[9px] font-bold uppercase flex-shrink-0 ${isDark ? "text-white/50" : "text-gray-400"}`}>{k}</span>
-                    <span className="text-[10px] font-bold uppercase truncate text-right">{String(v)}</span>
+                  <div key={k} className={`flex justify-between py-1.5 border-b last:border-0 gap-4 ${isDark ? "border-neutral-900" : "border-neutral-100"}`}>
+                    <span className={`text-[8px] font-mono font-semibold uppercase flex-shrink-0 ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{k}</span>
+                    <span className="text-[10px] font-mono font-medium truncate text-right">{String(v)}</span>
                   </div>
                 )
               ))}
             </div>
             {selectedRow._type === "order" && (
               <button onClick={() => handleArchiveOrder(selectedRow.id)}
-                className={`w-full py-4 text-[10px] font-bold uppercase transition-all ${isDark ? "bg-red-500/10 text-red-400 hover:bg-red-500/20" : "bg-red-50 text-red-600 hover:bg-red-100"}`}>
-                ARCHIVE ORDER
+                className={`w-full py-2.5 rounded text-[9px] font-mono font-bold uppercase tracking-wide transition-all ${isDark ? "bg-rose-500/10 text-rose-455 hover:bg-rose-500/20" : "bg-rose-50 text-rose-655 hover:bg-rose-100"}`}>
+                Archive Order Record
               </button>
             )}
           </div>
@@ -1557,45 +2063,63 @@ function AdminPage() {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// SHARED COMPONENTS
+// SHARED STAT COMPONENTS
 // ────────────────────────────────────────────────────────────────────────────
 
-function Stat({ label, value, sub, isDark }: { label: string; value: string | number; sub: string; isDark: boolean }) {
+function Stat({ label, value, sub, isDark, led = "cyan" }: { label: string; value: string | number; sub: string; isDark: boolean; led?: "green" | "yellow" | "red" | "cyan" | "purple" | "neutral" }) {
   return (
-    <div className="space-y-1">
-      <p className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>{label}</p>
-      <p className="text-2xl font-bold tracking-tighter">{value}</p>
-      <p className={`text-[8px] uppercase tracking-widest ${isDark ? "text-white/30" : "text-gray-400"}`}>{sub}</p>
+    <div className={`p-4 border rounded ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200/50 shadow-sm"} space-y-1`}>
+      <div className="flex items-center justify-between gap-2">
+        <p className={`text-[8px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{label}</p>
+        <LedPulse color={led} />
+      </div>
+      <p 
+        className="text-xl font-semibold tracking-tight font-sans"
+        style={{ textShadow: isDark ? "0 0 10px rgba(255,255,255,0.1)" : "0 0 8px rgba(0,0,0,0.03)" }}
+      >
+        {value}
+      </p>
+      <p className={`text-[8px] font-mono tracking-wider uppercase ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>{sub}</p>
     </div>
   );
 }
 
 function StatWithDelta({ label, value, sub, delta, isDark }: { label: string; value: string | number; sub: string; delta: number | null; isDark: boolean }) {
+  const deltaColor = delta !== null && delta > 0 ? "green" as const : delta !== null && delta < 0 ? "red" as const : "neutral" as const;
+
   return (
-    <div className="space-y-1">
-      <p className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>{label}</p>
-      <div className="flex items-end gap-2 flex-wrap">
-        <p className="text-2xl font-bold tracking-tighter">{value}</p>
+    <div className={`p-4 border rounded ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200/50 shadow-sm"} space-y-1`}>
+      <div className="flex items-center justify-between gap-2">
+        <p className={`text-[8px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{label}</p>
+        <LedPulse color={deltaColor} />
+      </div>
+      <div className="flex items-baseline gap-2 flex-wrap">
+        <p 
+          className="text-xl font-semibold tracking-tight font-sans"
+          style={{ textShadow: isDark ? "0 0 10px rgba(255,255,255,0.1)" : "0 0 8px rgba(0,0,0,0.03)" }}
+        >
+          {value}
+        </p>
         {delta !== null && (
-          <span className={`text-[8px] font-bold uppercase pb-0.5 ${
-            delta > 0 ? "text-green-500" : delta < 0 ? "text-red-500" : isDark ? "text-white/30" : "text-gray-300"
+          <span className={`text-[8px] font-mono font-bold uppercase ${
+            delta > 0 ? "text-emerald-500" : delta < 0 ? "text-rose-500" : isDark ? "text-neutral-600" : "text-neutral-400"
           }`}>
             {delta > 0 ? "↑" : delta < 0 ? "↓" : "—"}{Math.abs(delta)}%
           </span>
         )}
       </div>
-      <p className={`text-[8px] uppercase tracking-widest ${isDark ? "text-white/30" : "text-gray-400"}`}>{sub}</p>
+      <p className={`text-[8px] font-mono tracking-wider uppercase ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>{sub}</p>
     </div>
   );
 }
 
 function Input({ label, value, onChange, type = "text", isDark }: { label: string; value: string; onChange: (v: string) => void; type?: string; isDark: boolean }) {
   return (
-    <div className="space-y-2">
-      <label className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>{label}</label>
+    <div className="space-y-1.5">
+      <label className={`text-[9px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>{label}</label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)}
-        className={`w-full bg-transparent border-b focus:border-current outline-none py-2 text-xs font-bold uppercase transition-all ${
-          isDark ? "border-white/20 text-white" : "border-gray-200 text-black"
+        className={`w-full bg-transparent border rounded px-3 py-1.5 text-xs font-mono transition-all focus:outline-none focus:ring-1 ${
+          isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-neutral-200 text-black focus:border-black focus:ring-black/5"
         }`} />
     </div>
   );
