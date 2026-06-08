@@ -2,7 +2,7 @@
 //  J.A.R.V.I.S — Luveni GM | src/routes/admin.jarvis.tsx
 // ─────────────────────────────────────────────────────────────
 import { createFileRoute } from '@tanstack/react-router';
-import JarvisHub from '../components/jarvis/JarvisHub';
+import JarvisHub from '@/components/jarvis/JarvisHub';
 
 export const Route = createFileRoute('/admin/jarvis')({
   ssr: false,
