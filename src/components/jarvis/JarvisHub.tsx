@@ -349,23 +349,9 @@ function useGemini(options: UseGeminiOptions = {}) {
     async (userText: string, onChunk?: (text: string) => void): Promise<string> => {
       const { googleToken, storeSnapshot } = optionsRef.current;
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      
+      // Temporarily push user message into history ref for tracking
       history.current.push({ role: "user", content: userText });
-
-      // Build parameters dynamically. If a value is undefined, it is completely 
-      // omitted from JSON serialization instead of being passed as an explicit 'null'
-      // which can trigger unhandled destructuring errors in the Edge Function.
-      const args: Record<string, any> = {
-        userText,
-        history: history.current.slice(0, -1),
-        timezone,
-      };
-
-      if (storeSnapshot) {
-        args.storeSnapshot = storeSnapshot;
-      }
-      if (googleToken) {
-        args.googleToken = googleToken;
-      }
 
       try {
         const { data, error } = await supabase.functions.invoke<{ reply?: string }>(
@@ -373,16 +359,29 @@ function useGemini(options: UseGeminiOptions = {}) {
           {
             body: {
               tool: "chat",
-              args,
+              args: {
+                userText,
+                history: history.current.slice(0, -1),
+                storeSnapshot: storeSnapshot || null,
+                googleToken: googleToken || null,
+                timezone,
+              },
             },
           },
         );
         if (error) throw error;
         const reply = data?.reply || "No response received.";
+        
+        // Push the assistant response to complete the alternating pair
         history.current.push({ role: "assistant", content: reply });
         onChunk?.(reply);
         return reply;
       } catch (e) {
+        // CRITICAL FIX: If invocation fails, remove the failed user turn from 
+        // history. This keeps the history structure in alternating order and 
+        // prevents consecutive-turn errors from locking up the edge function.
+        history.current.pop();
+
         const error = e instanceof Error ? e : new Error(String(e));
         console.error("[Jarvis] Edge function error:", error.message);
         throw error;
