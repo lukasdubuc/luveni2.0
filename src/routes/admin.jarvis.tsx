@@ -19,10 +19,7 @@ export const Route = createFileRoute('/admin/jarvis')({
       fontFamily: "'Inter', sans-serif",
       overflow: 'hidden'
     }}>
-      <JarvisHub 
-        geminiApiKey="" 
-        autoStart={true} 
-      />
+      <JarvisHub autoStart={true} />
     </div>
   ),
 });
