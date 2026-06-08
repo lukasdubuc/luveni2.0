@@ -7,8 +7,65 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from "@/integrations/supabase/client";
 import NeuralOrb from './NeuralOrb';
 
-// Import type directly from global types folder
-import type { OrbState, JarvisMessage } from '../../types/jarvis';
+// ─────────────────────────────────────────────────────────────
+//  TYPES & INTERFACES
+// ─────────────────────────────────────────────────────────────
+export type OrbState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';
+
+export interface JarvisMessage {
+  role: 'user' | 'model';
+  parts: { text: string }[];
+  timestamp: number;
+}
+
+interface StoreSnapshot {
+  revenue_today_cents: number;
+  revenue_week_cents: number;
+  revenue_month_cents: number;
+  orders_total: number;
+  orders_paid: number;
+  orders_pending: number;
+  orders_failed: number;
+  leads_total: number;
+  products_published: number;
+  products_total: number;
+  recent_orders: { email: string; amount_cents: number; status: string; created_at: string }[];
+  top_products: { title: string; revenue: number; units: number }[];
+}
+
+interface UseGeminiOptions {
+  googleToken?: string | null;
+  storeSnapshot?: StoreSnapshot | null;
+}
+
+interface UseVoiceInputOptions {
+  onInterim: (text: string) => void;
+  onTranscript: (text: string) => void;
+  onStateChange: (state: string) => void;
+  onLevelChange: (level: number) => void;
+  enabled: boolean;
+  cancelSpeech: () => void;
+}
+
+interface UseSpeechOutputOptions {
+  onStart?: () => void;
+  onBoundary?: (level: number) => void;
+  onEnd?: () => void;
+}
+
+// Minimal Web Speech API types (browser-only)
+declare global {
+  interface SpeechRecognition extends EventTarget {
+    continuous: boolean;
+    interimResults: boolean;
+    lang: string;
+    onresult: ((e: any) => void) | null;
+    onerror: ((e: Event) => void) | null;
+    onend: (() => void) | null;
+    start(): void;
+    stop(): void;
+  }
+}
 
 // ─────────────────────────────────────────────────────────────
 //  CONSTANTS & HELPER FUNCTIONS (Hoisted at Module Level)
@@ -377,23 +434,17 @@ function useVoiceInput({
     rec.onend = () => {
       recognitionRef.current = null;
       if (enabledRef.current) {
-        // Throttled restart to prevent rapid looping and console flooding
         restartTimeoutRef.current = setTimeout(() => {
           if (enabledRef.current && !recognitionRef.current) {
             startRecognition();
           }
-        }, 2000);
+        }, 100);
       }
     };
     rec.onerror = (event: any) => {
-        console.error("[Jarvis STT] Speech recognition error:", event.error);
-        if (event.error === 'not-allowed' || event.error === 'audio-capture' || event.error === 'service-not-allowed') {
-            // Disable the loop on critical permission or hardware failures to free the browser thread
-            enabledRef.current = false;
-            onStateChange('error');
-        } else if (event.error === 'aborted') {
-            // Non-critical abort, transition smoothly to standby
-            onStateChange('idle');
+        console.error("Speech recognition error", event.error);
+        if (event.error === 'no-speech' || event.error === 'network') {
+            // Recoverable
         } else {
             onStateChange('error');
         }
@@ -655,71 +706,6 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
   useEffect(() => { orbStateRef.current = orbState; }, [orbState]);
   useEffect(() => { setIsMobile(detectMobileDevice()); }, []);
 
-  // 1. Speech synthesis hook executed FIRST
-  const { speak, cancel, currentSubtitle } = useSpeechOutput({
-    onStart: () => changeOrbState('speaking'),
-    onEnd: () => {
-      if (orbStateRef.current === 'speaking') {
-        changeOrbState('idle');
-        setUserQuery('');
-      }
-    },
-  });
-
-  const { ask } = useGemini();
-
-  const changeOrbState = useCallback((newState: OrbState) => {
-    if (stateTimeoutRef.current) clearTimeout(stateTimeoutRef.current);
-    setOrbState(newState);
-  }, []);
-  
-  // 2. Declaration of handleFinalTranscript after speak/cancel are fully defined
-  const handleFinalTranscript = useCallback(async (text: string) => {
-    if (orbStateRef.current === 'thinking' || orbStateRef.current === 'speaking' || !text) {
-      return;
-    }
-    setInterimTranscript('');
-    setUserQuery(text);
-    changeOrbState('thinking');
-    try {
-      const reply = await ask(text);
-      if (!reply) throw new Error("No response received");
-      setLastAiResponse(reply);
-      const cleanReply = cleanResponseForSpeech(reply);
-      speak(cleanReply);
-    } catch (err) {
-      console.error('[Jarvis] Error:', err);
-      const errorMessage = "System error, sir.";
-      setLastAiResponse(errorMessage);
-      speak(errorMessage);
-      changeOrbState('idle');
-    }
-  }, [ask, speak, changeOrbState]);
-
-  // 3. Declaration of useVoiceInput hook after cancel/handleFinalTranscript are established
-  useVoiceInput({
-    onInterim: (text: string) => {
-      if (isLive) setInterimTranscript(text);
-    },
-    onTranscript: (text: string) => { 
-      if (isLive) {
-        cancel();
-        handleFinalTranscript(text);
-      }
-    },
-    onStateChange: (s: string) => {
-      if (!isLive) return;
-      if (s === 'listening') { cancel(); }
-      if ((s === 'idle' || s === 'listening') && (orbStateRef.current === 'speaking' || orbStateRef.current === 'thinking')) {
-        return;
-      }
-      changeOrbState(s as OrbState);
-    },
-    onLevelChange: () => {},
-    enabled: isReady && isLive && !isTextInputActive,
-    cancelSpeech: cancel
-  });
-
   useEffect(() => {
     if (isTextInputActive && inputRef.current) {
       inputRef.current.focus();
@@ -754,6 +740,68 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [isTextInputActive, isMobile]);
+
+  const { ask } = useGemini();
+
+  const changeOrbState = useCallback((newState: OrbState) => {
+    if (stateTimeoutRef.current) clearTimeout(stateTimeoutRef.current);
+    setOrbState(newState);
+  }, []);
+  
+  const { speak, cancel, currentSubtitle } = useSpeechOutput({
+    onStart: () => changeOrbState('speaking'),
+    onEnd: () => {
+      if (orbStateRef.current === 'speaking') {
+        changeOrbState('idle');
+        setUserQuery('');
+      }
+    },
+  });
+
+  const handleFinalTranscript = useCallback(async (text: string) => {
+    if (orbStateRef.current === 'thinking' || orbStateRef.current === 'speaking' || !text) {
+      return;
+    }
+    setInterimTranscript('');
+    setUserQuery(text);
+    changeOrbState('thinking');
+    try {
+      const reply = await ask(text);
+      if (!reply) throw new Error("No response received");
+      setLastAiResponse(reply);
+      const cleanReply = cleanResponseForSpeech(reply);
+      speak(cleanReply);
+    } catch (err) {
+      console.error('[Jarvis] Error:', err);
+      const errorMessage = "System error, sir.";
+      setLastAiResponse(errorMessage);
+      speak(errorMessage);
+      changeOrbState('idle');
+    }
+  }, [ask, speak, changeOrbState]);
+
+  useVoiceInput({
+    onInterim: (text: string) => {
+      if (isLive) setInterimTranscript(text);
+    },
+    onTranscript: (text: string) => { 
+      if (isLive) {
+        cancel();
+        handleFinalTranscript(text);
+      }
+    },
+    onStateChange: (s: string) => {
+      if (!isLive) return;
+      if (s === 'listening') { cancel(); }
+      if ((s === 'idle' || s === 'listening') && (orbStateRef.current === 'speaking' || orbStateRef.current === 'thinking')) {
+        return;
+      }
+      changeOrbState(s as OrbState);
+    },
+    onLevelChange: () => {},
+    enabled: isReady && isLive && !isTextInputActive,
+    cancelSpeech: cancel
+  });
 
   const initializeJarvis = useCallback(async () => {
     if (isReady) return;
@@ -899,3 +947,4 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
 }
 
 export default JarvisHub;
+
