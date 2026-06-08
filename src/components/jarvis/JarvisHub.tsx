@@ -350,19 +350,30 @@ function useGemini(options: UseGeminiOptions = {}) {
       const { googleToken, storeSnapshot } = optionsRef.current;
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
       history.current.push({ role: "user", content: userText });
+
+      // Build parameters dynamically. If a value is undefined, it is completely 
+      // omitted from JSON serialization instead of being passed as an explicit 'null'
+      // which can trigger unhandled destructuring errors in the Edge Function.
+      const args: Record<string, any> = {
+        userText,
+        history: history.current.slice(0, -1),
+        timezone,
+      };
+
+      if (storeSnapshot) {
+        args.storeSnapshot = storeSnapshot;
+      }
+      if (googleToken) {
+        args.googleToken = googleToken;
+      }
+
       try {
         const { data, error } = await supabase.functions.invoke<{ reply?: string }>(
           "jarvis-brain",
           {
             body: {
               tool: "chat",
-              args: {
-                userText,
-                history: history.current.slice(0, -1),
-                storeSnapshot: storeSnapshot || null,
-                googleToken: googleToken || null,
-                timezone,
-              },
+              args,
             },
           },
         );
