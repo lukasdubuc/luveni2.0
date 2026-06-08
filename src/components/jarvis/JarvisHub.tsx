@@ -152,7 +152,6 @@ function cleanResponseForSpeech(rawText: string): string {
 
 export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
   const [orbState, setOrbState] = useState<OrbState>('idle');
-  const [audioLevel, setAudioLevel] = useState(0); // Tracks mic volume
   const [userQuery, setUserQuery] = useState('');
   const [interimTranscript, setInterimTranscript] = useState('');
   const [lastAiResponse, setLastAiResponse] = useState('');
@@ -166,6 +165,7 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
   const stateTimeoutRef = useRef<any>(null);
   const orbStateRef = useRef(orbState);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const isProcessingRef = useRef(false);
 
   useEffect(() => { orbStateRef.current = orbState; }, [orbState]);
   useEffect(() => { setIsMobile(detectMobileDevice()); }, []);
@@ -215,17 +215,19 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
   const { speak, cancel, currentSubtitle } = useSpeechOutput({
     onStart: () => changeOrbState('speaking'),
     onEnd: () => {
-      if (orbStateRef.current === 'speaking') {
+      if (orbStateRef.current === 'speaking' || orbStateRef.current === 'thinking') {
         changeOrbState('idle');
         setUserQuery('');
+        isProcessingRef.current = false;
       }
     },
   });
 
   const handleFinalTranscript = useCallback(async (text: string) => {
-    if (orbStateRef.current === 'thinking' || orbStateRef.current === 'speaking' || !text) {
+    if (isProcessingRef.current || !text) {
       return;
     }
+    isProcessingRef.current = true;
     setInterimTranscript('');
     setUserQuery(text);
     changeOrbState('thinking');
@@ -241,6 +243,7 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       setLastAiResponse(errorMessage);
       speak(errorMessage);
       changeOrbState('idle');
+      isProcessingRef.current = false;
     }
   }, [ask, speak, changeOrbState]);
 
@@ -262,10 +265,9 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       }
       changeOrbState(s as OrbState);
     },
-    onLevelChange: (level: number) => {
-      if (isLive) setAudioLevel(level);
-    },
-    enabled: isReady && isLive && !isTextInputActive,
+    onLevelChange: () => {},
+    // Disable voice recognition when texting or during processing cycles
+    enabled: isReady && isLive && !isTextInputActive && (orbState === 'idle' || orbState === 'listening'),
     cancelSpeech: cancel
   });
 
@@ -292,12 +294,23 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     }
   }, [autoStart, isMobile]);
 
+  const handleOrbClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isReady) {
+      initializeJarvis();
+      return;
+    }
+    // Clicking the orb strictly turns on voice input
+    setIsTextInputActive(false);
+  };
+
   const handleContainerClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isReady) {
       initializeJarvis();
       return;
     }
+    // Clicking elsewhere activates text mode
     if (orbState !== 'thinking' && orbState !== 'speaking') {
       setIsTextInputActive(true);
     }
@@ -342,6 +355,8 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     displayText = "Thinking...";
   } else if (orbState === 'speaking') {
     displayText = currentSubtitle;
+  } else if (orbState === 'error') {
+    displayText = "Microphone error. Ensure permissions are allowed or open this page directly in a new browser tab.";
   } else if (interimTranscript) {
     displayText = interimTranscript;
   } else if (userQuery) {
@@ -368,8 +383,8 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       
       <div style={{ flex: '0 0 40px' }} />
 
-      <div style={styles.orbWrap} onClick={handleContainerClick}>
-        <NeuralOrb state={orbState} audioLevel={audioLevel} size={orbSize} />
+      <div style={styles.orbWrap} onClick={handleOrbClick}>
+        <NeuralOrb state={orbState} audioLevel={0} size={orbSize} />
       </div>
       
       <div style={styles.transcriptContainer}>
