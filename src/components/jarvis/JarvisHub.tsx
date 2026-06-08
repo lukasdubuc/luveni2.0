@@ -9,9 +9,7 @@ import { useGemini } from '../../hooks/useGemini';
 import type { OrbState } from '../../types/jarvis';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Decouple the circular reference by lazy-loading the NeuralOrb graphic element.
-// This allows the JarvisHub module to complete evaluation and register the 'OrbState' type 
-// in the browser's cache before NeuralOrb is evaluated.
+// Decouple circular references by lazy-loading the NeuralOrb graphic element.
 const NeuralOrb = lazy(() => import('./NeuralOrb'));
 
 const STATE_LABEL: Record<OrbState, string> = {
@@ -21,14 +19,6 @@ const STATE_LABEL: Record<OrbState, string> = {
 const STATE_COLOR: Record<OrbState, string> = {
   idle: 'rgba(0,180,255,0.6)', listening: 'rgba(0,255,255,1.0)', thinking: 'rgba(180,100,255,1.0)', speaking: 'rgba(0,255,180,0.95)', error: 'rgba(255,80,80,1.0)',
 };
-
-function detectMobileDevice() {
-  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
-  return (
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-  );
-}
 
 const svgPattern = `
 <svg width="120" height="138.56" viewBox="0 0 120 138.56" xmlns="http://www.w3.org/2000/svg">
@@ -60,6 +50,96 @@ const svgPattern = `
   <use href="#c" x="-60" y="-69.28"/>
 </svg>
 `;
+
+// Declaring styles above JarvisHub to prevent Temporal Dead Zone (TDZ) initialization errors
+const styles: Record<string, React.CSSProperties> = {
+  root: {
+    height: '100dvh',
+    minHeight: '100vh',
+    width: '100%', 
+    display: 'flex', 
+    flexDirection: 'column', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    padding: '20px', 
+    boxSizing: 'border-box', 
+    position: 'relative', 
+    overflow: 'hidden' 
+  },
+  orbWrap: { 
+    cursor: 'pointer', 
+    display: 'flex', 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    flex: '1 1 auto', 
+    maxHeight: '50vh', // Keeps visual footprint bounded
+    zIndex: 5 
+  },
+  stateLabel: { 
+    marginTop: 'auto', 
+    marginBottom: '20px', 
+    fontSize: '12px', 
+    fontFamily: "'Inter', sans-serif", 
+    letterSpacing: '0.6rem', 
+    fontWeight: 300, 
+    textTransform: 'uppercase', 
+    zIndex: 10,
+    flexShrink: 0
+  },
+  transcriptContainer: { 
+    width: '90%', 
+    maxWidth: '800px', 
+    textAlign: 'center', 
+    zIndex: 10, 
+    margin: '20px auto',
+    minHeight: '48px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
+  },
+  transcript: { color: '#fff', fontSize: '1.4rem', fontFamily: "'Inter', sans-serif", lineHeight: 1.5, fontWeight: 300, cursor: 'pointer', opacity: 0.9 },
+  textInput: {
+    width: '100%',
+    background: 'transparent',
+    border: 'none',
+    outline: 'none',
+    color: '#fff',
+    fontSize: '1.4rem',
+    fontFamily: "'Inter', sans-serif",
+    fontWeight: 300,
+    textAlign: 'center',
+    padding: '10px 0',
+    boxSizing: 'border-box',
+    borderBottom: '1px solid rgba(255, 255, 255, 0.15)',
+    caretColor: 'rgba(0, 180, 255, 0.8)',
+    resize: 'none',
+    overflowY: 'hidden',
+    minHeight: '40px',
+    lineHeight: 1.5,
+  },
+  gridBg: {
+    position: 'absolute',
+    inset: 0,
+    backgroundImage: `
+      radial-gradient(circle at 50% 50%, rgba(2, 4, 8, 0.15) 0%, rgba(2, 4, 8, 0.98) 95%),
+      url("data:image/svg+xml,${encodeURIComponent(svgPattern.trim())}")
+    `,
+    backgroundSize: '100% 100%, 120px 138.56px',
+    backgroundPosition: 'center, 0 0',
+    pointerEvents: 'none',
+    zIndex: 0,
+  },
+  orbShadow: { position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1, transition: 'background 0.3s ease' }
+};
+
+function detectMobileDevice() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  return (
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+}
 
 /**
  * Removes markdown bold/italics, bullet marks, headers, and bracketed links
@@ -366,91 +446,6 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  root: {
-    height: '100dvh',
-    minHeight: '100vh',
-    width: '100%', 
-    display: 'flex', 
-    flexDirection: 'column', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    padding: '20px', 
-    boxSizing: 'border-box', 
-    position: 'relative', 
-    overflow: 'hidden' 
-  },
-  orbWrap: { 
-    cursor: 'pointer', 
-    display: 'flex', 
-    justifyContent: 'center', 
-    alignItems: 'center',
-    flex: '1 1 auto', 
-    maxHeight: '50vh', // Keeps visual footprint bounded
-    zIndex: 5 
-  },
-  stateLabel: { 
-    marginTop: 'auto', 
-    marginBottom: '20px', 
-    fontSize: '12px', 
-    fontFamily: "'Inter', sans-serif", 
-    letterSpacing: '0.6rem', 
-    fontWeight: 300, 
-    textTransform: 'uppercase', 
-    zIndex: 10,
-    flexShrink: 0
-  },
-  
-  // Repositioned out of position: absolute to flow naturally and prevent obstruction
-  transcriptContainer: { 
-    width: '90%', 
-    maxWidth: '800px', 
-    textAlign: 'center', 
-    zIndex: 10, 
-    margin: '20px auto',
-    minHeight: '48px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0
-  },
-  transcript: { color: '#fff', fontSize: '1.4rem', fontFamily: "'Inter', sans-serif", lineHeight: 1.5, fontWeight: 300, cursor: 'pointer', opacity: 0.9 },
-  
-  textInput: {
-    width: '100%',
-    background: 'transparent',
-    border: 'none',
-    outline: 'none',
-    color: '#fff',
-    fontSize: '1.4rem',
-    fontFamily: "'Inter', sans-serif",
-    fontWeight: 300,
-    textAlign: 'center',
-    padding: '10px 0',
-    boxSizing: 'border-box',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.15)',
-    caretColor: 'rgba(0, 180, 255, 0.8)',
-    resize: 'none',
-    overflowY: 'hidden',
-    minHeight: '40px',
-    lineHeight: 1.5,
-  },
-
-  gridBg: {
-    position: 'absolute',
-    inset: 0,
-    backgroundImage: `
-      radial-gradient(circle at 50% 50%, rgba(2, 4, 8, 0.15) 0%, rgba(2, 4, 8, 0.98) 95%),
-      url("data:image/svg+xml,${encodeURIComponent(svgPattern.trim())}")
-    `,
-    backgroundSize: '100% 100%, 120px 138.56px',
-    backgroundPosition: 'center, 0 0',
-    pointerEvents: 'none',
-    zIndex: 0,
-  },
-  orbShadow: { position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1, transition: 'background 0.3s ease' }
-};
 
 export default JarvisHub;
 export type OrbState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';
