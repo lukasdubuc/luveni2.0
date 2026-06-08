@@ -4,1506 +4,1380 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts } from "@/lib/useProducts";
 import { offer } from "@/config/site";
 import { toast } from "sonner";
-import { Edit3, Archive, X, Menu, RefreshCw, BarChart2, Lock, CheckSquare, Square, Trash2, Eye, EyeOff, GripVertical, Users, TrendingUp, TrendingDown, Minus, Terminal, Cpu, Zap, Activity, AlertTriangle, Play } from "lucide-react";
+import {
+  Edit3, Archive, X, Menu, RefreshCw, BarChart2, Lock,
+  CheckSquare, Square, Trash2, Eye, EyeOff, GripVertical,
+  Users, TrendingUp, TrendingDown, Minus,
+} from "lucide-react";
 import { requireAdmin } from "@/lib/admin-guard";
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GLOBAL DECORATIVE STYLES  (injected once, zero runtime cost)
+// ─────────────────────────────────────────────────────────────────────────────
+const ADMIN_CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
 
-// ────────────────────────────────────────────────────────────────────────────
-// TYPES & ROUTE DEFINITION
-// ────────────────────────────────────────────────────────────────────────────
+  .adm-root {
+    --c-bg:       #04070d;
+    --c-panel:    #080e1a;
+    --c-border:   #0d2137;
+    --c-border2:  #0e3a5c;
+    --c-cyan:     #00e5ff;
+    --c-cyan2:    #00b4cc;
+    --c-green:    #00ff88;
+    --c-amber:    #ffb700;
+    --c-red:      #ff3860;
+    --c-purple:   #b44fff;
+    --c-text:     #c8e6f7;
+    --c-muted:    #3a6480;
+    --font-hud:   'Share Tech Mono', monospace;
+    --font-title: 'Orbitron', monospace;
+  }
 
+  /* ── LIGHT OVERRIDE ── */
+  .adm-root.light {
+    --c-bg:      #f0f4f8;
+    --c-panel:   #ffffff;
+    --c-border:  #d0dce8;
+    --c-border2: #a8c0d6;
+    --c-cyan:    #0077aa;
+    --c-cyan2:   #005580;
+    --c-green:   #00884d;
+    --c-amber:   #c47a00;
+    --c-red:     #cc1a3a;
+    --c-purple:  #7b22cc;
+    --c-text:    #1a2a3a;
+    --c-muted:   #6a8aaa;
+  }
+
+  .adm-root * { box-sizing: border-box; margin: 0; padding: 0; }
+  .adm-root { font-family: var(--font-hud); background: var(--c-bg); color: var(--c-text); min-height: 100vh; position: relative; overflow-x: hidden; }
+
+  /* ── HEX-GRID BACKGROUND ── */
+  .adm-hexbg {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100'%3E%3Cpath d='M28 0 l28 16 0 33 -28 17 -28-17 0-33z' fill='none' stroke='%230d2137' stroke-width='0.6'/%3E%3C/svg%3E");
+    background-size: 56px 100px;
+    opacity: 0.6;
+  }
+  .adm-root.light .adm-hexbg { opacity: 0.3; }
+
+  /* ── SCANLINE OVERLAY ── */
+  .adm-scan {
+    position: fixed; inset: 0; pointer-events: none; z-index: 1;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px);
+  }
+  .adm-root.light .adm-scan { opacity: 0.25; }
+
+  /* ── TOP ACCENT LINE ── */
+  .adm-topline {
+    position: fixed; top: 0; left: 0; right: 0; height: 2px; z-index: 100;
+    background: linear-gradient(90deg, transparent, var(--c-cyan), var(--c-purple), var(--c-cyan), transparent);
+    animation: adm-slide 4s linear infinite;
+  }
+  @keyframes adm-slide { 0%{background-position:-100%} 100%{background-position:200%} }
+
+  /* ── CORNER BRACKETS ── */
+  .adm-bracket {
+    position: absolute; width: 16px; height: 16px; pointer-events: none;
+  }
+  .adm-bracket.tl { top: 0; left: 0; border-top: 1.5px solid var(--c-cyan); border-left: 1.5px solid var(--c-cyan); }
+  .adm-bracket.tr { top: 0; right: 0; border-top: 1.5px solid var(--c-cyan); border-right: 1.5px solid var(--c-cyan); }
+  .adm-bracket.bl { bottom: 0; left: 0; border-bottom: 1.5px solid var(--c-cyan); border-left: 1.5px solid var(--c-cyan); }
+  .adm-bracket.br { bottom: 0; right: 0; border-bottom: 1.5px solid var(--c-cyan); border-right: 1.5px solid var(--c-cyan); }
+
+  /* ── NAV ── */
+  .adm-nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(4,7,13,0.92); border-bottom: 1px solid var(--c-border2);
+    backdrop-filter: blur(12px);
+    padding: 0 24px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    height: 52px;
+  }
+  .adm-root.light .adm-nav { background: rgba(240,244,248,0.92); }
+  .adm-nav-brand {
+    font-family: var(--font-title); font-size: 11px; font-weight: 700;
+    color: var(--c-cyan); letter-spacing: 0.25em;
+    display: flex; align-items: center; gap: 8px;
+    text-shadow: 0 0 12px var(--c-cyan);
+  }
+  .adm-root.light .adm-nav-brand { text-shadow: none; }
+  .adm-nav-links { display: flex; align-items: center; gap: 6px; }
+  .adm-nav-btn {
+    font-family: var(--font-hud); font-size: 10px; letter-spacing: 0.14em;
+    padding: 6px 14px; background: transparent; border: 1px solid transparent;
+    color: var(--c-muted); cursor: pointer; transition: all 0.2s; text-transform: uppercase;
+    position: relative;
+  }
+  .adm-nav-btn:hover { color: var(--c-cyan); border-color: var(--c-border2); }
+  .adm-nav-btn.active {
+    color: var(--c-cyan); border-color: var(--c-cyan2);
+    background: rgba(0,229,255,0.05);
+    text-shadow: 0 0 8px var(--c-cyan);
+  }
+  .adm-root.light .adm-nav-btn.active { text-shadow: none; background: rgba(0,119,170,0.08); }
+
+  /* ── JARVIS BUTTON ── */
+  .adm-jarvis-btn {
+    font-family: var(--font-title); font-size: 9px; font-weight: 700;
+    padding: 7px 16px; border: 1px solid var(--c-purple);
+    background: rgba(180,79,255,0.08); color: var(--c-purple);
+    cursor: pointer; letter-spacing: 0.18em; text-transform: uppercase;
+    transition: all 0.2s;
+    clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+  }
+  .adm-jarvis-btn:hover { background: rgba(180,79,255,0.18); box-shadow: 0 0 20px rgba(180,79,255,0.3); }
+
+  /* ── MAIN LAYOUT ── */
+  .adm-main { max-width: 1400px; margin: 0 auto; padding: 28px 24px 60px; position: relative; z-index: 2; }
+
+  /* ── SECTION HEADING ── */
+  .adm-heading {
+    font-family: var(--font-title); font-size: 13px; font-weight: 700;
+    letter-spacing: 0.2em; color: var(--c-cyan); text-transform: uppercase;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .adm-heading::before { content: '//'; color: var(--c-muted); font-family: var(--font-hud); font-size: 11px; }
+  .adm-subheading {
+    font-size: 9px; letter-spacing: 0.2em; color: var(--c-muted); text-transform: uppercase; margin-top: 3px;
+  }
+
+  /* ── PANEL CARD ── */
+  .adm-panel {
+    background: var(--c-panel); border: 1px solid var(--c-border);
+    position: relative; overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .adm-panel:hover { border-color: var(--c-border2); }
+  .adm-panel::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--c-cyan2), transparent);
+    opacity: 0.4;
+  }
+  .adm-root.light .adm-panel::before { opacity: 0.6; }
+
+  /* ── LED DOTS ── */
+  .adm-led {
+    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+    animation: adm-pulse 2s ease-in-out infinite;
+  }
+  @keyframes adm-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .adm-led-g  { background: var(--c-green);  box-shadow: 0 0 6px var(--c-green);  }
+  .adm-led-c  { background: var(--c-cyan);   box-shadow: 0 0 6px var(--c-cyan);   }
+  .adm-led-a  { background: var(--c-amber);  box-shadow: 0 0 6px var(--c-amber);  }
+  .adm-led-r  { background: var(--c-red);    box-shadow: 0 0 6px var(--c-red);    }
+  .adm-led-p  { background: var(--c-purple); box-shadow: 0 0 6px var(--c-purple); }
+  .adm-led-n  { background: var(--c-muted);  box-shadow: none; animation: none; }
+  .adm-root.light .adm-led { box-shadow: none !important; }
+
+  /* ── STAT CARD ── */
+  .adm-stat {
+    padding: 16px 18px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .adm-stat-label {
+    font-size: 9px; letter-spacing: 0.2em; color: var(--c-muted); text-transform: uppercase;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .adm-stat-val {
+    font-family: var(--font-title); font-size: 26px; font-weight: 700;
+    color: var(--c-text); letter-spacing: 0.04em; line-height: 1;
+  }
+  .adm-stat-sub { font-size: 9px; color: var(--c-muted); letter-spacing: 0.1em; }
+
+  /* ── WAVEFORM / SPARKLINE ── */
+  .adm-wave-wrap { position: relative; height: 56px; overflow: hidden; }
+  .adm-wave-svg { width: 100%; height: 100%; }
+
+  /* ── OSCILLOSCOPE RING ── */
+  .adm-osc-wrap { position: relative; width: 100%; height: 80px; overflow: hidden; }
+  .adm-osc-line { position: absolute; inset: 0; }
+
+  /* ── RADAR ── */
+  .adm-radar-wrap {
+    position: relative; width: 120px; height: 120px; flex-shrink: 0;
+  }
+  .adm-radar-svg { width: 100%; height: 100%; }
+  .adm-radar-sweep {
+    transform-origin: 60px 60px;
+    animation: adm-radar-rot 3s linear infinite;
+  }
+  @keyframes adm-radar-rot { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+
+  /* ── MATRIX RAIN CANVAS ── */
+  .adm-matrix-wrap {
+    position: relative; overflow: hidden;
+    border-right: 1px solid var(--c-border);
+  }
+  .adm-matrix-canvas { display: block; opacity: 0.55; }
+  .adm-root.light .adm-matrix-canvas { opacity: 0.18; }
+
+  /* ── TELEMETRY PIPELINE ── */
+  .adm-tele-pipe {
+    display: flex; align-items: center; gap: 0; padding: 20px 24px;
+  }
+  .adm-tele-node {
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+    flex: 1;
+  }
+  .adm-tele-dot {
+    width: 12px; height: 12px; border-radius: 50%; border: 2px solid;
+    position: relative; z-index: 2; background: var(--c-panel);
+    transition: box-shadow 0.3s;
+  }
+  .adm-tele-dot.c  { border-color: var(--c-cyan);   box-shadow: 0 0 10px var(--c-cyan);   }
+  .adm-tele-dot.a  { border-color: var(--c-amber);  box-shadow: 0 0 10px var(--c-amber);  }
+  .adm-tele-dot.g  { border-color: var(--c-green);  box-shadow: 0 0 10px var(--c-green);  }
+  .adm-tele-dot.n  { border-color: var(--c-border2); box-shadow: none; }
+  .adm-root.light .adm-tele-dot { box-shadow: none !important; }
+  .adm-tele-connector {
+    flex: 1; height: 1px; position: relative; margin-bottom: 17px;
+  }
+  .adm-tele-connector-line {
+    position: absolute; inset: 0; background: var(--c-border2);
+  }
+  .adm-tele-packet {
+    position: absolute; top: -2px; width: 5px; height: 5px; border-radius: 50%;
+    animation: adm-packet-move 2s linear infinite;
+  }
+  .adm-tele-packet.c { background: var(--c-cyan);  box-shadow: 0 0 6px var(--c-cyan);  }
+  .adm-tele-packet.a { background: var(--c-amber); box-shadow: 0 0 6px var(--c-amber); }
+  .adm-tele-packet.g { background: var(--c-green); box-shadow: 0 0 6px var(--c-green); }
+  .adm-root.light .adm-tele-packet { box-shadow: none !important; }
+  @keyframes adm-packet-move { 0%{left:-1%} 100%{left:100%} }
+  .adm-tele-label { font-size: 9px; letter-spacing: 0.15em; color: var(--c-muted); text-transform: uppercase; }
+  .adm-tele-count { font-family: var(--font-title); font-size: 13px; color: var(--c-text); }
+
+  /* ── FUNNEL BARS ── */
+  .adm-funnel-bar-bg { height: 5px; background: var(--c-border); border-radius: 0; overflow: hidden; flex: 1; }
+  .adm-funnel-bar-fill { height: 100%; transition: width 0.8s cubic-bezier(0.16,1,0.3,1); }
+
+  /* ── TICKER TAPE ── */
+  .adm-ticker {
+    overflow: hidden; white-space: nowrap; font-size: 9px; letter-spacing: 0.12em;
+    color: var(--c-muted); padding: 6px 0; border-top: 1px solid var(--c-border);
+    border-bottom: 1px solid var(--c-border);
+  }
+  .adm-ticker-inner { display: inline-block; animation: adm-ticker-scroll 28s linear infinite; }
+  @keyframes adm-ticker-scroll { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+
+  /* ── STATUS BADGE ── */
+  .adm-badge {
+    font-size: 8px; letter-spacing: 0.16em; padding: 2px 8px; text-transform: uppercase;
+    clip-path: polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%);
+  }
+  .adm-badge-g { background: rgba(0,255,136,0.12); color: var(--c-green); }
+  .adm-badge-a { background: rgba(255,183,0,0.12);  color: var(--c-amber); }
+  .adm-badge-r { background: rgba(255,56,96,0.12);  color: var(--c-red);   }
+
+  /* ── TABLES ── */
+  .adm-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .adm-table th {
+    font-size: 9px; letter-spacing: 0.18em; color: var(--c-muted); text-transform: uppercase;
+    padding: 10px 16px; border-bottom: 1px solid var(--c-border); text-align: left;
+    font-weight: 400;
+  }
+  .adm-table td { padding: 12px 16px; border-bottom: 1px solid var(--c-border); }
+  .adm-table tr:last-child td { border-bottom: none; }
+  .adm-table tr { cursor: pointer; transition: background 0.15s; }
+  .adm-table tr:hover td { background: rgba(0,229,255,0.03); }
+  .adm-root.light .adm-table tr:hover td { background: rgba(0,119,170,0.04); }
+
+  /* ── PRODUCT CARD ── */
+  .adm-product-card {
+    border: 1px solid var(--c-border); background: var(--c-panel);
+    transition: border-color 0.2s, transform 0.2s;
+    overflow: hidden; position: relative;
+  }
+  .adm-product-card:hover { border-color: var(--c-cyan2); transform: translateY(-2px); }
+  .adm-product-card.selected { border-color: var(--c-cyan); box-shadow: 0 0 16px rgba(0,229,255,0.15); }
+  .adm-root.light .adm-product-card.selected { box-shadow: none; }
+  .adm-product-card.drag-over { border-color: var(--c-purple); }
+
+  /* ── FORM INPUTS ── */
+  .adm-input-wrap { display: flex; flex-direction: column; gap: 6px; }
+  .adm-input-label { font-size: 9px; letter-spacing: 0.18em; color: var(--c-muted); text-transform: uppercase; }
+  .adm-input {
+    background: transparent; border: none; border-bottom: 1px solid var(--c-border2);
+    color: var(--c-text); font-family: var(--font-hud); font-size: 12px;
+    padding: 8px 0; outline: none; width: 100%; letter-spacing: 0.06em;
+    transition: border-color 0.2s;
+  }
+  .adm-input:focus { border-bottom-color: var(--c-cyan); }
+  .adm-textarea {
+    background: rgba(0,229,255,0.02); border: 1px solid var(--c-border2);
+    color: var(--c-text); font-family: var(--font-hud); font-size: 11px;
+    padding: 10px; outline: none; width: 100%; resize: none; letter-spacing: 0.04em;
+    transition: border-color 0.2s;
+  }
+  .adm-textarea:focus { border-color: var(--c-cyan); }
+  .adm-root.light .adm-textarea { background: rgba(0,119,170,0.03); }
+
+  /* ── BUTTONS ── */
+  .adm-btn {
+    font-family: var(--font-hud); font-size: 10px; letter-spacing: 0.16em;
+    text-transform: uppercase; padding: 10px 20px; cursor: pointer;
+    border: 1px solid var(--c-border2); background: transparent; color: var(--c-text);
+    transition: all 0.2s;
+  }
+  .adm-btn:hover { border-color: var(--c-cyan); color: var(--c-cyan); background: rgba(0,229,255,0.04); }
+  .adm-btn-primary {
+    background: var(--c-cyan); color: #04070d; border-color: var(--c-cyan);
+    font-weight: 700;
+  }
+  .adm-btn-primary:hover { background: var(--c-cyan2); border-color: var(--c-cyan2); color: #04070d; box-shadow: 0 0 20px rgba(0,229,255,0.3); }
+  .adm-root.light .adm-btn-primary:hover { box-shadow: none; }
+  .adm-btn-danger { border-color: var(--c-red); color: var(--c-red); }
+  .adm-btn-danger:hover { background: rgba(255,56,96,0.08); }
+  .adm-btn-active { border-color: var(--c-cyan); color: var(--c-cyan); background: rgba(0,229,255,0.06); }
+
+  /* ── RANGE SLIDER ── */
+  .adm-period-bar { display: flex; gap: 4px; }
+  .adm-period-btn {
+    font-family: var(--font-hud); font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase;
+    padding: 5px 12px; cursor: pointer; border: 1px solid var(--c-border);
+    background: transparent; color: var(--c-muted); transition: all 0.2s;
+  }
+  .adm-period-btn.active { border-color: var(--c-cyan2); color: var(--c-cyan); background: rgba(0,229,255,0.06); }
+
+  /* ── MODAL ── */
+  .adm-modal-backdrop {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(4,7,13,0.88); backdrop-filter: blur(8px);
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  .adm-root.light .adm-modal-backdrop { background: rgba(240,244,248,0.88); }
+  .adm-modal {
+    background: var(--c-panel); border: 1px solid var(--c-border2);
+    width: 100%; max-width: 520px; max-height: 88vh; overflow-y: auto;
+    position: relative;
+  }
+  .adm-modal::before {
+    content:''; position: absolute; top:0; left:0; right:0; height:2px;
+    background: linear-gradient(90deg, var(--c-cyan), var(--c-purple));
+  }
+
+  /* ── MOBILE MENU ── */
+  .adm-mobile-menu {
+    background: var(--c-panel); border-bottom: 1px solid var(--c-border);
+    padding: 16px 24px; display: flex; flex-direction: column; gap: 4px;
+  }
+
+  /* ── MISC ── */
+  .adm-divider { height: 1px; background: var(--c-border); }
+  .adm-code-block {
+    background: rgba(0,0,0,0.4); border: 1px solid var(--c-border);
+    font-size: 9px; color: var(--c-cyan2); padding: 14px; overflow-x: auto;
+    line-height: 1.7; letter-spacing: 0.04em;
+  }
+  .adm-root.light .adm-code-block { background: rgba(0,119,170,0.05); color: var(--c-cyan2); }
+  .adm-empty { text-align: center; padding: 40px; font-size: 10px; letter-spacing: 0.2em; color: var(--c-muted); }
+
+  .adm-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .adm-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .adm-grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .adm-grid-prod { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px; }
+  @media(max-width:768px) {
+    .adm-grid-4 { grid-template-columns: repeat(2,1fr); }
+    .adm-grid-5 { grid-template-columns: repeat(2,1fr); }
+    .adm-grid-2 { grid-template-columns: 1fr; }
+    .adm-nav-links { display: none; }
+    .adm-nav-links.open { display: flex; flex-direction: column; }
+  }
+
+  /* ── CORNER CHIP ── */
+  .adm-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase;
+    padding: 3px 8px; border: 1px solid; color: var(--c-cyan); border-color: var(--c-border2);
+    background: rgba(0,229,255,0.04);
+  }
+
+  /* ── SELECT OVERLAY ── */
+  .adm-select-bar {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 10px 16px; border: 1px solid var(--c-border2);
+    background: rgba(0,229,255,0.03); margin-bottom: 8px;
+    animation: adm-fade-in 0.2s ease;
+  }
+  @keyframes adm-fade-in { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+
+  /* ── LIVE STATUS INDICATOR ── */
+  .adm-live { display: flex; align-items: center; gap: 6px; font-size: 9px; letter-spacing: 0.15em; color: var(--c-green); }
+
+  /* ── TAB BAR ── */
+  .adm-tabbar { display: flex; border-bottom: 1px solid var(--c-border); }
+  .adm-tab {
+    font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase;
+    padding: 10px 18px; cursor: pointer; border-bottom: 2px solid transparent;
+    color: var(--c-muted); background: transparent; border-top:none; border-left:none; border-right:none;
+    display: flex; align-items: center; gap: 6px; transition: all 0.18s; margin-bottom: -1px;
+  }
+  .adm-tab:hover { color: var(--c-cyan); }
+  .adm-tab.active { color: var(--c-cyan); border-bottom-color: var(--c-cyan); }
+  .adm-tab-count {
+    font-size: 8px; padding: 1px 5px;
+    background: rgba(0,229,255,0.1); color: var(--c-cyan); border-radius: 2px;
+  }
+  .adm-tab.active .adm-tab-count { background: var(--c-cyan); color: #04070d; }
+
+  /* ── SEARCH INPUT ── */
+  .adm-search {
+    background: transparent; border: none; border-bottom: 1px solid var(--c-border2);
+    color: var(--c-text); font-family: var(--font-hud); font-size: 10px;
+    padding: 6px 0; outline: none; width: 200px; letter-spacing: 0.08em;
+  }
+  .adm-search::placeholder { color: var(--c-muted); }
+  .adm-search:focus { border-bottom-color: var(--c-cyan); }
+
+  /* analytics chart */
+  .adm-bar-chart { display: flex; align-items: flex-end; gap: 2px; height: 96px; }
+  .adm-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .adm-bar { width: 100%; min-height: 2px; transition: height 0.5s ease; border-top: 1px solid; }
+  .adm-bar-lbl { font-size: 7px; color: var(--c-muted); letter-spacing: 0.06em; }
+
+  /* revenue waveform canvas */
+  .adm-wave-canvas { width: 100%; height: 56px; display: block; }
+`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TYPES
+// ─────────────────────────────────────────────────────────────────────────────
 type SiteContent = {
-  hero_headline: string;
-  hero_subheadline: string;
-  hero_cta: string;
-  price_display: string;
-  price_original: string;
-  launch_pricing_active: boolean;
-  guarantee_days: number;
-  theme?: string;
-  metadata?: any;
+  hero_headline: string; hero_subheadline: string; hero_cta: string;
+  price_display: string; price_original: string; launch_pricing_active: boolean;
+  guarantee_days: number; theme?: string; metadata?: any;
 };
-
 type Product = {
-  id: string;
-  title: string;
-  slug: string;
-  price_cents: number;
-  image_urls: string[];
-  is_published: boolean;
-  description?: string;
-  printful_id?: string | null;
-  display_order?: number;
+  id: string; title: string; slug: string; price_cents: number;
+  image_urls: string[]; is_published: boolean; description?: string;
+  printful_id?: string | null; display_order?: number;
 };
-
-type Order = {
-  id: string;
-  email: string;
-  name?: string;
-  amount_cents: number;
-  status: string;
-  created_at: string;
-};
-
-type Lead = {
-  id: string;
-  email: string;
-  created_at: string;
-};
-
-type PageEvent = {
-  id: string;
-  event_type: string;
-  path: string;
-  product_id?: string;
-  session_id?: string;
-  referrer?: string;
-  country?: string;
-  created_at: string;
-};
-
-type AdminUser = {
-  id: string;
-  email: string;
-  role: "admin" | "manager" | "viewer";
-  created_at: string;
-};
-
-type NavSection = "overview" | "products" | "orders" | "leads" | "analytics" | "settings";
+type Order   = { id: string; email: string; name?: string; amount_cents: number; status: string; created_at: string; };
+type Lead    = { id: string; email: string; created_at: string; };
+type PageEvent = { id: string; event_type: string; path: string; product_id?: string; session_id?: string; referrer?: string; country?: string; created_at: string; };
+type AdminUser = { id: string; email: string; role: "admin"|"manager"|"viewer"; created_at: string; };
+type NavSection = "overview"|"products"|"orders"|"leads"|"analytics"|"settings";
 
 export const Route = createFileRoute("/admin/")({
-  head: () => ({
-    meta: [{ title: "Command Center" }],
-  }),
+  head: () => ({ meta: [{ title: "Admin" }] }),
   beforeLoad: requireAdmin,
   component: AdminPage,
 });
 
-// ────────────────────────────────────────────────────────────────────────────
-// BULLETPROOF EVENT NORMALIZATION PARSER
-// ────────────────────────────────────────────────────────────────────────────
-const getAddToCartCount = (eventsList: PageEvent[]): number => {
-  return eventsList.filter(e => {
-    const type = e.event_type?.toLowerCase() || "";
-    return type === "add_to_cart" || type === "add-to-cart" || type === "cart" || type === "addtocart";
-  }).length;
-};
+// ─────────────────────────────────────────────────────────────────────────────
+// DECORATIVE COMPONENTS (pure UI, zero data dependency)
+// ─────────────────────────────────────────────────────────────────────────────
 
-// ────────────────────────────────────────────────────────────────────────────
-// LED VISUAL GLOW COMPONENT
-// ────────────────────────────────────────────────────────────────────────────
-function LedPulse({ color, active = true }: { color: "green" | "yellow" | "red" | "cyan" | "purple" | "neutral"; active?: boolean }) {
-  const colorMap = {
-    green: "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.9)]",
-    yellow: "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.9)]",
-    red: "bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.9)]",
-    cyan: "bg-sky-400 shadow-[0_0_10px_rgba(56,189,248,0.9)]",
-    purple: "bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.9)]",
-    neutral: "bg-neutral-400 shadow-[0_0_6px_rgba(163,163,163,0.5)]",
-  };
-  return (
-    <span className={`inline-block w-2.5 h-2.5 rounded-full transition-all duration-300 ${colorMap[color]} ${active ? "animate-pulse" : ""}`} />
-  );
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// INTERACTIVE TELEMETRY CANVAS COMPONENT (TRAVERSAL EMULATOR)
-// ────────────────────────────────────────────────────────────────────────────
-interface TelemetryCanvasRef {
-  triggerSimulatedPacket: (type: "view" | "click" | "cart" | "checkout" | "purchase") => void;
-}
-
-const TelemetryCanvas = ({ events, isDark, canvasRefExternal }: { events: PageEvent[]; isDark: boolean; canvasRefExternal?: React.RefObject<TelemetryCanvasRef | null> }) => {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const prevEventsLength = useRef(events.length);
-
-  const packets = useRef<Array<{
-    x: number;
-    y: number;
-    targetNode: number;
-    speed: number;
-    color: string;
-    size: number;
-  }>>([]);
-
-  const spawnPacket = useCallback((eventType: string) => {
-    let targetNode = 0;
-    let color = isDark ? "rgba(255, 255, 255, 0.85)" : "rgba(0, 0, 0, 0.85)";
-
-    const normalized = eventType.toLowerCase();
-    if (normalized === "product_click") {
-      targetNode = 1;
-      color = "rgba(56, 189, 248, 0.95)"; 
-    } else if (normalized === "add_to_cart" || normalized === "add-to-cart" || normalized === "cart") {
-      targetNode = 2;
-      color = "rgba(245, 158, 11, 0.95)"; 
-    } else if (normalized === "checkout_start") {
-      targetNode = 3;
-      color = "rgba(168, 85, 247, 0.95)"; 
-    } else if (normalized === "purchase" || normalized === "paid") {
-      targetNode = 4;
-      color = "rgba(16, 185, 129, 0.95)"; 
-    }
-
-    packets.current.push({
-      x: 40,
-      y: 70,
-      targetNode,
-      speed: 1.8 + Math.random() * 1.5,
-      color,
-      size: 4.5 + Math.random() * 2.5,
-    });
-  }, [isDark]);
-
-  // Expose manual trigger API to other modules/buttons
-  useEffect(() => {
-    if (canvasRefExternal) {
-      (canvasRefExternal as any).current = {
-        triggerSimulatedPacket: (type: "view" | "click" | "cart" | "checkout" | "purchase") => {
-          const map = {
-            view: "page_view",
-            click: "product_click",
-            cart: "add_to_cart",
-            checkout: "checkout_start",
-            purchase: "purchase",
-          };
-          spawnPacket(map[type]);
-        }
-      };
-    }
-  }, [canvasRefExternal, spawnPacket]);
-
-  useEffect(() => {
-    if (events.length > prevEventsLength.current) {
-      const difference = events.length - prevEventsLength.current;
-      for (let i = 0; i < difference; i++) {
-        const ev = events[i];
-        if (ev) {
-          spawnPacket(ev.event_type);
-        }
-      }
-    }
-    prevEventsLength.current = events.length;
-  }, [events, spawnPacket]);
-
+/** Matrix rain canvas — purely decorative column accent */
+function MatrixRain({ width = 80, height = 300, isDark }: { width?: number; height?: number; isDark: boolean }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-
-    let animationId: number;
-    const nodes = [
-      { name: "VIEW", x: 40, y: 70 },
-      { name: "CLICK", x: 140, y: 70 },
-      { name: "CART", x: 240, y: 70 },
-      { name: "CHECKOUT", x: 340, y: 70 },
-      { name: "PAID", x: 440, y: 70 },
-    ];
-
-    const resize = () => {
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      ctx.scale(dpr, dpr);
-    };
-
-    resize();
-    window.addEventListener("resize", resize);
-
-    const render = () => {
-      const width = canvas.width / (window.devicePixelRatio || 1);
-      const height = canvas.height / (window.devicePixelRatio || 1);
-      ctx.clearRect(0, 0, width, height);
-
-      // System background grid
-      ctx.strokeStyle = isDark ? "rgba(255, 255, 255, 0.03)" : "rgba(0, 0, 0, 0.03)";
-      ctx.lineWidth = 1;
-      const gridSpacing = 16;
-      for (let x = 0; x < width; x += gridSpacing) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, height);
-        ctx.stroke();
-      }
-      for (let y = 0; y < height; y += gridSpacing) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(width, y);
-        ctx.stroke();
-      }
-
-      const spacingX = (width - 80) / 4;
-      nodes.forEach((n, idx) => {
-        n.x = 40 + spacingX * idx;
-        n.y = height / 2;
+    canvas.width = width;
+    canvas.height = height;
+    const cols = Math.floor(width / 12);
+    const drops = Array(cols).fill(1);
+    const chars = "アイウエオカキクケコ0123456789ABCDEF>_<[]{}|/\\";
+    const tick = setInterval(() => {
+      ctx.fillStyle = isDark ? "rgba(4,7,13,0.08)" : "rgba(240,244,248,0.08)";
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = isDark ? "#00ff8844" : "#00884d44";
+      ctx.font = "11px 'Share Tech Mono', monospace";
+      drops.forEach((y, i) => {
+        const ch = chars[Math.floor(Math.random() * chars.length)];
+        ctx.fillStyle = isDark ? "#00ff8866" : "#00884d66";
+        ctx.fillText(ch, i * 12, y * 12);
+        if (y * 12 > height && Math.random() > 0.97) drops[i] = 0;
+        drops[i]++;
       });
-
-      // Node path tracks
-      ctx.strokeStyle = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)";
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(nodes[0].x, nodes[0].y);
-      for (let i = 1; i < nodes.length; i++) {
-        ctx.lineTo(nodes[i].x, nodes[i].y);
-      }
-      ctx.stroke();
-
-      // Ambient stream simulation
-      if (Math.random() < 0.015) {
-        packets.current.push({
-          x: nodes[0].x,
-          y: nodes[0].y,
-          targetNode: Math.floor(Math.random() * 4) + 1,
-          speed: 1.0 + Math.random() * 1.0,
-          color: isDark ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.12)",
-          size: 2.5,
-        });
-      }
-
-      // Draw active traveling packets
-      packets.current.forEach((p, idx) => {
-        const nextNode = nodes[p.targetNode];
-
-        if (p.x < nextNode.x) {
-          p.x += p.speed;
-        } else {
-          p.x = nextNode.x;
-        }
-
-        p.y = nextNode.y;
-
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fillStyle = p.color;
-        ctx.shadowColor = p.color;
-        ctx.shadowBlur = isDark ? 10 : 0;
-        ctx.fill();
-        ctx.shadowBlur = 0;
-
-        if (p.x >= nextNode.x) {
-          packets.current.splice(idx, 1);
-        }
-      });
-
-      // Draw node terminals
-      nodes.forEach((n) => {
-        ctx.beginPath();
-        ctx.arc(n.x, n.y, 6, 0, Math.PI * 2);
-        ctx.fillStyle = isDark ? "#000000" : "#ffffff";
-        ctx.strokeStyle = isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.3)";
-        ctx.lineWidth = 2;
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.arc(n.x, n.y, 2, 0, Math.PI * 2);
-        ctx.fillStyle = isDark ? "#ffffff" : "#000000";
-        ctx.fill();
-
-        ctx.font = "bold 9px monospace";
-        ctx.fillStyle = isDark ? "rgba(255, 255, 255, 0.45)" : "rgba(0, 0, 0, 0.5)";
-        ctx.textAlign = "center";
-        ctx.fillText(n.name, n.x, n.y + 24);
-      });
-
-      animationId = requestAnimationFrame(render);
-    };
-
-    render();
-
-    return () => {
-      cancelAnimationFrame(animationId);
-      window.removeEventListener("resize", resize);
-    };
-  }, [isDark]);
-
-  return (
-    <div className="relative w-full h-32 md:h-36 rounded border border-neutral-200/50 dark:border-neutral-800/50 bg-neutral-50/30 dark:bg-neutral-900/10">
-      <div className="absolute top-3 left-4 flex items-center gap-2 pointer-events-none">
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-        <span className="text-[8px] font-mono tracking-widest text-neutral-400 dark:text-neutral-500 uppercase">SYS_TELEMETRY_STREAM</span>
-      </div>
-      <canvas ref={canvasRef} className="w-full h-full block" />
-    </div>
-  );
+    }, 60);
+    return () => clearInterval(tick);
+  }, [isDark, width, height]);
+  return <canvas ref={canvasRef} className="adm-matrix-canvas" style={{ width, height }} />;
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// COGNITIVE INTEL INTERACTIVE AI ENGINE MODULE
-// ────────────────────────────────────────────────────────────────────────────
-function AiAgentConsole({ isDark, onSimulatePacket }: { isDark: boolean; onSimulatePacket: (type: "view" | "click" | "cart" | "checkout" | "purchase") => void }) {
-  const [logs, setLogs] = useState<string[]>([
-    "SYS_COGNITIVE_ENGINE: Initializing analytical sequence...",
-    "COGNITIVE_AGENT: Thread pool mounted. Listening on pg_realtime...",
-  ]);
-  const [thinkingSpeed, setThinkingSpeed] = useState(3000); // ms per check
-  const [activeTask, setActiveTask] = useState("Awaiting telemetry...");
-
-  // Generate automated diagnostics logs based on system tasks
+/** Animated waveform for revenue sparkline */
+function WaveformCanvas({ data, color, height = 56 }: { data: number[]; color: string; height?: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const frameRef  = useRef<number>(0);
+  const offsetRef = useRef(0);
   useEffect(() => {
-    const tasks = [
-      "Evaluating cart-to-checkout progression anomalies...",
-      "Correlating landing page traffic spikes with active leads...",
-      "Analyzing pricing elasticity indices on store config...",
-      "Optimizing real-time cache indices for catalog retrieval...",
-      "Auditing active administrator operational permissions...",
-    ];
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.offsetWidth;
+    canvas.width  = w * dpr;
+    canvas.height = height * dpr;
+    ctx.scale(dpr, dpr);
+    const max = Math.max(...data, 1);
+    const draw = () => {
+      ctx.clearRect(0, 0, w, height);
+      const pts: [number, number][] = data.map((v, i) => [
+        (i / (data.length - 1)) * w,
+        height - 8 - ((v / max) * (height - 16)),
+      ]);
+      // filled area
+      const grad = ctx.createLinearGradient(0, 0, 0, height);
+      grad.addColorStop(0, color + "44");
+      grad.addColorStop(1, color + "00");
+      ctx.beginPath();
+      ctx.moveTo(0, height);
+      pts.forEach(([x, y]) => ctx.lineTo(x, y));
+      ctx.lineTo(w, height);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+      // line
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      pts.forEach(([x, y], i) => i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y));
+      ctx.stroke();
+      // animated scan dot
+      const pct = ((offsetRef.current % 100) / 100);
+      const si = Math.floor(pct * (pts.length - 1));
+      const [dx, dy] = pts[Math.min(si, pts.length - 1)];
+      ctx.beginPath();
+      ctx.arc(dx, dy, 3, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(dx, dy, 6, 0, Math.PI * 2);
+      ctx.strokeStyle = color + "55";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      offsetRef.current += 0.5;
+      frameRef.current = requestAnimationFrame(draw);
+    };
+    draw();
+    return () => cancelAnimationFrame(frameRef.current);
+  }, [data, color, height]);
+  return <canvas ref={canvasRef} className="adm-wave-canvas" style={{ height }} />;
+}
 
-    const interval = setInterval(() => {
-      const selectedTask = tasks[Math.floor(Math.random() * tasks.length)];
-      setActiveTask(selectedTask);
-      
-      const timestamp = new Date().toLocaleTimeString("en-US", { hour12: false });
-      setLogs(prev => {
-        const updated = [`[${timestamp}] Jarvis_AI: ${selectedTask}`, ...prev];
-        return updated.slice(0, 15); // keep log history light
-      });
-    }, thinkingSpeed);
-
-    return () => clearInterval(interval);
-  }, [thinkingSpeed]);
-
+/** Radar sweep — decorative */
+function RadarDisplay({ isDark }: { isDark: boolean }) {
+  const rings = [0.25, 0.5, 0.75, 1];
+  const cx = 60, cy = 60, r = 54;
+  const c = isDark ? "#00e5ff" : "#0077aa";
+  const bg = isDark ? "#080e1a" : "#f0f4f8";
   return (
-    <div className={`p-6 border rounded-md relative overflow-hidden transition-all ${
-      isDark ? "bg-neutral-950/45 border-neutral-800/80" : "bg-white border-neutral-200/80 shadow-sm"
-    }`}>
-      {/* Grid line indicator background */}
-      <div className="absolute top-0 right-0 p-3 flex items-center gap-1.5 pointer-events-none text-[8px] font-mono tracking-widest text-neutral-400 dark:text-neutral-500 uppercase">
-        <Cpu size={12} className="animate-spin" style={{ animationDuration: "10s" }} />
-        <span>Jarvis Cognitive Core v4.1</span>
-      </div>
+    <div className="adm-radar-wrap">
+      <svg className="adm-radar-svg" viewBox="0 0 120 120">
+        <rect width="120" height="120" fill={bg} />
+        {rings.map((s, i) => (
+          <circle key={i} cx={cx} cy={cy} r={r * s} fill="none" stroke={c} strokeWidth="0.5" opacity="0.3" />
+        ))}
+        <line x1={cx} y1={cy - r} x2={cx} y2={cy + r} stroke={c} strokeWidth="0.4" opacity="0.2" />
+        <line x1={cx - r} y1={cy} x2={cx + r} y2={cy} stroke={c} strokeWidth="0.4" opacity="0.2" />
+        <g className="adm-radar-sweep">
+          <defs>
+            <radialGradient id="radg" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse"
+              gradientTransform={`translate(${cx},${cy}) scale(${r})`}>
+              <stop offset="0%" stopColor={c} stopOpacity="0.6" />
+              <stop offset="100%" stopColor={c} stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <path d={`M ${cx} ${cy} L ${cx} ${cy - r} A ${r} ${r} 0 0 1 ${cx + r * 0.87} ${cy + r * 0.5} Z`}
+            fill="url(#radg)" />
+          <line x1={cx} y1={cy} x2={cx} y2={cy - r} stroke={c} strokeWidth="1.5" opacity="0.8" />
+        </g>
+        {/* blips */}
+        {[[0.4, 0.3],[0.7, 0.6],[0.2, 0.7],[0.8, 0.2]].map(([bx, by], i) => (
+          <circle key={i} cx={cx + (bx - 0.5) * r * 2} cy={cy + (by - 0.5) * r * 2}
+            r="2.5" fill={i % 2 === 0 ? c : (isDark ? "#00ff88" : "#00884d")} opacity="0.7">
+            <animate attributeName="opacity" values="0.7;0.1;0.7" dur={`${1.2 + i * 0.4}s`} repeatCount="indefinite" />
+          </circle>
+        ))}
+        <text x={cx} y={cy + r + 11} textAnchor="middle" fontSize="7" fill={c} opacity="0.5" fontFamily="'Share Tech Mono',monospace">
+          RADAR_SCAN
+        </text>
+      </svg>
+    </div>
+  );
+}
 
-      <div className="space-y-4">
-        <div>
-          <h3 className="text-xs font-mono font-black uppercase tracking-wider flex items-center gap-1.5">
-            <LedPulse color="purple" />
-            <span>Jarvis Cognitive Engine Diagnostics</span>
-          </h3>
-          <p className={`text-[10px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>
-            ACTIVE REASONING: <span className="text-purple-400 font-bold">{activeTask}</span>
-          </p>
-        </div>
+/** Scrolling ticker tape */
+function TickerTape({ isDark }: { isDark: boolean }) {
+  const items = [
+    "SYS_ONLINE", "DB_CONN_OK", "REALTIME_ACTIVE", "PRINTFUL_API_READY",
+    "AUTH_SECURE", "CDN_CACHED", "PAYMENTS_LIVE", "WEBHOOK_ARMED",
+    "SSL_VALID", "EDGE_FN_WARM", "SUPABASE_LINKED", "METRICS_STREAMING",
+  ];
+  const text = items.join("  ·  ") + "  ·  " + items.join("  ·  ");
+  return (
+    <div className="adm-ticker">
+      <span className="adm-ticker-inner">{text}&nbsp;&nbsp;&nbsp;&nbsp;{text}</span>
+    </div>
+  );
+}
 
-        {/* Live typing diagnostic output console */}
-        <div className={`p-4 border rounded font-mono text-[9px] h-32 overflow-y-auto space-y-1.5 ${
-          isDark ? "bg-black/80 border-neutral-900 text-purple-300" : "bg-neutral-50 border-neutral-100 text-purple-700"
-        }`}>
-          {logs.map((log, index) => (
-            <div key={index} className="flex items-start gap-2 animate-in fade-in duration-300">
-              <span className="opacity-40">❯</span>
-              <span className="leading-relaxed whitespace-pre-wrap">{log}</span>
+/** Animated telemetry pipeline nodes */
+function TelemetryPipeline({ views, clicks, carts, checkouts, purchases, isDark }: {
+  views: number; clicks: number; carts: number; checkouts: number; purchases: number; isDark: boolean;
+}) {
+  const nodes = [
+    { label: "VIEW",     val: views,     cls: "c", delay: "0s"   },
+    { label: "CLICK",    val: clicks,    cls: "c", delay: "0.4s" },
+    { label: "CART",     val: carts,     cls: "a", delay: "0.8s" },
+    { label: "CHECKOUT", val: checkouts, cls: "a", delay: "1.2s" },
+    { label: "PAID",     val: purchases, cls: "g", delay: "1.6s" },
+  ];
+  const connCls = ["c","c","a","g"];
+  return (
+    <div style={{ padding: "0 16px 16px" }}>
+      <div style={{ display: "flex", alignItems: "center" }}>
+        {nodes.map((n, i) => (
+          <div key={n.label} style={{ display: "contents" }}>
+            <div className="adm-tele-node">
+              <div className={`adm-tele-dot ${n.cls}`} />
+              <span className="adm-tele-label">{n.label}</span>
+              <span className="adm-tele-count">{n.val > 0 ? n.val.toLocaleString() : "—"}</span>
             </div>
-          ))}
-        </div>
-
-        {/* Interactable Telemetry Slider & Simulation Buttons */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-[8px] font-mono font-bold tracking-widest uppercase text-neutral-400">
-              <span>Reasoning Throttle (Delay: {thinkingSpeed}ms)</span>
-              <Zap size={10} className="text-purple-400" />
-            </div>
-            <input 
-              type="range" 
-              min={1000} 
-              max={8000} 
-              step={500}
-              value={thinkingSpeed} 
-              onChange={e => setThinkingSpeed(Number(e.target.value))}
-              className="w-full h-1 bg-neutral-200 dark:bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
-            />
+            {i < nodes.length - 1 && (
+              <div className="adm-tele-connector">
+                <div className="adm-tele-connector-line" />
+                <div className={`adm-tele-packet ${connCls[i]}`}
+                  style={{ animationDelay: n.delay, animationDuration: `${1.5 + i * 0.3}s` }} />
+              </div>
+            )}
           </div>
-
-          <div className="space-y-2">
-            <span className="text-[8px] font-mono font-bold tracking-widest uppercase text-neutral-400 block">
-              Inject Telemetry Signal (Manual Override)
-            </span>
-            <div className="flex gap-1.5 flex-wrap">
-              {(["view", "click", "cart", "checkout", "purchase"] as const).map(signal => (
-                <button
-                  key={signal}
-                  onClick={() => {
-                    onSimulatePacket(signal);
-                    setLogs(prev => {
-                      const t = new Date().toLocaleTimeString("en-US", { hour12: false });
-                      return [`[${t}] SYSTEM: Manual telemetry override payload [${signal.toUpperCase()}] injected.`, ...prev];
-                    });
-                  }}
-                  className="flex-1 min-w-[50px] text-[8px] font-mono font-black uppercase tracking-widest border py-1.5 rounded hover:bg-purple-500/10 hover:border-purple-500/40 transition-all dark:border-neutral-850 dark:text-neutral-400 dark:hover:text-purple-300 border-neutral-200 text-neutral-600"
-                >
-                  {signal}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// MAIN ADMIN PAGE COMPONENT
-// ────────────────────────────────────────────────────────────────────────────
+/** Corner brackets around a panel */
+function Brackets() {
+  return (
+    <>
+      <div className="adm-bracket tl" />
+      <div className="adm-bracket tr" />
+      <div className="adm-bracket bl" />
+      <div className="adm-bracket br" />
+    </>
+  );
+}
+
+/** LED indicator */
+function Led({ color }: { color: "g"|"c"|"a"|"r"|"p"|"n" }) {
+  return <span className={`adm-led adm-led-${color}`} />;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SHARED STAT / INPUT COMPONENTS
+// ─────────────────────────────────────────────────────────────────────────────
+function Stat({ label, value, sub, led = "c" }: { label: string; value: string | number; sub: string; led?: "g"|"c"|"a"|"r"|"p"|"n" }) {
+  return (
+    <div className="adm-panel adm-stat">
+      <Brackets />
+      <div className="adm-stat-label">{label} <Led color={led} /></div>
+      <div className="adm-stat-val">{value}</div>
+      <div className="adm-stat-sub">{sub}</div>
+    </div>
+  );
+}
+
+function StatDelta({ label, value, sub, delta }: { label: string; value: string|number; sub: string; delta: number|null }) {
+  const led: "g"|"r"|"n" = delta === null ? "n" : delta > 0 ? "g" : "r";
+  return (
+    <div className="adm-panel adm-stat">
+      <Brackets />
+      <div className="adm-stat-label">{label} <Led color={led} /></div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <div className="adm-stat-val">{value}</div>
+        {delta !== null && (
+          <span style={{ fontSize: 10, color: delta > 0 ? "var(--c-green)" : "var(--c-red)", letterSpacing: "0.1em" }}>
+            {delta > 0 ? "↑" : "↓"}{Math.abs(delta)}%
+          </span>
+        )}
+      </div>
+      <div className="adm-stat-sub">{sub}</div>
+    </div>
+  );
+}
+
+function InputField({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
+  return (
+    <div className="adm-input-wrap">
+      <label className="adm-input-label">{label}</label>
+      <input type={type} value={value} onChange={e => onChange(e.target.value)} className="adm-input" />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN ADMIN PAGE
+// ─────────────────────────────────────────────────────────────────────────────
 function AdminPage() {
   const navigate = useNavigate();
-
-  const navSections: NavSection[] = ["overview", "products", "orders", "leads", "analytics", "settings"];
+  const navSections: NavSection[] = ["overview","products","orders","leads","analytics","settings"];
   const [section, setSection] = useState<NavSection>("overview");
-
   const [isDark, setIsDark] = useState<boolean>(
     () => typeof document !== "undefined" && document.documentElement.classList.contains("dark")
   );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Secure Handshake & Authentication Gate States
-  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
-  const [isAuthorized, setIsAuthorized] = useState(false);
-
-  // External Ref to connect AI Engine Simulator with the Telemetry Canvas
-  const telemetryCanvasRef = useRef<TelemetryCanvasRef | null>(null);
-
-  // ── Data State ──────────────────────────────────────────────────────────
-  const [products, setProducts] = useState<Product[]>([]);
+  // ── Data ──
+  const [products,    setProducts]    = useState<Product[]>([]);
   const [activeOrders, setActiveOrders] = useState<Order[]>([]);
-  const [activeLeads, setActiveLeads] = useState<Lead[]>([]);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [pageEvents, setPageEvents] = useState<PageEvent[]>([]);
-  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [activeLeads,  setActiveLeads]  = useState<Lead[]>([]);
+  const [userEmail,    setUserEmail]    = useState<string|null>(null);
+  const [pageEvents,   setPageEvents]   = useState<PageEvent[]>([]);
+  const [adminUsers,   setAdminUsers]   = useState<AdminUser[]>([]);
 
-  // ── Site Config State ───────────────────────────────────────────────────
+  // ── Site config ──
   const [siteContent, setSiteContent] = useState<SiteContent>({
-    hero_headline: "",
-    hero_subheadline: "",
-    hero_cta: "",
-    price_display: "",
-    price_original: "",
-    launch_pricing_active: false,
-    guarantee_days: 30,
-    theme: "light",
-    metadata: {},
+    hero_headline:"", hero_subheadline:"", hero_cta:"",
+    price_display:"", price_original:"", launch_pricing_active:false,
+    guarantee_days:30, theme:"light", metadata:{},
   });
-  const [siteEdited, setSiteEdited] = useState(false);
   const [siteSaving, setSiteSaving] = useState(false);
 
-  // ── Product Form State ──────────────────────────────────────────────────
+  // ── Product form ──
   const [productFormOpen, setProductFormOpen] = useState(false);
   const [productForm, setProductForm] = useState({
-    editingId: null as string | null,
-    title: "",
-    slug: "",
-    price_cents: "",
-    image_url: "",
-    description: "",
-    is_published: true,
-    source_url: "",
-    hasVariants: false,
-    variantsText: "[]",
+    editingId: null as string|null,
+    title:"", slug:"", price_cents:"", image_url:"", description:"",
+    is_published:true, source_url:"", hasVariants:false, variantsText:"[]",
   });
 
-  // ── Product Select / Bulk State ─────────────────────────────────────────
-  const [selectMode, setSelectMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // ── Bulk / drag ──
+  const [selectMode,   setSelectMode]   = useState(false);
+  const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set());
   const [isBulkActing, setIsBulkActing] = useState(false);
-
-  // ── Drag-to-reorder State ───────────────────────────────────────────────
-  const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [draggedId,    setDraggedId]    = useState<string|null>(null);
+  const [dragOverId,   setDragOverId]   = useState<string|null>(null);
   const [orderedProducts, setOrderedProducts] = useState<Product[]>([]);
 
-  // ── Orders Filter State ─────────────────────────────────────────────────
-  const [orderStatusFilter, setOrderStatusFilter] = useState<"all" | "paid" | "pending" | "failed">("all");
+  // ── Filters / UI ──
+  const [orderStatusFilter, setOrderStatusFilter] = useState<"all"|"paid"|"pending"|"failed">("all");
+  const [analyticsRange,    setAnalyticsRange]    = useState<"7"|"14"|"30">("14");
+  const [revenueRange,      setRevenueRange]       = useState<"day"|"week"|"month"|"all">("day");
+  const [searchQuery,       setSearchQuery]        = useState("");
+  const [selectedRow,       setSelectedRow]        = useState<any>(null);
+  const [isSyncing,         setIsSyncing]          = useState(false);
+  const [newUserEmail,      setNewUserEmail]        = useState("");
+  const [newUserRole,       setNewUserRole]         = useState<"admin"|"manager"|"viewer">("viewer");
+  const [isAddingUser,      setIsAddingUser]        = useState(false);
 
-  // ── Analytics State ─────────────────────────────────────────────────────
-  const [analyticsRange, setAnalyticsRange] = useState<"7" | "14" | "30">("14");
+  // inject CSS once
+  useEffect(() => {
+    if (document.getElementById("adm-styles")) return;
+    const s = document.createElement("style");
+    s.id = "adm-styles";
+    s.textContent = ADMIN_CSS;
+    document.head.appendChild(s);
+  }, []);
 
-  // ── Settings: User Management ───────────────────────────────────────────
-  const [newUserEmail, setNewUserEmail] = useState("");
-  const [newUserRole, setNewUserRole] = useState<"admin" | "manager" | "viewer">("viewer");
-  const [isAddingUser, setIsAddingUser] = useState(false);
-
-  // ── UI State ────────────────────────────────────────────────────────────
-  const [revenueRange, setRevenueRange] = useState<"day" | "week" | "month" | "all">("day");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedRow, setSelectedRow] = useState<any>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
-
-  // Apply saved theme from site_config once loaded
+  // theme sync
   useEffect(() => {
     if (!localStorage.getItem("theme") && siteContent.theme) {
-      if (siteContent.theme === "dark") {
-        document.documentElement.classList.add("dark");
-        setIsDark(true);
-      } else {
-        document.documentElement.classList.remove("dark");
-        setIsDark(false);
-      }
+      const dark = siteContent.theme === "dark";
+      document.documentElement.classList.toggle("dark", dark);
+      setIsDark(dark);
     }
   }, [siteContent.theme]);
 
-  // Sync orderedProducts when products update
   useEffect(() => {
-    setOrderedProducts([...products].sort((a, b) => (a.display_order ?? 999) - (b.display_order ?? 999)));
+    setOrderedProducts([...products].sort((a,b) => (a.display_order??999)-(b.display_order??999)));
   }, [products]);
 
-  // ── Auth & Data Fetch ───────────────────────────────────────────────────
+  // ── Auth ──
   useEffect(() => {
     const init = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          setIsLoadingAuth(false);
-          navigate({ to: "/login", replace: true } as any);
-          return;
-        }
-        setUserEmail(user.email || null);
-        await fetchData();
-        setIsAuthorized(true);
-      } catch (error) {
-        console.error("Auth initialization failure:", error);
-        navigate({ to: "/login", replace: true } as any);
-      } finally {
-        setIsLoadingAuth(false);
-      }
+      const { data:{ user } } = await supabase.auth.getUser();
+      if (!user) { window.location.href="/login"; return; }
+      setUserEmail(user.email||null);
+      await fetchData();
     };
     init();
-  }, [navigate]);
+  }, []);
 
-  // ── Realtime ────────────────────────────────────────────────────────────
+  // ── Realtime ──
   useEffect(() => {
-    const upsertById = <T extends { id: string }>(arr: T[], row: T) => {
-      const idx = arr.findIndex(r => r.id === row.id);
-      if (idx === -1) return [row, ...arr];
-      const next = arr.slice();
-      next[idx] = { ...next[idx], ...row };
-      return next;
+    const up = <T extends {id:string}>(arr:T[],row:T) => {
+      const i = arr.findIndex(r=>r.id===row.id);
+      if(i===-1) return [row,...arr];
+      const n=[...arr]; n[i]={...n[i],...row}; return n;
     };
-    const removeById = <T extends { id: string }>(arr: T[], id: string) =>
-      arr.filter(r => r.id !== id);
-
-    const channel = supabase
-      .channel("admin_realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (p) => {
-        if (p.eventType === "INSERT") setActiveOrders(prev => upsertById(prev, p.new as Order));
-        else if (p.eventType === "UPDATE") setActiveOrders(prev => upsertById(prev, p.new as Order));
-        else if (p.eventType === "DELETE") setActiveOrders(prev => removeById(prev, (p.old as any).id));
+    const rm = <T extends {id:string}>(arr:T[],id:string) => arr.filter(r=>r.id!==id);
+    const ch = supabase.channel("admin_rt")
+      .on("postgres_changes",{event:"*",schema:"public",table:"orders"},(p)=>{
+        if(p.eventType==="INSERT") setActiveOrders(v=>up(v,p.new as Order));
+        else if(p.eventType==="UPDATE") setActiveOrders(v=>up(v,p.new as Order));
+        else if(p.eventType==="DELETE") setActiveOrders(v=>rm(v,(p.old as any).id));
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, (p) => {
-        if (p.eventType === "INSERT") setActiveLeads(prev => upsertById(prev, p.new as Lead));
-        else if (p.eventType === "UPDATE") setActiveLeads(prev => upsertById(prev, p.new as Lead));
-        else if (p.eventType === "DELETE") setActiveLeads(prev => removeById(prev, (p.old as any).id));
+      .on("postgres_changes",{event:"*",schema:"public",table:"leads"},(p)=>{
+        if(p.eventType==="INSERT") setActiveLeads(v=>up(v,p.new as Lead));
+        else if(p.eventType==="UPDATE") setActiveLeads(v=>up(v,p.new as Lead));
+        else if(p.eventType==="DELETE") setActiveLeads(v=>rm(v,(p.old as any).id));
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "products" }, (p) => {
-        if (p.eventType === "INSERT") setProducts(prev => upsertById(prev, p.new as Product));
-        else if (p.eventType === "UPDATE") setProducts(prev => upsertById(prev, p.new as Product));
-        else if (p.eventType === "DELETE") setProducts(prev => removeById(prev, (p.old as any).id));
+      .on("postgres_changes",{event:"*",schema:"public",table:"products"},(p)=>{
+        if(p.eventType==="INSERT") setProducts(v=>up(v,p.new as Product));
+        else if(p.eventType==="UPDATE") setProducts(v=>up(v,p.new as Product));
+        else if(p.eventType==="DELETE") setProducts(v=>rm(v,(p.old as any).id));
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "admin_users" }, (p) => {
-        if (p.eventType === "INSERT") setAdminUsers(prev => upsertById(prev, p.new as AdminUser));
-        else if (p.eventType === "UPDATE") setAdminUsers(prev => upsertById(prev, p.new as AdminUser));
-        else if (p.eventType === "DELETE") setAdminUsers(prev => removeById(prev, (p.old as any).id));
+      .on("postgres_changes",{event:"*",schema:"public",table:"admin_users"},(p)=>{
+        if(p.eventType==="INSERT") setAdminUsers(v=>up(v,p.new as AdminUser));
+        else if(p.eventType==="UPDATE") setAdminUsers(v=>up(v,p.new as AdminUser));
+        else if(p.eventType==="DELETE") setAdminUsers(v=>rm(v,(p.old as any).id));
       })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "page_events" }, (p) => {
-        setPageEvents(prev => {
-          const next = [p.new as PageEvent, ...prev];
-          return next.length > 5000 ? next.slice(0, 5000) : next;
-        });
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"page_events"},(p)=>{
+        setPageEvents(v=>{ const n=[p.new as PageEvent,...v]; return n.length>5000?n.slice(0,5000):n; });
       })
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          fetchData().catch(() => {});
-        }
-      });
-
-    return () => { supabase.removeChannel(channel); };
+      .subscribe(s=>{ if(s==="SUBSCRIBED") fetchData().catch(()=>{}); });
+    return ()=>{ supabase.removeChannel(ch); };
   }, []);
 
   const fetchData = async () => {
     try {
-      const [productsRes, ordersRes, leadsRes, siteRes, eventsRes, usersRes] = await Promise.all([
+      const [pR,oR,lR,sR,eR,uR] = await Promise.all([
         supabase.from("products").select("*"),
         supabase.from("orders").select("*"),
         supabase.from("leads").select("*"),
-        supabase.from("site_config").select("*").eq("id", "main").single(),
-        supabase.from("page_events").select("*").order("created_at", { ascending: false }).limit(5000),
+        supabase.from("site_config").select("*").eq("id","main").single(),
+        supabase.from("page_events").select("*").order("created_at",{ascending:false}).limit(5000),
         supabase.from("admin_users").select("*"),
       ]);
-
-      if (productsRes.data) setProducts(productsRes.data as Product[]);
-      if (ordersRes.data) setActiveOrders(ordersRes.data as Order[]);
-      if (leadsRes.data) setActiveLeads(leadsRes.data as Lead[]);
-      if (siteRes.data) {
-        setSiteContent(prev => ({ ...prev, ...(siteRes.data as any) }));
-      }
-      if (eventsRes.data) setPageEvents(eventsRes.data as PageEvent[]);
-      if (usersRes.data) setAdminUsers(usersRes.data as AdminUser[]);
-    } catch (e) {
-      console.error("[Admin] Fetch error:", e);
-    }
+      if(pR.data) setProducts(pR.data as Product[]);
+      if(oR.data) setActiveOrders(oR.data as Order[]);
+      if(lR.data) setActiveLeads(lR.data as Lead[]);
+      if(sR.data) setSiteContent(p=>({...p,...(sR.data as any)}));
+      if(eR.data) setPageEvents(eR.data as PageEvent[]);
+      if(uR.data) setAdminUsers(uR.data as AdminUser[]);
+    } catch(e){ console.error(e); }
   };
 
+  // ── Printful sync ──
   const handleSyncPrintful = async () => {
     setIsSyncing(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      const res = await fetch("/api/printful-sync", {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      const {data:sd} = await supabase.auth.getSession();
+      const token = sd.session?.access_token;
+      const res = await fetch("/api/printful-sync",{method:"POST",headers:token?{Authorization:`Bearer ${token}`}:{}});
       const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error || data.message || "Sync failed");
-        return;
-      }
-      if (Array.isArray(data.errors) && data.errors.length > 0) {
-        toast.error(data.errors[0]);
-        return;
-      }
-      toast.success(`Sync complete: ${data.synced}/${data.total} products processed.`);
+      if(!res.ok){toast.error(data.error||"Sync failed");return;}
+      if(Array.isArray(data.errors)&&data.errors.length>0){toast.error(data.errors[0]);return;}
+      toast.success(`Sync complete: ${data.synced}/${data.total} processed.`);
       await fetchData();
-    } catch (e: any) {
-      toast.error(`Sync error: ${e?.message || "Unknown error"}`);
-    } finally {
-      setIsSyncing(false);
-    }
+    } catch(e:any){ toast.error(`Sync error: ${e?.message}`); }
+    finally { setIsSyncing(false); }
   };
 
+  // ── Product CRUD ──
   const saveProduct = async () => {
     try {
-      const imageUrls = productForm.image_url
-        .split(",")
-        .map(u => u.trim())
-        .filter(u => u);
+      const imageUrls = productForm.image_url.split(",").map(u=>u.trim()).filter(u=>u);
       const payload = {
-        title: productForm.title,
-        slug: productForm.slug,
-        price_cents: parseInt(productForm.price_cents) || 0,
-        image_urls: imageUrls,
-        description: productForm.description,
-        is_published: productForm.is_published,
-        source_url: productForm.source_url,
-        updated_at: new Date().toISOString(),
+        title:productForm.title, slug:productForm.slug,
+        price_cents:parseInt(productForm.price_cents)||0,
+        image_urls:imageUrls, description:productForm.description,
+        is_published:productForm.is_published, source_url:productForm.source_url,
+        updated_at:new Date().toISOString(),
       };
-      if (productForm.editingId) {
-        const { error } = await supabase.from("products").update(payload as any).eq("id", productForm.editingId);
-        if (error) throw error;
-        toast.success("Product updated.");
+      if(productForm.editingId){
+        const {error}=await supabase.from("products").update(payload as any).eq("id",productForm.editingId);
+        if(error) throw error; toast.success("Product updated.");
       } else {
-        const { error } = await supabase.from("products").insert([payload] as any);
-        if (error) throw error;
-        toast.success("Product created.");
+        const {error}=await supabase.from("products").insert([payload] as any);
+        if(error) throw error; toast.success("Product created.");
       }
-      resetProductForm();
-      await fetchData();
-    } catch (e: any) {
-      toast.error(`Save failed: ${e.message}`);
-    }
+      resetProductForm(); await fetchData();
+    } catch(e:any){ toast.error(`Save failed: ${e.message}`); }
   };
 
-  const togglePublished = async (id: string, currentState: boolean) => {
-    try {
-      const { error } = await supabase.from("products").update({ is_published: !currentState }).eq("id", id);
-      if (error) throw error;
-      await fetchData();
-    } catch (e: any) {
-      toast.error(`Toggle failed: ${e.message}`);
-    }
+  const togglePublished = async (id:string,cur:boolean) => {
+    const {error}=await supabase.from("products").update({is_published:!cur}).eq("id",id);
+    if(error) toast.error(error.message); else await fetchData();
   };
-
-  const archiveProduct = async (id: string) => {
-    try {
-      const { error } = await supabase.from("products").delete().eq("id", id);
-      if (error) throw error;
-      toast.success("Product archived.");
-      await fetchData();
-    } catch (e: any) {
-      toast.error(`Archive failed: ${e.message}`);
-    }
+  const archiveProduct = async (id:string) => {
+    const {error}=await supabase.from("products").delete().eq("id",id);
+    if(error) toast.error(error.message); else { toast.success("Archived."); await fetchData(); }
   };
-
-  const handleArchiveOrder = async (id: string) => {
-    try {
-      const { error } = await supabase.from("orders").delete().eq("id", id);
-      if (error) throw error;
-      toast.success("Order archived.");
-      setSelectedRow(null);
-      await fetchData();
-    } catch (e: any) {
-      toast.error(`Archive failed: ${e.message}`);
-    }
+  const handleArchiveOrder = async (id:string) => {
+    const {error}=await supabase.from("orders").delete().eq("id",id);
+    if(error) toast.error(error.message); else { toast.success("Archived."); setSelectedRow(null); await fetchData(); }
   };
 
   const resetProductForm = () => {
-    setProductForm({
-      editingId: null,
-      title: "",
-      slug: "",
-      price_cents: "",
-      image_url: "",
-      description: "",
-      is_published: true,
-      source_url: "",
-      hasVariants: false,
-      variantsText: "[]",
-    });
+    setProductForm({editingId:null,title:"",slug:"",price_cents:"",image_url:"",description:"",is_published:true,source_url:"",hasVariants:false,variantsText:"[]"});
     setProductFormOpen(false);
   };
-
-  const startEditProduct = (p: Product) => {
-    setProductForm({
-      editingId: p.id,
-      title: p.title,
-      slug: p.slug,
-      price_cents: String(p.price_cents),
-      image_url: (p.image_urls || []).join(", "),
-      description: p.description || "",
-      is_published: p.is_published,
-      source_url: "",
-      hasVariants: false,
-      variantsText: "[]",
-    });
-    setProductFormOpen(true);
-    setSection("products");
+  const startEditProduct = (p:Product) => {
+    setProductForm({editingId:p.id,title:p.title,slug:p.slug,price_cents:String(p.price_cents),image_url:(p.image_urls||[]).join(", "),description:p.description||"",is_published:p.is_published,source_url:"",hasVariants:false,variantsText:"[]"});
+    setProductFormOpen(true); setSection("products");
   };
 
-  const saveSiteConfig = async (updatedContent: SiteContent) => {
+  // ── Site config save ──
+  const saveSiteConfig = async (updated:SiteContent) => {
     setSiteSaving(true);
     try {
-      const payload: any = {
-        id: "main",
-        hero_headline: updatedContent.hero_headline || "",
-        hero_subheadline: updatedContent.hero_subheadline || "",
-        hero_cta: updatedContent.hero_cta || "",
-        price_display: updatedContent.price_display || "",
-        price_original: updatedContent.price_original || "",
-        launch_pricing_active: updatedContent.launch_pricing_active ?? false,
-        guarantee_days: String(updatedContent.guarantee_days || "30"),
-        theme: updatedContent.theme,
-        updated_at: new Date().toISOString(),
-      };
-      const { error: updateError } = await supabase.from("site_config").update(payload).eq("id", "main");
-      if (updateError) throw updateError;
-      toast.success("Site content saved.");
-      setSiteEdited(false);
-    } catch (e: any) {
-      toast.error(`Failed: ${e.message || e.details || "Unknown error"}`);
-    } finally {
-      setSiteSaving(false);
-    }
+      const payload:any = {id:"main",...updated,guarantee_days:String(updated.guarantee_days||"30"),updated_at:new Date().toISOString()};
+      const {error}=await supabase.from("site_config").update(payload).eq("id","main");
+      if(error) throw error; toast.success("Saved.");
+    } catch(e:any){ toast.error(`Failed: ${e.message}`); }
+    finally { setSiteSaving(false); }
   };
 
-  const handleSignOut = async () => { await supabase.auth.signOut(); window.location.href = "/login"; };
+  const handleSignOut = async () => { await supabase.auth.signOut(); window.location.href="/login"; };
 
-  const toggleSelectProduct = (id: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const selectAllProducts = () => {
-    if (selectedIds.size === orderedProducts.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(orderedProducts.map(p => p.id)));
-    }
-  };
-
-  const bulkPublish = async (publish: boolean) => {
+  // ── Bulk ops ──
+  const toggleSelectProduct = (id:string) => setSelectedIds(p=>{const n=new Set(p); n.has(id)?n.delete(id):n.add(id); return n;});
+  const selectAllProducts = () => selectedIds.size===orderedProducts.length ? setSelectedIds(new Set()) : setSelectedIds(new Set(orderedProducts.map(p=>p.id)));
+  const bulkPublish = async (pub:boolean) => {
     setIsBulkActing(true);
     try {
-      const ids = Array.from(selectedIds);
-      const { error } = await supabase.from("products").update({ is_published: publish }).in("id", ids);
-      if (error) throw error;
-      toast.success(`${ids.length} product(s) ${publish ? "published" : "unpublished"}.`);
-      setSelectedIds(new Set());
-      setSelectMode(false);
-      await fetchData();
-    } catch (e: any) {
-      toast.error(`Bulk action failed: ${e.message}`);
-    } finally {
-      setIsBulkActing(false);
-    }
+      const ids=Array.from(selectedIds);
+      const {error}=await supabase.from("products").update({is_published:pub}).in("id",ids);
+      if(error) throw error;
+      toast.success(`${ids.length} product(s) ${pub?"published":"unpublished"}.`);
+      setSelectedIds(new Set()); setSelectMode(false); await fetchData();
+    } catch(e:any){ toast.error(e.message); } finally { setIsBulkActing(false); }
   };
-
   const bulkDelete = async () => {
-    if (!confirm(`Delete ${selectedIds.size} product(s)? This cannot be undone.`)) return;
+    if(!confirm(`Delete ${selectedIds.size} product(s)?`)) return;
     setIsBulkActing(true);
     try {
-      const ids = Array.from(selectedIds);
-      const { error } = await supabase.from("products").delete().in("id", ids);
-      if (error) throw error;
-      toast.success(`${ids.length} product(s) deleted.`);
-      setSelectedIds(new Set());
-      setSelectMode(false);
-      await fetchData();
-    } catch (e: any) {
-      toast.error(`Bulk delete failed: ${e.message}`);
-    } finally {
-      setIsBulkActing(false);
-    }
+      const ids=Array.from(selectedIds);
+      const {error}=await supabase.from("products").delete().in("id",ids);
+      if(error) throw error;
+      toast.success(`${ids.length} deleted.`); setSelectedIds(new Set()); setSelectMode(false); await fetchData();
+    } catch(e:any){ toast.error(e.message); } finally { setIsBulkActing(false); }
   };
 
-  const handleDragStart = (id: string) => setDraggedId(id);
-  const handleDragOver = (e: React.DragEvent, id: string) => {
-    e.preventDefault();
-    setDragOverId(id);
-  };
-  const handleDrop = async (targetId: string) => {
-    if (!draggedId || draggedId === targetId) {
-      setDraggedId(null);
-      setDragOverId(null);
-      return;
-    }
-    const reordered = [...orderedProducts];
-    const fromIdx = reordered.findIndex(p => p.id === draggedId);
-    const toIdx = reordered.findIndex(p => p.id === targetId);
-    const [moved] = reordered.splice(fromIdx, 1);
-    reordered.splice(toIdx, 0, moved);
-    const updated = reordered.map((p, i) => ({ ...p, display_order: i }));
-    setOrderedProducts(updated);
-    setDraggedId(null);
-    setDragOverId(null);
+  // ── Drag reorder ──
+  const handleDragStart = (id:string) => setDraggedId(id);
+  const handleDragOver  = (e:React.DragEvent,id:string) => { e.preventDefault(); setDragOverId(id); };
+  const handleDrop = async (targetId:string) => {
+    if(!draggedId||draggedId===targetId){ setDraggedId(null); setDragOverId(null); return; }
+    const reordered=[...orderedProducts];
+    const fi=reordered.findIndex(p=>p.id===draggedId), ti=reordered.findIndex(p=>p.id===targetId);
+    const [mv]=reordered.splice(fi,1); reordered.splice(ti,0,mv);
+    const updated=reordered.map((p,i)=>({...p,display_order:i}));
+    setOrderedProducts(updated); setDraggedId(null); setDragOverId(null);
     try {
-      await Promise.all(updated.map(p =>
-        supabase.from("products").update({ display_order: p.display_order }).eq("id", p.id)
-      ));
+      await Promise.all(updated.map(p=>supabase.from("products").update({display_order:p.display_order}).eq("id",p.id)));
       toast.success("Order saved.");
-    } catch (e: any) {
-      toast.error(`Reorder failed: ${e.message}`);
-    }
+    } catch(e:any){ toast.error(e.message); }
   };
 
+  // ── Admin users ──
   const handleAddAdminUser = async () => {
-    if (!newUserEmail.trim()) return;
+    if(!newUserEmail.trim()) return;
     setIsAddingUser(true);
     try {
-      const { error } = await supabase.from("admin_users").insert([{
-        email: newUserEmail.trim().toLowerCase(),
-        role: newUserRole,
-        created_at: new Date().toISOString(),
-      }]);
-      if (error) throw error;
-      toast.success(`User ${newUserEmail} added as ${newUserRole}.`);
-      setNewUserEmail("");
-      setNewUserRole("viewer");
-      await fetchData();
-    } catch (e: any) {
-      toast.error(`Failed to add user: ${e.message}`);
-    } finally {
-      setIsAddingUser(false);
-    }
+      const {error}=await supabase.from("admin_users").insert([{email:newUserEmail.trim().toLowerCase(),role:newUserRole,created_at:new Date().toISOString()}]);
+      if(error) throw error;
+      toast.success(`Added ${newUserEmail} as ${newUserRole}.`); setNewUserEmail(""); setNewUserRole("viewer"); await fetchData();
+    } catch(e:any){ toast.error(e.message); } finally { setIsAddingUser(false); }
   };
-
-  const handleRemoveAdminUser = async (id: string) => {
-    try {
-      const { error } = await supabase.from("admin_users").delete().eq("id", id);
-      if (error) throw error;
-      toast.success("User removed.");
-      await fetchData();
-    } catch (e: any) {
-      toast.error(`Remove failed: ${e.message}`);
-    }
+  const handleRemoveAdminUser = async (id:string) => {
+    const {error}=await supabase.from("admin_users").delete().eq("id",id);
+    if(error) toast.error(error.message); else { toast.success("Removed."); await fetchData(); }
   };
-
-  const handleUpdateUserRole = async (id: string, role: "admin" | "manager" | "viewer") => {
-    try {
-      const { error } = await supabase.from("admin_users").update({ role }).eq("id", id);
-      if (error) throw error;
-      toast.success("Role updated.");
-      await fetchData();
-    } catch (e: any) {
-      toast.error(`Update failed: ${e.message}`);
-    }
+  const handleUpdateUserRole = async (id:string,role:"admin"|"manager"|"viewer") => {
+    const {error}=await supabase.from("admin_users").update({role}).eq("id",id);
+    if(error) toast.error(error.message); else { toast.success("Updated."); await fetchData(); }
   };
 
   const handleOpenJarvis = async () => {
-    try {
-      if (
-        document.documentElement.requestFullscreen &&
-        !document.fullscreenElement
-      ) {
-        await document.documentElement.requestFullscreen();
-      }
-    } catch (e) {
-      // Fullscreen denied or unavailable — proceed anyway
-    }
-    navigate({ to: "/admin/jarvis" });
+    try { if(document.documentElement.requestFullscreen&&!document.fullscreenElement) await document.documentElement.requestFullscreen(); } catch{}
+    navigate({to:"/admin/jarvis"});
   };
 
-  // ── Computed: Revenue ───────────────────────────────────────────────────
-  const filterByRange = (date: Date, range: typeof revenueRange) => {
-    const now = new Date();
-    if (range === "day") return date.toDateString() === now.toDateString();
-    if (range === "week") return (now.getTime() - date.getTime()) < 7 * 24 * 60 * 60 * 1000;
-    if (range === "month") return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+  // ── Computed: Revenue ──
+  const inRange = (d:Date,r:typeof revenueRange) => {
+    const now=new Date();
+    if(r==="day")   return d.toDateString()===now.toDateString();
+    if(r==="week")  return (now.getTime()-d.getTime())<7*86400000;
+    if(r==="month") return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
     return true;
   };
-
-  const filterByRangePrev = (date: Date, range: typeof revenueRange) => {
-    const now = new Date();
-    if (range === "day") {
-      const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
-      return date.toDateString() === yesterday.toDateString();
-    }
-    if (range === "week") {
-      const diff = now.getTime() - date.getTime();
-      return diff >= 7 * 24 * 60 * 60 * 1000 && diff < 14 * 24 * 60 * 60 * 1000;
-    }
-    if (range === "month") {
-      const prevMonth = new Date(now); prevMonth.setMonth(now.getMonth() - 1);
-      return date.getMonth() === prevMonth.getMonth() && date.getFullYear() === prevMonth.getFullYear();
-    }
+  const inRangePrev = (d:Date,r:typeof revenueRange) => {
+    const now=new Date();
+    if(r==="day")  { const y=new Date(now); y.setDate(now.getDate()-1); return d.toDateString()===y.toDateString(); }
+    if(r==="week") { const df=now.getTime()-d.getTime(); return df>=7*86400000&&df<14*86400000; }
+    if(r==="month"){ const p=new Date(now); p.setMonth(now.getMonth()-1); return d.getMonth()===p.getMonth()&&d.getFullYear()===p.getFullYear(); }
     return false;
   };
+  const paidOrders    = activeOrders.filter(o=>o.status==="paid");
+  const pendingOrders = activeOrders.filter(o=>o.status==="pending");
+  const failedOrders  = activeOrders.filter(o=>o.status==="failed");
+  const curOrders = paidOrders.filter(o=>inRange(new Date(o.created_at),revenueRange));
+  const prevOrders= paidOrders.filter(o=>inRangePrev(new Date(o.created_at),revenueRange));
+  const filteredRevenue = curOrders.reduce((s,o)=>s+o.amount_cents,0);
+  const prevRevenue     = prevOrders.reduce((s,o)=>s+o.amount_cents,0);
+  const revenueDelta    = prevRevenue>0 ? Math.round(((filteredRevenue-prevRevenue)/prevRevenue)*100) : null;
+  const avgTicket       = curOrders.length>0  ? filteredRevenue/curOrders.length  : 0;
+  const prevAvgTicket   = prevOrders.length>0 ? prevRevenue/prevOrders.length : 0;
+  const avgTicketDelta  = prevAvgTicket>0 ? Math.round(((avgTicket-prevAvgTicket)/prevAvgTicket)*100) : null;
+  const ordersInPeriod  = curOrders.length;
+  const prevOrdersCount = prevOrders.length;
+  const ordersDelta     = prevOrdersCount>0 ? Math.round(((ordersInPeriod-prevOrdersCount)/prevOrdersCount)*100) : null;
+  const convRate        = activeOrders.length>0 ? Math.round((paidOrders.length/activeOrders.length)*100) : 0;
+  const fmt$ = (c:number) => `$${(c/100).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:2})}`;
+  const fmtDate = (d:string) => new Date(d).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
 
-  const paidOrders = activeOrders.filter(o => o.status === "paid");
-  const pendingOrders = activeOrders.filter(o => o.status === "pending");
-  const failedOrders = activeOrders.filter(o => o.status === "failed");
+  // ── Funnel ──
+  const hasEvents = pageEvents.length>0;
+  const fViews    = hasEvents ? pageEvents.filter(e=>e.event_type==="page_view").length : 0;
+  const fClicks   = hasEvents ? pageEvents.filter(e=>e.event_type==="product_click").length : 0;
+  const fCarts    = hasEvents ? pageEvents.filter(e=>["add_to_cart","add-to-cart","cart","addtocart"].includes(e.event_type?.toLowerCase()||"")).length : 0;
+  const fCheckout = hasEvents ? pageEvents.filter(e=>e.event_type==="checkout_start").length : 0;
+  const fPurchase = paidOrders.length;
+  const fMax      = Math.max(fViews,fClicks,fCarts,fCheckout,fPurchase,1);
 
-  const currentPeriodOrders = paidOrders.filter(o => filterByRange(new Date(o.created_at), revenueRange));
-  const prevPeriodOrders = paidOrders.filter(o => filterByRangePrev(new Date(o.created_at), revenueRange));
-
-  const filteredRevenue = currentPeriodOrders.reduce((sum, o) => sum + o.amount_cents, 0);
-  const prevRevenue = prevPeriodOrders.reduce((sum, o) => sum + o.amount_cents, 0);
-
-  const revenueDelta = prevRevenue > 0 ? Math.round(((filteredRevenue - prevRevenue) / prevRevenue) * 100) : null;
-
-  const avgTicket = currentPeriodOrders.length > 0 ? filteredRevenue / currentPeriodOrders.length : 0;
-  const prevAvgTicket = prevPeriodOrders.length > 0 ? prevRevenue / prevPeriodOrders.length : 0;
-  const avgTicketDelta = prevAvgTicket > 0 ? Math.round(((avgTicket - prevAvgTicket) / prevAvgTicket) * 100) : null;
-
-  const ordersInPeriod = currentPeriodOrders.length;
-  const prevOrdersInPeriod = prevPeriodOrders.length;
-  const ordersDelta = prevOrdersInPeriod > 0 ? Math.round(((ordersInPeriod - prevOrdersInPeriod) / prevOrdersInPeriod) * 100) : null;
-
-  const convRate = activeOrders.length > 0 ? Math.round((paidOrders.length / activeOrders.length) * 100) : 0;
-
-  const fmt$ = (cents: number) => `$${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-  const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-
-  // ── Computed: Funnel ────────────────────────────────────────────────────
-  const hasEventData = pageEvents.length > 0;
-  const funnelViews = hasEventData ? pageEvents.filter(e => e.event_type === "page_view").length : 0;
-  const funnelProductClicks = hasEventData ? pageEvents.filter(e => e.event_type === "product_click").length : 0;
-  const funnelAddToCart = hasEventData ? getAddToCartCount(pageEvents) : 0;
-  const funnelCheckoutStart = hasEventData ? pageEvents.filter(e => e.event_type === "checkout_start").length : 0;
-  const funnelPurchase = paidOrders.length;
-  const funnelMax = Math.max(funnelViews, funnelProductClicks, funnelAddToCart, funnelCheckoutStart, funnelPurchase, 1);
-
-  // ── Computed: Live events matching the current selected period ────────────
-  const currentPeriodEvents = useMemo(() => {
-    return pageEvents.filter(e => filterByRange(new Date(e.created_at), revenueRange));
-  }, [pageEvents, revenueRange]);
-
-  const currentPeriodAddToCart = useMemo(() => {
-    return getAddToCartCount(currentPeriodEvents);
-  }, [currentPeriodEvents]);
-
-  // ── Computed: Top Products ──────────────────────────────────────────────
-  const topProducts = useMemo(() => {
-    const map: Record<string, { title: string; revenue: number; units: number }> = {};
-    paidOrders.forEach(o => {
-      const key = (o as any).product_id || "store";
-      const prod = products.find(p => p.id === key);
-      const title = prod?.title || "All Products";
-      if (!map[key]) map[key] = { title, revenue: 0, units: 0 };
-      map[key].revenue += o.amount_cents;
-      map[key].units += 1;
-    });
-    return Object.values(map).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
-  }, [paidOrders, products]);
-
-  // ── Computed: Sparkline ─────────────────────────────────────────────────
-  const sparklineData = useMemo(() => {
-    const days: { label: string; value: number }[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const label = d.toLocaleDateString("en-US", { weekday: "short" });
-      const value = paidOrders
-        .filter(o => new Date(o.created_at).toDateString() === d.toDateString())
-        .reduce((sum, o) => sum + o.amount_cents, 0);
-      days.push({ label, value });
+  // ── Sparkline (7 days) ──
+  const sparkData = useMemo(() => {
+    const days=[];
+    for(let i=6;i>=0;i--){
+      const d=new Date(); d.setDate(d.getDate()-i);
+      const v=paidOrders.filter(o=>new Date(o.created_at).toDateString()===d.toDateString()).reduce((s,o)=>s+o.amount_cents,0);
+      days.push(v);
     }
     return days;
-  }, [paidOrders]);
+  },[paidOrders]);
 
-  const sparkMax = Math.max(...sparklineData.map(d => d.value), 1);
+  // ── Top products ──
+  const topProducts = useMemo(()=>{
+    const map:Record<string,{title:string;revenue:number;units:number}> = {};
+    paidOrders.forEach(o=>{
+      const key=(o as any).product_id||"store";
+      const prod=products.find(p=>p.id===key);
+      const title=prod?.title||"All Products";
+      if(!map[key]) map[key]={title,revenue:0,units:0};
+      map[key].revenue+=o.amount_cents; map[key].units+=1;
+    });
+    return Object.values(map).sort((a,b)=>b.revenue-a.revenue).slice(0,5);
+  },[paidOrders,products]);
 
-  // ── Computed: Filtered Orders ───────────────────────────────────────────
-  const filteredOrders = activeOrders
-    .filter(o => orderStatusFilter === "all" ? true : o.status === orderStatusFilter)
-    .filter(o =>
-      o.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      o.name?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-
-  const filteredLeads = activeLeads.filter(l =>
-    l.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  // ── Computed: Analytics ─────────────────────────────────────────────────
-  const analyticsRangeDays = parseInt(analyticsRange);
-
-  const analyticsEvents = useMemo(() => {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - analyticsRangeDays);
-    return pageEvents.filter(e => new Date(e.created_at) >= cutoff);
-  }, [pageEvents, analyticsRangeDays]);
-
-  const analyticsChartData = useMemo(() => {
-    const days: { label: string; views: number }[] = [];
-    for (let i = analyticsRangeDays - 1; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      const views = analyticsEvents.filter(e =>
-        e.event_type === "page_view" && new Date(e.created_at).toDateString() === d.toDateString()
-      ).length;
-      days.push({ label, views });
+  // ── Analytics ──
+  const analyticsRangeDays=parseInt(analyticsRange);
+  const analyticsEvents=useMemo(()=>{
+    const cut=new Date(); cut.setDate(cut.getDate()-analyticsRangeDays);
+    return pageEvents.filter(e=>new Date(e.created_at)>=cut);
+  },[pageEvents,analyticsRangeDays]);
+  const analyticsChartData=useMemo(()=>{
+    const days=[];
+    for(let i=analyticsRangeDays-1;i>=0;i--){
+      const d=new Date(); d.setDate(d.getDate()-i);
+      const lbl=d.toLocaleDateString("en-US",{month:"short",day:"numeric"});
+      const views=analyticsEvents.filter(e=>e.event_type==="page_view"&&new Date(e.created_at).toDateString()===d.toDateString()).length;
+      days.push({label:lbl,views});
     }
     return days;
-  }, [analyticsEvents, analyticsRangeDays]);
+  },[analyticsEvents,analyticsRangeDays]);
+  const chartMax=Math.max(...analyticsChartData.map(d=>d.views),1);
+  const topReferrers=useMemo(()=>{
+    const m:Record<string,number>={};
+    analyticsEvents.filter(e=>e.referrer).forEach(e=>{m[e.referrer||"direct"]=(m[e.referrer||"direct"]||0)+1;});
+    return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  },[analyticsEvents]);
+  const topPaths=useMemo(()=>{
+    const m:Record<string,number>={};
+    analyticsEvents.filter(e=>e.event_type==="page_view").forEach(e=>{m[e.path]=(m[e.path]||0)+1;});
+    return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  },[analyticsEvents]);
+  const productClickMap=useMemo(()=>{
+    const m:Record<string,number>={};
+    analyticsEvents.filter(e=>e.event_type==="product_click"&&e.product_id).forEach(e=>{m[e.product_id!]=(m[e.product_id!]||0)+1;});
+    return m;
+  },[analyticsEvents]);
+  const uniqueSessions=useMemo(()=>new Set(analyticsEvents.filter(e=>e.session_id).map(e=>e.session_id)).size,[analyticsEvents]);
+  const geoBreakdown=useMemo(()=>{
+    const m:Record<string,number>={};
+    analyticsEvents.filter(e=>e.country).forEach(e=>{m[e.country!]=(m[e.country!]||0)+1;});
+    return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  },[analyticsEvents]);
 
-  const chartMax = Math.max(...analyticsChartData.map(d => d.views), 1);
+  // ── Filtered tables ──
+  const filteredOrders=activeOrders
+    .filter(o=>orderStatusFilter==="all"||o.status===orderStatusFilter)
+    .filter(o=>o.email.toLowerCase().includes(searchQuery.toLowerCase())||(o.name||"").toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredLeads=activeLeads.filter(l=>l.email.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  const topReferrers = useMemo(() => {
-    const map: Record<string, number> = {};
-    analyticsEvents.filter(e => e.referrer).forEach(e => {
-      const ref = e.referrer || "direct";
-      map[ref] = (map[ref] || 0) + 1;
-    });
-    return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  }, [analyticsEvents]);
-
-  const topPaths = useMemo(() => {
-    const map: Record<string, number> = {};
-    analyticsEvents.filter(e => e.event_type === "page_view").forEach(e => {
-      map[e.path] = (map[e.path] || 0) + 1;
-    });
-    return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 8);
-  }, [analyticsEvents]);
-
-  const productClickMap = useMemo(() => {
-    const map: Record<string, number> = {};
-    analyticsEvents.filter(e => e.event_type === "product_click" && e.product_id).forEach(e => {
-      map[e.product_id!] = (map[e.product_id!] || 0) + 1;
-    });
-    return map;
-  }, [analyticsEvents]);
-
-  const uniqueSessions = useMemo(() => {
-    const ids = new Set(analyticsEvents.filter(e => e.session_id).map(e => e.session_id));
-    return ids.size;
-  }, [analyticsEvents]);
-
-  const geoBreakdown = useMemo(() => {
-    const map: Record<string, number> = {};
-    analyticsEvents.filter(e => e.country).forEach(e => {
-      map[e.country!] = (map[e.country!] || 0) + 1;
-    });
-    return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 6);
-  }, [analyticsEvents]);
-
-  // ── RENDER SECURITY SAFEGUARD LOADERS ───────────────────────────────────
-  if (isLoadingAuth) {
-    return (
-      <div className={`min-h-screen flex flex-col items-center justify-center font-mono ${isDark ? "bg-black text-white" : "bg-neutral-50 text-black"}`}>
-        <div className="space-y-4 text-center max-w-sm px-6">
-          <div className="relative w-12 h-12 mx-auto">
-            <div className={`absolute inset-0 rounded-full border-2 border-t-transparent animate-spin ${isDark ? "border-white" : "border-black"}`} />
-            <div className={`absolute inset-2 rounded-full border border-b-transparent animate-spin ${isDark ? "border-neutral-800" : "border-neutral-300"}`} style={{ animationDirection: "reverse" }} />
-          </div>
-          <div className="space-y-1">
-            <p className="text-[10px] uppercase tracking-[0.2em] font-bold">INITIALIZING CORE CONTROL</p>
-            <p className="text-[8px] uppercase tracking-widest text-neutral-500 animate-pulse">AUTHORIZING CREDENTIALS & MOUNTING SYSTEMS</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAuthorized) {
-    return null;
-  }
-
+  // ─────────────────────────────────────────────────────────────────────────
+  // RENDER
+  // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className={`min-h-screen font-sans relative ${isDark ? "bg-black text-neutral-100 selection:bg-neutral-800" : "bg-neutral-50 text-neutral-900 selection:bg-neutral-200"}`}>
-      <div className="absolute top-0 left-0 w-full h-[2px] bg-sky-500/10 dark:bg-white/5 pointer-events-none animate-bounce z-40 opacity-40" style={{ animationDuration: "12s" }} />
-
-      <div 
-        className="fixed inset-0 pointer-events-none opacity-[0.03] dark:opacity-[0.04] z-0"
-        style={{
-          backgroundImage: `radial-gradient(${isDark ? '#ffffff' : '#000000'} 1px, transparent 1px)`,
-          backgroundSize: '16px 16px'
-        }}
-      />
+    <div className={`adm-root ${isDark ? "" : "light"}`}>
+      <style>{`html,body{margin:0;padding:0;}`}</style>
+      <div className="adm-hexbg" />
+      <div className="adm-scan" />
+      <div className="adm-topline" />
 
       {/* ── NAV ── */}
-      <nav className={`sticky top-0 z-50 backdrop-blur-md border-b ${isDark ? "bg-black/80 border-neutral-800/60" : "bg-white/80 border-neutral-200/60"}`}>
-        <div className="max-w-7xl mx-auto flex items-center justify-between px-6 py-3.5">
-          <div className="flex items-center gap-3">
-            <span className={`text-[10px] font-mono tracking-[0.3em] font-semibold border px-2 py-0.5 uppercase ${isDark ? "border-neutral-800 text-neutral-400" : "border-neutral-200 text-neutral-500"}`}>
-              COMMAND CENTER
-            </span>
-            <LedPulse color="green" />
-          </div>
-
-          <div className="hidden md:flex items-center justify-center gap-7">
-            {navSections.map(s => (
-              <button
-                key={s}
-                onClick={() => setSection(s)}
-                className={`text-[10px] font-mono font-medium uppercase tracking-widest transition-all relative py-1 ${
-                  section === s
-                    ? isDark ? "text-white" : "text-black"
-                    : isDark ? "text-neutral-500 hover:text-neutral-300" : "text-neutral-455 hover:text-neutral-800"
-                }`}
-              >
-                {s}
-                {section === s && (
-                  <span className={`absolute bottom-0 left-0 w-full h-[1px] ${isDark ? "bg-white" : "bg-black"}`} />
-                )}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-4">
-            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100">
-              <Menu size={16} />
-            </button>
-          </div>
+      <nav className="adm-nav">
+        <div className="adm-nav-brand">
+          <Led color="g" />
+          CTRL_CENTER
         </div>
 
-        {mobileMenuOpen && (
-          <div className={`md:hidden border-t ${isDark ? "border-neutral-900 bg-black" : "border-neutral-100 bg-white"} px-6 py-4 space-y-2`}>
-            {navSections.map(s => (
-              <button
-                key={s}
-                onClick={() => { setSection(s); setMobileMenuOpen(false); }}
-                className={`block w-full text-left text-[10px] font-mono uppercase tracking-widest py-2 ${
-                  section === s
-                    ? isDark ? "text-white" : "text-black"
-                    : isDark ? "text-neutral-500" : "text-neutral-400"
-                }`}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="adm-nav-links" style={{ display: mobileMenuOpen ? "none" : undefined }}>
+          {navSections.map(s => (
+            <button key={s} onClick={()=>setSection(s)} className={`adm-nav-btn ${section===s?"active":""}`}>
+              {s}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+          <button onClick={handleOpenJarvis} className="adm-jarvis-btn">JARVIS →</button>
+          <button onClick={()=>setMobileMenuOpen(!mobileMenuOpen)} style={{ background:"none", border:"none", color:"var(--c-text)", cursor:"pointer", display:"none" }} className="adm-mobile-ham">
+            <Menu size={18} />
+          </button>
+        </div>
       </nav>
 
-      <main className="relative max-w-7xl mx-auto px-6 py-10 space-y-10 z-10">
+      {mobileMenuOpen && (
+        <div className="adm-mobile-menu">
+          {navSections.map(s=>(
+            <button key={s} onClick={()=>{setSection(s);setMobileMenuOpen(false);}} className={`adm-nav-btn ${section===s?"active":""}`}>
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
 
-        {/* ════════════════════════════════════════════════════════════════
+      <TickerTape isDark={isDark} />
+
+      <main className="adm-main">
+
+        {/* ═══════════════════════════════════════════════════
             OVERVIEW
-        ════════════════════════════════════════════════════════════════ */}
+        ═══════════════════════════════════════════════════ */}
         {section === "overview" && (
-          <div className="space-y-10 animate-in fade-in duration-500">
-            <div className="flex items-center justify-between">
+          <div style={{ display:"flex", flexDirection:"column", gap:24 }}>
+            <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
               <div>
-                <h1 className="text-xl font-medium tracking-tight flex items-center gap-2">
-                  Command Center Console
-                </h1>
-                <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>JARVIS_AI OPTIMIZATION CORE DEPLOYED</p>
+                <div className="adm-heading">Overview</div>
+                <div className="adm-subheading">LIVE SYSTEM DIAGNOSTICS · REALTIME FEED</div>
               </div>
-
-              <button
-                onClick={handleOpenJarvis}
-                className={`text-[9px] font-mono font-semibold tracking-wider uppercase px-4 py-2 border transition-all ${
-                  isDark
-                    ? "border-neutral-800 text-neutral-300 hover:bg-neutral-900/50 hover:text-white"
-                    : "border-neutral-200 text-neutral-700 hover:bg-neutral-100 hover:text-black"
-                }`}
-              >
-                JARVIS CONSOLE →
-              </button>
+              <div className="adm-period-bar">
+                {(["day","week","month","all"] as const).map(r=>(
+                  <button key={r} onClick={()=>setRevenueRange(r)} className={`adm-period-btn ${revenueRange===r?"active":""}`}>{r}</button>
+                ))}
+              </div>
             </div>
 
-            {/* Period Selector */}
-            <div className="flex gap-2">
-              {["day", "week", "month", "all"].map(r => (
-                <button
-                  key={r}
-                  onClick={() => setRevenueRange(r as any)}
-                  className={`text-[9px] font-mono font-bold uppercase px-3 py-1.5 transition-all ${
-                    revenueRange === r
-                      ? isDark ? "bg-white text-black" : "bg-black text-white"
-                      : isDark ? "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/50" : "text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100"
-                  }`}
-                >
-                  {r}
-                </button>
+            {/* REVENUE PANEL with radar + waveform + matrix */}
+            <div className="adm-panel" style={{ display:"flex", gap:0 }}>
+              <Brackets />
+              <div className="adm-matrix-wrap" style={{ width:72 }}>
+                <MatrixRain width={72} height={200} isDark={isDark} />
+              </div>
+              <div style={{ flex:1, padding:"20px 24px", display:"flex", flexDirection:"column", gap:14 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <Led color="c" />
+                  <span style={{ fontSize:9, letterSpacing:"0.2em", color:"var(--c-muted)", textTransform:"uppercase" }}>Revenue · {revenueRange}</span>
+                </div>
+                <div style={{ display:"flex", alignItems:"baseline", gap:12, flexWrap:"wrap" }}>
+                  <span style={{ fontFamily:"var(--font-title)", fontSize:40, fontWeight:900, color:"var(--c-cyan)", letterSpacing:"0.02em", textShadow:isDark?"0 0 24px var(--c-cyan)":"none" }}>
+                    {fmt$(filteredRevenue)}
+                  </span>
+                  {revenueDelta !== null && (
+                    <span style={{ fontSize:11, padding:"2px 10px", background:revenueDelta>0?"rgba(0,255,136,0.1)":"rgba(255,56,96,0.1)", color:revenueDelta>0?"var(--c-green)":"var(--c-red)", letterSpacing:"0.1em" }}>
+                      {revenueDelta>0?<TrendingUp size={10} style={{display:"inline",verticalAlign:"middle",marginRight:4}}/>:<TrendingDown size={10} style={{display:"inline",verticalAlign:"middle",marginRight:4}}/>}
+                      {revenueDelta>0?"+":""}{revenueDelta}% VS PRIOR
+                    </span>
+                  )}
+                </div>
+                <WaveformCanvas data={sparkData} color={isDark?"#00e5ff":"#0077aa"} height={52} />
+              </div>
+              <div style={{ padding:"20px 20px 20px 0", display:"flex", alignItems:"center" }}>
+                <RadarDisplay isDark={isDark} />
+              </div>
+            </div>
+
+            {/* STATS GRID */}
+            <div className="adm-grid-5">
+              <StatDelta label="Orders"     value={ordersInPeriod}     sub="paid this period"  delta={ordersDelta}     />
+              <StatDelta label="Avg Ticket" value={fmt$(avgTicket)}    sub="per paid order"    delta={avgTicketDelta}  />
+              <Stat      label="Conv Rate"  value={`${convRate}%`}     sub="checkout → paid"   led="a" />
+              <Stat      label="Leads"      value={activeLeads.length} sub="total captured"    led="p" />
+              <Stat      label="Add to Cart" value={fCarts>0?fCarts.toLocaleString():"—"} sub="cart events" led="c" />
+            </div>
+
+            {/* STATUS ROW */}
+            <div className="adm-grid-4">
+              {[
+                {label:"Paid",      count:paidOrders.length,                    color:"var(--c-green)", led:"g" as const},
+                {label:"Pending",   count:pendingOrders.length,                  color:"var(--c-amber)", led:"a" as const},
+                {label:"Failed",    count:failedOrders.length,                   color:"var(--c-red)",   led:"r" as const},
+                {label:"Published", count:products.filter(p=>p.is_published).length, color:"var(--c-cyan)",  led:"c" as const},
+              ].map(item=>(
+                <div key={item.label} className="adm-panel" style={{ padding:"16px 18px", position:"relative" }}>
+                  <Brackets />
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6 }}>
+                    <span style={{ fontSize:9, letterSpacing:"0.18em", color:"var(--c-muted)", textTransform:"uppercase" }}>{item.label}</span>
+                    <Led color={item.led} />
+                  </div>
+                  <div style={{ fontFamily:"var(--font-title)", fontSize:28, fontWeight:700, color:item.color, textShadow:isDark?`0 0 16px ${item.color}`:"none" }}>
+                    {item.count}
+                  </div>
+                </div>
               ))}
             </div>
 
-            {/* ── REVENUE HERO ── */}
-            <div className={`p-6 border rounded-md relative overflow-hidden ${isDark ? "bg-neutral-950/40 border-neutral-800/80" : "bg-white border-neutral-200/80 shadow-sm"}`}>
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <LedPulse color="cyan" />
-                    <p className={`text-[9px] font-mono font-medium uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>System Revenue</p>
-                  </div>
-                  <div className="flex items-baseline gap-3 flex-wrap">
-                    <p 
-                      className="text-4xl font-semibold tracking-tight font-sans transition-all"
-                      style={{ textShadow: isDark ? "0 0 15px rgba(255,255,255,0.12)" : "0 0 10px rgba(0,0,0,0.04)" }}
-                    >
-                      {fmt$(filteredRevenue)}
-                    </p>
-                    {revenueDelta !== null && (
-                      <div className={`flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase ${
-                        revenueDelta > 0
-                          ? "bg-emerald-500/10 text-emerald-500"
-                          : revenueDelta < 0
-                          ? "bg-rose-500/10 text-rose-500"
-                          : isDark ? "bg-neutral-800 text-neutral-400" : "bg-neutral-100 text-neutral-550"
-                      }`}>
-                        {revenueDelta > 0 ? <TrendingUp size={10} /> : revenueDelta < 0 ? <TrendingDown size={10} /> : <Minus size={10} />}
-                        {revenueDelta > 0 ? "+" : ""}{revenueDelta}% vs prior {revenueRange}
-                      </div>
-                    )}
-                  </div>
+            {/* TELEMETRY PIPELINE */}
+            <div className="adm-panel">
+              <Brackets />
+              <div style={{ padding:"16px 20px 6px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <Led color="g" />
+                  <span style={{ fontSize:9, letterSpacing:"0.2em", color:"var(--c-muted)", textTransform:"uppercase" }}>Real-Time Telemetry Pipeline</span>
                 </div>
+                {!hasEvents && (
+                  <span className="adm-chip">TRACKER NOT INSTALLED</span>
+                )}
+              </div>
+              <TelemetryPipeline views={fViews} clicks={fClicks} carts={fCarts} checkouts={fCheckout} purchases={fPurchase} isDark={isDark} />
+              {hasEvents && fViews>0 && fPurchase>0 && (
+                <div style={{ padding:"0 20px 12px", fontSize:9, color:"var(--c-muted)", letterSpacing:"0.12em", textAlign:"right" }}>
+                  OVERALL: {((fPurchase/fViews)*100).toFixed(2)}% VISITOR → PURCHASE
+                </div>
+              )}
+            </div>
 
-                {/* 7-day sparkline bar style */}
-                <div className="flex items-end gap-1.5 h-14 w-full md:w-56 pt-2">
-                  {sparklineData.map((d, i) => (
-                    <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group relative">
-                      <div
-                        className={`w-full transition-all duration-300 rounded-[1px] ${isDark ? "bg-neutral-800 group-hover:bg-neutral-600" : "bg-neutral-200 group-hover:bg-neutral-400"}`}
-                        style={{ height: `${(d.value / sparkMax) * 100}%`, minHeight: d.value > 0 ? "3px" : "1px" }}
-                      />
-                      <span className={`text-[8px] font-mono ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>{d.label.slice(0, 1)}</span>
-                      {d.value > 0 && (
-                        <div className={`absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[8px] font-mono font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border ${isDark ? "bg-neutral-900 text-white border-neutral-700" : "bg-white text-black border-neutral-300 shadow-sm"}`}>
-                          {fmt$(d.value)}
-                        </div>
-                      )}
+            {/* FUNNEL + TOP PRODUCTS */}
+            <div className="adm-grid-2">
+              {/* Funnel */}
+              <div className="adm-panel" style={{ padding:"20px" }}>
+                <Brackets />
+                <div style={{ fontSize:9, letterSpacing:"0.2em", color:"var(--c-muted)", marginBottom:16, textTransform:"uppercase" }}>Conversion Funnel</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                  {[
+                    {label:"Page Views",    val:hasEvents?fViews:null,    c:"var(--c-cyan)"},
+                    {label:"Product Clicks",val:hasEvents?fClicks:null,   c:"var(--c-cyan)"},
+                    {label:"Add to Cart",   val:hasEvents?fCarts:null,    c:"var(--c-amber)"},
+                    {label:"Checkout",      val:hasEvents?fCheckout:null, c:"var(--c-amber)"},
+                    {label:"Purchased",     val:fPurchase,                c:"var(--c-green)"},
+                  ].map((step,i)=>(
+                    <div key={step.label} style={{ display:"flex", alignItems:"center", gap:10 }}>
+                      <span style={{ fontSize:9, letterSpacing:"0.1em", color:"var(--c-muted)", width:110, flexShrink:0, textTransform:"uppercase" }}>{step.label}</span>
+                      <div className="adm-funnel-bar-bg">
+                        <div className="adm-funnel-bar-fill" style={{ width:`${((step.val??0)/fMax)*100}%`, background:step.c, opacity:1-i*0.12 }} />
+                      </div>
+                      <span style={{ fontSize:10, color:"var(--c-text)", width:42, textAlign:"right", fontFamily:"var(--font-title)", fontSize:11 }}>
+                        {step.val!==null?step.val.toLocaleString():"—"}
+                      </span>
                     </div>
                   ))}
                 </div>
               </div>
-            </div>
 
-            {/* ── SUPPORTING STATS GRID (NOW INCLUDING ADD TO CART!) ── */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
-              <StatWithDelta label="Orders" value={ordersInPeriod} sub="paid this period" delta={ordersDelta} isDark={isDark} />
-              <StatWithDelta label="Avg Ticket" value={fmt$(avgTicket)} sub="per paid order" delta={avgTicketDelta} isDark={isDark} />
-              <Stat label="Conv Rate" value={`${convRate}%`} sub="checkout to paid" isDark={isDark} />
-              <Stat label="Leads" value={activeLeads.length} sub="total captured" isDark={isDark} />
-              <Stat label="Add to Cart" value={currentPeriodAddToCart.toLocaleString()} sub="cart conversions" isDark={isDark} led="cyan" />
-            </div>
-
-            {/* ── ORDER STATUS BREAKDOWN ── */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[
-                { label: "Paid Orders", count: paidOrders.length, color: "text-emerald-500", led: "green" as const },
-                { label: "Pending Orders", count: pendingOrders.length, color: isDark ? "text-amber-400" : "text-amber-600", led: "yellow" as const },
-                { label: "Failed Orders", count: failedOrders.length, color: "text-rose-500", led: "red" as const },
-                { label: "Published Items", count: products.filter(p => p.is_published).length, color: isDark ? "text-neutral-300" : "text-neutral-800", led: "neutral" as const },
-              ].map(item => (
-                <div key={item.label} className={`p-4 border rounded ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200/50"}`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className={`text-[8px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{item.label}</p>
-                    <LedPulse color={item.led} />
+              {/* Top Products */}
+              {topProducts.length > 0 ? (
+                <div className="adm-panel" style={{ padding:"20px" }}>
+                  <Brackets />
+                  <div style={{ fontSize:9, letterSpacing:"0.2em", color:"var(--c-muted)", marginBottom:16, textTransform:"uppercase" }}>Top Products · Revenue</div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
+                    {topProducts.map((p,i)=>(
+                      <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 0", borderBottom:"1px solid var(--c-border)" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                          <span style={{ fontSize:9, color:"var(--c-muted)", fontFamily:"var(--font-title)", minWidth:14 }}>0{i+1}</span>
+                          <span style={{ fontSize:11, color:"var(--c-text)", letterSpacing:"0.06em", textTransform:"uppercase" }}>{p.title}</span>
+                        </div>
+                        <div style={{ textAlign:"right" }}>
+                          <div style={{ fontFamily:"var(--font-title)", fontSize:13, color:"var(--c-cyan)" }}>{fmt$(p.revenue)}</div>
+                          <div style={{ fontSize:9, color:"var(--c-muted)" }}>{p.units} orders</div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <p className={`text-lg font-semibold tracking-tight mt-1 ${item.color}`}>{item.count}</p>
                 </div>
-              ))}
-            </div>
-
-            {/* ── TELEMETRY CANVAS PLACED EXACTLY BELOW MAIN METRICS ── */}
-            <div className="space-y-3">
-              <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-450"}`}>Real-Time Telemetry Pipeline</p>
-              <TelemetryCanvas events={pageEvents} isDark={isDark} canvasRefExternal={telemetryCanvasRef} />
-            </div>
-
-            {/* ── COGNITIVE INTEL AI DICTATOR (THE "SHOW-OFF" MODULE) ── */}
-            <AiAgentConsole 
-              isDark={isDark} 
-              onSimulatePacket={(type) => {
-                if (telemetryCanvasRef.current) {
-                  telemetryCanvasRef.current.triggerSimulatedPacket(type);
-                }
-              }} 
-            />
-
-            {/* ── CONVERSION FUNNEL ── */}
-            <div className={`p-6 border rounded ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200/60"} space-y-4`}>
-              <div className="flex items-center gap-4 justify-between">
-                <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Live Conversion Flow</p>
-                {!hasEventData && (
-                  <span className={`text-[8px] font-mono tracking-wider uppercase px-2 py-0.5 border ${isDark ? "border-neutral-800 text-neutral-500" : "border-neutral-200 text-neutral-400"}`}>
-                    Telemetry hook standby
-                  </span>
-                )}
-              </div>
-              <div className="space-y-4">
-                {[
-                  { label: "Page Views", value: hasEventData ? funnelViews : null, led: "cyan" as const },
-                  { label: "Product Clicks", value: hasEventData ? funnelProductClicks : null, led: "cyan" as const },
-                  { label: "Add to Cart", value: hasEventData ? funnelAddToCart : null, led: "yellow" as const },
-                  { label: "Checkout Inits", value: hasEventData ? funnelCheckoutStart : null, led: "yellow" as const },
-                  { label: "Purchases", value: funnelPurchase, led: "green" as const },
-                ].map((step, i) => (
-                  <div key={step.label} className="flex items-center gap-4">
-                    <div className="w-32 flex-shrink-0 flex items-center gap-2">
-                      <LedPulse color={step.led} active={step.value !== null && step.value > 0} />
-                      <span className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-500" : "text-neutral-450"}`}>{step.label}</span>
-                    </div>
-                    <div className={`flex-1 h-2 relative rounded overflow-hidden ${isDark ? "bg-neutral-900" : "bg-neutral-100"}`}>
-                      {step.value !== null && (
-                        <div
-                          className={`h-full transition-all duration-700 ease-out rounded ${isDark ? "bg-neutral-300" : "bg-neutral-800"}`}
-                          style={{ width: `${((step.value ?? 0) / funnelMax) * 100}%`, opacity: 1 - i * 0.12 }}
-                        />
-                      )}
-                    </div>
-                    <span className={`text-[10px] font-mono font-medium w-16 text-right ${isDark ? "text-neutral-300" : "text-neutral-700"}`}>
-                      {step.value !== null ? step.value.toLocaleString() : "—"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              {hasEventData && funnelViews > 0 && funnelPurchase > 0 && (
-                <p className={`text-[8px] font-mono uppercase text-right ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>
-                  Overall Ratio: {((funnelPurchase / funnelViews) * 100).toFixed(2)}% visitor-to-purchase
-                </p>
+              ) : (
+                <div className="adm-panel" style={{ display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  <span className="adm-empty">NO ORDERS YET</span>
+                </div>
               )}
             </div>
-
-            {/* ── TOP PRODUCTS ── */}
-            {topProducts.length > 0 && (
-              <div className="space-y-3">
-                <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-450"}`}>Top Products by Revenue</p>
-                <div className={`border rounded overflow-hidden ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200/60"}`}>
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${isDark ? "text-neutral-500 border-neutral-900 bg-neutral-950/50" : "text-neutral-500 border-neutral-100 bg-neutral-50"}`}>
-                        <th className="px-5 py-3 font-semibold">Product Title</th>
-                        <th className="px-5 py-3 font-semibold text-right">Revenue</th>
-                        <th className="px-5 py-3 font-semibold text-right">Orders</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {topProducts.map((p, i) => (
-                        <tr key={i} className={`border-b last:border-0 ${isDark ? "border-neutral-900 hover:bg-neutral-900/30" : "border-neutral-100 hover:bg-neutral-50/50"}`}>
-                          <td className="px-5 py-3 text-[11px] font-medium uppercase truncate max-w-[180px]">{p.title}</td>
-                          <td className={`px-5 py-3 text-[11px] font-mono font-medium text-right ${isDark ? "text-white" : "text-black"}`}>{fmt$(p.revenue)}</td>
-                          <td className={`px-5 py-3 text-[11px] font-mono text-right ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>{p.units}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════
+        {/* ═══════════════════════════════════════════════════
             PRODUCTS
-        ════════════════════════════════════════════════════════════════ */}
+        ═══════════════════════════════════════════════════ */}
         {section === "products" && (
-          <div className="space-y-10 animate-in fade-in duration-500">
-            <div className="flex items-end justify-between flex-wrap gap-4 border-b pb-4 dark:border-neutral-900 border-neutral-200">
+          <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+            <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
               <div>
-                <h1 className="text-xl font-medium tracking-tight">Products</h1>
-                <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>MANAGE DEPLOYED ITEMS</p>
+                <div className="adm-heading">Products</div>
+                <div className="adm-subheading">CATALOG MANAGEMENT · {orderedProducts.length} ITEMS</div>
               </div>
-
-              <div className="flex gap-2 flex-wrap">
-                <button
-                  onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
-                  className={`text-[9px] font-mono font-semibold uppercase px-4 py-2 border transition-all ${
-                    selectMode
-                      ? isDark ? "border-white bg-white text-black" : "border-black bg-black text-white"
-                      : isDark ? "border-neutral-800 text-neutral-355 hover:bg-neutral-900/40" : "border-neutral-200 text-neutral-705 hover:bg-neutral-50"
-                  }`}>
-                  {selectMode ? "Cancel" : "Select"}
+              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                <button onClick={()=>{setSelectMode(!selectMode);setSelectedIds(new Set());}} className={`adm-btn ${selectMode?"adm-btn-active":""}`}>
+                  {selectMode?"CANCEL":"SELECT"}
                 </button>
-                <button onClick={handleSyncPrintful} disabled={isSyncing}
-                  className={`flex items-center gap-1.5 text-[9px] font-mono font-semibold uppercase px-4 py-2 border transition-all ${
-                    isDark ? "border-neutral-800 text-neutral-355 hover:bg-neutral-900/40" : "border-neutral-200 text-neutral-705 hover:bg-neutral-50"
-                  }`}>
-                  <RefreshCw size={11} className={isSyncing ? "animate-spin" : ""} />
-                  {isSyncing ? "Syncing" : "Sync Printful"}
+                <button onClick={handleSyncPrintful} disabled={isSyncing} className="adm-btn" style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <RefreshCw size={12} className={isSyncing?"animate-spin":""} />
+                  {isSyncing?"SYNCING":"SYNC PRINTFUL"}
                 </button>
-                <button onClick={() => setProductFormOpen(!productFormOpen)}
-                  className={`text-[9px] font-mono font-bold uppercase px-5 py-2 transition-all ${
-                    isDark ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800"
-                  }`}>
-                  {productFormOpen ? "Close Form" : "New Product"}
+                <button onClick={()=>setProductFormOpen(!productFormOpen)} className="adm-btn adm-btn-primary">
+                  {productFormOpen?"CLOSE":"+ NEW PRODUCT"}
                 </button>
               </div>
             </div>
 
-            {/* ── Bulk Toolbar ── */}
+            {/* bulk toolbar */}
             {selectMode && selectedIds.size > 0 && (
-              <div className={`flex items-center gap-4 p-3 rounded-md animate-in slide-in-from-top-2 duration-200 border ${isDark ? "bg-neutral-950 border-neutral-800" : "bg-white border-neutral-200 shadow-sm"}`}>
-                <span className={`text-[9px] font-mono font-semibold uppercase ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>{selectedIds.size} selected</span>
-                <div className="flex gap-2 ml-auto">
-                  <button onClick={selectAllProducts} className={`text-[9px] font-mono uppercase px-3 py-1.5 border rounded transition-all ${isDark ? "border-neutral-800 text-neutral-400 hover:text-white" : "border-neutral-200 text-neutral-600 hover:text-black"}`}>
-                    {selectedIds.size === orderedProducts.length ? "Deselect All" : "Select All"}
+              <div className="adm-select-bar">
+                <span style={{ fontSize:9, letterSpacing:"0.15em", color:"var(--c-cyan)" }}>{selectedIds.size} SELECTED</span>
+                <div style={{ display:"flex", gap:8, marginLeft:"auto", flexWrap:"wrap" }}>
+                  <button onClick={selectAllProducts} className="adm-btn" style={{ padding:"5px 12px", fontSize:9 }}>
+                    {selectedIds.size===orderedProducts.length?"DESELECT ALL":"SELECT ALL"}
                   </button>
-                  <button onClick={() => bulkPublish(true)} disabled={isBulkActing}
-                    className="flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 rounded transition-all">
-                    <Eye size={10} /> Publish
+                  <button onClick={()=>bulkPublish(true)} disabled={isBulkActing} className="adm-btn" style={{ padding:"5px 12px", fontSize:9, color:"var(--c-green)", borderColor:"var(--c-green)" }}>
+                    <Eye size={10} style={{marginRight:4,display:"inline",verticalAlign:"middle"}}/>PUBLISH
                   </button>
-                  <button onClick={() => bulkPublish(false)} disabled={isBulkActing}
-                    className={`flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 rounded transition-all ${isDark ? "bg-neutral-900 text-neutral-400 hover:bg-neutral-800" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"}`}>
-                    <EyeOff size={10} /> Unpublish
+                  <button onClick={()=>bulkPublish(false)} disabled={isBulkActing} className="adm-btn" style={{ padding:"5px 12px", fontSize:9 }}>
+                    <EyeOff size={10} style={{marginRight:4,display:"inline",verticalAlign:"middle"}}/>UNPUBLISH
                   </button>
-                  <button onClick={bulkDelete} disabled={isBulkActing}
-                    className="flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 rounded transition-all">
-                    <Trash2 size={10} /> Delete
+                  <button onClick={bulkDelete} disabled={isBulkActing} className="adm-btn adm-btn-danger" style={{ padding:"5px 12px", fontSize:9 }}>
+                    <Trash2 size={10} style={{marginRight:4,display:"inline",verticalAlign:"middle"}}/>DELETE
                   </button>
                 </div>
               </div>
             )}
 
-            {/* ── Product Form ── */}
+            {/* product form */}
             {productFormOpen && (
-              <div className={`p-6 border rounded-md space-y-6 animate-in slide-in-from-top-3 duration-300 ${isDark ? "bg-neutral-950/40 border-neutral-800" : "bg-white border-neutral-200 shadow-sm"}`}>
-                <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>
-                  {productForm.editingId ? "Modify Product Engine" : "Create Product Hook"}
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Input label="Title" value={productForm.title} onChange={v => setProductForm(f => ({ ...f, title: v }))} isDark={isDark} />
-                  <Input label="Price (USD)" value={productForm.price_cents} onChange={v => setProductForm(f => ({ ...f, price_cents: v }))} type="number" isDark={isDark} />
-                  <Input label="Slug" value={productForm.slug} onChange={v => setProductForm(f => ({ ...f, slug: v }))} isDark={isDark} />
-                  <Input label="Source URL" value={productForm.source_url} onChange={v => setProductForm(f => ({ ...f, source_url: v }))} isDark={isDark} />
+              <div className="adm-panel" style={{ padding:24 }}>
+                <Brackets />
+                <div style={{ fontSize:9, letterSpacing:"0.2em", color:"var(--c-cyan)", marginBottom:20, textTransform:"uppercase" }}>
+                  {productForm.editingId?"// EDIT PRODUCT":"// NEW PRODUCT"}
                 </div>
-                <Input label="Image URL(s)" value={productForm.image_url} onChange={v => setProductForm(f => ({ ...f, image_url: v }))} isDark={isDark} />
-                <div className="space-y-1.5">
-                  <label className={`text-[9px] font-mono font-semibold uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Description</label>
-                  <textarea value={productForm.description} onChange={e => setProductForm(f => ({ ...f, description: e.target.value }))}
-                    className={`w-full bg-transparent border rounded px-3 py-2 text-xs font-mono resize-none focus:outline-none focus:ring-1 ${
-                      isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-neutral-200 text-black focus:border-black focus:ring-black/5"
-                    }`} rows={3} />
+                <div className="adm-grid-2" style={{ marginBottom:16 }}>
+                  <InputField label="Title"      value={productForm.title}      onChange={v=>setProductForm(f=>({...f,title:v}))} />
+                  <InputField label="Price (¢)"  value={productForm.price_cents} onChange={v=>setProductForm(f=>({...f,price_cents:v}))} type="number" />
+                  <InputField label="Slug"       value={productForm.slug}       onChange={v=>setProductForm(f=>({...f,slug:v}))} />
+                  <InputField label="Source URL" value={productForm.source_url} onChange={v=>setProductForm(f=>({...f,source_url:v}))} />
                 </div>
-                <div className="flex items-center justify-between">
-                  <button onClick={() => setProductForm(f => ({ ...f, is_published: !f.is_published }))}
-                    className={`text-[9px] font-mono font-semibold uppercase px-3 py-1.5 rounded border transition-all ${
-                      productForm.is_published ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-rose-500/10 text-rose-500 border-rose-500/20"
-                    }`}>
-                    {productForm.is_published ? "Status: Deployed" : "Status: Draft"}
+                <div style={{ marginBottom:16 }}>
+                  <InputField label="Image URL(s)" value={productForm.image_url} onChange={v=>setProductForm(f=>({...f,image_url:v}))} />
+                </div>
+                <div className="adm-input-wrap" style={{ marginBottom:20 }}>
+                  <label className="adm-input-label">Description</label>
+                  <textarea value={productForm.description} onChange={e=>setProductForm(f=>({...f,description:e.target.value}))} className="adm-textarea" rows={3} />
+                </div>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                  <button onClick={()=>setProductForm(f=>({...f,is_published:!f.is_published}))} className="adm-btn" style={{ fontSize:9, padding:"5px 14px", color:productForm.is_published?"var(--c-green)":"var(--c-red)", borderColor:productForm.is_published?"var(--c-green)":"var(--c-red)" }}>
+                    {productForm.is_published?"● PUBLISHED":"○ DRAFT"}
                   </button>
-                  <div className="flex gap-2">
-                    <button onClick={resetProductForm} className={`text-[9px] font-mono uppercase px-3 py-2 ${isDark ? "text-neutral-500 hover:text-white" : "text-neutral-450 hover:text-black"}`}>Cancel</button>
-                    <button onClick={saveProduct} className={`text-[9px] font-mono font-bold uppercase px-6 py-2 transition-all ${
-                      isDark ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800"
-                    }`}>
-                      {productForm.editingId ? "Save Engine" : "Build Hook"}
+                  <div style={{ display:"flex", gap:10 }}>
+                    <button onClick={resetProductForm} className="adm-btn" style={{ fontSize:9, padding:"5px 14px" }}>CANCEL</button>
+                    <button onClick={saveProduct} className="adm-btn adm-btn-primary" style={{ fontSize:9, padding:"7px 24px" }}>
+                      {productForm.editingId?"SAVE CHANGES":"CREATE"}
                     </button>
                   </div>
                 </div>
@@ -1511,82 +1385,66 @@ function AdminPage() {
             )}
 
             {!selectMode && (
-              <p className={`text-[9px] font-mono uppercase tracking-wider ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>
-                ● Drag items to sort directory · Click SELECT for directory operations
-              </p>
+              <div style={{ fontSize:9, letterSpacing:"0.15em", color:"var(--c-muted)" }}>
+                ▸ DRAG TO REORDER  ·  SELECT FOR BULK OPS
+              </div>
             )}
 
-            {/* ── Product Grid ── */}
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-5">
-              {orderedProducts.map(p => {
-                const isPrintful = !!p.printful_id;
-                const isSelected = selectedIds.has(p.id);
-                const isDragging = draggedId === p.id;
-                const isDragTarget = dragOverId === p.id;
-
+            {/* product grid */}
+            <div className="adm-grid-prod">
+              {orderedProducts.map(p=>{
+                const isPF=!!p.printful_id;
+                const isSel=selectedIds.has(p.id);
+                const isDrg=draggedId===p.id;
+                const isDrO=dragOverId===p.id;
                 return (
                   <div
                     key={p.id}
-                    className={`group relative transition-all duration-200 rounded overflow-hidden border ${
-                      isDark 
-                        ? isSelected ? "border-neutral-100 bg-neutral-900/40" : "border-neutral-900 bg-neutral-950/20 hover:border-neutral-800" 
-                        : isSelected ? "border-black bg-white shadow-md" : "border-neutral-200/60 bg-white hover:border-neutral-300 shadow-sm"
-                    } ${isDragging ? "opacity-35 scale-95" : ""} ${isDragTarget ? isDark ? "ring-1 ring-white/30" : "ring-1 ring-black/10" : ""}`}
+                    className={`adm-product-card ${isSel?"selected":""} ${isDrO?"drag-over":""}`}
+                    style={{ opacity:isDrg?0.35:1, transform:isDrg?"scale(0.93)":"" }}
                     draggable={!selectMode}
-                    onDragStart={() => handleDragStart(p.id)}
-                    onDragOver={e => handleDragOver(e, p.id)}
-                    onDrop={() => handleDrop(p.id)}
-                    onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}
-                    onClick={() => selectMode && toggleSelectProduct(p.id)}
+                    onDragStart={()=>handleDragStart(p.id)}
+                    onDragOver={e=>handleDragOver(e,p.id)}
+                    onDrop={()=>handleDrop(p.id)}
+                    onDragEnd={()=>{setDraggedId(null);setDragOverId(null);}}
+                    onClick={()=>selectMode&&toggleSelectProduct(p.id)}
                   >
                     {selectMode && (
-                      <div className="absolute top-2.5 left-2.5 z-10">
-                        {isSelected
-                          ? <CheckSquare size={13} className={isDark ? "text-white" : "text-black"} />
-                          : <Square size={13} className={isDark ? "text-neutral-600" : "text-neutral-400"} />
-                        }
+                      <div style={{ position:"absolute", top:8, left:8, zIndex:10 }}>
+                        {isSel?<CheckSquare size={13} color="var(--c-cyan)"/>:<Square size={13} color="var(--c-muted)"/>}
                       </div>
                     )}
                     {!selectMode && (
-                      <div className={`absolute top-2.5 left-2.5 z-10 opacity-0 group-hover:opacity-100 cursor-grab transition-opacity ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>
-                        <GripVertical size={11} />
+                      <div style={{ position:"absolute", top:8, left:8, zIndex:10, opacity:0, transition:"opacity 0.2s" }} className="adm-grip">
+                        <GripVertical size={11} color="var(--c-muted)"/>
                       </div>
                     )}
-                    {isPrintful && (
-                      <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-0.5 px-1.5 py-0.5 rounded-[2px] bg-sky-500/10 text-sky-400 text-[7px] font-mono font-bold uppercase border border-sky-500/10">
-                        <Lock size={6} /> PF
+                    {isPF && (
+                      <div style={{ position:"absolute", top:8, right:8, zIndex:10, display:"flex", alignItems:"center", gap:3, padding:"2px 6px", background:"rgba(0,229,255,0.1)", border:"1px solid var(--c-border2)", fontSize:7, letterSpacing:"0.15em", color:"var(--c-cyan)" }}>
+                        <Lock size={7}/>PF
                       </div>
                     )}
-                    <div className="relative flex aspect-[4/5] items-center justify-center overflow-hidden p-4">
-                      {p.image_urls && p.image_urls.length > 1 ? (
-                        <img src={p.image_urls[1]} alt={p.title} className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500" />
-                      ) : p.image_urls && p.image_urls[0] ? (
-                        <img src={p.image_urls[0]} alt={p.title} className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500" />
+                    <div style={{ aspectRatio:"3/4", background:"var(--c-bg)", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", padding:12 }}>
+                      {p.image_urls?.length>1 ? (
+                        <img src={p.image_urls[1]} alt={p.title} style={{ maxHeight:"100%", maxWidth:"100%", objectFit:"contain", transition:"transform 0.4s", display:"block" }} />
+                      ) : p.image_urls?.[0] ? (
+                        <img src={p.image_urls[0]} alt={p.title} style={{ maxHeight:"100%", maxWidth:"100%", objectFit:"contain", transition:"transform 0.4s", display:"block" }} />
                       ) : (
-                        <span className={`text-[8px] font-mono uppercase tracking-widest ${isDark ? "text-neutral-800" : "text-neutral-300"}`}>Empty visual</span>
+                        <span style={{ fontSize:8, letterSpacing:"0.2em", color:"var(--c-muted)" }}>NO_IMAGE</span>
                       )}
                     </div>
-                    <div className={`px-3.5 pb-3.5 pt-2 ${isDark ? "bg-neutral-950/40" : "bg-neutral-50/20"}`}>
-                      <p className={`mb-0.5 text-[10px] uppercase tracking-wider truncate font-medium ${isDark ? "text-neutral-200" : "text-neutral-800"}`}>{p.title}</p>
-                      <p className={`text-[10px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-550"}`}>
-                        ${(p.price_cents / 100).toFixed(2)}
-                      </p>
+                    <div style={{ padding:"10px 12px", borderTop:"1px solid var(--c-border)" }}>
+                      <div style={{ fontSize:9, letterSpacing:"0.1em", textTransform:"uppercase", color:"var(--c-text)", marginBottom:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.title}</div>
+                      <div style={{ fontFamily:"var(--font-title)", fontSize:11, color:"var(--c-cyan)" }}>${(p.price_cents/100).toFixed(2)}</div>
                       {!selectMode && (
-                        <div className="flex items-center justify-end gap-2.5 mt-2 pt-2 border-t border-neutral-200/20 dark:border-neutral-900/40">
-                          <button onClick={e => { e.stopPropagation(); togglePublished(p.id, p.is_published); }}
-                            className={`w-1.5 h-1.5 rounded-full transition-all ${p.is_published ? "bg-emerald-500" : "bg-rose-500"}`} />
-                          {isPrintful ? (
-                            <span className={`${isDark ? "text-neutral-800" : "text-neutral-305"} cursor-not-allowed`} title="Printful products are synced from supplier hub">
-                              <Edit3 size={11} />
-                            </span>
+                        <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end", gap:10, marginTop:8 }}>
+                          <button onClick={e=>{e.stopPropagation();togglePublished(p.id,p.is_published);}} style={{ width:7, height:7, borderRadius:"50%", background:p.is_published?"var(--c-green)":"var(--c-red)", border:"none", cursor:"pointer", padding:0, boxShadow:isDark?`0 0 6px ${p.is_published?"var(--c-green)":"var(--c-red)"}`:""}} />
+                          {isPF ? (
+                            <span style={{ color:"var(--c-border2)", cursor:"not-allowed" }} title="Sync from Printful"><Edit3 size={11}/></span>
                           ) : (
-                            <button onClick={e => { e.stopPropagation(); startEditProduct(p); }} className={`${isDark ? "text-neutral-500 hover:text-white" : "text-neutral-400 hover:text-black"} transition-colors`}>
-                              <Edit3 size={11} />
-                            </button>
+                            <button onClick={e=>{e.stopPropagation();startEditProduct(p);}} style={{ background:"none", border:"none", color:"var(--c-muted)", cursor:"pointer", padding:0, transition:"color 0.2s" }}><Edit3 size={11}/></button>
                           )}
-                          <button onClick={e => { e.stopPropagation(); archiveProduct(p.id); }} className={`${isDark ? "text-neutral-500 hover:text-rose-455" : "text-neutral-400 hover:text-rose-600"} transition-colors`}>
-                            <Archive size={11} />
-                          </button>
+                          <button onClick={e=>{e.stopPropagation();archiveProduct(p.id);}} style={{ background:"none", border:"none", color:"var(--c-muted)", cursor:"pointer", padding:0, transition:"color 0.2s" }}><Archive size={11}/></button>
                         </div>
                       )}
                     </div>
@@ -1597,167 +1455,110 @@ function AdminPage() {
           </div>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════
+        {/* ═══════════════════════════════════════════════════
             ORDERS
-        ════════════════════════════════════════════════════════════════ */}
+        ═══════════════════════════════════════════════════ */}
         {section === "orders" && (
-          <div className="space-y-8 animate-in fade-in duration-500">
-            <div className="flex items-end justify-between flex-wrap gap-4 border-b pb-4 dark:border-neutral-900 border-neutral-200">
+          <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+            <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
               <div>
-                <h1 className="text-xl font-medium tracking-tight">Ledger Registry</h1>
-                <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>ORDER INVOICING RECORDS</p>
+                <div className="adm-heading">Orders</div>
+                <div className="adm-subheading">TRANSACTION LEDGER · {activeOrders.length} RECORDS</div>
               </div>
-
-              <input type="text" placeholder="FILTER LEDGER…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                className={`text-[9px] font-mono border rounded px-3 py-2 w-48 bg-transparent focus:outline-none focus:ring-1 ${
-                  isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-neutral-250 text-black focus:border-black focus:ring-black/10"
-                }`} />
+              <input type="text" placeholder="SEARCH..." value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} className="adm-search" />
             </div>
 
-            <div className={`flex gap-0 border-b ${isDark ? "border-neutral-900" : "border-neutral-200"}`}>
-              {([
-                { key: "all", label: "Registry", count: activeOrders.length },
-                { key: "paid", label: "Paid", count: paidOrders.length },
-                { key: "pending", label: "Pending", count: pendingOrders.length },
-                { key: "failed", label: "Failed", count: failedOrders.length },
-              ] as const).map(tab => (
-                <button
-                  key={tab.key}
-                  onClick={() => setOrderStatusFilter(tab.key)}
-                  className={`flex items-center gap-2 px-4 py-2.5 text-[9px] font-mono font-semibold uppercase tracking-widest border-b-2 transition-all -mb-px ${
-                    orderStatusFilter === tab.key
-                      ? isDark ? "border-white text-white" : "border-black text-black"
-                      : isDark ? "border-transparent text-neutral-550 hover:text-neutral-350" : "border-transparent text-neutral-455 hover:text-neutral-800"
-                  }`}
-                >
-                  {tab.label}
-                  <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded ${
-                    orderStatusFilter === tab.key
-                      ? isDark ? "bg-white text-black" : "bg-black text-white"
-                      : isDark ? "bg-neutral-900 text-neutral-500" : "bg-neutral-100 text-neutral-500"
-                  }`}>{tab.count}</span>
+            <div className="adm-tabbar">
+              {([{key:"all",label:"All",count:activeOrders.length},{key:"paid",label:"Paid",count:paidOrders.length},{key:"pending",label:"Pending",count:pendingOrders.length},{key:"failed",label:"Failed",count:failedOrders.length}] as const).map(tab=>(
+                <button key={tab.key} onClick={()=>setOrderStatusFilter(tab.key)} className={`adm-tab ${orderStatusFilter===tab.key?"active":""}`}>
+                  {tab.label}<span className="adm-tab-count">{tab.count}</span>
                 </button>
               ))}
             </div>
 
-            <div className="overflow-x-auto border dark:border-neutral-900 border-neutral-200 rounded overflow-hidden">
-              <table className="w-full text-left">
+            <div className="adm-panel" style={{ overflow:"auto" }}>
+              <Brackets />
+              <table className="adm-table">
                 <thead>
-                  <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${
-                    isDark ? "text-neutral-500 border-neutral-900 bg-neutral-950/50" : "text-neutral-500 border-neutral-200 bg-neutral-50"
-                  }`}>
-                    <th className="px-5 py-3 font-semibold">Invoicing Email</th>
-                    <th className="px-5 py-3 font-semibold">Recipient Identity</th>
-                    <th className="px-5 py-3 font-semibold">Invoice Payload</th>
-                    <th className="px-5 py-3 font-semibold">Pipeline State</th>
-                    <th className="px-5 py-3 font-semibold">Timestamp</th>
+                  <tr>
+                    <th>Email</th><th>Name</th><th>Amount</th><th>Status</th><th>Date</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredOrders.map(o => (
-                    <tr key={o.id}
-                      className={`border-b last:border-0 cursor-pointer ${isDark ? "border-neutral-900 hover:bg-neutral-900/30" : "border-neutral-100 hover:bg-neutral-50/50"}`}
-                      onClick={() => setSelectedRow({ ...o, _type: "order" })}
-                    >
-                      <td className="px-5 py-3.5 text-xs font-semibold lowercase font-mono">{o.email}</td>
-                      <td className={`px-5 py-3.5 text-[10px] uppercase font-mono ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>{o.name || "—"}</td>
-                      <td className="px-5 py-3.5 text-xs font-mono font-medium">{fmt$(o.amount_cents)}</td>
-                      <td className="px-5 py-3.5">
-                        <span className={`text-[8px] font-mono font-bold uppercase px-2 py-0.5 rounded flex items-center gap-1.5 w-fit ${
-                          o.status === "paid" ? "bg-emerald-500/10 text-emerald-500" :
-                          o.status === "pending" ? "bg-amber-500/10 text-amber-500" :
-                          "bg-rose-500/10 text-rose-500"
-                        }`}>
-                          <LedPulse color={o.status === "paid" ? "green" : o.status === "pending" ? "yellow" : "red"} active={false} />
+                  {filteredOrders.map(o=>(
+                    <tr key={o.id} onClick={()=>setSelectedRow({...o,_type:"order"})}>
+                      <td style={{ fontFamily:"var(--font-hud)", letterSpacing:"0.04em" }}>{o.email}</td>
+                      <td style={{ color:"var(--c-muted)", fontSize:10 }}>{o.name||"—"}</td>
+                      <td style={{ fontFamily:"var(--font-title)", color:"var(--c-cyan)", fontSize:12 }}>{fmt$(o.amount_cents)}</td>
+                      <td>
+                        <span className={`adm-badge ${o.status==="paid"?"adm-badge-g":o.status==="pending"?"adm-badge-a":"adm-badge-r"}`}>
                           {o.status}
                         </span>
                       </td>
-                      <td className={`px-5 py-3.5 text-[10px] font-mono uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>{fmtDate(o.created_at)}</td>
+                      <td style={{ color:"var(--c-muted)", fontSize:10 }}>{fmtDate(o.created_at)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              {filteredOrders.length === 0 && (
-                <p className={`text-center py-10 text-[9px] font-mono uppercase tracking-widest ${isDark ? "text-neutral-750" : "text-neutral-300"}`}>
-                  Registry empty
-                </p>
-              )}
+              {filteredOrders.length===0 && <div className="adm-empty">NO_RECORDS_FOUND</div>}
             </div>
           </div>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════
+        {/* ═══════════════════════════════════════════════════
             LEADS
-        ════════════════════════════════════════════════════════════════ */}
+        ═══════════════════════════════════════════════════ */}
         {section === "leads" && (
-          <div className="space-y-8 animate-in fade-in duration-500">
-            <div className="flex items-end justify-between flex-wrap gap-4 border-b pb-4 dark:border-neutral-900 border-neutral-200">
+          <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+            <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
               <div>
-                <h1 className="text-xl font-medium tracking-tight">Leads Engine</h1>
-                <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>MARKETING CAPTURE HOOKS</p>
+                <div className="adm-heading">Leads</div>
+                <div className="adm-subheading">CAPTURE REGISTER · {activeLeads.length} CONTACTS</div>
               </div>
-
-              <input type="text" placeholder="FILTER LEADS…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                className={`text-[9px] font-mono border rounded px-3 py-2 w-48 bg-transparent focus:outline-none focus:ring-1 ${
-                  isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-neutral-250 text-black focus:border-black focus:ring-black/10"
-                }`} />
+              <input type="text" placeholder="SEARCH..." value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} className="adm-search" />
             </div>
-            <div className="overflow-x-auto border dark:border-neutral-900 border-neutral-200 rounded overflow-hidden">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${
-                    isDark ? "text-neutral-500 border-neutral-900 bg-neutral-950/50" : "text-neutral-500 border-neutral-200 bg-neutral-50"
-                  }`}>
-                    <th className="px-5 py-3 font-semibold">Capture email</th>
-                    <th className="px-5 py-3 font-semibold">Registered</th>
-                  </tr>
-                </thead>
+            <div className="adm-panel" style={{ overflow:"auto" }}>
+              <Brackets />
+              <table className="adm-table">
+                <thead><tr><th>Email</th><th>Captured</th></tr></thead>
                 <tbody>
-                  {filteredLeads.map(l => (
-                    <tr key={l.id} className={`border-b last:border-0 ${isDark ? "border-neutral-900 hover:bg-neutral-900/30" : "border-neutral-100 hover:bg-neutral-50/50"}`}>
-                      <td className="px-5 py-4 text-xs font-semibold lowercase font-mono">{l.email}</td>
-                      <td className={`px-5 py-4 text-[10px] font-mono uppercase ${isDark ? "text-neutral-500" : "text-neutral-450"}`}>{fmtDate(l.created_at)}</td>
+                  {filteredLeads.map(l=>(
+                    <tr key={l.id}>
+                      <td style={{ fontFamily:"var(--font-hud)" }}>{l.email}</td>
+                      <td style={{ color:"var(--c-muted)", fontSize:10 }}>{fmtDate(l.created_at)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              {filteredLeads.length===0 && <div className="adm-empty">NO_LEADS_YET</div>}
             </div>
           </div>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════
+        {/* ═══════════════════════════════════════════════════
             ANALYTICS
-        ════════════════════════════════════════════════════════════════ */}
+        ═══════════════════════════════════════════════════ */}
         {section === "analytics" && (
-          <div className="space-y-10 animate-in fade-in duration-500">
-            <div className="flex items-end justify-between flex-wrap gap-4 border-b pb-4 dark:border-neutral-900 border-neutral-200">
+          <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+            <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
               <div>
-                <h1 className="text-xl font-medium tracking-tight">System Telemetry</h1>
-                <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>USER ACTIVITY CORE LOGS</p>
+                <div className="adm-heading">Analytics</div>
+                <div className="adm-subheading">TELEMETRY CORE · SESSION TRACKING</div>
               </div>
-
-              <div className="flex gap-1">
-                {(["7", "14", "30"] as const).map(r => (
-                  <button key={r} onClick={() => setAnalyticsRange(r)}
-                    className={`text-[9px] font-mono font-bold uppercase px-3 py-1.5 transition-all ${
-                      analyticsRange === r
-                        ? isDark ? "bg-white text-black" : "bg-black text-white"
-                        : isDark ? "text-neutral-450 hover:text-white" : "text-neutral-500 hover:text-black"
-                    }`}>
-                    {r}D
-                  </button>
+              <div className="adm-period-bar">
+                {(["7","14","30"] as const).map(r=>(
+                  <button key={r} onClick={()=>setAnalyticsRange(r)} className={`adm-period-btn ${analyticsRange===r?"active":""}`}>{r}D</button>
                 ))}
               </div>
             </div>
 
-            {!hasEventData && (
-              <div className={`p-6 border rounded space-y-4 ${isDark ? "border-neutral-900 bg-neutral-950/30" : "border-neutral-200 bg-white shadow-sm"}`}>
-                <p className={`text-[10px] font-mono font-bold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Tracker Inactive</p>
-                <p className={`text-xs leading-relaxed ${isDark ? "text-neutral-400" : "text-neutral-600"}`}>
-                  Bind the client-side telemetry dispatcher to monitor user sessions, clicks, and page view triggers.
-                </p>
-                <pre className={`text-[9px] p-4 overflow-x-auto font-mono rounded ${isDark ? "bg-neutral-950 border border-neutral-900 text-neutral-400" : "bg-neutral-50 border border-neutral-200 text-neutral-600"}`}>
-{`export function trackEvent(type, data = {}) {
+            {!hasEvents && (
+              <div className="adm-panel" style={{ padding:24 }}>
+                <Brackets />
+                <div style={{ fontSize:9, color:"var(--c-amber)", letterSpacing:"0.2em", marginBottom:12, textTransform:"uppercase" }}>
+                  ⚠ TRACKER OFFLINE — INSTALL HOOK TO ENABLE
+                </div>
+                <pre className="adm-code-block">{`export function trackEvent(type, data = {}) {
   supabase.from('page_events').insert([{
     event_type: type,
     path: window.location.pathname,
@@ -1769,68 +1570,63 @@ function AdminPage() {
     referrer: document.referrer || null,
     ...data
   }]);
-}`}
-                </pre>
+}`}</pre>
               </div>
             )}
 
-            {/* ANALYTICS STATS WITH ADD TO CART INTEGRATED */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
-              <Stat label="Page Views" value={analyticsEvents.filter(e => e.event_type === "page_view").length.toLocaleString()} sub={`last ${analyticsRange} days`} isDark={isDark} />
-              <Stat label="Sessions" value={uniqueSessions.toLocaleString()} sub="unique visitors" isDark={isDark} />
-              <Stat label="Product Clicks" value={analyticsEvents.filter(e => e.event_type === "product_click").length.toLocaleString()} sub="product page views" isDark={isDark} />
-              <Stat label="Add to Carts" value={getAddToCartCount(analyticsEvents).toLocaleString()} sub="add to cart conversions" isDark={isDark} led="cyan" />
-              <Stat label="Checkout Starts" value={analyticsEvents.filter(e => e.event_type === "checkout_start").length.toLocaleString()} sub="initiated checkout" isDark={isDark} />
+            <div className="adm-grid-5">
+              <Stat label="Page Views"     value={analyticsEvents.filter(e=>e.event_type==="page_view").length.toLocaleString()}        sub={`last ${analyticsRange}d`} led="c" />
+              <Stat label="Sessions"       value={uniqueSessions.toLocaleString()}                                                       sub="unique visitors"           led="p" />
+              <Stat label="Product Clicks" value={analyticsEvents.filter(e=>e.event_type==="product_click").length.toLocaleString()}     sub="click-throughs"            led="c" />
+              <Stat label="Add to Cart"    value={analyticsEvents.filter(e=>["add_to_cart","cart"].includes(e.event_type||"")).length.toLocaleString()} sub="cart actions" led="a" />
+              <Stat label="Checkout"       value={analyticsEvents.filter(e=>e.event_type==="checkout_start").length.toLocaleString()}    sub="checkout starts"           led="a" />
             </div>
 
-            <div className={`p-6 border rounded ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200/60"} space-y-4`}>
-              <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Daily Telemetry Pulse</p>
-              <div className="flex items-end gap-1.5 h-32 pt-4">
-                {analyticsChartData.map((d, i) => (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group relative">
-                    <div
-                      className={`w-full transition-all duration-300 rounded-[1px] ${isDark ? "bg-neutral-800 group-hover:bg-neutral-550" : "bg-neutral-200 group-hover:bg-neutral-355"}`}
-                      style={{ height: `${(d.views / chartMax) * 100}%`, minHeight: d.views > 0 ? "3px" : "1px" }}
-                    />
-                    {d.views > 0 && (
-                      <div className={`absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[8px] font-mono font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border ${isDark ? "bg-neutral-900 text-white border-neutral-850" : "bg-white text-black border-neutral-250 shadow-sm"}`}>
-                        {d.views}
-                      </div>
-                    )}
-                    {i % Math.ceil(analyticsRangeDays / 7) === 0 && (
-                      <span className={`text-[8px] font-mono hidden sm:block ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>{d.label}</span>
+            {/* Bar chart */}
+            <div className="adm-panel" style={{ padding:"20px 24px" }}>
+              <Brackets />
+              <div style={{ fontSize:9, letterSpacing:"0.2em", color:"var(--c-muted)", marginBottom:16, textTransform:"uppercase" }}>Daily Page Views — Last {analyticsRange} Days</div>
+              <div className="adm-bar-chart">
+                {analyticsChartData.map((d,i)=>(
+                  <div key={i} className="adm-bar-col">
+                    <div className="adm-bar" style={{
+                      height:`${(d.views/chartMax)*100}%`,
+                      minHeight: d.views>0?3:1,
+                      background:isDark?"rgba(0,229,255,0.18)":"rgba(0,119,170,0.15)",
+                      borderTopColor:isDark?"var(--c-cyan)":"var(--c-cyan2)",
+                    }} />
+                    {i%Math.ceil(analyticsRangeDays/7)===0 && (
+                      <span className="adm-bar-lbl">{d.label.split(" ")[1]||""}</span>
                     )}
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-              <div className="space-y-3">
-                <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Origin Referrers</p>
-                {topReferrers.length === 0 ? (
-                  <p className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-700" : "text-neutral-300"}`}>Empty logs</p>
-                ) : (
-                  <div className={`p-4 border rounded ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200/60"} space-y-2.5`}>
-                    {topReferrers.map(([ref, count]) => (
-                      <div key={ref} className="flex items-center justify-between gap-4 py-1.5 border-b last:border-0 dark:border-neutral-900/40 border-neutral-100">
-                        <span className={`text-[10px] font-mono truncate uppercase ${isDark ? "text-neutral-400" : "text-neutral-600"}`}>{ref || "direct"}</span>
-                        <span className={`text-[10px] font-mono font-semibold ${isDark ? "text-white" : "text-black"}`}>{count}</span>
+            <div className="adm-grid-2">
+              <div className="adm-panel" style={{ padding:"20px" }}>
+                <Brackets />
+                <div style={{ fontSize:9, letterSpacing:"0.2em", color:"var(--c-muted)", marginBottom:14, textTransform:"uppercase" }}>Top Referrers</div>
+                {topReferrers.length===0 ? <div className="adm-empty">NO_DATA</div> : (
+                  <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
+                    {topReferrers.map(([ref,cnt])=>(
+                      <div key={ref} style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderBottom:"1px solid var(--c-border)", fontSize:10, letterSpacing:"0.06em" }}>
+                        <span style={{ color:"var(--c-text)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"75%" }}>{ref||"direct"}</span>
+                        <span style={{ fontFamily:"var(--font-title)", color:"var(--c-cyan)", fontSize:11 }}>{cnt}</span>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-              <div className="space-y-3">
-                <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Node Access Directory</p>
-                {topPaths.length === 0 ? (
-                  <p className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-700" : "text-neutral-300"}`}>Empty logs</p>
-                ) : (
-                  <div className={`p-4 border rounded ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200/60"} space-y-2.5`}>
-                    {topPaths.map(([path, count]) => (
-                      <div key={path} className="flex items-center justify-between gap-4 py-1.5 border-b last:border-0 dark:border-neutral-900/40 border-neutral-100">
-                        <span className={`text-[9px] font-mono truncate ${isDark ? "text-neutral-400" : "text-neutral-600"}`}>{path}</span>
-                        <span className={`text-[10px] font-mono font-semibold ${isDark ? "text-white" : "text-black"}`}>{count}</span>
+              <div className="adm-panel" style={{ padding:"20px" }}>
+                <Brackets />
+                <div style={{ fontSize:9, letterSpacing:"0.2em", color:"var(--c-muted)", marginBottom:14, textTransform:"uppercase" }}>Top Pages</div>
+                {topPaths.length===0 ? <div className="adm-empty">NO_DATA</div> : (
+                  <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
+                    {topPaths.map(([path,cnt])=>(
+                      <div key={path} style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderBottom:"1px solid var(--c-border)", fontSize:10 }}>
+                        <span style={{ color:"var(--c-muted)", fontFamily:"var(--font-hud)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"75%" }}>{path}</span>
+                        <span style={{ fontFamily:"var(--font-title)", color:"var(--c-cyan)", fontSize:11 }}>{cnt}</span>
                       </div>
                     ))}
                   </div>
@@ -1838,44 +1634,35 @@ function AdminPage() {
               </div>
             </div>
 
-            {Object.keys(productClickMap).length > 0 && (
-              <div className="space-y-3">
-                <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Interaction CTR</p>
-                <div className={`border rounded overflow-hidden ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200/60"}`}>
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${isDark ? "text-neutral-500 border-neutral-900 bg-neutral-950/50" : "text-neutral-500 border-neutral-200 bg-neutral-50"}`}>
-                        <th className="px-5 py-3 font-semibold">Node Item</th>
-                        <th className="px-5 py-3 font-semibold text-right">Activity Pulses</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Object.entries(productClickMap)
-                        .sort((a, b) => b[1] - a[1])
-                        .slice(0, 8)
-                        .map(([pid, clicks]) => {
-                          const prod = products.find(p => p.id === pid);
-                          return (
-                            <tr key={pid} className={`border-b last:border-0 ${isDark ? "border-neutral-900" : "border-neutral-100"}`}>
-                              <td className="px-5 py-3 text-[10px] font-medium uppercase">{prod?.title || pid}</td>
-                              <td className="px-5 py-3 text-[11px] font-mono font-medium text-right">{clicks}</td>
-                            </tr>
-                          );
-                        })}
-                    </tbody>
-                  </table>
-                </div>
+            {Object.keys(productClickMap).length>0 && (
+              <div className="adm-panel" style={{ overflow:"auto" }}>
+                <Brackets />
+                <table className="adm-table">
+                  <thead><tr><th>Product</th><th style={{textAlign:"right"}}>Clicks</th></tr></thead>
+                  <tbody>
+                    {Object.entries(productClickMap).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([pid,clicks])=>{
+                      const prod=products.find(p=>p.id===pid);
+                      return (
+                        <tr key={pid}>
+                          <td style={{ textTransform:"uppercase", letterSpacing:"0.06em" }}>{prod?.title||pid}</td>
+                          <td style={{ textAlign:"right", fontFamily:"var(--font-title)", color:"var(--c-cyan)" }}>{clicks}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
 
-            {geoBreakdown.length > 0 && (
-              <div className="space-y-3">
-                <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Geographic Distribution</p>
-                <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-                  {geoBreakdown.map(([country, count]) => (
-                    <div key={country} className={`p-4 border rounded ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200/50"}`}>
-                      <p className={`text-[8px] font-mono uppercase tracking-wider ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{country}</p>
-                      <p className="text-lg font-bold tracking-tight mt-1">{count}</p>
+            {geoBreakdown.length>0 && (
+              <div>
+                <div style={{ fontSize:9, letterSpacing:"0.2em", color:"var(--c-muted)", marginBottom:12, textTransform:"uppercase" }}>Geographic Breakdown</div>
+                <div className="adm-grid-4">
+                  {geoBreakdown.map(([country,cnt])=>(
+                    <div key={country} className="adm-panel" style={{ padding:"14px 16px" }}>
+                      <Brackets />
+                      <div style={{ fontSize:9, letterSpacing:"0.15em", color:"var(--c-muted)", textTransform:"uppercase", marginBottom:4 }}>{country}</div>
+                      <div style={{ fontFamily:"var(--font-title)", fontSize:20, color:"var(--c-text)" }}>{cnt}</div>
                     </div>
                   ))}
                 </div>
@@ -1884,144 +1671,90 @@ function AdminPage() {
           </div>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════
+        {/* ═══════════════════════════════════════════════════
             SETTINGS
-        ════════════════════════════════════════════════════════════════ */}
+        ═══════════════════════════════════════════════════ */}
         {section === "settings" && (
-          <div className="max-w-2xl space-y-10 animate-in fade-in duration-500">
-            <div className="border-b pb-4 dark:border-neutral-900 border-neutral-200">
-              <h1 className="text-xl font-medium tracking-tight">System Settings</h1>
-              <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>ROOT HOOK CONTROL</p>
+          <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:680 }}>
+            <div>
+              <div className="adm-heading">Settings</div>
+              <div className="adm-subheading">SYSTEM CONFIGURATION · ROOT ACCESS</div>
             </div>
 
-            <div className="space-y-10">
-
-              <div className="space-y-3">
-                <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Theme Adaptation</h2>
-                <div className={`p-5 border rounded ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-neutral-200 shadow-sm"} space-y-4`}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono uppercase tracking-widest">Interface Mode</span>
-                    <div className={`flex border rounded overflow-hidden ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
-                      <button
-                        onClick={() => {
-                          setIsDark(false);
-                          localStorage.setItem("theme", "light");
-                          document.documentElement.classList.remove("dark");
-                          saveSiteConfig({ ...siteContent, theme: "light" });
-                        }}
-                        className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all ${!isDark ? "bg-black text-white" : "text-neutral-400 hover:bg-neutral-900"}`}
-                      >
-                        LIGHT
-                      </button>
-                      <button
-                        onClick={() => {
-                          setIsDark(true);
-                          document.documentElement.classList.add("dark");
-                          localStorage.setItem("theme", "dark");
-                          saveSiteConfig({ ...siteContent, theme: "dark" });
-                        }}
-                        className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all ${isDark ? "bg-white text-black" : "text-neutral-550 hover:bg-neutral-100"}`}
-                      >
-                        DARK
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Team Registry Access</h2>
-                <div className={`p-5 border rounded ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-neutral-200 shadow-sm"} space-y-6`}>
-                  <div className="flex gap-3 flex-wrap items-end">
-                    <div className="flex-1 min-w-[200px] space-y-1.5">
-                      <label className={`text-[8px] font-mono font-semibold uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>ADD TEAM MEMBER</label>
-                      <input
-                        type="email"
-                        placeholder="EMAIL ADDR…"
-                        value={newUserEmail}
-                        onChange={e => setNewUserEmail(e.target.value)}
-                        className={`w-full bg-transparent border rounded px-3 py-1.5 text-[10px] font-mono uppercase focus:outline-none focus:ring-1 ${
-                          isDark ? "border-neutral-850 text-white placeholder-neutral-700 focus:border-white focus:ring-white/25" : "border-neutral-200 text-black placeholder-neutral-350 focus:border-black focus:ring-black/10"
-                        }`}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className={`text-[8px] font-mono font-semibold uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>PIPELINE ROLE</label>
-                      <select
-                        value={newUserRole}
-                        onChange={e => setNewUserRole(e.target.value as any)}
-                        className={`text-[9px] font-mono font-semibold uppercase bg-transparent border rounded px-2 py-1.5 focus:outline-none focus:ring-1 ${
-                          isDark ? "border-neutral-850 text-white focus:border-white focus:ring-white/25" : "border-neutral-200 text-black focus:border-black focus:ring-black/10"
-                        }`}
-                      >
-                        <option value="viewer">VIEWER</option>
-                        <option value="manager">MANAGER</option>
-                        <option value="admin">ADMIN</option>
-                      </select>
-                    </div>
-                    <button
-                      onClick={handleAddAdminUser}
-                      disabled={isAddingUser || !newUserEmail.trim()}
-                      className={`text-[9px] font-mono font-bold uppercase px-4 py-1.5 rounded transition-all ${
-                        isDark ? "bg-white text-black hover:bg-neutral-200 disabled:opacity-30" : "bg-black text-white hover:bg-neutral-800 disabled:opacity-30"
-                      }`}
-                    >
-                      {isAddingUser ? "Deploying" : "Deploy"}
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {[
-                      { role: "viewer", desc: "Read-only access to diagnostics" },
-                      { role: "manager", desc: "Write access to database & inventory" },
-                      { role: "admin", desc: "Root execution permissions on settings" },
-                    ].map(r => (
-                      <div key={r.role} className={`p-3 border rounded ${isDark ? "border-neutral-900 bg-neutral-950/10" : "border-neutral-100 bg-neutral-50"}`}>
-                        <p className={`text-[8px] font-mono font-bold uppercase ${isDark ? "text-neutral-300" : "text-neutral-800"}`}>{r.role}</p>
-                        <p className={`text-[8px] font-mono mt-1 leading-relaxed ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{r.desc}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  {adminUsers.length > 0 ? (
-                    <div className="space-y-1.5 pt-4 border-t dark:border-neutral-900 border-neutral-100">
-                      {adminUsers.map(u => (
-                        <div key={u.id} className="flex items-center justify-between gap-4 py-2 border-b last:border-0 dark:border-neutral-900 border-neutral-100">
-                          <span className="text-[10px] font-mono font-semibold truncate flex-1">{u.email}</span>
-                          <select
-                            value={u.role}
-                            onChange={e => handleUpdateUserRole(u.id, e.target.value as any)}
-                            className={`text-[8px] font-mono font-semibold uppercase bg-transparent focus:outline-none focus:ring-1 border rounded px-1.5 py-0.5 ${isDark ? "text-neutral-400 border-neutral-800" : "text-neutral-550 border-neutral-200"}`}
-                          >
-                            <option value="viewer">VIEWER</option>
-                            <option value="manager">MANAGER</option>
-                            <option value="admin">ADMIN</option>
-                          </select>
-                          <button onClick={() => handleRemoveAdminUser(u.id)}
-                            className={`${isDark ? "text-neutral-650 hover:text-rose-455" : "text-neutral-400 hover:text-rose-600"} transition-colors`}>
-                            <X size={11} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className={`text-[9px] font-mono uppercase tracking-widest ${isDark ? "text-neutral-750" : "text-neutral-300"}`}>Registry empty</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Identity Verification</h2>
-                <div className={`p-5 border rounded ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-neutral-200 shadow-sm"} space-y-4`}>
-                  <div>
-                    <p className={`text-[9px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Identified Payload</p>
-                    <p className="text-xs font-mono font-semibold uppercase">{userEmail || "…"}</p>
-                  </div>
-                  <button onClick={handleSignOut} className={`w-full rounded text-[10px] font-mono font-semibold uppercase px-4 py-2.5 transition-all ${isDark ? "bg-rose-500/10 text-rose-455 hover:bg-rose-500/20" : "bg-rose-50 text-rose-655 hover:bg-rose-100"}`}>
-                    TERMINATE SESSION
+            {/* Theme */}
+            <div className="adm-panel" style={{ padding:24 }}>
+              <Brackets />
+              <div style={{ fontSize:9, letterSpacing:"0.2em", color:"var(--c-muted)", marginBottom:16, textTransform:"uppercase" }}>// Display Mode</div>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <span style={{ fontSize:11, letterSpacing:"0.1em", textTransform:"uppercase" }}>Interface Theme</span>
+                <div style={{ display:"flex", border:"1px solid var(--c-border2)", overflow:"hidden" }}>
+                  <button onClick={()=>{setIsDark(false);localStorage.setItem("theme","light");document.documentElement.classList.remove("dark");saveSiteConfig({...siteContent,theme:"light"});}}
+                    className="adm-btn" style={{ padding:"7px 18px", fontSize:9, borderRadius:0, border:"none", background:!isDark?"var(--c-cyan)":"transparent", color:!isDark?"#04070d":"var(--c-muted)" }}>
+                    LIGHT
+                  </button>
+                  <button onClick={()=>{setIsDark(true);document.documentElement.classList.add("dark");localStorage.setItem("theme","dark");saveSiteConfig({...siteContent,theme:"dark"});}}
+                    className="adm-btn" style={{ padding:"7px 18px", fontSize:9, borderRadius:0, border:"none", background:isDark?"var(--c-cyan)":"transparent", color:isDark?"#04070d":"var(--c-muted)" }}>
+                    DARK
                   </button>
                 </div>
               </div>
+            </div>
+
+            {/* Team */}
+            <div className="adm-panel" style={{ padding:24 }}>
+              <Brackets />
+              <div style={{ fontSize:9, letterSpacing:"0.2em", color:"var(--c-muted)", marginBottom:16, textTransform:"uppercase" }}>// Team Access</div>
+              <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:16 }}>
+                <input type="email" placeholder="EMAIL ADDRESS" value={newUserEmail} onChange={e=>setNewUserEmail(e.target.value)} className="adm-input" style={{ flex:1, minWidth:180 }} />
+                <select value={newUserRole} onChange={e=>setNewUserRole(e.target.value as any)}
+                  style={{ background:"transparent", border:"none", borderBottom:"1px solid var(--c-border2)", color:"var(--c-text)", fontFamily:"var(--font-hud)", fontSize:10, padding:"8px 4px", outline:"none", letterSpacing:"0.1em" }}>
+                  <option value="viewer" style={{background:"var(--c-panel)"}}>VIEWER</option>
+                  <option value="manager" style={{background:"var(--c-panel)"}}>MANAGER</option>
+                  <option value="admin" style={{background:"var(--c-panel)"}}>ADMIN</option>
+                </select>
+                <button onClick={handleAddAdminUser} disabled={isAddingUser||!newUserEmail.trim()} className="adm-btn adm-btn-primary" style={{ fontSize:9, padding:"5px 16px", opacity:!newUserEmail.trim()?0.4:1 }}>
+                  {isAddingUser?"ADDING...":"ADD"}
+                </button>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:16 }}>
+                {[{role:"viewer",desc:"Read-only"},{role:"manager",desc:"Edit products & orders"},{role:"admin",desc:"Full access"}].map(r=>(
+                  <div key={r.role} style={{ padding:"8px 10px", border:"1px solid var(--c-border)", fontSize:9, letterSpacing:"0.08em" }}>
+                    <div style={{ color:"var(--c-cyan)", textTransform:"uppercase", marginBottom:3 }}>{r.role}</div>
+                    <div style={{ color:"var(--c-muted)" }}>{r.desc}</div>
+                  </div>
+                ))}
+              </div>
+              {adminUsers.length>0 ? (
+                <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
+                  {adminUsers.map(u=>(
+                    <div key={u.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderBottom:"1px solid var(--c-border)" }}>
+                      <span style={{ flex:1, fontSize:10, fontFamily:"var(--font-hud)", overflow:"hidden", textOverflow:"ellipsis" }}>{u.email}</span>
+                      <select value={u.role} onChange={e=>handleUpdateUserRole(u.id,e.target.value as any)}
+                        style={{ background:"transparent", border:"1px solid var(--c-border2)", color:"var(--c-text)", fontFamily:"var(--font-hud)", fontSize:9, padding:"3px 6px", outline:"none", letterSpacing:"0.1em" }}>
+                        <option value="viewer" style={{background:"var(--c-panel)"}}>VIEWER</option>
+                        <option value="manager" style={{background:"var(--c-panel)"}}>MANAGER</option>
+                        <option value="admin" style={{background:"var(--c-panel)"}}>ADMIN</option>
+                      </select>
+                      <button onClick={()=>handleRemoveAdminUser(u.id)} style={{ background:"none", border:"none", color:"var(--c-muted)", cursor:"pointer", padding:0, transition:"color 0.2s" }}><X size={12}/></button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ fontSize:9, color:"var(--c-muted)", letterSpacing:"0.15em" }}>NO TEAM MEMBERS YET</div>
+              )}
+            </div>
+
+            {/* Account */}
+            <div className="adm-panel" style={{ padding:24 }}>
+              <Brackets />
+              <div style={{ fontSize:9, letterSpacing:"0.2em", color:"var(--c-muted)", marginBottom:16, textTransform:"uppercase" }}>// Account</div>
+              <div style={{ marginBottom:16 }}>
+                <div style={{ fontSize:9, color:"var(--c-muted)", marginBottom:4, letterSpacing:"0.1em" }}>AUTHENTICATED AS</div>
+                <div style={{ fontFamily:"var(--font-hud)", color:"var(--c-cyan)", fontSize:12 }}>{userEmail||"..."}</div>
+              </div>
+              <button onClick={handleSignOut} className="adm-btn adm-btn-danger" style={{ width:"100%", padding:"10px", textAlign:"center" }}>
+                ⏻  TERMINATE SESSION
+              </button>
             </div>
           </div>
         )}
@@ -2030,97 +1763,30 @@ function AdminPage() {
 
       {/* ── ORDER DETAIL MODAL ── */}
       {selectedRow && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 animate-in fade-in duration-355">
-          <div className="absolute inset-0 backdrop-blur-md bg-black/60 dark:bg-black/80" onClick={() => setSelectedRow(null)} />
-          <div className={`relative w-full max-w-lg p-8 border rounded-md space-y-6 max-h-[85vh] overflow-y-auto ${
-            isDark ? "bg-neutral-950 border-neutral-850" : "bg-white border-neutral-250 shadow-xl"
-          }`}>
-            <div className="flex items-center justify-between border-b pb-3 dark:border-neutral-900 border-neutral-150">
-              <h3 className={`text-xs font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-300" : "text-neutral-800"}`}>System Ledger Metadata</h3>
-              <button onClick={() => setSelectedRow(null)} className={`${isDark ? "text-neutral-500 hover:text-white" : "text-neutral-400 hover:text-black"}`}><X size={14} /></button>
+        <div className="adm-modal-backdrop" onClick={e=>{ if(e.target===e.currentTarget) setSelectedRow(null); }}>
+          <div className="adm-modal">
+            <div style={{ padding:"20px 24px", borderBottom:"1px solid var(--c-border)", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <span style={{ fontFamily:"var(--font-title)", fontSize:11, letterSpacing:"0.2em", color:"var(--c-cyan)", textTransform:"uppercase" }}>Record Detail</span>
+              <button onClick={()=>setSelectedRow(null)} style={{ background:"none", border:"none", color:"var(--c-muted)", cursor:"pointer", padding:0 }}><X size={16}/></button>
             </div>
-            <div className="space-y-2">
-              {Object.entries(selectedRow).map(([k, v]) => (
-                k !== "_type" && (
-                  <div key={k} className={`flex justify-between py-1.5 border-b last:border-0 gap-4 ${isDark ? "border-neutral-900" : "border-neutral-100"}`}>
-                    <span className={`text-[8px] font-mono font-semibold uppercase flex-shrink-0 ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{k}</span>
-                    <span className="text-[10px] font-mono font-medium truncate text-right">{String(v)}</span>
-                  </div>
-                )
+            <div style={{ padding:"20px 24px" }}>
+              {Object.entries(selectedRow).map(([k,v])=> k!=="type" && k!=="\_type" && (
+                <div key={k} style={{ display:"flex", justifyContent:"space-between", gap:16, padding:"8px 0", borderBottom:"1px solid var(--c-border)" }}>
+                  <span style={{ fontSize:9, color:"var(--c-muted)", letterSpacing:"0.15em", textTransform:"uppercase", flexShrink:0 }}>{k}</span>
+                  <span style={{ fontSize:10, fontFamily:"var(--font-hud)", textAlign:"right", wordBreak:"break-all" }}>{String(v)}</span>
+                </div>
               ))}
             </div>
             {selectedRow._type === "order" && (
-              <button onClick={() => handleArchiveOrder(selectedRow.id)}
-                className={`w-full py-2.5 rounded text-[9px] font-mono font-bold uppercase tracking-wide transition-all ${isDark ? "bg-rose-500/10 text-rose-455 hover:bg-rose-500/20" : "bg-rose-50 text-rose-655 hover:bg-rose-100"}`}>
-                Archive Order Record
-              </button>
+              <div style={{ padding:"16px 24px", borderTop:"1px solid var(--c-border)" }}>
+                <button onClick={()=>handleArchiveOrder(selectedRow.id)} className="adm-btn adm-btn-danger" style={{ width:"100%", padding:"10px" }}>
+                  ARCHIVE ORDER
+                </button>
+              </div>
             )}
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// SHARED STAT COMPONENTS
-// ────────────────────────────────────────────────────────────────────────────
-
-function Stat({ label, value, sub, isDark, led = "cyan" }: { label: string; value: string | number; sub: string; isDark: boolean; led?: "green" | "yellow" | "red" | "cyan" | "purple" | "neutral" }) {
-  return (
-    <div className={`p-4 border rounded ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200/50 shadow-sm"} space-y-1`}>
-      <div className="flex items-center justify-between gap-2">
-        <p className={`text-[8px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{label}</p>
-        <LedPulse color={led} />
-      </div>
-      <p 
-        className="text-xl font-semibold tracking-tight font-sans"
-        style={{ textShadow: isDark ? "0 0 10px rgba(255,255,255,0.1)" : "0 0 8px rgba(0,0,0,0.03)" }}
-      >
-        {value}
-      </p>
-      <p className={`text-[8px] font-mono tracking-wider uppercase ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>{sub}</p>
-    </div>
-  );
-}
-
-function StatWithDelta({ label, value, sub, delta, isDark }: { label: string; value: string | number; sub: string; delta: number | null; isDark: boolean }) {
-  const deltaColor = delta !== null && delta > 0 ? "green" as const : delta !== null && delta < 0 ? "red" as const : "neutral" as const;
-
-  return (
-    <div className={`p-4 border rounded ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200/50 shadow-sm"} space-y-1`}>
-      <div className="flex items-center justify-between gap-2">
-        <p className={`text-[8px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{label}</p>
-        <LedPulse color={deltaColor} />
-      </div>
-      <div className="flex items-baseline gap-2 flex-wrap">
-        <p 
-          className="text-xl font-semibold tracking-tight font-sans"
-          style={{ textShadow: isDark ? "0 0 10px rgba(255,255,255,0.1)" : "0 0 8px rgba(0,0,0,0.03)" }}
-        >
-          {value}
-        </p>
-        {delta !== null && (
-          <span className={`text-[8px] font-mono font-bold uppercase ${
-            delta > 0 ? "text-emerald-500" : delta < 0 ? "text-rose-500" : isDark ? "text-neutral-600" : "text-neutral-400"
-          }`}>
-            {delta > 0 ? "↑" : delta < 0 ? "↓" : "—"}{Math.abs(delta)}%
-          </span>
-        )}
-      </div>
-      <p className={`text-[8px] font-mono tracking-wider uppercase ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>{sub}</p>
-    </div>
-  );
-}
-
-function Input({ label, value, onChange, type = "text", isDark }: { label: string; value: string; onChange: (v: string) => void; type?: string; isDark: boolean }) {
-  return (
-    <div className="space-y-1.5">
-      <label className={`text-[9px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>{label}</label>
-      <input type={type} value={value} onChange={e => onChange(e.target.value)}
-        className={`w-full bg-transparent border rounded px-3 py-1.5 text-xs font-mono transition-all focus:outline-none focus:ring-1 ${
-          isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-neutral-200 text-black focus:border-black focus:ring-black/5"
-        }`} />
     </div>
   );
 }
