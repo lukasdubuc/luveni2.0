@@ -34,15 +34,7 @@ export function useGemini(options: UseGeminiOptions = {}) {
       const { googleToken, storeSnapshot } = optionsRef.current;
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
-      // Track the user message locally
       history.current.push({ role: "user", content: userText });
-
-      // Format history turns to be compatible with both standard and Gemini SDK formats
-      const mappedHistory = history.current.slice(0, -1).map(item => ({
-        role: item.role === 'assistant' ? 'model' : 'user',
-        content: item.content,
-        parts: [{ text: item.content }]
-      }));
 
       try {
         const { data, error } = await supabase.functions.invoke<{ reply?: string }>(
@@ -52,7 +44,7 @@ export function useGemini(options: UseGeminiOptions = {}) {
               tool: "chat",
               args: {
                 userText,
-                history: mappedHistory,
+                history: history.current.slice(0, -1),
                 storeSnapshot: storeSnapshot || null,
                 googleToken: googleToken || null,
                 timezone,
@@ -68,29 +60,30 @@ export function useGemini(options: UseGeminiOptions = {}) {
         onChunk?.(reply);
         return reply;
       } catch (e) {
-        // Remove the failed user turn to prevent consecutive-turn history pollution
+        // Prevent conversational poisoning by popping failed turns
         if (history.current.length > 0) {
           history.current.pop();
         }
 
         let details = "";
-        // Extract the error payload returned by the Supabase Edge Function for debugging
         if (e && typeof e === 'object' && 'context' in e) {
-          try {
-            // @ts-ignore
-            const jsonErr = await e.context.json();
-            details = typeof jsonErr === 'object' ? JSON.stringify(jsonErr) : String(jsonErr);
-          } catch {
+          const context = (e as any).context;
+          if (context instanceof Response) {
             try {
-              // @ts-ignore
-              details = await e.context.text();
-            } catch {}
+              const res = context.clone();
+              const jsonErr = await res.json();
+              details = typeof jsonErr === 'object' ? JSON.stringify(jsonErr) : String(jsonErr);
+            } catch {
+              try {
+                details = await context.clone().text();
+              } catch {}
+            }
           }
         }
 
         const error = e instanceof Error ? e : new Error(String(e));
-        const errorMsg = details ? `${error.message}: ${details}` : error.message;
-        console.error("[Jarvis] Edge function error details:", errorMsg);
+        const errorMsg = details ? `${details}` : error.message;
+        console.error("[Jarvis] Edge function response error:", errorMsg);
         throw new Error(errorMsg);
       }
     },
