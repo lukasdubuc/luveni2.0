@@ -7,157 +7,118 @@ import { useEffect, useRef, useCallback } from 'react';
 let sharedAudioContext: AudioContext | null = null;
 
 interface UseVoiceInputOptions {
+  onInterim: (text: string) => void;
   onTranscript: (text: string) => void;
   onStateChange: (state: string) => void;
   onLevelChange: (level: number) => void;
   enabled: boolean;
-  isSpeaking: boolean;
-  lastAiResponse: string;
-  preventListening?: boolean;
+  cancelSpeech: () => void;
 }
 
 export function useVoiceInput({ 
+  onInterim,
   onTranscript, 
   onStateChange, 
   onLevelChange, 
   enabled, 
-  isSpeaking, 
-  lastAiResponse,
-  preventListening 
+  cancelSpeech
 }: UseVoiceInputOptions) {
   const recognitionRef = useRef<any>(null);
   const restartTimeoutRef = useRef<any>(null);
-
-  const isSpeakingRef = useRef(isSpeaking);
-  const preventListeningRef = useRef(preventListening);
-  const lastAiResponseRef = useRef(lastAiResponse);
   const enabledRef = useRef(enabled);
 
-  useEffect(() => { isSpeakingRef.current = isSpeaking; }, [isSpeaking]);
-  useEffect(() => { preventListeningRef.current = preventListening; }, [preventListening]);
-  useEffect(() => { lastAiResponseRef.current = lastAiResponse; }, [lastAiResponse]);
   useEffect(() => { enabledRef.current = enabled; }, [enabled]);
 
-  const initAudio = useCallback(async () => {
-    if (sharedAudioContext) {
-      if (sharedAudioContext.state === 'suspended') await sharedAudioContext.resume();
-      return;
-    }
-    
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: { 
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true 
-        } 
-      });
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      sharedAudioContext = new AudioCtx();
-      const analyzer = sharedAudioContext.createAnalyser();
-      const source = sharedAudioContext.createMediaStreamSource(stream);
-      source.connect(analyzer);
-      analyzer.fftSize = 256;
-
-      const dataArray = new Uint8Array(analyzer.frequencyBinCount);
-      const updateLevel = () => {
-        if (!analyzer) return;
-        analyzer.getByteFrequencyData(dataArray);
-        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-        onLevelChange(avg / 128);
-        requestAnimationFrame(updateLevel);
-      };
-      updateLevel();
-    } catch (e) {
-      console.error('[VoiceInput] Hardware access blocked:', e);
-    }
-  }, [onLevelChange]);
-
-  // Always instantiate a FRESH SpeechRecognition object. Reusing stopped objects is banned on mobile WebKit.
   const startRecognition = useCallback(() => {
     if (!enabledRef.current || recognitionRef.current) return;
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition) {
+      onStateChange('error');
+      return;
+    }
 
     const rec = new SpeechRecognition();
     rec.continuous = true;
-    rec.interimResults = false; 
-    rec.lang = 'en-GB';
+    rec.interimResults = true; 
+    rec.lang = 'en-US';
 
     rec.onstart = () => {
       onStateChange('listening');
-      initAudio();
     };
 
     rec.onresult = (event: any) => {
-      if (isSpeakingRef.current || preventListeningRef.current) return;
+      cancelSpeech(); // Interrupt speech as soon as user speaks
+
+      let interim = '';
+      let final = '';
 
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
-          const transcript = event.results[i][0].transcript.trim();
-          
-          if (transcript && transcript.toLowerCase() !== lastAiResponseRef.current.toLowerCase()) {
-            onTranscript(transcript);
-          }
+          final += event.results[i][0].transcript;
+        } else {
+          interim += event.results[i][0].transcript;
         }
+      }
+
+      onInterim(interim);
+
+      if (final.trim()) {
+        onTranscript(final.trim());
       }
     };
 
     rec.onend = () => {
       recognitionRef.current = null;
-      onStateChange('idle');
-      
       if (enabledRef.current) {
+        // Use a minimal delay to avoid frantic restarts on brief network drops
         restartTimeoutRef.current = setTimeout(() => {
           if (enabledRef.current && !recognitionRef.current) {
             startRecognition();
           }
-        }, 300);
+        }, 100);
       }
+    };
+
+    rec.onerror = (event: any) => {
+        console.error("Speech recognition error", event.error);
+        if (event.error === 'no-speech' || event.error === 'network') {
+            // These are recoverable, allow onend to handle restart
+        } else {
+            onStateChange('error');
+        }
     };
 
     try { 
       rec.start(); 
       recognitionRef.current = rec; 
     } catch (e) { 
+      console.error("Failed to start recognition", e);
       recognitionRef.current = null;
     }
-  }, [onTranscript, onStateChange, initAudio]);
+  }, [onInterim, onTranscript, onStateChange, cancelSpeech]);
 
   useEffect(() => {
-    if (!enabled) {
-      if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch (e) {}
-        recognitionRef.current = null;
-      }
-      if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
-      return;
-    }
-
-    if (isSpeaking || preventListening) {
-      // STOP mic during speech output. This prevents echo loops & correctly coordinates iOS hardware focus
-      if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch (e) {}
-        recognitionRef.current = null;
-      }
-      if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
-    } else {
-      // START fresh session 1200ms after speaking ends
+    if (enabled) {
       if (!recognitionRef.current) {
-        clearTimeout(restartTimeoutRef.current);
-        restartTimeoutRef.current = setTimeout(() => {
-          if (!isSpeakingRef.current && !preventListeningRef.current) {
-            startRecognition();
-          }
-        }, 1200);
+        startRecognition();
       }
+    } else {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (e) {}
+        recognitionRef.current = null;
+      }
+      if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
     }
 
     return () => {
       if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (e) {}
+        recognitionRef.current = null;
+      }
     };
-  }, [enabled, isSpeaking, preventListening, startRecognition]);
+  }, [enabled, startRecognition]);
 
   return null;
 }
