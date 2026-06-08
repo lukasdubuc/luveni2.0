@@ -2,12 +2,10 @@
 //  J.A.R.V.I.S — Luveni GM | components/jarvis/JarvisHub.tsx
 // ─────────────────────────────────────────────────────────────
 
-import { useState, useCallback, useRef, useEffect, lazy, Suspense } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from "@/integrations/supabase/client";
-
-// Decouple the graphic layout from the compilation loop
-const NeuralOrb = lazy(() => import('./NeuralOrb'));
+import NeuralOrb from './NeuralOrb';
 
 // ─────────────────────────────────────────────────────────────
 //  TYPES & INTERFACES
@@ -905,9 +903,7 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       <div style={{ flex: '0 0 40px' }} />
 
       <div style={styles.orbWrap}>
-        <Suspense fallback={<div style={{ width: orbSize, height: orbSize }} />}>
-          <NeuralOrb state={orbState} audioLevel={0} size={orbSize} />
-        </Suspense>
+        <NeuralOrb state={orbState} audioLevel={0} size={orbSize} />
       </div>
       
       <div style={styles.transcriptContainer}>
@@ -951,3 +947,10 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
 }
 
 export default JarvisHub;
+export type OrbState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';
+
+export interface JarvisMessage {
+  role: 'user' | 'model';
+  parts: { text: string }[];
+  timestamp: number;
+}
