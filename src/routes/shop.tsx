@@ -92,7 +92,7 @@ const ProductCell = memo(({ product }: { product: Product }) => {
             width={400}
             height={400}
             className="max-h-full max-w-full object-contain aspect-square"
-            loading="lazy"
+            loading="eager"
             decoding="async"
             style={{ willChange: "transform", backfaceVisibility: "hidden" }}
           />
