@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import { Edit3, Archive, X, Menu, RefreshCw, BarChart2, Lock, CheckSquare, Square, Trash2, Eye, EyeOff, GripVertical, Users, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { requireAdmin } from "@/lib/admin-guard";
 
-
 // ────────────────────────────────────────────────────────────────────────────
 // TYPES & ROUTE DEFINITION
 // ────────────────────────────────────────────────────────────────────────────
@@ -79,15 +78,13 @@ export const Route = createFileRoute("/admin/")({
   component: AdminPage,
 });
 
-// ────────────────────────────────────────────────────────────────────────────
-// LED VISUAL PULSE COMPONENT
-// ────────────────────────────────────────────────────────────────────────────
+// ── LED indicator matching hardware aesthetics ──────────────────────────────
 function LedPulse({ color, active = true }: { color: "green" | "yellow" | "red" | "cyan" | "neutral"; active?: boolean }) {
   const colorMap = {
     green: "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]",
     yellow: "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.8)]",
     red: "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]",
-    cyan: "bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.8)]",
+    cyan: "bg-sky-450 shadow-[0_0_8px_rgba(56,189,248,0.8)]",
     neutral: "bg-neutral-400 shadow-[0_0_6px_rgba(163,163,163,0.5)]",
   };
   return (
@@ -95,9 +92,7 @@ function LedPulse({ color, active = true }: { color: "green" | "yellow" | "red" 
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// INTERACTIVE TELEMETRY CANVAS COMPONENT
-// ────────────────────────────────────────────────────────────────────────────
+// ── Interactive Telemetry Stream Canvas ─────────────────────────────────────
 function TelemetryCanvas({ events, isDark }: { events: PageEvent[]; isDark: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const prevEventsLength = useRef(events.length);
@@ -121,16 +116,16 @@ function TelemetryCanvas({ events, isDark }: { events: PageEvent[]; isDark: bool
 
         if (ev?.event_type === "product_click") {
           targetNode = 1;
-          color = "rgba(56, 189, 248, 0.9)"; // Cyan
+          color = "rgba(56, 189, 248, 0.9)"; 
         } else if (ev?.event_type === "add_to_cart") {
           targetNode = 2;
-          color = "rgba(245, 158, 11, 0.9)"; // Amber
+          color = "rgba(245, 158, 11, 0.9)"; 
         } else if (ev?.event_type === "checkout_start") {
           targetNode = 3;
-          color = "rgba(168, 85, 247, 0.9)"; // Purple
+          color = "rgba(168, 85, 247, 0.9)"; 
         } else if (ev?.event_type === "purchase") {
           targetNode = 4;
-          color = "rgba(16, 185, 129, 0.9)"; // Emerald
+          color = "rgba(16, 185, 129, 0.9)"; 
         }
 
         packets.current.push({
@@ -177,7 +172,6 @@ function TelemetryCanvas({ events, isDark }: { events: PageEvent[]; isDark: bool
       const height = canvas.height / (window.devicePixelRatio || 1);
       ctx.clearRect(0, 0, width, height);
 
-      // Grid overlay
       ctx.strokeStyle = isDark ? "rgba(255, 255, 255, 0.03)" : "rgba(0, 0, 0, 0.03)";
       ctx.lineWidth = 1;
       const gridSpacing = 16;
@@ -286,10 +280,6 @@ function TelemetryCanvas({ events, isDark }: { events: PageEvent[]; isDark: bool
   );
 }
 
-
-// ────────────────────────────────────────────────────────────────────────────
-// MAIN ADMIN PAGE COMPONENT
-// ────────────────────────────────────────────────────────────────────────────
 function AdminPage() {
   const navigate = useNavigate();
 
@@ -301,7 +291,7 @@ function AdminPage() {
   );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // ── Secure Loading and Auth states ──────────────────────────────────────
+  // Secure Loading & Auth Handlers
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
 
@@ -395,7 +385,7 @@ function AdminPage() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
           setIsLoadingAuth(false);
-          navigate({ to: "/login", replace: true });
+          navigate({ to: "/login", replace: true } as any);
           return;
         }
         setUserEmail(user.email || null);
@@ -403,7 +393,7 @@ function AdminPage() {
         setIsAuthorized(true);
       } catch (error) {
         console.error("Auth init failure:", error);
-        navigate({ to: "/login", replace: true });
+        navigate({ to: "/login", replace: true } as any);
       } finally {
         setIsLoadingAuth(false);
       }
@@ -702,7 +692,7 @@ function AdminPage() {
     }
     const reordered = [...orderedProducts];
     const fromIdx = reordered.findIndex(p => p.id === draggedId);
-    const toIdx = reordered.findIndex(p => p.id === targetId);
+    const_toIdx = reordered.findIndex(p => p.id === targetId);
     const [moved] = reordered.splice(fromIdx, 1);
     reordered.splice(toIdx, 0, moved);
     const updated = reordered.map((p, i) => ({ ...p, display_order: i }));
@@ -961,13 +951,11 @@ function AdminPage() {
   }
 
   if (!isAuthorized) {
-    // Return early to prevent layout render and avoid private data flashing before redirect completes
     return null;
   }
 
   return (
     <div className={`min-h-screen font-sans relative ${isDark ? "bg-black text-neutral-100 selection:bg-neutral-800" : "bg-neutral-50 text-neutral-900 selection:bg-neutral-200"}`}>
-      {/* Dynamic scanline element */}
       <div className="absolute top-0 left-0 w-full h-[2px] bg-sky-500/10 dark:bg-white/5 pointer-events-none animate-bounce z-40 opacity-40" style={{ animationDuration: "12s" }} />
 
       <div 
@@ -996,7 +984,7 @@ function AdminPage() {
                 className={`text-[10px] font-mono font-medium uppercase tracking-widest transition-all relative py-1 ${
                   section === s
                     ? isDark ? "text-white" : "text-black"
-                    : isDark ? "text-neutral-500 hover:text-neutral-300" : "text-neutral-450 hover:text-neutral-800"
+                    : isDark ? "text-neutral-500 hover:text-neutral-300" : "text-neutral-455 hover:text-neutral-800"
                 }`}
               >
                 {s}
@@ -1042,9 +1030,7 @@ function AdminPage() {
           <div className="space-y-10 animate-in fade-in duration-500">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-xl font-medium tracking-tight flex items-center gap-2">
-                  Diagnostic Overview
-                </h1>
+                <h1 className="text-xl font-medium tracking-tight">Diagnostic Overview</h1>
                 <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>SYSTEM METRICS AND ENGINE HOOKS</p>
               </div>
 
@@ -1177,7 +1163,7 @@ function AdminPage() {
                   <div key={step.label} className="flex items-center gap-4">
                     <div className="w-32 flex-shrink-0 flex items-center gap-2">
                       <LedPulse color={step.led} active={step.value !== null && step.value > 0} />
-                      <span className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>{step.label}</span>
+                      <span className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-500" : "text-neutral-450"}`}>{step.label}</span>
                     </div>
                     <div className={`flex-1 h-2 relative rounded overflow-hidden ${isDark ? "bg-neutral-900" : "bg-neutral-100"}`}>
                       {step.value !== null && (
@@ -1218,7 +1204,7 @@ function AdminPage() {
                         <tr key={i} className={`border-b last:border-0 ${isDark ? "border-neutral-900 hover:bg-neutral-900/30" : "border-neutral-100 hover:bg-neutral-50/50"}`}>
                           <td className="px-5 py-3 text-[11px] font-medium uppercase truncate max-w-[180px]">{p.title}</td>
                           <td className={`px-5 py-3 text-[11px] font-mono font-medium text-right ${isDark ? "text-white" : "text-black"}`}>{fmt$(p.revenue)}</td>
-                          <td className={`px-5 py-3 text-[11px] font-mono text-right ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>{p.units}</td>
+                          <td className={`px-5 py-3 text-[11px] font-mono text-right ${isDark ? "text-neutral-500" : "text-neutral-405"}`}>{p.units}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1318,7 +1304,7 @@ function AdminPage() {
                     {productForm.is_published ? "Status: Deployed" : "Status: Draft"}
                   </button>
                   <div className="flex gap-2">
-                    <button onClick={resetProductForm} className={`text-[9px] font-mono uppercase px-3 py-2 ${isDark ? "text-neutral-500 hover:text-white" : "text-neutral-400 hover:text-black"}`}>Cancel</button>
+                    <button onClick={resetProductForm} className={`text-[9px] font-mono uppercase px-3 py-2 ${isDark ? "text-neutral-500 hover:text-white" : "text-neutral-450 hover:text-black"}`}>Cancel</button>
                     <button onClick={saveProduct} className={`text-[9px] font-mono font-bold uppercase px-6 py-2 transition-all ${
                       isDark ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800"
                     }`}>
@@ -1395,7 +1381,7 @@ function AdminPage() {
                           <button onClick={e => { e.stopPropagation(); togglePublished(p.id, p.is_published); }}
                             className={`w-1.5 h-1.5 rounded-full transition-all ${p.is_published ? "bg-emerald-500" : "bg-rose-500"}`} />
                           {isPrintful ? (
-                            <span className={`${isDark ? "text-neutral-800" : "text-neutral-300"} cursor-not-allowed`} title="Printful products are synced from supplier hub">
+                            <span className={`${isDark ? "text-neutral-800" : "text-neutral-305"} cursor-not-allowed`} title="Printful products are synced from supplier hub">
                               <Edit3 size={11} />
                             </span>
                           ) : (
@@ -1403,7 +1389,7 @@ function AdminPage() {
                               <Edit3 size={11} />
                             </button>
                           )}
-                          <button onClick={e => { e.stopPropagation(); archiveProduct(p.id); }} className={`${isDark ? "text-neutral-500 hover:text-rose-450" : "text-neutral-400 hover:text-rose-600"} transition-colors`}>
+                          <button onClick={e => { e.stopPropagation(); archiveProduct(p.id); }} className={`${isDark ? "text-neutral-500 hover:text-rose-455" : "text-neutral-400 hover:text-rose-600"} transition-colors`}>
                             <Archive size={11} />
                           </button>
                         </div>
@@ -1601,7 +1587,7 @@ function AdminPage() {
             </div>
 
             <div className={`p-6 border rounded ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200/60"} space-y-4`}>
-              <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-450"}`}>Daily Telemetry Pulse</p>
+              <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Daily Telemetry Pulse</p>
               <div className="flex items-end gap-1.5 h-32 pt-4">
                 {analyticsChartData.map((d, i) => (
                   <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group relative">
@@ -1834,7 +1820,7 @@ function AdminPage() {
                     <p className={`text-[9px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Identified Payload</p>
                     <p className="text-xs font-mono font-semibold uppercase">{userEmail || "…"}</p>
                   </div>
-                  <button onClick={handleSignOut} className={`w-full rounded text-[10px] font-mono font-semibold uppercase px-4 py-2.5 transition-all ${isDark ? "bg-rose-500/10 text-rose-450 hover:bg-rose-500/20" : "bg-rose-50 text-rose-650 hover:bg-rose-100"}`}>
+                  <button onClick={handleSignOut} className={`w-full rounded text-[10px] font-mono font-semibold uppercase px-4 py-2.5 transition-all ${isDark ? "bg-rose-500/10 text-rose-455 hover:bg-rose-500/20" : "bg-rose-50 text-rose-650 hover:bg-rose-100"}`}>
                     TERMINATE SESSION
                   </button>
                 </div>
@@ -1868,7 +1854,7 @@ function AdminPage() {
             </div>
             {selectedRow._type === "order" && (
               <button onClick={() => handleArchiveOrder(selectedRow.id)}
-                className={`w-full py-2.5 rounded text-[9px] font-mono font-bold uppercase tracking-wide transition-all ${isDark ? "bg-rose-500/10 text-rose-450 hover:bg-rose-500/20" : "bg-rose-50 text-rose-655 hover:bg-rose-100"}`}>
+                className={`w-full py-2.5 rounded text-[9px] font-mono font-bold uppercase tracking-wide transition-all ${isDark ? "bg-rose-500/10 text-rose-455 hover:bg-rose-500/20" : "bg-rose-50 text-rose-655 hover:bg-rose-100"}`}>
                 Archive Order Record
               </button>
             )}
