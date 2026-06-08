@@ -4,8 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts } from "@/lib/useProducts";
 import { offer } from "@/config/site";
 import { toast } from "sonner";
-import { Edit3, Archive, X, Menu, RefreshCw, BarChart2, Lock, CheckSquare, Square, Trash2, Eye, EyeOff, GripVertical, Users, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Edit3, Archive, X, Menu, RefreshCw, BarChart2, Lock, CheckSquare, Square, Trash2, Eye, EyeOff, GripVertical, Users, TrendingUp, TrendingDown, Minus, Terminal, Cpu, Zap, Activity, AlertTriangle, Play } from "lucide-react";
 import { requireAdmin } from "@/lib/admin-guard";
+
 
 // ────────────────────────────────────────────────────────────────────────────
 // TYPES & ROUTE DEFINITION
@@ -72,28 +73,47 @@ type NavSection = "overview" | "products" | "orders" | "leads" | "analytics" | "
 
 export const Route = createFileRoute("/admin/")({
   head: () => ({
-    meta: [{ title: "Admin" }],
+    meta: [{ title: "Command Center" }],
   }),
   beforeLoad: requireAdmin,
   component: AdminPage,
 });
 
-// ── LED indicator matching hardware aesthetics ──────────────────────────────
-function LedPulse({ color, active = true }: { color: "green" | "yellow" | "red" | "cyan" | "neutral"; active?: boolean }) {
+// ────────────────────────────────────────────────────────────────────────────
+// BULLETPROOF EVENT NORMALIZATION PARSER
+// ────────────────────────────────────────────────────────────────────────────
+const getAddToCartCount = (eventsList: PageEvent[]): number => {
+  return eventsList.filter(e => {
+    const type = e.event_type?.toLowerCase() || "";
+    return type === "add_to_cart" || type === "add-to-cart" || type === "cart" || type === "addtocart";
+  }).length;
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+// LED VISUAL GLOW COMPONENT
+// ────────────────────────────────────────────────────────────────────────────
+function LedPulse({ color, active = true }: { color: "green" | "yellow" | "red" | "cyan" | "purple" | "neutral"; active?: boolean }) {
   const colorMap = {
-    green: "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]",
-    yellow: "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.8)]",
-    red: "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]",
-    cyan: "bg-sky-450 shadow-[0_0_8px_rgba(56,189,248,0.8)]",
+    green: "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.9)]",
+    yellow: "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.9)]",
+    red: "bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.9)]",
+    cyan: "bg-sky-400 shadow-[0_0_10px_rgba(56,189,248,0.9)]",
+    purple: "bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.9)]",
     neutral: "bg-neutral-400 shadow-[0_0_6px_rgba(163,163,163,0.5)]",
   };
   return (
-    <span className={`inline-block w-2 h-2 rounded-full transition-all duration-300 ${colorMap[color]} ${active ? "animate-pulse" : ""}`} />
+    <span className={`inline-block w-2.5 h-2.5 rounded-full transition-all duration-300 ${colorMap[color]} ${active ? "animate-pulse" : ""}`} />
   );
 }
 
-// ── Interactive Telemetry Stream Canvas ─────────────────────────────────────
-function TelemetryCanvas({ events, isDark }: { events: PageEvent[]; isDark: boolean }) {
+// ────────────────────────────────────────────────────────────────────────────
+// INTERACTIVE TELEMETRY CANVAS COMPONENT (TRAVERSAL EMULATOR)
+// ────────────────────────────────────────────────────────────────────────────
+interface TelemetryCanvasRef {
+  triggerSimulatedPacket: (type: "view" | "click" | "cart" | "checkout" | "purchase") => void;
+}
+
+const TelemetryCanvas = ({ events, isDark, canvasRefExternal }: { events: PageEvent[]; isDark: boolean; canvasRefExternal?: React.RefObject<TelemetryCanvasRef | null> }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const prevEventsLength = useRef(events.length);
 
@@ -106,40 +126,65 @@ function TelemetryCanvas({ events, isDark }: { events: PageEvent[]; isDark: bool
     size: number;
   }>>([]);
 
+  const spawnPacket = useCallback((eventType: string) => {
+    let targetNode = 0;
+    let color = isDark ? "rgba(255, 255, 255, 0.85)" : "rgba(0, 0, 0, 0.85)";
+
+    const normalized = eventType.toLowerCase();
+    if (normalized === "product_click") {
+      targetNode = 1;
+      color = "rgba(56, 189, 248, 0.95)"; 
+    } else if (normalized === "add_to_cart" || normalized === "add-to-cart" || normalized === "cart") {
+      targetNode = 2;
+      color = "rgba(245, 158, 11, 0.95)"; 
+    } else if (normalized === "checkout_start") {
+      targetNode = 3;
+      color = "rgba(168, 85, 247, 0.95)"; 
+    } else if (normalized === "purchase" || normalized === "paid") {
+      targetNode = 4;
+      color = "rgba(16, 185, 129, 0.95)"; 
+    }
+
+    packets.current.push({
+      x: 40,
+      y: 70,
+      targetNode,
+      speed: 1.8 + Math.random() * 1.5,
+      color,
+      size: 4.5 + Math.random() * 2.5,
+    });
+  }, [isDark]);
+
+  // Expose manual trigger API to other modules/buttons
+  useEffect(() => {
+    if (canvasRefExternal) {
+      (canvasRefExternal as any).current = {
+        triggerSimulatedPacket: (type: "view" | "click" | "cart" | "checkout" | "purchase") => {
+          const map = {
+            view: "page_view",
+            click: "product_click",
+            cart: "add_to_cart",
+            checkout: "checkout_start",
+            purchase: "purchase",
+          };
+          spawnPacket(map[type]);
+        }
+      };
+    }
+  }, [canvasRefExternal, spawnPacket]);
+
   useEffect(() => {
     if (events.length > prevEventsLength.current) {
       const difference = events.length - prevEventsLength.current;
       for (let i = 0; i < difference; i++) {
         const ev = events[i];
-        let targetNode = 0;
-        let color = isDark ? "rgba(255, 255, 255, 0.85)" : "rgba(0, 0, 0, 0.85)";
-
-        if (ev?.event_type === "product_click") {
-          targetNode = 1;
-          color = "rgba(56, 189, 248, 0.9)"; 
-        } else if (ev?.event_type === "add_to_cart") {
-          targetNode = 2;
-          color = "rgba(245, 158, 11, 0.9)"; 
-        } else if (ev?.event_type === "checkout_start") {
-          targetNode = 3;
-          color = "rgba(168, 85, 247, 0.9)"; 
-        } else if (ev?.event_type === "purchase") {
-          targetNode = 4;
-          color = "rgba(16, 185, 129, 0.9)"; 
+        if (ev) {
+          spawnPacket(ev.event_type);
         }
-
-        packets.current.push({
-          x: 20,
-          y: 60,
-          targetNode,
-          speed: 1.8 + Math.random() * 1.5,
-          color,
-          size: 4.5 + Math.random() * 2.5,
-        });
       }
     }
     prevEventsLength.current = events.length;
-  }, [events, isDark]);
+  }, [events, spawnPacket]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -172,6 +217,7 @@ function TelemetryCanvas({ events, isDark }: { events: PageEvent[]; isDark: bool
       const height = canvas.height / (window.devicePixelRatio || 1);
       ctx.clearRect(0, 0, width, height);
 
+      // System background grid
       ctx.strokeStyle = isDark ? "rgba(255, 255, 255, 0.03)" : "rgba(0, 0, 0, 0.03)";
       ctx.lineWidth = 1;
       const gridSpacing = 16;
@@ -194,6 +240,7 @@ function TelemetryCanvas({ events, isDark }: { events: PageEvent[]; isDark: bool
         n.y = height / 2;
       });
 
+      // Node path tracks
       ctx.strokeStyle = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)";
       ctx.lineWidth = 1.5;
       ctx.beginPath();
@@ -203,6 +250,7 @@ function TelemetryCanvas({ events, isDark }: { events: PageEvent[]; isDark: bool
       }
       ctx.stroke();
 
+      // Ambient stream simulation
       if (Math.random() < 0.015) {
         packets.current.push({
           x: nodes[0].x,
@@ -214,6 +262,7 @@ function TelemetryCanvas({ events, isDark }: { events: PageEvent[]; isDark: bool
         });
       }
 
+      // Draw active traveling packets
       packets.current.forEach((p, idx) => {
         const nextNode = nodes[p.targetNode];
 
@@ -238,6 +287,7 @@ function TelemetryCanvas({ events, isDark }: { events: PageEvent[]; isDark: bool
         }
       });
 
+      // Draw node terminals
       nodes.forEach((n) => {
         ctx.beginPath();
         ctx.arc(n.x, n.y, 6, 0, Math.PI * 2);
@@ -280,6 +330,123 @@ function TelemetryCanvas({ events, isDark }: { events: PageEvent[]; isDark: bool
   );
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// COGNITIVE INTEL INTERACTIVE AI ENGINE MODULE
+// ────────────────────────────────────────────────────────────────────────────
+function AiAgentConsole({ isDark, onSimulatePacket }: { isDark: boolean; onSimulatePacket: (type: "view" | "click" | "cart" | "checkout" | "purchase") => void }) {
+  const [logs, setLogs] = useState<string[]>([
+    "SYS_COGNITIVE_ENGINE: Initializing analytical sequence...",
+    "COGNITIVE_AGENT: Thread pool mounted. Listening on pg_realtime...",
+  ]);
+  const [thinkingSpeed, setThinkingSpeed] = useState(3000); // ms per check
+  const [activeTask, setActiveTask] = useState("Awaiting telemetry...");
+
+  // Generate automated diagnostics logs based on system tasks
+  useEffect(() => {
+    const tasks = [
+      "Evaluating cart-to-checkout progression anomalies...",
+      "Correlating landing page traffic spikes with active leads...",
+      "Analyzing pricing elasticity indices on store config...",
+      "Optimizing real-time cache indices for catalog retrieval...",
+      "Auditing active administrator operational permissions...",
+    ];
+
+    const interval = setInterval(() => {
+      const selectedTask = tasks[Math.floor(Math.random() * tasks.length)];
+      setActiveTask(selectedTask);
+      
+      const timestamp = new Date().toLocaleTimeString("en-US", { hour12: false });
+      setLogs(prev => {
+        const updated = [`[${timestamp}] Jarvis_AI: ${selectedTask}`, ...prev];
+        return updated.slice(0, 15); // keep log history light
+      });
+    }, thinkingSpeed);
+
+    return () => clearInterval(interval);
+  }, [thinkingSpeed]);
+
+  return (
+    <div className={`p-6 border rounded-md relative overflow-hidden transition-all ${
+      isDark ? "bg-neutral-950/45 border-neutral-800/80" : "bg-white border-neutral-200/80 shadow-sm"
+    }`}>
+      {/* Grid line indicator background */}
+      <div className="absolute top-0 right-0 p-3 flex items-center gap-1.5 pointer-events-none text-[8px] font-mono tracking-widest text-neutral-400 dark:text-neutral-500 uppercase">
+        <Cpu size={12} className="animate-spin" style={{ animationDuration: "10s" }} />
+        <span>Jarvis Cognitive Core v4.1</span>
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-xs font-mono font-black uppercase tracking-wider flex items-center gap-1.5">
+            <LedPulse color="purple" />
+            <span>Jarvis Cognitive Engine Diagnostics</span>
+          </h3>
+          <p className={`text-[10px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>
+            ACTIVE REASONING: <span className="text-purple-400 font-bold">{activeTask}</span>
+          </p>
+        </div>
+
+        {/* Live typing diagnostic output console */}
+        <div className={`p-4 border rounded font-mono text-[9px] h-32 overflow-y-auto space-y-1.5 ${
+          isDark ? "bg-black/80 border-neutral-900 text-purple-300" : "bg-neutral-50 border-neutral-100 text-purple-700"
+        }`}>
+          {logs.map((log, index) => (
+            <div key={index} className="flex items-start gap-2 animate-in fade-in duration-300">
+              <span className="opacity-40">❯</span>
+              <span className="leading-relaxed whitespace-pre-wrap">{log}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Interactable Telemetry Slider & Simulation Buttons */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-[8px] font-mono font-bold tracking-widest uppercase text-neutral-400">
+              <span>Reasoning Throttle (Delay: {thinkingSpeed}ms)</span>
+              <Zap size={10} className="text-purple-400" />
+            </div>
+            <input 
+              type="range" 
+              min={1000} 
+              max={8000} 
+              step={500}
+              value={thinkingSpeed} 
+              onChange={e => setThinkingSpeed(Number(e.target.value))}
+              className="w-full h-1 bg-neutral-200 dark:bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <span className="text-[8px] font-mono font-bold tracking-widest uppercase text-neutral-400 block">
+              Inject Telemetry Signal (Manual Override)
+            </span>
+            <div className="flex gap-1.5 flex-wrap">
+              {(["view", "click", "cart", "checkout", "purchase"] as const).map(signal => (
+                <button
+                  key={signal}
+                  onClick={() => {
+                    onSimulatePacket(signal);
+                    setLogs(prev => {
+                      const t = new Date().toLocaleTimeString("en-US", { hour12: false });
+                      return [`[${t}] SYSTEM: Manual telemetry override payload [${signal.toUpperCase()}] injected.`, ...prev];
+                    });
+                  }}
+                  className="flex-1 min-w-[50px] text-[8px] font-mono font-black uppercase tracking-widest border py-1.5 rounded hover:bg-purple-500/10 hover:border-purple-500/40 transition-all dark:border-neutral-850 dark:text-neutral-400 dark:hover:text-purple-300 border-neutral-200 text-neutral-600"
+                >
+                  {signal}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// MAIN ADMIN PAGE COMPONENT
+// ────────────────────────────────────────────────────────────────────────────
 function AdminPage() {
   const navigate = useNavigate();
 
@@ -291,9 +458,12 @@ function AdminPage() {
   );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Secure Loading & Auth Handlers
+  // Secure Handshake & Authentication Gate States
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
+
+  // External Ref to connect AI Engine Simulator with the Telemetry Canvas
+  const telemetryCanvasRef = useRef<TelemetryCanvasRef | null>(null);
 
   // ── Data State ──────────────────────────────────────────────────────────
   const [products, setProducts] = useState<Product[]>([]);
@@ -392,7 +562,7 @@ function AdminPage() {
         await fetchData();
         setIsAuthorized(true);
       } catch (error) {
-        console.error("Auth init failure:", error);
+        console.error("Auth initialization failure:", error);
         navigate({ to: "/login", replace: true } as any);
       } finally {
         setIsLoadingAuth(false);
@@ -692,7 +862,7 @@ function AdminPage() {
     }
     const reordered = [...orderedProducts];
     const fromIdx = reordered.findIndex(p => p.id === draggedId);
-    const_toIdx = reordered.findIndex(p => p.id === targetId);
+    const toIdx = reordered.findIndex(p => p.id === targetId);
     const [moved] = reordered.splice(fromIdx, 1);
     reordered.splice(toIdx, 0, moved);
     const updated = reordered.map((p, i) => ({ ...p, display_order: i }));
@@ -821,10 +991,19 @@ function AdminPage() {
   const hasEventData = pageEvents.length > 0;
   const funnelViews = hasEventData ? pageEvents.filter(e => e.event_type === "page_view").length : 0;
   const funnelProductClicks = hasEventData ? pageEvents.filter(e => e.event_type === "product_click").length : 0;
-  const funnelAddToCart = hasEventData ? pageEvents.filter(e => e.event_type === "add_to_cart").length : 0;
+  const funnelAddToCart = hasEventData ? getAddToCartCount(pageEvents) : 0;
   const funnelCheckoutStart = hasEventData ? pageEvents.filter(e => e.event_type === "checkout_start").length : 0;
   const funnelPurchase = paidOrders.length;
   const funnelMax = Math.max(funnelViews, funnelProductClicks, funnelAddToCart, funnelCheckoutStart, funnelPurchase, 1);
+
+  // ── Computed: Live events matching the current selected period ────────────
+  const currentPeriodEvents = useMemo(() => {
+    return pageEvents.filter(e => filterByRange(new Date(e.created_at), revenueRange));
+  }, [pageEvents, revenueRange]);
+
+  const currentPeriodAddToCart = useMemo(() => {
+    return getAddToCartCount(currentPeriodEvents);
+  }, [currentPeriodEvents]);
 
   // ── Computed: Top Products ──────────────────────────────────────────────
   const topProducts = useMemo(() => {
@@ -942,8 +1121,8 @@ function AdminPage() {
             <div className={`absolute inset-2 rounded-full border border-b-transparent animate-spin ${isDark ? "border-neutral-800" : "border-neutral-300"}`} style={{ animationDirection: "reverse" }} />
           </div>
           <div className="space-y-1">
-            <p className="text-[10px] uppercase tracking-[0.2em] font-bold">INITIALIZING CONTROL PANEL</p>
-            <p className="text-[8px] uppercase tracking-widest text-neutral-500 animate-pulse">AUTHORIZING CREDENTIALS & DEPLOYING CORE</p>
+            <p className="text-[10px] uppercase tracking-[0.2em] font-bold">INITIALIZING CORE CONTROL</p>
+            <p className="text-[8px] uppercase tracking-widest text-neutral-500 animate-pulse">AUTHORIZING CREDENTIALS & MOUNTING SYSTEMS</p>
           </div>
         </div>
       </div>
@@ -971,7 +1150,7 @@ function AdminPage() {
         <div className="max-w-7xl mx-auto flex items-center justify-between px-6 py-3.5">
           <div className="flex items-center gap-3">
             <span className={`text-[10px] font-mono tracking-[0.3em] font-semibold border px-2 py-0.5 uppercase ${isDark ? "border-neutral-800 text-neutral-400" : "border-neutral-200 text-neutral-500"}`}>
-              SYS.ADMIN
+              COMMAND CENTER
             </span>
             <LedPulse color="green" />
           </div>
@@ -1030,8 +1209,10 @@ function AdminPage() {
           <div className="space-y-10 animate-in fade-in duration-500">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-xl font-medium tracking-tight">Diagnostic Overview</h1>
-                <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>SYSTEM METRICS AND ENGINE HOOKS</p>
+                <h1 className="text-xl font-medium tracking-tight flex items-center gap-2">
+                  Command Center Console
+                </h1>
+                <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>JARVIS_AI OPTIMIZATION CORE DEPLOYED</p>
               </div>
 
               <button
@@ -1045,9 +1226,6 @@ function AdminPage() {
                 JARVIS CONSOLE →
               </button>
             </div>
-
-            {/* Live Interactive Telemetry Canvas */}
-            <TelemetryCanvas events={pageEvents} isDark={isDark} />
 
             {/* Period Selector */}
             <div className="flex gap-2">
@@ -1116,12 +1294,13 @@ function AdminPage() {
               </div>
             </div>
 
-            {/* ── SUPPORTING STATS ── */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {/* ── SUPPORTING STATS GRID (NOW INCLUDING ADD TO CART!) ── */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
               <StatWithDelta label="Orders" value={ordersInPeriod} sub="paid this period" delta={ordersDelta} isDark={isDark} />
               <StatWithDelta label="Avg Ticket" value={fmt$(avgTicket)} sub="per paid order" delta={avgTicketDelta} isDark={isDark} />
               <Stat label="Conv Rate" value={`${convRate}%`} sub="checkout to paid" isDark={isDark} />
               <Stat label="Leads" value={activeLeads.length} sub="total captured" isDark={isDark} />
+              <Stat label="Add to Cart" value={currentPeriodAddToCart.toLocaleString()} sub="cart conversions" isDark={isDark} led="cyan" />
             </div>
 
             {/* ── ORDER STATUS BREAKDOWN ── */}
@@ -1141,6 +1320,22 @@ function AdminPage() {
                 </div>
               ))}
             </div>
+
+            {/* ── TELEMETRY CANVAS PLACED EXACTLY BELOW MAIN METRICS ── */}
+            <div className="space-y-3">
+              <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-450"}`}>Real-Time Telemetry Pipeline</p>
+              <TelemetryCanvas events={pageEvents} isDark={isDark} canvasRefExternal={telemetryCanvasRef} />
+            </div>
+
+            {/* ── COGNITIVE INTEL AI DICTATOR (THE "SHOW-OFF" MODULE) ── */}
+            <AiAgentConsole 
+              isDark={isDark} 
+              onSimulatePacket={(type) => {
+                if (telemetryCanvasRef.current) {
+                  telemetryCanvasRef.current.triggerSimulatedPacket(type);
+                }
+              }} 
+            />
 
             {/* ── CONVERSION FUNNEL ── */}
             <div className={`p-6 border rounded ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200/60"} space-y-4`}>
@@ -1204,7 +1399,7 @@ function AdminPage() {
                         <tr key={i} className={`border-b last:border-0 ${isDark ? "border-neutral-900 hover:bg-neutral-900/30" : "border-neutral-100 hover:bg-neutral-50/50"}`}>
                           <td className="px-5 py-3 text-[11px] font-medium uppercase truncate max-w-[180px]">{p.title}</td>
                           <td className={`px-5 py-3 text-[11px] font-mono font-medium text-right ${isDark ? "text-white" : "text-black"}`}>{fmt$(p.revenue)}</td>
-                          <td className={`px-5 py-3 text-[11px] font-mono text-right ${isDark ? "text-neutral-500" : "text-neutral-405"}`}>{p.units}</td>
+                          <td className={`px-5 py-3 text-[11px] font-mono text-right ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>{p.units}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1373,7 +1568,7 @@ function AdminPage() {
                     </div>
                     <div className={`px-3.5 pb-3.5 pt-2 ${isDark ? "bg-neutral-950/40" : "bg-neutral-50/20"}`}>
                       <p className={`mb-0.5 text-[10px] uppercase tracking-wider truncate font-medium ${isDark ? "text-neutral-200" : "text-neutral-800"}`}>{p.title}</p>
-                      <p className={`text-[10px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-500"}`}>
+                      <p className={`text-[10px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-550"}`}>
                         ${(p.price_cents / 100).toFixed(2)}
                       </p>
                       {!selectMode && (
@@ -1521,7 +1716,7 @@ function AdminPage() {
                   {filteredLeads.map(l => (
                     <tr key={l.id} className={`border-b last:border-0 ${isDark ? "border-neutral-900 hover:bg-neutral-900/30" : "border-neutral-100 hover:bg-neutral-50/50"}`}>
                       <td className="px-5 py-4 text-xs font-semibold lowercase font-mono">{l.email}</td>
-                      <td className={`px-5 py-4 text-[10px] font-mono uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>{fmtDate(l.created_at)}</td>
+                      <td className={`px-5 py-4 text-[10px] font-mono uppercase ${isDark ? "text-neutral-500" : "text-neutral-450"}`}>{fmtDate(l.created_at)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1579,10 +1774,12 @@ function AdminPage() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {/* ANALYTICS STATS WITH ADD TO CART INTEGRATED */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
               <Stat label="Page Views" value={analyticsEvents.filter(e => e.event_type === "page_view").length.toLocaleString()} sub={`last ${analyticsRange} days`} isDark={isDark} />
               <Stat label="Sessions" value={uniqueSessions.toLocaleString()} sub="unique visitors" isDark={isDark} />
               <Stat label="Product Clicks" value={analyticsEvents.filter(e => e.event_type === "product_click").length.toLocaleString()} sub="product page views" isDark={isDark} />
+              <Stat label="Add to Carts" value={getAddToCartCount(analyticsEvents).toLocaleString()} sub="add to cart conversions" isDark={isDark} led="cyan" />
               <Stat label="Checkout Starts" value={analyticsEvents.filter(e => e.event_type === "checkout_start").length.toLocaleString()} sub="initiated checkout" isDark={isDark} />
             </div>
 
@@ -1592,11 +1789,11 @@ function AdminPage() {
                 {analyticsChartData.map((d, i) => (
                   <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group relative">
                     <div
-                      className={`w-full transition-all duration-300 rounded-[1px] ${isDark ? "bg-neutral-800 group-hover:bg-neutral-550" : "bg-neutral-200 group-hover:bg-neutral-350"}`}
+                      className={`w-full transition-all duration-300 rounded-[1px] ${isDark ? "bg-neutral-800 group-hover:bg-neutral-550" : "bg-neutral-200 group-hover:bg-neutral-355"}`}
                       style={{ height: `${(d.views / chartMax) * 100}%`, minHeight: d.views > 0 ? "3px" : "1px" }}
                     />
                     {d.views > 0 && (
-                      <div className={`absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[8px] font-mono font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border ${isDark ? "bg-neutral-900 text-white border-neutral-800" : "bg-white text-black border-neutral-250 shadow-sm"}`}>
+                      <div className={`absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[8px] font-mono font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border ${isDark ? "bg-neutral-900 text-white border-neutral-850" : "bg-white text-black border-neutral-250 shadow-sm"}`}>
                         {d.views}
                       </div>
                     )}
@@ -1794,14 +1991,14 @@ function AdminPage() {
                           <select
                             value={u.role}
                             onChange={e => handleUpdateUserRole(u.id, e.target.value as any)}
-                            className={`text-[8px] font-mono font-semibold uppercase bg-transparent focus:outline-none focus:ring-1 border rounded px-1.5 py-0.5 ${isDark ? "text-neutral-400 border-neutral-800" : "text-neutral-500 border-neutral-200"}`}
+                            className={`text-[8px] font-mono font-semibold uppercase bg-transparent focus:outline-none focus:ring-1 border rounded px-1.5 py-0.5 ${isDark ? "text-neutral-400 border-neutral-800" : "text-neutral-550 border-neutral-200"}`}
                           >
                             <option value="viewer">VIEWER</option>
                             <option value="manager">MANAGER</option>
                             <option value="admin">ADMIN</option>
                           </select>
                           <button onClick={() => handleRemoveAdminUser(u.id)}
-                            className={`${isDark ? "text-neutral-650 hover:text-rose-450" : "text-neutral-400 hover:text-rose-600"} transition-colors`}>
+                            className={`${isDark ? "text-neutral-650 hover:text-rose-455" : "text-neutral-400 hover:text-rose-600"} transition-colors`}>
                             <X size={11} />
                           </button>
                         </div>
@@ -1820,7 +2017,7 @@ function AdminPage() {
                     <p className={`text-[9px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Identified Payload</p>
                     <p className="text-xs font-mono font-semibold uppercase">{userEmail || "…"}</p>
                   </div>
-                  <button onClick={handleSignOut} className={`w-full rounded text-[10px] font-mono font-semibold uppercase px-4 py-2.5 transition-all ${isDark ? "bg-rose-500/10 text-rose-455 hover:bg-rose-500/20" : "bg-rose-50 text-rose-650 hover:bg-rose-100"}`}>
+                  <button onClick={handleSignOut} className={`w-full rounded text-[10px] font-mono font-semibold uppercase px-4 py-2.5 transition-all ${isDark ? "bg-rose-500/10 text-rose-455 hover:bg-rose-500/20" : "bg-rose-50 text-rose-655 hover:bg-rose-100"}`}>
                     TERMINATE SESSION
                   </button>
                 </div>
@@ -1833,7 +2030,7 @@ function AdminPage() {
 
       {/* ── ORDER DETAIL MODAL ── */}
       {selectedRow && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 animate-in fade-in duration-350">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 animate-in fade-in duration-355">
           <div className="absolute inset-0 backdrop-blur-md bg-black/60 dark:bg-black/80" onClick={() => setSelectedRow(null)} />
           <div className={`relative w-full max-w-lg p-8 border rounded-md space-y-6 max-h-[85vh] overflow-y-auto ${
             isDark ? "bg-neutral-950 border-neutral-850" : "bg-white border-neutral-250 shadow-xl"
@@ -1869,12 +2066,12 @@ function AdminPage() {
 // SHARED STAT COMPONENTS
 // ────────────────────────────────────────────────────────────────────────────
 
-function Stat({ label, value, sub, isDark }: { label: string; value: string | number; sub: string; isDark: boolean }) {
+function Stat({ label, value, sub, isDark, led = "cyan" }: { label: string; value: string | number; sub: string; isDark: boolean; led?: "green" | "yellow" | "red" | "cyan" | "purple" | "neutral" }) {
   return (
     <div className={`p-4 border rounded ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200/50 shadow-sm"} space-y-1`}>
       <div className="flex items-center justify-between gap-2">
         <p className={`text-[8px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{label}</p>
-        <LedPulse color="cyan" />
+        <LedPulse color={led} />
       </div>
       <p 
         className="text-xl font-semibold tracking-tight font-sans"
