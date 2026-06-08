@@ -626,7 +626,7 @@ function AdminPage() {
         supabase.from("products").select("*"),
         supabase.from("orders").select("*"),
         supabase.from("leads").select("*"),
-        supabase.from("site_config").select("*").eq("id", "main").single(),
+        supabase.from("site_config").select("*").eq("id", "main").maybeSingle(),
         supabase.from("page_events").select("*").order("created_at", { ascending: false }).limit(5000),
         supabase.from("admin_users").select("*"),
       ]);
@@ -1323,7 +1323,7 @@ function AdminPage() {
 
             {/* ── TELEMETRY CANVAS PLACED EXACTLY BELOW MAIN METRICS ── */}
             <div className="space-y-3">
-              <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-450"}`}>Real-Time Telemetry Pipeline</p>
+              <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Real-Time Telemetry Pipeline</p>
               <TelemetryCanvas events={pageEvents} isDark={isDark} canvasRefExternal={telemetryCanvasRef} />
             </div>
 
@@ -1384,7 +1384,7 @@ function AdminPage() {
             {/* ── TOP PRODUCTS ── */}
             {topProducts.length > 0 && (
               <div className="space-y-3">
-                <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-450"}`}>Top Products by Revenue</p>
+                <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Top Products by Revenue</p>
                 <div className={`border rounded overflow-hidden ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200/60"}`}>
                   <table className="w-full text-left">
                     <thead>
@@ -1568,7 +1568,7 @@ function AdminPage() {
                     </div>
                     <div className={`px-3.5 pb-3.5 pt-2 ${isDark ? "bg-neutral-950/40" : "bg-neutral-50/20"}`}>
                       <p className={`mb-0.5 text-[10px] uppercase tracking-wider truncate font-medium ${isDark ? "text-neutral-200" : "text-neutral-800"}`}>{p.title}</p>
-                      <p className={`text-[10px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-550"}`}>
+                      <p className={`text-[10px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-555"}`}>
                         ${(p.price_cents / 100).toFixed(2)}
                       </p>
                       {!selectMode && (
@@ -1716,7 +1716,7 @@ function AdminPage() {
                   {filteredLeads.map(l => (
                     <tr key={l.id} className={`border-b last:border-0 ${isDark ? "border-neutral-900 hover:bg-neutral-900/30" : "border-neutral-100 hover:bg-neutral-50/50"}`}>
                       <td className="px-5 py-4 text-xs font-semibold lowercase font-mono">{l.email}</td>
-                      <td className={`px-5 py-4 text-[10px] font-mono uppercase ${isDark ? "text-neutral-500" : "text-neutral-450"}`}>{fmtDate(l.created_at)}</td>
+                      <td className={`px-5 py-4 text-[10px] font-mono uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{fmtDate(l.created_at)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -2014,7 +2014,7 @@ function AdminPage() {
                 <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Identity Verification</h2>
                 <div className={`p-5 border rounded ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-neutral-200 shadow-sm"} space-y-4`}>
                   <div>
-                    <p className={`text-[9px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Identified Payload</p>
+                    <p className={`text-[9px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-450"}`}>Identified Payload</p>
                     <p className="text-xs font-mono font-semibold uppercase">{userEmail || "…"}</p>
                   </div>
                   <button onClick={handleSignOut} className={`w-full rounded text-[10px] font-mono font-semibold uppercase px-4 py-2.5 transition-all ${isDark ? "bg-rose-500/10 text-rose-455 hover:bg-rose-500/20" : "bg-rose-50 text-rose-655 hover:bg-rose-100"}`}>
