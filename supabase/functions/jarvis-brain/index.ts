@@ -467,16 +467,16 @@ async function runJarvisChat(
     { role: "user", content: userText },
   ];
   const webSearchState = { used: false };
-  async function callModel(msgs: any[], useFunctions = true): Promise<any> {
+  async function callModel(msgs: any[], useTools = true): Promise<any> {
     const body: any = {
       model: MISTRAL_MODEL,
       messages: msgs,
       temperature: 0.25,
       max_tokens: 1200,
       top_p: 0.95,
-      ...(useFunctions
-        ? { functions: MISTRAL_TOOLS, function_call: "auto" }
-        : { function_call: "none" }),
+      ...(useTools
+        ? { tools: MISTRAL_TOOLS, tool_choice: "auto" }
+        : {}),
     };
     const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
       method: "POST",
@@ -497,24 +497,28 @@ async function runJarvisChat(
   if (!firstMessage) {
     throw new Error("No response received from the language model.");
   }
-  if (firstMessage.function_call) {
+  
+  // Handle modern Mistral tool execution
+  if (firstMessage.tool_calls && firstMessage.tool_calls.length > 0) {
+    const toolCall = firstMessage.tool_calls[0];
     let toolArgs = {};
     try {
-      toolArgs = JSON.parse(firstMessage.function_call.arguments || "{}");
+      toolArgs = JSON.parse(toolCall.function.arguments || "{}");
     } catch {
       toolArgs = {};
     }
-    const toolOutput = await executeTool(firstMessage.function_call.name, toolArgs, webSearchState);
+    const toolOutput = await executeTool(toolCall.function.name, toolArgs, webSearchState);
     const followupMessages = [
       ...messages,
       {
         role: "assistant",
-        content: "",
-        function_call: firstMessage.function_call,
+        content: firstMessage.content || "",
+        tool_calls: firstMessage.tool_calls,
       },
       {
-        role: "function",
-        name: firstMessage.function_call.name,
+        role: "tool",
+        tool_call_id: toolCall.id,
+        name: toolCall.function.name,
         content: toolOutput,
       },
     ];
@@ -525,7 +529,7 @@ async function runJarvisChat(
     }
     return finalMessage.content;
   }
-  return firstMessage.content;
+  return firstMessage.content || "";
 }
 
 serve(async (req) => {
