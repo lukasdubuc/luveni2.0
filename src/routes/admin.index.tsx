@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts } from "@/lib/useProducts";
 import { offer } from "@/config/site";
-import { toast } from "sonner";
+import { toast, Toaster } from "sonner";
 import { Edit3, Archive, X, Menu, RefreshCw, BarChart2, Lock, CheckSquare, Square, Trash2, Eye, EyeOff, GripVertical, Users, TrendingUp, TrendingDown, Minus, Terminal, Cpu, Zap, Activity, AlertTriangle, Play } from "lucide-react";
 import { requireAdmin } from "@/lib/admin-guard";
 
@@ -320,7 +320,10 @@ const TelemetryCanvas = ({ events, isDark, canvasRefExternal }: { events: PageEv
   }, [isDark]);
 
   return (
-    <div className="relative w-full h-32 md:h-36 rounded-[24px] border border-[#D1D1D6] dark:border-neutral-800/50 bg-white/50 dark:bg-neutral-900/10 shadow-[0_12px_24px_rgba(0,0,0,0.02)] overflow-hidden">
+    <div 
+      className="relative w-full h-32 md:h-36 border border-[#D1D1D6] dark:border-neutral-800/50 bg-white/50 dark:bg-neutral-900/10 shadow-[0_12px_24px_rgba(0,0,0,0.02)] overflow-hidden"
+      style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? "#333338" : "#D1D1D6" }}
+    >
       <div className="absolute top-3 left-4 flex items-center gap-2 pointer-events-none">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
         <span className="text-[8px] font-mono tracking-widest text-neutral-400 dark:text-neutral-500 uppercase">SYS_TELEMETRY_STREAM</span>
@@ -366,9 +369,12 @@ function AiAgentConsole({ isDark, onSimulatePacket }: { isDark: boolean; onSimul
   }, [thinkingSpeed]);
 
   return (
-    <div className={`p-6 border rounded-[24px] relative overflow-hidden transition-all duration-300 ${
-      isDark ? "bg-neutral-950/45 border-neutral-800/80" : "bg-white border-[#D1D1D6] shadow-[0_24px_48px_rgba(0,0,0,0.03)] hover:shadow-[0_24px_48px_rgba(0,0,0,0.06)]"
-    }`}>
+    <div 
+      className={`p-6 border relative overflow-hidden transition-all duration-300 ${
+        isDark ? "bg-neutral-950/45 border-neutral-800/80" : "bg-white border-[#D1D1D6] shadow-[0_24px_48px_rgba(0,0,0,0.03)] hover:shadow-[0_24px_48px_rgba(0,0,0,0.06)]"
+      }`}
+      style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? "#333338" : "#D1D1D6" }}
+    >
       {/* Grid line indicator background */}
       <div className="absolute top-0 right-0 p-3 flex items-center gap-1.5 pointer-events-none text-[8px] font-mono tracking-widest text-neutral-400 dark:text-neutral-500 uppercase">
         <Cpu size={12} className="animate-spin" style={{ animationDuration: "10s" }} />
@@ -862,9 +868,9 @@ function AdminPage() {
     }
     const reordered = [...orderedProducts];
     const fromIdx = reordered.findIndex(p => p.id === draggedId);
-    const toIdx = reordered.findIndex(p => p.id === targetId);
+    const ToIdx = reordered.findIndex(p => p.id === targetId);
     const [moved] = reordered.splice(fromIdx, 1);
-    reordered.splice(toIdx, 0, moved);
+    reordered.splice(ToIdx, 0, moved);
     const updated = reordered.map((p, i) => ({ ...p, display_order: i }));
     setOrderedProducts(updated);
     setDraggedId(null);
@@ -1347,7 +1353,7 @@ function AdminPage() {
             {/* ── CONVERSION FUNNEL ── */}
             <div className={`p-6 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-4`}>
               <div className="flex items-center gap-4 justify-between">
-                <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Live Conversion Flow</p>
+                <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Live Conversion Flow</p>
                 {!hasEventData && (
                   <span className={`text-[8px] font-mono tracking-wider uppercase px-2.5 py-0.5 border ${isDark ? "border-neutral-800 text-neutral-500" : "border-[#D1D1D6] text-neutral-450 bg-white rounded-[9999px] shadow-sm"}`}>
                     Telemetry hook standby
@@ -1647,7 +1653,7 @@ function AdminPage() {
                   className={`flex items-center gap-2 px-4 py-1.5 text-[9px] font-mono font-semibold uppercase tracking-widest transition-all rounded-[9999px] ${
                     orderStatusFilter === tab.key
                       ? isDark ? "text-white bg-neutral-900 shadow-sm" : "text-black bg-white shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
-                      : isDark ? "text-neutral-550 hover:text-neutral-355" : "text-neutral-550 hover:text-neutral-800"
+                      : isDark ? "text-neutral-550 hover:text-neutral-355" : "text-neutral-555 hover:text-neutral-800"
                   }`}
                 >
                   {tab.label}
@@ -1714,7 +1720,7 @@ function AdminPage() {
             <div className="flex items-end justify-between flex-wrap gap-4 border-b pb-4 dark:border-neutral-900 border-[#D1D1D6]">
               <div>
                 <h1 className="text-xl font-medium tracking-tight">Leads Engine</h1>
-                <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>MARKETING CAPTURE HOOKS</p>
+                <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>MARKETING CAPTURE HOOKS</p>
               </div>
 
               <input type="text" placeholder="FILTER LEADS…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
@@ -1737,6 +1743,492 @@ function AdminPage() {
                     <tr key={l.id} className={`border-b last:border-0 ${isDark ? "border-neutral-900 hover:bg-neutral-900/30" : "border-[#F2F2F7] hover:bg-neutral-50/50"}`}>
                       <td className="px-5 py-4 text-xs font-semibold lowercase font-mono">{l.email}</td>
                       <td className={`px-5 py-4 text-[10px] font-mono uppercase ${isDark ? "text-neutral-550" : "text-neutral-455"}`}>{fmtDate(l.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════════════════════════
+            ANALYTICS
+        ════════════════════════════════════════════════════════════════ */}
+        {section === "analytics" && (
+          <div className="space-y-10 animate-in fade-in duration-500">
+            <div className="flex items-end justify-between flex-wrap gap-4 border-b pb-4 dark:border-neutral-900 border-[#D1D1D6]">
+              <div>
+                <h1 className="text-xl font-medium tracking-tight">System Telemetry</h1>
+                <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>USER ACTIVITY CORE LOGS</p>
+              </div>
+
+              <div className="flex gap-1">
+                {(["7", "14", "30"] as const).map(r => (
+                  <button key={r} onClick={() => setAnalyticsRange(r)}
+                    className={`text-[9px] font-mono font-bold uppercase px-3 py-1.5 transition-all rounded-[9999px] ${
+                      analyticsRange === r
+                        ? isDark ? "bg-white text-black" : "bg-black text-white"
+                        : isDark ? "text-neutral-455 hover:text-white" : "text-neutral-555 bg-white border border-[#D1D1D6] hover:text-black shadow-[0_1px_4px_rgba(0,0,0,0.05)]"
+                    }`}>
+                    {r}D
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {!hasEventData && (
+              <div className={`p-6 border rounded-[24px] overflow-hidden space-y-4 ${isDark ? "border-neutral-900 bg-neutral-950/30" : "border-[#D1D1D6] bg-white shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"}`}>
+                <p className={`text-[10px] font-mono font-bold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Tracker Inactive</p>
+                <p className={`text-xs leading-relaxed ${isDark ? "text-neutral-400" : "text-neutral-600"}`}>
+                  Bind the client-side telemetry dispatcher to monitor user sessions, clicks, and page view triggers.
+                </p>
+                <pre className={`text-[9px] p-4 overflow-x-auto font-mono rounded-2xl ${isDark ? "bg-neutral-950 border border-neutral-900 text-neutral-400" : "bg-neutral-50 border border-[#D1D1D6] text-neutral-600"}`}>
+{`export function trackEvent(type, data = {}) {
+  supabase.from('page_events').insert([{
+    event_type: type,
+    path: window.location.pathname,
+    session_id: sessionStorage.getItem('sid') || (() => {
+      const id = crypto.randomUUID();
+      sessionStorage.setItem('sid', id);
+      return id;
+    })(),
+    referrer: document.referrer || null,
+    ...data
+  }]);
+}`}
+                </pre>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+              <Stat label="Page Views" value={analyticsEvents.filter(e => e.event_type === "page_view").length.toLocaleString()} sub={`last ${analyticsRange} days`} isDark={isDark} />
+              <Stat label="Sessions" value={uniqueSessions.toLocaleString()} sub="unique visitors" isDark={isDark} />
+              <Stat label="Product Clicks" value={analyticsEvents.filter(e => e.event_type === "product_click").length.toLocaleString()} sub="product page views" isDark={isDark} />
+              <Stat label="Add to Carts" value={getAddToCartCount(analyticsEvents).toLocaleString()} sub="add to cart conversions" isDark={isDark} led="cyan" />
+              <Stat label="Checkout Starts" value={analyticsEvents.filter(e => e.event_type === "checkout_start").length.toLocaleString()} sub="initiated checkout" isDark={isDark} />
+            </div>
+
+            <div className={`p-6 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-4`}>
+              <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Daily Telemetry Pulse</p>
+              <div className="flex items-end gap-1.5 h-32 pt-4">
+                {analyticsChartData.map((d, i) => (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group relative">
+                    <div
+                      className={`w-full transition-all duration-300 rounded-[9999px] ${isDark ? "bg-neutral-800 group-hover:bg-neutral-550" : "bg-neutral-200 group-hover:bg-neutral-355"}`}
+                      style={{ height: `${(d.views / chartMax) * 100}%`, minHeight: d.views > 0 ? "3px" : "1px" }}
+                    />
+                    {d.views > 0 && (
+                      <div className={`absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[8px] font-mono font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border ${isDark ? "bg-neutral-900 text-white border-neutral-850" : "bg-white text-black border-[#D1D1D6] shadow-[0_2px_8px_rgba(0,0,0,0.08)] rounded-[9999px]"}`}>
+                        {d.views}
+                      </div>
+                    )}
+                    {i % Math.ceil(analyticsRangeDays / 7) === 0 && (
+                      <span className={`text-[8px] font-mono hidden sm:block ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>{d.label}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+              <div className="space-y-3">
+                <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Origin Referrers</p>
+                {topReferrers.length === 0 ? (
+                  <p className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-700" : "text-neutral-300"}`}>Empty logs</p>
+                ) : (
+                  <div className={`p-4 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-2.5`}>
+                    {topReferrers.map(([ref, count]) => (
+                      <div key={ref} className={`flex items-center justify-between gap-4 py-1.5 border-b last:border-0 dark:border-neutral-900/40 border-[#F2F2F7]`}>
+                        <span className={`text-[10px] font-mono truncate uppercase ${isDark ? "text-neutral-400" : "text-neutral-600"}`}>{ref || "direct"}</span>
+                        <span className={`text-[10px] font-mono font-semibold ${isDark ? "text-white" : "text-black"}`}>{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="space-y-3">
+                <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Node Access Directory</p>
+                {topPaths.length === 0 ? (
+                  <p className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-700" : "text-neutral-300"}`}>Empty logs</p>
+                ) : (
+                  <div className={`p-4 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-2.5`}>
+                    {topPaths.map(([path, count]) => (
+                      <div key={path} className={`flex items-center justify-between gap-4 py-1.5 border-b last:border-0 dark:border-neutral-900/40 border-[#F2F2F7]`}>
+                        <span className={`text-[9px] font-mono truncate ${isDark ? "text-neutral-400" : "text-neutral-600"}`}>{path}</span>
+                        <span className={`text-[10px] font-mono font-semibold ${isDark ? "text-white" : "text-black"}`}>{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {Object.keys(productClickMap).length > 0 && (
+              <div className="space-y-3">
+                <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Interaction CTR</p>
+                <div className={`border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"}`}>
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${isDark ? "text-neutral-500 border-neutral-900 bg-neutral-950/50" : "text-neutral-500 border-[#D1D1D6] bg-[#f5f5f7]"}`}>
+                        <th className="px-5 py-3 font-semibold">Node Item</th>
+                        <th className="px-5 py-3 font-semibold text-right">Activity Pulses</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(productClickMap)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 8)
+                        .map(([pid, clicks]) => {
+                          const prod = products.find(p => p.id === pid);
+                          return (
+                            <tr key={pid} className={`border-b last:border-0 ${isDark ? "border-neutral-900" : "border-[#F2F2F7]"}`}>
+                              <td className="px-5 py-3 text-[10px] font-medium uppercase">{prod?.title || pid}</td>
+                              <td className="px-5 py-3 text-[11px] font-mono font-medium text-right">{clicks}</td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {geoBreakdown.length > 0 && (
+              <div className="space-y-3">
+                <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Geographic Distribution</p>
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+                  {geoBreakdown.map(([country, count]) => (
+                    <div key={country} className={`p-4 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"}`}>
+                      <p className={`text-[8px] font-mono uppercase tracking-wider ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{country}</p>
+                      <p className="text-lg font-bold tracking-tight mt-1">{count}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════════════════════════
+            PRODUCTS
+        ════════════════════════════════════════════════════════════════ */}
+        {section === "products" && (
+          <div className="space-y-10 animate-in fade-in duration-500">
+            <div className="flex items-end justify-between flex-wrap gap-4 border-b pb-4 dark:border-neutral-900 border-[#D1D1D6]">
+              <div>
+                <h1 className="text-xl font-medium tracking-tight">Products</h1>
+                <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>MANAGE DEPLOYED ITEMS</p>
+              </div>
+
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
+                  className={`text-[9px] font-mono font-semibold uppercase px-4 py-2 border transition-all rounded-[9999px] ${
+                    selectMode
+                      ? isDark ? "border-white bg-white text-black" : "border-black bg-black text-white shadow-sm"
+                      : isDark ? "border-neutral-800 text-neutral-355 hover:bg-neutral-900/40" : "border-[#D1D1D6] text-neutral-705 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)] hover:bg-neutral-50"
+                  }`}>
+                  {selectMode ? "Cancel" : "Select"}
+                </button>
+                <button onClick={handleSyncPrintful} disabled={isSyncing}
+                  className={`flex items-center gap-1.5 text-[9px] font-mono font-semibold uppercase px-4 py-2 border transition-all rounded-[9999px] ${
+                    isDark ? "border-neutral-800 text-neutral-355 hover:bg-neutral-900/40" : "border-[#D1D1D6] text-neutral-705 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)] hover:bg-neutral-50"
+                  }`}>
+                  <RefreshCw size={11} className={isSyncing ? "animate-spin" : ""} />
+                  {isSyncing ? "Syncing" : "Sync Printful"}
+                </button>
+                <button onClick={() => setProductFormOpen(!productFormOpen)}
+                  className={`text-[9px] font-mono font-bold uppercase px-5 py-2 transition-all rounded-[9999px] ${
+                    isDark ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800 shadow-sm"
+                  }`}>
+                  {productFormOpen ? "Close Form" : "New Product"}
+                </button>
+              </div>
+            </div>
+
+            {/* ── Bulk Toolbar ── */}
+            {selectMode && selectedIds.size > 0 && (
+              <div className={`flex items-center gap-4 p-3 rounded-[9999px] animate-in slide-in-from-top-2 duration-200 border ${isDark ? "bg-neutral-950 border-neutral-800" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"}`}>
+                <span className={`text-[9px] font-mono font-semibold uppercase ${isDark ? "text-neutral-400" : "text-neutral-550"}`}>{selectedIds.size} selected</span>
+                <div className="flex gap-2 ml-auto">
+                  <button onClick={selectAllProducts} className={`text-[9px] font-mono uppercase px-3 py-1.5 border rounded-[9999px] transition-all ${isDark ? "border-neutral-800 text-neutral-400 hover:text-white" : "border-neutral-200 text-neutral-600 hover:text-black bg-white shadow-sm"}`}>
+                    {selectedIds.size === orderedProducts.length ? "Deselect All" : "Select All"}
+                  </button>
+                  <button onClick={() => bulkPublish(true)} disabled={isBulkActing}
+                    className="flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 rounded-[9999px] transition-all">
+                    <Eye size={10} /> Publish
+                  </button>
+                  <button onClick={() => bulkPublish(false)} disabled={isBulkActing}
+                    className={`flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 rounded-[9999px] transition-all ${isDark ? "bg-neutral-900 text-neutral-400 hover:bg-neutral-800" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"}`}>
+                    <EyeOff size={10} /> Unpublish
+                  </button>
+                  <button onClick={bulkDelete} disabled={isBulkActing}
+                    className="flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 rounded-[9999px] transition-all">
+                    <Trash2 size={10} /> Delete
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Product Form ── */}
+            {productFormOpen && (
+              <div className={`p-6 border rounded-[24px] overflow-hidden space-y-6 animate-in slide-in-from-top-3 duration-300 ${isDark ? "bg-neutral-950/40 border-neutral-800" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"}`}>
+                <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>
+                  {productForm.editingId ? "Modify Product Engine" : "Create Product Hook"}
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Input label="Title" value={productForm.title} onChange={v => setProductForm(f => ({ ...f, title: v }))} isDark={isDark} />
+                  <Input label="Price (USD)" value={productForm.price_cents} onChange={v => setProductForm(f => ({ ...f, price_cents: v }))} type="number" isDark={isDark} />
+                  <Input label="Slug" value={productForm.slug} onChange={v => setProductForm(f => ({ ...f, slug: v }))} isDark={isDark} />
+                  <Input label="Source URL" value={productForm.source_url} onChange={v => setProductForm(f => ({ ...f, source_url: v }))} isDark={isDark} />
+                </div>
+                <Input label="Image URL(s)" value={productForm.image_url} onChange={v => setProductForm(f => ({ ...f, image_url: v }))} isDark={isDark} />
+                <div className="space-y-1.5">
+                  <label className={`text-[9px] font-mono font-semibold uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Description</label>
+                  <textarea value={productForm.description} onChange={e => setProductForm(f => ({ ...f, description: e.target.value }))}
+                    className={`w-full bg-transparent border rounded-[16px] px-4 py-2.5 text-xs font-mono resize-none focus:outline-none focus:ring-1 ${
+                      isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-[#D1D1D6] text-black focus:border-black focus:ring-black/5 bg-white shadow-sm"
+                    }`} rows={3} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <button onClick={() => setProductForm(f => ({ ...f, is_published: !f.is_published }))}
+                    className={`text-[9px] font-mono font-semibold uppercase px-4 py-1.5 rounded-[9999px] border transition-all ${
+                      productForm.is_published ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-rose-500/10 text-rose-500 border-rose-500/20"
+                    }`}>
+                    {productForm.is_published ? "Status: Deployed" : "Status: Draft"}
+                  </button>
+                  <div className="flex gap-2">
+                    <button onClick={resetProductForm} className={`text-[9px] font-mono uppercase px-3 py-2 ${isDark ? "text-neutral-500 hover:text-white" : "text-neutral-450 hover:text-black"}`}>Cancel</button>
+                    <button onClick={saveProduct} className={`text-[9px] font-mono font-bold uppercase px-6 py-2 transition-all rounded-[9999px] ${
+                      isDark ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800 shadow-sm"
+                    }`}>
+                      {productForm.editingId ? "Save Engine" : "Build Hook"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!selectMode && (
+              <p className={`text-[9px] font-mono uppercase tracking-wider ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>
+                ● Drag items to sort directory · Click SELECT for directory operations
+              </p>
+            )}
+
+            {/* ── Product Grid ── */}
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-5">
+              {orderedProducts.map(p => {
+                const isPrintful = !!p.printful_id;
+                const isSelected = selectedIds.has(p.id);
+                const isDragging = draggedId === p.id;
+                const isDragTarget = dragOverId === p.id;
+
+                return (
+                  <div
+                    key={p.id}
+                    className={`group relative transition-all duration-300 rounded-[24px] overflow-hidden border ${
+                      isDark 
+                        ? isSelected ? "border-neutral-100 bg-neutral-900/40" : "border-neutral-900 bg-neutral-950/20 hover:border-neutral-800" 
+                        : isSelected 
+                          ? "border-black bg-white shadow-[0_8px_32px_rgba(0,0,0,0.12),0_2px_8px_rgba(0,0,0,0.08)]" 
+                          : "border-[#D1D1D6] bg-white hover:border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.10),0_2px_6px_rgba(0,0,0,0.06)] hover:-translate-y-0.5"
+                    } ${isDragging ? "opacity-35 scale-95" : ""} ${isDragTarget ? isDark ? "ring-1 ring-white/30" : "ring-1 ring-black/10" : ""}`}
+                    draggable={!selectMode}
+                    onDragStart={() => handleDragStart(p.id)}
+                    onDragOver={e => handleDragOver(e, p.id)}
+                    onDrop={() => handleDrop(p.id)}
+                    onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}
+                    onClick={() => selectMode && toggleSelectProduct(p.id)}
+                  >
+                    {selectMode && (
+                      <div className="absolute top-2.5 left-2.5 z-10">
+                        {isSelected
+                          ? <CheckSquare size={13} className={isDark ? "text-white" : "text-black"} />
+                          : <Square size={13} className={isDark ? "text-neutral-600" : "text-neutral-400"} />
+                        }
+                      </div>
+                    )}
+                    {!selectMode && (
+                      <div className={`absolute top-2.5 left-2.5 z-10 opacity-0 group-hover:opacity-100 cursor-grab transition-opacity ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>
+                        <GripVertical size={11} />
+                      </div>
+                    )}
+                    {isPrintful && (
+                      <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-0.5 px-1.5 py-0.5 rounded-[9999px] bg-sky-500/10 text-sky-400 text-[7px] font-mono font-bold uppercase border border-sky-500/10">
+                        <Lock size={6} /> PF
+                      </div>
+                    )}
+                    {/* ── Product Image with Apple-style drop shadow ── */}
+                    <div className="relative flex aspect-[4/5] items-center justify-center overflow-hidden p-4 bg-[#FAFAFA] rounded-t-[24px]">
+                      {p.image_urls && p.image_urls.length > 1 ? (
+                        <img
+                          src={p.image_urls[1]}
+                          alt={p.title}
+                          className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500 rounded-[16px]"
+                          style={{ filter: "drop-shadow(0 6px 18px rgba(0,0,0,0.13)) drop-shadow(0 2px 6px rgba(0,0,0,0.08))" }}
+                        />
+                      ) : p.image_urls && p.image_urls[0] ? (
+                        <img
+                          src={p.image_urls[0]}
+                          alt={p.title}
+                          className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500 rounded-[16px]"
+                          style={{ filter: "drop-shadow(0 6px 18px rgba(0,0,0,0.13)) drop-shadow(0 2px 6px rgba(0,0,0,0.08))" }}
+                        />
+                      ) : (
+                        <span className={`text-[8px] font-mono uppercase tracking-widest ${isDark ? "text-neutral-800" : "text-neutral-300"}`}>Empty visual</span>
+                      )}
+                    </div>
+                    <div className={`px-3.5 pb-3.5 pt-2 border-t ${isDark ? "bg-neutral-950/40 border-neutral-900/40" : "bg-white border-[#F2F2F7]"}`}>
+                      <p className={`mb-0.5 text-[10px] uppercase tracking-wider truncate font-medium ${isDark ? "text-neutral-200" : "text-neutral-800"}`}>{p.title}</p>
+                      <p className={`text-[10px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-555"}`}>
+                        ${(p.price_cents / 100).toFixed(2)}
+                      </p>
+                      {!selectMode && (
+                        <div className="flex items-center justify-end gap-2.5 mt-2 pt-2 border-t border-neutral-200/20 dark:border-neutral-900/40">
+                          <button onClick={e => { e.stopPropagation(); togglePublished(p.id, p.is_published); }}
+                            className={`w-1.5 h-1.5 rounded-full transition-all ${p.is_published ? "bg-emerald-500" : "bg-rose-500"}`} />
+                          {isPrintful ? (
+                            <span className={`${isDark ? "text-neutral-800" : "text-neutral-305"} cursor-not-allowed`} title="Printful products are synced from supplier hub">
+                              <Edit3 size={11} />
+                            </span>
+                          ) : (
+                            <button onClick={e => { e.stopPropagation(); startEditProduct(p); }} className={`${isDark ? "text-neutral-500 hover:text-white" : "text-neutral-400 hover:text-black"} transition-colors`}>
+                              <Edit3 size={11} />
+                            </button>
+                          )}
+                          <button onClick={e => { e.stopPropagation(); archiveProduct(p.id); }} className={`${isDark ? "text-neutral-500 hover:text-rose-455" : "text-neutral-400 hover:text-rose-600"} transition-colors`}>
+                            <Archive size={11} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════════════════════════
+            ORDERS
+        ════════════════════════════════════════════════════════════════ */}
+        {section === "orders" && (
+          <div className="space-y-8 animate-in fade-in duration-500">
+            <div className="flex items-end justify-between flex-wrap gap-4 border-b pb-4 dark:border-neutral-900 border-[#D1D1D6]">
+              <div>
+                <h1 className="text-xl font-medium tracking-tight">Ledger Registry</h1>
+                <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>ORDER INVOICING RECORDS</p>
+              </div>
+
+              <input type="text" placeholder="FILTER LEDGER…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                className={`text-[9px] font-mono border rounded-[9999px] px-4 py-2 w-48 bg-transparent focus:outline-none focus:ring-1 ${
+                  isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-[#D1D1D6] text-black focus:border-black focus:ring-black/10 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
+                }`} />
+            </div>
+
+            <div className="flex gap-2 p-1 bg-[#e8e8ed]/40 dark:bg-neutral-900/40 rounded-[9999px] w-fit">
+              {([
+                { key: "all", label: "Registry", count: activeOrders.length },
+                { key: "paid", label: "Paid", count: paidOrders.length },
+                { key: "pending", label: "Pending", count: pendingOrders.length },
+                { key: "failed", label: "Failed", count: failedOrders.length },
+              ] as const).map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setOrderStatusFilter(tab.key)}
+                  className={`flex items-center gap-2 px-4 py-1.5 text-[9px] font-mono font-semibold uppercase tracking-widest transition-all rounded-[9999px] ${
+                    orderStatusFilter === tab.key
+                      ? isDark ? "text-white bg-neutral-900 shadow-sm" : "text-black bg-white shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
+                      : isDark ? "text-neutral-550 hover:text-neutral-355" : "text-neutral-555 hover:text-neutral-800"
+                  }`}
+                >
+                  {tab.label}
+                  <span className={`text-[8px] font-mono px-2 py-0.5 rounded-[9999px] ${
+                    orderStatusFilter === tab.key
+                      ? isDark ? "bg-white text-black" : "bg-black text-white"
+                      : isDark ? "bg-neutral-900 text-neutral-500" : "bg-neutral-100 text-neutral-500"
+                  }`}>{tab.count}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className={`overflow-x-auto border rounded-[24px] overflow-hidden ${isDark ? "border-neutral-900" : "border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} bg-white dark:bg-transparent`}>
+              <table className="w-full text-left">
+                <thead>
+                  <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${
+                    isDark ? "text-neutral-500 border-neutral-900 bg-neutral-950/50" : "text-neutral-500 border-[#D1D1D6] bg-[#f5f5f7]"
+                  }`}>
+                    <th className="px-5 py-3 font-semibold">Invoicing Email</th>
+                    <th className="px-5 py-3 font-semibold">Recipient Identity</th>
+                    <th className="px-5 py-3 font-semibold">Invoice Payload</th>
+                    <th className="px-5 py-3 font-semibold">Pipeline State</th>
+                    <th className="px-5 py-3 font-semibold">Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredOrders.map(o => (
+                    <tr key={o.id}
+                      className={`border-b last:border-0 cursor-pointer ${isDark ? "border-neutral-900 hover:bg-neutral-900/30" : "border-[#F2F2F7] hover:bg-neutral-50/50"}`}
+                      onClick={() => setSelectedRow({ ...o, _type: "order" })}
+                    >
+                      <td className="px-5 py-3.5 text-xs font-semibold lowercase font-mono">{o.email}</td>
+                      <td className={`px-5 py-3.5 text-[10px] uppercase font-mono ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>{o.name || "—"}</td>
+                      <td className="px-5 py-3.5 text-xs font-mono font-medium">{fmt$(o.amount_cents)}</td>
+                      <td className="px-5 py-3.5">
+                        <span className={`text-[8px] font-mono font-bold uppercase px-2.5 py-1 rounded-[9999px] flex items-center gap-1.5 w-fit ${
+                          o.status === "paid" ? "bg-emerald-500/10 text-emerald-500" :
+                          o.status === "pending" ? "bg-amber-500/10 text-amber-500" :
+                          "bg-rose-500/10 text-rose-500"
+                        }`}>
+                          <LedPulse color={o.status === "paid" ? "green" : o.status === "pending" ? "yellow" : "red"} active={false} />
+                          {o.status}
+                        </span>
+                      </td>
+                      <td className={`px-5 py-3.5 text-[10px] font-mono uppercase ${isDark ? "text-neutral-550" : "text-neutral-400"}`}>{fmtDate(o.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {filteredOrders.length === 0 && (
+                <p className={`text-center py-10 text-[9px] font-mono uppercase tracking-widest ${isDark ? "text-neutral-750" : "text-neutral-300"}`}>
+                  Registry empty
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════════════════════════
+            LEADS
+        ════════════════════════════════════════════════════════════════ */}
+        {section === "leads" && (
+          <div className="space-y-8 animate-in fade-in duration-500">
+            <div className="flex items-end justify-between flex-wrap gap-4 border-b pb-4 dark:border-neutral-900 border-[#D1D1D6]">
+              <div>
+                <h1 className="text-xl font-medium tracking-tight">Leads Engine</h1>
+                <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-550" : "text-neutral-455"}`}>MARKETING CAPTURE HOOKS</p>
+              </div>
+
+              <input type="text" placeholder="FILTER LEADS…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                className={`text-[9px] font-mono border rounded-[9999px] px-4 py-2 w-48 bg-transparent focus:outline-none focus:ring-1 ${
+                  isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-[#D1D1D6] text-black focus:border-black focus:ring-black/10 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
+                }`} />
+            </div>
+            <div className={`overflow-x-auto border rounded-[24px] overflow-hidden ${isDark ? "border-neutral-900" : "border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} bg-white dark:bg-transparent`}>
+              <table className="w-full text-left">
+                <thead>
+                  <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${
+                    isDark ? "text-neutral-500 border-neutral-900 bg-neutral-950/50" : "text-neutral-500 border-[#D1D1D6] bg-[#f5f5f7]"
+                  }`}>
+                    <th className="px-5 py-3 font-semibold">Capture email</th>
+                    <th className="px-5 py-3 font-semibold">Registered</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredLeads.map(l => (
+                    <tr key={l.id} className={`border-b last:border-0 ${isDark ? "border-neutral-900 hover:bg-neutral-900/30" : "border-[#F2F2F7] hover:bg-neutral-50/50"}`}>
+                      <td className="px-5 py-4 text-xs font-semibold lowercase font-mono">{l.email}</td>
+                      <td className={`px-5 py-4 text-[10px] font-mono uppercase ${isDark ? "text-neutral-555" : "text-neutral-455"}`}>{fmtDate(l.created_at)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -2031,7 +2523,7 @@ function AdminPage() {
 
               <div className="space-y-3">
                 <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Identity Verification</h2>
-                <div className={`p-5 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-4`}>
+                <div className={`p-5 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"}`} style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? "#333338" : "#D1D1D6" }}>
                   <div>
                     <p className={`text-[9px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Identified Payload</p>
                     <p className="text-xs font-mono font-semibold uppercase">{userEmail || "…"}</p>
