@@ -320,7 +320,10 @@ const TelemetryCanvas = ({ events, isDark, canvasRefExternal }: { events: PageEv
   }, [isDark]);
 
   return (
-    <div className="relative w-full h-32 md:h-36 rounded-[24px] border border-[#D1D1D6] dark:border-neutral-800/50 bg-white/50 dark:bg-neutral-900/10 shadow-[0_12px_24px_rgba(0,0,0,0.02)] overflow-hidden">
+    <div 
+      className="relative w-full h-32 md:h-36 border border-[#D1D1D6] dark:border-neutral-800/50 bg-white/50 dark:bg-neutral-900/10 shadow-[0_12px_24px_rgba(0,0,0,0.02)]"
+      style={{ borderRadius: "24px", overflow: "hidden" }}
+    >
       <div className="absolute top-3 left-4 flex items-center gap-2 pointer-events-none">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
         <span className="text-[8px] font-mono tracking-widest text-neutral-400 dark:text-neutral-500 uppercase">SYS_TELEMETRY_STREAM</span>
@@ -366,9 +369,12 @@ function AiAgentConsole({ isDark, onSimulatePacket }: { isDark: boolean; onSimul
   }, [thinkingSpeed]);
 
   return (
-    <div className={`p-6 border rounded-[24px] relative overflow-hidden transition-all duration-300 ${
-      isDark ? "bg-neutral-950/45 border-neutral-800/80" : "bg-white border-[#D1D1D6] shadow-[0_24px_48px_rgba(0,0,0,0.03)] hover:shadow-[0_24px_48px_rgba(0,0,0,0.06)]"
-    }`}>
+    <div 
+      className={`p-6 border relative overflow-hidden transition-all duration-300 ${
+        isDark ? "bg-neutral-950/45 border-neutral-800/80" : "bg-white border-[#D1D1D6] shadow-[0_24px_48px_rgba(0,0,0,0.03)] hover:shadow-[0_24px_48px_rgba(0,0,0,0.06)]"
+      }`}
+      style={{ borderRadius: "24px", overflow: "hidden" }}
+    >
       {/* Grid line indicator background */}
       <div className="absolute top-0 right-0 p-3 flex items-center gap-1.5 pointer-events-none text-[8px] font-mono tracking-widest text-neutral-400 dark:text-neutral-500 uppercase">
         <Cpu size={12} className="animate-spin" style={{ animationDuration: "10s" }} />
@@ -387,9 +393,12 @@ function AiAgentConsole({ isDark, onSimulatePacket }: { isDark: boolean; onSimul
         </div>
 
         {/* Live typing diagnostic output console */}
-        <div className={`p-4 border rounded-[16px] font-mono text-[9px] h-32 overflow-y-auto space-y-1.5 ${
-          isDark ? "bg-black/80 border-neutral-900 text-purple-300" : "bg-neutral-50 border-[#E5E5EA] text-purple-700"
-        }`}>
+        <div 
+          className={`p-4 border font-mono text-[9px] h-32 overflow-y-auto space-y-1.5 ${
+            isDark ? "bg-black/80 border-neutral-900 text-purple-300" : "bg-neutral-50 border-[#E5E5EA] text-purple-700"
+          }`}
+          style={{ borderRadius: "16px" }}
+        >
           {logs.map((log, index) => (
             <div key={index} className="flex items-start gap-2 animate-in fade-in duration-300">
               <span className="opacity-40">❯</span>
@@ -431,7 +440,8 @@ function AiAgentConsole({ isDark, onSimulatePacket }: { isDark: boolean; onSimul
                       return [`[${t}] SYSTEM: Manual telemetry override payload [${signal.toUpperCase()}] injected.`, ...prev];
                     });
                   }}
-                  className="flex-1 min-w-[50px] text-[8px] font-mono font-black uppercase tracking-widest border py-1.5 rounded-[9999px] hover:bg-purple-500/10 hover:border-purple-500/40 transition-all dark:border-neutral-850 dark:text-neutral-400 dark:hover:text-purple-300 border-[#E5E5EA] text-neutral-600 bg-white shadow-sm"
+                  className="flex-1 min-w-[50px] text-[8px] font-mono font-black uppercase tracking-widest border py-1.5 hover:bg-purple-500/10 hover:border-purple-500/40 transition-all dark:border-neutral-850 dark:text-neutral-400 dark:hover:text-purple-300 border-[#E5E5EA] text-neutral-600 bg-white shadow-sm"
+                  style={{ borderRadius: "9999px" }}
                 >
                   {signal}
                 </button>
@@ -1117,7 +1127,7 @@ function AdminPage() {
       <div 
         className={`min-h-screen flex flex-col items-center justify-center ${isDark ? "bg-black text-white" : "bg-[#f5f5f7] text-black"}`}
         style={{
-          fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "SF Pro", "SF Compact", "Helvetica Neue", Helvetica, Arial, sans-serif'
+          fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif'
         }}
       >
         <div className="space-y-4 text-center max-w-sm px-6">
@@ -1142,7 +1152,7 @@ function AdminPage() {
     <div 
       className={`min-h-screen relative ${isDark ? "bg-black text-neutral-100 selection:bg-neutral-800" : "bg-[#f5f5f7] text-neutral-900 selection:bg-neutral-200"}`}
       style={{
-        fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "SF Pro", "SF Compact", "Helvetica Neue", Helvetica, Arial, sans-serif'
+        fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif'
       }}
     >
       <div className="absolute top-0 left-0 w-full h-[2px] bg-sky-500/10 dark:bg-white/5 pointer-events-none animate-bounce z-40 opacity-40" style={{ animationDuration: "12s" }} />
@@ -1156,25 +1166,31 @@ function AdminPage() {
       />
 
       {/* ── NAV ── */}
-      <nav className={`sticky top-0 z-50 backdrop-blur-md border-b ${isDark ? "bg-black/80 border-neutral-800/60" : "bg-white/80 border-[#D1D1D6]"}`}>
+      <nav 
+        className={`sticky top-0 z-50 backdrop-blur-md border-b ${isDark ? "bg-black/80 border-neutral-800/60" : "bg-white/80 border-[#D1D1D6]"}`}
+        style={{ borderColor: isDark ? undefined : "#D1D1D6" }}
+      >
         <div className="max-w-7xl mx-auto flex items-center justify-between px-6 py-3.5">
           <div className="flex items-center gap-3">
-            <span className={`text-[10px] font-mono tracking-[0.3em] font-semibold border px-3 py-1 uppercase ${isDark ? "border-neutral-800 text-neutral-400" : "border-[#D1D1D6] text-neutral-555 bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04)] rounded-[9999px]"}`}>
+            <span 
+              className={`text-[10px] font-mono tracking-[0.3em] font-semibold border px-3 py-1 uppercase ${isDark ? "border-neutral-800 text-neutral-400" : "border-[#D1D1D6] text-neutral-555 bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04)]"}`}
+              style={{ borderRadius: "9999px" }}
+            >
               COMMAND CENTER
             </span>
             <LedPulse color="green" />
           </div>
 
-          <div className="hidden md:flex items-center justify-center gap-2 p-1 bg-[#e8e8ed]/60 dark:bg-neutral-900/60 rounded-[9999px]">
+          <div 
+            className="hidden md:flex items-center justify-center gap-2 p-1 bg-[#e8e8ed]/60 dark:bg-neutral-900/60"
+            style={{ borderRadius: "9999px" }}
+          >
             {navSections.map(s => (
               <button
                 key={s}
                 onClick={() => setSection(s)}
-                className={`text-[10px] font-mono font-medium uppercase tracking-widest transition-all duration-200 px-4 py-1.5 rounded-[9999px] ${
-                  section === s
-                    ? isDark ? "text-white bg-neutral-900" : "text-black bg-white shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
-                    : isDark ? "text-neutral-550 hover:text-neutral-300" : "text-neutral-550 hover:text-neutral-800"
-                }`}
+                className={`text-[10px] font-mono font-medium uppercase tracking-widest transition-all duration-200 px-4 py-1.5`}
+                style={{ borderRadius: "9999px" }}
               >
                 {s}
               </button>
@@ -1194,11 +1210,8 @@ function AdminPage() {
               <button
                 key={s}
                 onClick={() => { setSection(s); setMobileMenuOpen(false); }}
-                className={`block w-full text-left text-[10px] font-mono uppercase tracking-widest py-2 px-3 rounded-[9999px] ${
-                  section === s
-                    ? isDark ? "text-white bg-neutral-900" : "text-black bg-[#e8e8ed]"
-                    : isDark ? "text-neutral-550" : "text-neutral-400"
-                }`}
+                className={`block w-full text-left text-[10px] font-mono uppercase tracking-widest py-2 px-3`}
+                style={{ borderRadius: "9999px" }}
               >
                 {s}
               </button>
@@ -1224,11 +1237,12 @@ function AdminPage() {
 
               <button
                 onClick={handleOpenJarvis}
-                className={`text-[9px] font-mono font-semibold tracking-wider uppercase px-4 py-2 border transition-all rounded-[9999px] ${
+                className={`text-[9px] font-mono font-semibold tracking-wider uppercase px-4 py-2 border transition-all ${
                   isDark
                     ? "border-neutral-800 text-neutral-300 hover:bg-neutral-900/50 hover:text-white"
                     : "border-[#D1D1D6] text-neutral-700 bg-white hover:bg-neutral-50 hover:text-black shadow-[0_2px_8px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)]"
                 }`}
+                style={{ borderRadius: "9999px" }}
               >
                 JARVIS CONSOLE →
               </button>
@@ -1240,11 +1254,8 @@ function AdminPage() {
                 <button
                   key={r}
                   onClick={() => setRevenueRange(r as any)}
-                  className={`text-[9px] font-mono font-bold uppercase px-4 py-1.5 transition-all rounded-[9999px] ${
-                    revenueRange === r
-                      ? isDark ? "bg-white text-black shadow-sm" : "bg-black text-white shadow-sm"
-                      : isDark ? "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/50" : "text-neutral-550 bg-white hover:text-neutral-900 border border-[#D1D1D6] shadow-[0_1px_4px_rgba(0,0,0,0.05)]"
-                  }`}
+                  className={`text-[9px] font-mono font-bold uppercase px-4 py-1.5 transition-all`}
+                  style={{ borderRadius: "9999px" }}
                 >
                   {r}
                 </button>
@@ -1252,7 +1263,10 @@ function AdminPage() {
             </div>
 
             {/* ── REVENUE HERO ── */}
-            <div className={`p-6 border rounded-[24px] relative overflow-hidden transition-all duration-300 ${isDark ? "bg-neutral-950/40 border-neutral-800/80" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.09),0_2px_6px_rgba(0,0,0,0.04)]"}`}>
+            <div 
+              className={`p-6 border relative overflow-hidden transition-all duration-300 ${isDark ? "bg-neutral-950/40 border-neutral-800/80" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.09),0_2px_6px_rgba(0,0,0,0.04)]"}`}
+              style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? undefined : "#D1D1D6" }}
+            >
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
@@ -1267,13 +1281,15 @@ function AdminPage() {
                       {fmt$(filteredRevenue)}
                     </p>
                     {revenueDelta !== null && (
-                      <div className={`flex items-center gap-1 px-3 py-1 rounded-[9999px] text-[9px] font-mono font-bold uppercase ${
+                      <div className={`flex items-center gap-1 px-3 py-1 text-[9px] font-mono font-bold uppercase ${
                         revenueDelta > 0
                           ? "bg-emerald-500/10 text-emerald-500"
                           : revenueDelta < 0
                           ? "bg-rose-500/10 text-rose-500"
                           : isDark ? "bg-neutral-800 text-neutral-400" : "bg-neutral-100 text-neutral-550"
-                      }`}>
+                      }`}
+                      style={{ borderRadius: "9999px" }}
+                      >
                         {revenueDelta > 0 ? <TrendingUp size={10} /> : revenueDelta < 0 ? <TrendingDown size={10} /> : <Minus size={10} />}
                         {revenueDelta > 0 ? "+" : ""}{revenueDelta}% vs prior {revenueRange}
                       </div>
@@ -1286,12 +1302,15 @@ function AdminPage() {
                   {sparklineData.map((d, i) => (
                     <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group relative">
                       <div
-                        className={`w-full transition-all duration-300 rounded-[9999px] ${isDark ? "bg-neutral-800 group-hover:bg-neutral-600" : "bg-neutral-200 group-hover:bg-neutral-400"}`}
-                        style={{ height: `${(d.value / sparkMax) * 100}%`, minHeight: d.value > 0 ? "3px" : "1px" }}
+                        className={`w-full transition-all duration-300`}
+                        style={{ height: `${(d.value / sparkMax) * 100}%`, minHeight: d.value > 0 ? "3px" : "1px", borderRadius: "9999px" }}
                       />
                       <span className={`text-[8px] font-mono ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>{d.label.slice(0, 1)}</span>
                       {d.value > 0 && (
-                        <div className={`absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[8px] font-mono font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border ${isDark ? "bg-neutral-900 text-white border-neutral-700" : "bg-white text-black border-[#D1D1D6] shadow-[0_2px_8px_rgba(0,0,0,0.08)] rounded-[9999px]"}`}>
+                        <div 
+                          className={`absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[8px] font-mono font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border ${isDark ? "bg-neutral-900 text-white border-neutral-700" : "bg-white text-black border-[#D1D1D6] shadow-[0_2px_8px_rgba(0,0,0,0.08)]"}`}
+                          style={{ borderRadius: "9999px" }}
+                        >
                           {fmt$(d.value)}
                         </div>
                       )}
@@ -1318,7 +1337,11 @@ function AdminPage() {
                 { label: "Failed Orders", count: failedOrders.length, color: "text-rose-500", led: "red" as const },
                 { label: "Published Items", count: products.filter(p => p.is_published).length, color: isDark ? "text-neutral-300" : "text-neutral-800", led: "neutral" as const },
               ].map(item => (
-                <div key={item.label} className={`p-4 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"}`}>
+                <div 
+                  key={item.label} 
+                  className={`p-4 border transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"}`}
+                  style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? undefined : "#D1D1D6" }}
+                >
                   <div className="flex items-center justify-between gap-2">
                     <p className={`text-[8px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{item.label}</p>
                     <LedPulse color={item.led} />
@@ -1345,11 +1368,17 @@ function AdminPage() {
             />
 
             {/* ── CONVERSION FUNNEL ── */}
-            <div className={`p-6 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-4`}>
+            <div 
+              className={`p-6 border transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-4`}
+              style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? undefined : "#D1D1D6" }}
+            >
               <div className="flex items-center gap-4 justify-between">
                 <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Live Conversion Flow</p>
                 {!hasEventData && (
-                  <span className={`text-[8px] font-mono tracking-wider uppercase px-2.5 py-0.5 border ${isDark ? "border-neutral-800 text-neutral-500" : "border-[#D1D1D6] text-neutral-450 bg-white rounded-[9999px] shadow-sm"}`}>
+                  <span 
+                    className={`text-[8px] font-mono tracking-wider uppercase px-2.5 py-0.5 border ${isDark ? "border-neutral-800 text-neutral-500" : "border-[#D1D1D6] text-neutral-450 bg-white shadow-sm"}`}
+                    style={{ borderRadius: "9999px" }}
+                  >
                     Telemetry hook standby
                   </span>
                 )}
@@ -1367,11 +1396,14 @@ function AdminPage() {
                       <LedPulse color={step.led} active={step.value !== null && step.value > 0} />
                       <span className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{step.label}</span>
                     </div>
-                    <div className={`flex-1 h-2 relative rounded-[9999px] overflow-hidden ${isDark ? "bg-neutral-900" : "bg-neutral-100"}`}>
+                    <div 
+                      className={`flex-1 h-2 relative overflow-hidden ${isDark ? "bg-neutral-900" : "bg-neutral-100"}`}
+                      style={{ borderRadius: "9999px" }}
+                    >
                       {step.value !== null && (
                         <div
-                          className={`h-full transition-all duration-700 ease-out rounded-[9999px] ${isDark ? "bg-neutral-300" : "bg-neutral-800"}`}
-                          style={{ width: `${((step.value ?? 0) / funnelMax) * 100}%`, opacity: 1 - i * 0.12 }}
+                          className={`h-full transition-all duration-700 ease-out ${isDark ? "bg-neutral-300" : "bg-neutral-800"}`}
+                          style={{ width: `${((step.value ?? 0) / funnelMax) * 100}%`, opacity: 1 - i * 0.12, borderRadius: "9999px" }}
                         />
                       )}
                     </div>
@@ -1392,7 +1424,10 @@ function AdminPage() {
             {topProducts.length > 0 && (
               <div className="space-y-3">
                 <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Top Products by Revenue</p>
-                <div className={`border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"}`}>
+                <div 
+                  className={`border overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"}`}
+                  style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? undefined : "#D1D1D6" }}
+                >
                   <table className="w-full text-left">
                     <thead>
                       <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${isDark ? "text-neutral-500 border-neutral-900 bg-neutral-950/50" : "text-neutral-500 border-[#D1D1D6] bg-[#f5f5f7]"}`}>
@@ -1431,24 +1466,30 @@ function AdminPage() {
               <div className="flex gap-2 flex-wrap">
                 <button
                   onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
-                  className={`text-[9px] font-mono font-semibold uppercase px-4 py-2 border transition-all rounded-[9999px] ${
+                  className={`text-[9px] font-mono font-semibold uppercase px-4 py-2 border transition-all ${
                     selectMode
                       ? isDark ? "border-white bg-white text-black" : "border-black bg-black text-white shadow-sm"
                       : isDark ? "border-neutral-800 text-neutral-355 hover:bg-neutral-900/40" : "border-[#D1D1D6] text-neutral-705 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)] hover:bg-neutral-50"
-                  }`}>
+                  }`}
+                  style={{ borderRadius: "9999px" }}
+                >
                   {selectMode ? "Cancel" : "Select"}
                 </button>
                 <button onClick={handleSyncPrintful} disabled={isSyncing}
-                  className={`flex items-center gap-1.5 text-[9px] font-mono font-semibold uppercase px-4 py-2 border transition-all rounded-[9999px] ${
+                  className={`flex items-center gap-1.5 text-[9px] font-mono font-semibold uppercase px-4 py-2 border transition-all ${
                     isDark ? "border-neutral-800 text-neutral-355 hover:bg-neutral-900/40" : "border-[#D1D1D6] text-neutral-705 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)] hover:bg-neutral-50"
-                  }`}>
+                  }`}
+                  style={{ borderRadius: "9999px" }}
+                >
                   <RefreshCw size={11} className={isSyncing ? "animate-spin" : ""} />
                   {isSyncing ? "Syncing" : "Sync Printful"}
                 </button>
                 <button onClick={() => setProductFormOpen(!productFormOpen)}
-                  className={`text-[9px] font-mono font-bold uppercase px-5 py-2 transition-all rounded-[9999px] ${
+                  className={`text-[9px] font-mono font-bold uppercase px-5 py-2 transition-all ${
                     isDark ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800 shadow-sm"
-                  }`}>
+                  }`}
+                  style={{ borderRadius: "9999px" }}
+                >
                   {productFormOpen ? "Close Form" : "New Product"}
                 </button>
               </div>
@@ -1456,22 +1497,38 @@ function AdminPage() {
 
             {/* ── Bulk Toolbar ── */}
             {selectMode && selectedIds.size > 0 && (
-              <div className={`flex items-center gap-4 p-3 rounded-[9999px] animate-in slide-in-from-top-2 duration-200 border ${isDark ? "bg-neutral-950 border-neutral-800" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"}`}>
-                <span className={`text-[9px] font-mono font-semibold uppercase ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>{selectedIds.size} selected</span>
+              <div 
+                className={`flex items-center gap-4 p-3 animate-in slide-in-from-top-2 duration-200 border ${isDark ? "bg-neutral-950 border-neutral-800" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"}`}
+                style={{ borderRadius: "9999px", borderColor: isDark ? undefined : "#D1D1D6" }}
+              >
+                <span className={`text-[9px] font-mono font-semibold uppercase ${isDark ? "text-neutral-400" : "text-neutral-550"}`}>{selectedIds.size} selected</span>
                 <div className="flex gap-2 ml-auto">
-                  <button onClick={selectAllProducts} className={`text-[9px] font-mono uppercase px-3 py-1.5 border rounded-[9999px] transition-all ${isDark ? "border-neutral-800 text-neutral-400 hover:text-white" : "border-neutral-200 text-neutral-600 hover:text-black bg-white shadow-sm"}`}>
+                  <button 
+                    onClick={selectAllProducts} 
+                    className={`text-[9px] font-mono uppercase px-3 py-1.5 border transition-all ${isDark ? "border-neutral-800 text-neutral-400 hover:text-white" : "border-neutral-200 text-neutral-600 hover:text-black bg-white shadow-sm"}`}
+                    style={{ borderRadius: "9999px" }}
+                  >
                     {selectedIds.size === orderedProducts.length ? "Deselect All" : "Select All"}
                   </button>
-                  <button onClick={() => bulkPublish(true)} disabled={isBulkActing}
-                    className="flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 rounded-[9999px] transition-all">
+                  <button 
+                    onClick={() => bulkPublish(true)} disabled={isBulkActing}
+                    className="flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-all"
+                    style={{ borderRadius: "9999px" }}
+                  >
                     <Eye size={10} /> Publish
                   </button>
-                  <button onClick={() => bulkPublish(false)} disabled={isBulkActing}
-                    className={`flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 rounded-[9999px] transition-all ${isDark ? "bg-neutral-900 text-neutral-400 hover:bg-neutral-800" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"}`}>
+                  <button 
+                    onClick={() => bulkPublish(false)} disabled={isBulkActing}
+                    className={`flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 transition-all ${isDark ? "bg-neutral-900 text-neutral-400 hover:bg-neutral-800" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"}`}
+                    style={{ borderRadius: "9999px" }}
+                  >
                     <EyeOff size={10} /> Unpublish
                   </button>
-                  <button onClick={bulkDelete} disabled={isBulkActing}
-                    className="flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 rounded-[9999px] transition-all">
+                  <button 
+                    onClick={bulkDelete} disabled={isBulkActing}
+                    className="flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 transition-all"
+                    style={{ borderRadius: "9999px" }}
+                  >
                     <Trash2 size={10} /> Delete
                   </button>
                 </div>
@@ -1480,7 +1537,10 @@ function AdminPage() {
 
             {/* ── Product Form ── */}
             {productFormOpen && (
-              <div className={`p-6 border rounded-[24px] overflow-hidden space-y-6 animate-in slide-in-from-top-3 duration-300 ${isDark ? "bg-neutral-950/40 border-neutral-800" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"}`}>
+              <div 
+                className={`p-6 border space-y-6 animate-in slide-in-from-top-3 duration-300 ${isDark ? "bg-neutral-950/40 border-neutral-800" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"}`}
+                style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? undefined : "#D1D1D6" }}
+              >
                 <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>
                   {productForm.editingId ? "Modify Product Engine" : "Create Product Hook"}
                 </h2>
@@ -1494,22 +1554,32 @@ function AdminPage() {
                 <div className="space-y-1.5">
                   <label className={`text-[9px] font-mono font-semibold uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Description</label>
                   <textarea value={productForm.description} onChange={e => setProductForm(f => ({ ...f, description: e.target.value }))}
-                    className={`w-full bg-transparent border rounded-[16px] px-4 py-2.5 text-xs font-mono resize-none focus:outline-none focus:ring-1 ${
+                    className={`w-full bg-transparent border px-4 py-2.5 text-xs font-mono resize-none focus:outline-none focus:ring-1 ${
                       isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-[#D1D1D6] text-black focus:border-black focus:ring-black/5 bg-white shadow-sm"
-                    }`} rows={3} />
+                    }`} 
+                    style={{ borderRadius: "16px", borderColor: isDark ? undefined : "#D1D1D6" }}
+                    rows={3} 
+                  />
                 </div>
                 <div className="flex items-center justify-between">
-                  <button onClick={() => setProductForm(f => ({ ...f, is_published: !f.is_published }))}
-                    className={`text-[9px] font-mono font-semibold uppercase px-4 py-1.5 rounded-[9999px] border transition-all ${
+                  <button 
+                    onClick={() => setProductForm(f => ({ ...f, is_published: !f.is_published }))}
+                    className={`text-[9px] font-mono font-semibold uppercase px-4 py-1.5 border transition-all ${
                       productForm.is_published ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-rose-500/10 text-rose-500 border-rose-500/20"
-                    }`}>
+                    }`}
+                    style={{ borderRadius: "9999px" }}
+                  >
                     {productForm.is_published ? "Status: Deployed" : "Status: Draft"}
                   </button>
                   <div className="flex gap-2">
                     <button onClick={resetProductForm} className={`text-[9px] font-mono uppercase px-3 py-2 ${isDark ? "text-neutral-500 hover:text-white" : "text-neutral-450 hover:text-black"}`}>Cancel</button>
-                    <button onClick={saveProduct} className={`text-[9px] font-mono font-bold uppercase px-6 py-2 transition-all rounded-[9999px] ${
-                      isDark ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800 shadow-sm"
-                    }`}>
+                    <button 
+                      onClick={saveProduct} 
+                      className={`text-[9px] font-mono font-bold uppercase px-6 py-2 transition-all ${
+                        isDark ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800 shadow-sm"
+                      }`}
+                      style={{ borderRadius: "9999px" }}
+                    >
                       {productForm.editingId ? "Save Engine" : "Build Hook"}
                     </button>
                   </div>
@@ -1534,7 +1604,7 @@ function AdminPage() {
                 return (
                   <div
                     key={p.id}
-                    className={`group relative transition-all duration-300 rounded-[24px] overflow-hidden border ${
+                    className={`group relative transition-all duration-300 border ${
                       isDark 
                         ? isSelected ? "border-neutral-100 bg-neutral-900/40" : "border-neutral-900 bg-neutral-950/20 hover:border-neutral-800" 
                         : isSelected 
@@ -1547,6 +1617,7 @@ function AdminPage() {
                     onDrop={() => handleDrop(p.id)}
                     onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}
                     onClick={() => selectMode && toggleSelectProduct(p.id)}
+                    style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? undefined : "#D1D1D6" }}
                   >
                     {selectMode && (
                       <div className="absolute top-2.5 left-2.5 z-10">
@@ -1562,25 +1633,31 @@ function AdminPage() {
                       </div>
                     )}
                     {isPrintful && (
-                      <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-0.5 px-1.5 py-0.5 rounded-[9999px] bg-sky-500/10 text-sky-400 text-[7px] font-mono font-bold uppercase border border-sky-500/10">
+                      <div 
+                        className="absolute top-2.5 right-2.5 z-10 flex items-center gap-0.5 px-1.5 py-0.5 bg-sky-500/10 text-sky-400 text-[7px] font-mono font-bold uppercase border border-sky-500/10"
+                        style={{ borderRadius: "9999px" }}
+                      >
                         <Lock size={6} /> PF
                       </div>
                     )}
                     {/* ── Product Image with Apple-style drop shadow ── */}
-                    <div className="relative flex aspect-[4/5] items-center justify-center overflow-hidden p-4 bg-[#FAFAFA] rounded-t-[24px]">
+                    <div 
+                      className="relative flex aspect-[4/5] items-center justify-center overflow-hidden p-4 bg-[#FAFAFA]"
+                      style={{ borderTopLeftRadius: "24px", borderTopRightRadius: "24px" }}
+                    >
                       {p.image_urls && p.image_urls.length > 1 ? (
                         <img
                           src={p.image_urls[1]}
                           alt={p.title}
-                          className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500 rounded-[16px]"
-                          style={{ filter: "drop-shadow(0 6px 18px rgba(0,0,0,0.13)) drop-shadow(0 2px 6px rgba(0,0,0,0.08))" }}
+                          className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500"
+                          style={{ borderRadius: "16px", filter: "drop-shadow(0 6px 18px rgba(0,0,0,0.13)) drop-shadow(0 2px 6px rgba(0,0,0,0.08))" }}
                         />
                       ) : p.image_urls && p.image_urls[0] ? (
                         <img
                           src={p.image_urls[0]}
                           alt={p.title}
-                          className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500 rounded-[16px]"
-                          style={{ filter: "drop-shadow(0 6px 18px rgba(0,0,0,0.13)) drop-shadow(0 2px 6px rgba(0,0,0,0.08))" }}
+                          className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500"
+                          style={{ borderRadius: "16px", filter: "drop-shadow(0 6px 18px rgba(0,0,0,0.13)) drop-shadow(0 2px 6px rgba(0,0,0,0.08))" }}
                         />
                       ) : (
                         <span className={`text-[8px] font-mono uppercase tracking-widest ${isDark ? "text-neutral-800" : "text-neutral-300"}`}>Empty visual</span>
@@ -1629,12 +1706,17 @@ function AdminPage() {
               </div>
 
               <input type="text" placeholder="FILTER LEDGER…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                className={`text-[9px] font-mono border rounded-[9999px] px-4 py-2 w-48 bg-transparent focus:outline-none focus:ring-1 ${
+                className={`text-[9px] font-mono border px-4 py-2 w-48 bg-transparent focus:outline-none focus:ring-1 ${
                   isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-[#D1D1D6] text-black focus:border-black focus:ring-black/10 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
-                }`} />
+                }`} 
+                style={{ borderRadius: "9999px", borderColor: isDark ? undefined : "#D1D1D6" }}
+              />
             </div>
 
-            <div className="flex gap-2 p-1 bg-[#e8e8ed]/40 dark:bg-neutral-900/40 rounded-[9999px] w-fit">
+            <div 
+              className="flex gap-2 p-1 bg-[#e8e8ed]/40 dark:bg-neutral-900/40 w-fit"
+              style={{ borderRadius: "9999px" }}
+            >
               {([
                 { key: "all", label: "Registry", count: activeOrders.length },
                 { key: "paid", label: "Paid", count: paidOrders.length },
@@ -1644,23 +1726,28 @@ function AdminPage() {
                 <button
                   key={tab.key}
                   onClick={() => setOrderStatusFilter(tab.key)}
-                  className={`flex items-center gap-2 px-4 py-1.5 text-[9px] font-mono font-semibold uppercase tracking-widest transition-all rounded-[9999px] ${
-                    orderStatusFilter === tab.key
-                      ? isDark ? "text-white bg-neutral-900 shadow-sm" : "text-black bg-white shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
-                      : isDark ? "text-neutral-550 hover:text-neutral-350" : "text-neutral-555 hover:text-neutral-800"
-                  }`}
+                  className={`flex items-center gap-2 px-4 py-1.5 text-[9px] font-mono font-semibold uppercase tracking-widest transition-all`}
+                  style={{ borderRadius: "9999px" }}
                 >
                   {tab.label}
-                  <span className={`text-[8px] font-mono px-2 py-0.5 rounded-[9999px] ${
-                    orderStatusFilter === tab.key
-                      ? isDark ? "bg-white text-black" : "bg-black text-white"
-                      : isDark ? "bg-neutral-900 text-neutral-500" : "bg-neutral-100 text-neutral-500"
-                  }`}>{tab.count}</span>
+                  <span 
+                    className={`text-[8px] font-mono px-2 py-0.5 ${
+                      orderStatusFilter === tab.key
+                        ? isDark ? "bg-white text-black" : "bg-black text-white"
+                        : isDark ? "bg-neutral-900 text-neutral-500" : "bg-neutral-100 text-neutral-500"
+                    }`}
+                    style={{ borderRadius: "9999px" }}
+                  >
+                    {tab.count}
+                  </span>
                 </button>
               ))}
             </div>
 
-            <div className={`overflow-x-auto border rounded-[24px] overflow-hidden ${isDark ? "border-neutral-900" : "border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} bg-white dark:bg-transparent`}>
+            <div 
+              className={`overflow-x-auto border ${isDark ? "border-neutral-900" : "border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} bg-white dark:bg-transparent`}
+              style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? undefined : "#D1D1D6" }}
+            >
               <table className="w-full text-left">
                 <thead>
                   <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${
@@ -1683,11 +1770,14 @@ function AdminPage() {
                       <td className={`px-5 py-3.5 text-[10px] uppercase font-mono ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>{o.name || "—"}</td>
                       <td className="px-5 py-3.5 text-xs font-mono font-medium">{fmt$(o.amount_cents)}</td>
                       <td className="px-5 py-3.5">
-                        <span className={`text-[8px] font-mono font-bold uppercase px-2.5 py-1 rounded-[9999px] flex items-center gap-1.5 w-fit ${
-                          o.status === "paid" ? "bg-emerald-500/10 text-emerald-500" :
-                          o.status === "pending" ? "bg-amber-500/10 text-amber-500" :
-                          "bg-rose-500/10 text-rose-500"
-                        }`}>
+                        <span 
+                          className={`text-[8px] font-mono font-bold uppercase px-2.5 py-1 flex items-center gap-1.5 w-fit ${
+                            o.status === "paid" ? "bg-emerald-500/10 text-emerald-500" :
+                            o.status === "pending" ? "bg-amber-500/10 text-amber-500" :
+                            "bg-rose-500/10 text-rose-500"
+                          }`}
+                          style={{ borderRadius: "9999px" }}
+                        >
                           <LedPulse color={o.status === "paid" ? "green" : o.status === "pending" ? "yellow" : "red"} active={false} />
                           {o.status}
                         </span>
@@ -1718,11 +1808,16 @@ function AdminPage() {
               </div>
 
               <input type="text" placeholder="FILTER LEADS…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                className={`text-[9px] font-mono border rounded-[9999px] px-4 py-2 w-48 bg-transparent focus:outline-none focus:ring-1 ${
+                className={`text-[9px] font-mono border px-4 py-2 w-48 bg-transparent focus:outline-none focus:ring-1 ${
                   isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-[#D1D1D6] text-black focus:border-black focus:ring-black/10 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
-                }`} />
+                }`} 
+                style={{ borderRadius: "9999px", borderColor: isDark ? undefined : "#D1D1D6" }}
+              />
             </div>
-            <div className={`overflow-x-auto border rounded-[24px] overflow-hidden ${isDark ? "border-neutral-900" : "border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} bg-white dark:bg-transparent`}>
+            <div 
+              className={`overflow-x-auto border ${isDark ? "border-neutral-900" : "border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} bg-white dark:bg-transparent`}
+              style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? undefined : "#D1D1D6" }}
+            >
               <table className="w-full text-left">
                 <thead>
                   <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${
@@ -1759,11 +1854,13 @@ function AdminPage() {
               <div className="flex gap-1">
                 {(["7", "14", "30"] as const).map(r => (
                   <button key={r} onClick={() => setAnalyticsRange(r)}
-                    className={`text-[9px] font-mono font-bold uppercase px-3 py-1.5 transition-all rounded-[9999px] ${
+                    className={`text-[9px] font-mono font-bold uppercase px-3 py-1.5 transition-all ${
                       analyticsRange === r
                         ? isDark ? "bg-white text-black" : "bg-black text-white"
-                        : isDark ? "text-neutral-450 hover:text-white" : "text-neutral-550 bg-white border border-[#D1D1D6] hover:text-black shadow-[0_1px_4px_rgba(0,0,0,0.05)]"
-                    }`}>
+                        : isDark ? "text-neutral-455 hover:text-white" : "text-neutral-550 bg-white border border-[#D1D1D6] hover:text-black shadow-[0_1px_4px_rgba(0,0,0,0.05)]"
+                    }`}
+                    style={{ borderRadius: "9999px" }}
+                  >
                     {r}D
                   </button>
                 ))}
@@ -1771,12 +1868,18 @@ function AdminPage() {
             </div>
 
             {!hasEventData && (
-              <div className={`p-6 border rounded-[24px] overflow-hidden space-y-4 ${isDark ? "border-neutral-900 bg-neutral-950/30" : "border-[#D1D1D6] bg-white shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"}`}>
+              <div 
+                className={`p-6 border space-y-4 ${isDark ? "border-neutral-900 bg-neutral-950/30" : "border-[#D1D1D6] bg-white shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"}`}
+                style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? undefined : "#D1D1D6" }}
+              >
                 <p className={`text-[10px] font-mono font-bold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Tracker Inactive</p>
                 <p className={`text-xs leading-relaxed ${isDark ? "text-neutral-400" : "text-neutral-600"}`}>
                   Bind the client-side telemetry dispatcher to monitor user sessions, clicks, and page view triggers.
                 </p>
-                <pre className={`text-[9px] p-4 overflow-x-auto font-mono rounded-2xl ${isDark ? "bg-neutral-950 border border-neutral-900 text-neutral-400" : "bg-neutral-50 border border-[#D1D1D6] text-neutral-600"}`}>
+                <pre 
+                  className={`text-[9px] p-4 overflow-x-auto font-mono ${isDark ? "bg-neutral-950 border border-neutral-900 text-neutral-400" : "bg-neutral-50 border border-[#D1D1D6] text-neutral-600"}`}
+                  style={{ borderRadius: "16px" }}
+                >
 {`export function trackEvent(type, data = {}) {
   supabase.from('page_events').insert([{
     event_type: type,
@@ -1802,17 +1905,23 @@ function AdminPage() {
               <Stat label="Checkout Starts" value={analyticsEvents.filter(e => e.event_type === "checkout_start").length.toLocaleString()} sub="initiated checkout" isDark={isDark} />
             </div>
 
-            <div className={`p-6 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-4`}>
+            <div 
+              className={`p-6 border transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-4`}
+              style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? undefined : "#D1D1D6" }}
+            >
               <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Daily Telemetry Pulse</p>
               <div className="flex items-end gap-1.5 h-32 pt-4">
                 {analyticsChartData.map((d, i) => (
                   <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group relative">
                     <div
-                      className={`w-full transition-all duration-300 rounded-[9999px] ${isDark ? "bg-neutral-800 group-hover:bg-neutral-550" : "bg-neutral-200 group-hover:bg-neutral-355"}`}
-                      style={{ height: `${(d.views / chartMax) * 100}%`, minHeight: d.views > 0 ? "3px" : "1px" }}
+                      className={`w-full transition-all duration-300`}
+                      style={{ height: `${(d.views / chartMax) * 100}%`, minHeight: d.views > 0 ? "3px" : "1px", borderRadius: "9999px" }}
                     />
                     {d.views > 0 && (
-                      <div className={`absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[8px] font-mono font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border ${isDark ? "bg-neutral-900 text-white border-neutral-850" : "bg-white text-black border-[#D1D1D6] shadow-[0_2px_8px_rgba(0,0,0,0.08)] rounded-[9999px]"}`}>
+                      <div 
+                        className={`absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[8px] font-mono font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border ${isDark ? "bg-neutral-900 text-white border-neutral-850" : "bg-white text-black border-[#D1D1D6] shadow-[0_2px_8px_rgba(0,0,0,0.08)]"}`}
+                        style={{ borderRadius: "9999px" }}
+                      >
                         {d.views}
                       </div>
                     )}
@@ -1830,7 +1939,10 @@ function AdminPage() {
                 {topReferrers.length === 0 ? (
                   <p className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-700" : "text-neutral-300"}`}>Empty logs</p>
                 ) : (
-                  <div className={`p-4 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-2.5`}>
+                  <div 
+                    className={`p-4 border transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-2.5`}
+                    style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? undefined : "#D1D1D6" }}
+                  >
                     {topReferrers.map(([ref, count]) => (
                       <div key={ref} className={`flex items-center justify-between gap-4 py-1.5 border-b last:border-0 dark:border-neutral-900/40 border-[#F2F2F7]`}>
                         <span className={`text-[10px] font-mono truncate uppercase ${isDark ? "text-neutral-400" : "text-neutral-600"}`}>{ref || "direct"}</span>
@@ -1845,7 +1957,10 @@ function AdminPage() {
                 {topPaths.length === 0 ? (
                   <p className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-700" : "text-neutral-300"}`}>Empty logs</p>
                 ) : (
-                  <div className={`p-4 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-2.5`}>
+                  <div 
+                    className={`p-4 border transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-2.5`}
+                    style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? undefined : "#D1D1D6" }}
+                  >
                     {topPaths.map(([path, count]) => (
                       <div key={path} className={`flex items-center justify-between gap-4 py-1.5 border-b last:border-0 dark:border-neutral-900/40 border-[#F2F2F7]`}>
                         <span className={`text-[9px] font-mono truncate ${isDark ? "text-neutral-400" : "text-neutral-600"}`}>{path}</span>
@@ -1860,7 +1975,10 @@ function AdminPage() {
             {Object.keys(productClickMap).length > 0 && (
               <div className="space-y-3">
                 <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Interaction CTR</p>
-                <div className={`border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"}`}>
+                <div 
+                  className={`border transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"}`}
+                  style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? undefined : "#D1D1D6" }}
+                >
                   <table className="w-full text-left">
                     <thead>
                       <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${isDark ? "text-neutral-500 border-neutral-900 bg-neutral-950/50" : "text-neutral-500 border-[#D1D1D6] bg-[#f5f5f7]"}`}>
@@ -1892,7 +2010,11 @@ function AdminPage() {
                 <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Geographic Distribution</p>
                 <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
                   {geoBreakdown.map(([country, count]) => (
-                    <div key={country} className={`p-4 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"}`}>
+                    <div 
+                      key={country} 
+                      className={`p-4 border transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"}`}
+                      style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? undefined : "#D1D1D6" }}
+                    >
                       <p className={`text-[8px] font-mono uppercase tracking-wider ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{country}</p>
                       <p className="text-lg font-bold tracking-tight mt-1">{count}</p>
                     </div>
@@ -1917,10 +2039,16 @@ function AdminPage() {
 
               <div className="space-y-3">
                 <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Theme Adaptation</h2>
-                <div className={`p-5 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-4`}>
+                <div 
+                  className={`p-5 border transition-all duration-300 ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-4`}
+                  style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? undefined : "#D1D1D6" }}
+                >
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-mono uppercase tracking-widest">Interface Mode</span>
-                    <div className={`flex border rounded-[9999px] overflow-hidden ${isDark ? "border-neutral-800" : "border-[#D1D1D6]"}`}>
+                    <div 
+                      className={`flex border overflow-hidden ${isDark ? "border-neutral-800" : "border-[#D1D1D6]"}`}
+                      style={{ borderRadius: "9999px" }}
+                    >
                       <button
                         onClick={() => {
                           setIsDark(false);
@@ -1928,7 +2056,8 @@ function AdminPage() {
                           document.documentElement.classList.remove("dark");
                           saveSiteConfig({ ...siteContent, theme: "light" });
                         }}
-                        className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all rounded-[9999px] ${!isDark ? "bg-black text-white" : "text-neutral-400 hover:bg-neutral-900"}`}
+                        className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all`}
+                        style={{ borderRadius: "9999px" }}
                       >
                         LIGHT
                       </button>
@@ -1939,7 +2068,8 @@ function AdminPage() {
                           localStorage.setItem("theme", "dark");
                           saveSiteConfig({ ...siteContent, theme: "dark" });
                         }}
-                        className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all rounded-[9999px] ${isDark ? "bg-white text-black" : "text-neutral-550 hover:bg-neutral-100"}`}
+                        className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all`}
+                        style={{ borderRadius: "9999px" }}
                       >
                         DARK
                       </button>
@@ -1950,7 +2080,10 @@ function AdminPage() {
 
               <div className="space-y-3">
                 <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Team Registry Access</h2>
-                <div className={`p-5 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-6`}>
+                <div 
+                  className={`p-5 border transition-all duration-300 ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-6`}
+                  style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? undefined : "#D1D1D6" }}
+                >
                   <div className="flex gap-3 flex-wrap items-end">
                     <div className="flex-1 min-w-[200px] space-y-1.5">
                       <label className={`text-[8px] font-mono font-semibold uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>ADD TEAM MEMBER</label>
@@ -1959,9 +2092,10 @@ function AdminPage() {
                         placeholder="EMAIL ADDR…"
                         value={newUserEmail}
                         onChange={e => setNewUserEmail(e.target.value)}
-                        className={`w-full bg-transparent border rounded-[9999px] px-4 py-1.5 text-[10px] font-mono uppercase focus:outline-none focus:ring-1 ${
+                        className={`w-full bg-transparent border px-4 py-1.5 text-[10px] font-mono uppercase focus:outline-none focus:ring-1 ${
                           isDark ? "border-neutral-850 text-white placeholder-neutral-700 focus:border-white focus:ring-white/25" : "border-[#D1D1D6] text-black placeholder-neutral-350 focus:border-black focus:ring-black/10 bg-white shadow-sm"
                         }`}
+                        style={{ borderRadius: "9999px", borderColor: isDark ? undefined : "#D1D1D6" }}
                       />
                     </div>
                     <div className="space-y-1.5">
@@ -1969,9 +2103,10 @@ function AdminPage() {
                       <select
                         value={newUserRole}
                         onChange={e => setNewUserRole(e.target.value as any)}
-                        className={`text-[9px] font-mono font-semibold uppercase bg-transparent border rounded-[9999px] px-3 py-1.5 focus:outline-none focus:ring-1 ${
+                        className={`text-[9px] font-mono font-semibold uppercase bg-transparent border px-3 py-1.5 focus:outline-none focus:ring-1 ${
                           isDark ? "border-neutral-850 text-white focus:border-white focus:ring-white/25" : "border-[#D1D1D6] text-black focus:border-black focus:ring-black/10 bg-white shadow-sm"
                         }`}
+                        style={{ borderRadius: "9999px", borderColor: isDark ? undefined : "#D1D1D6" }}
                       >
                         <option value="viewer">VIEWER</option>
                         <option value="manager">MANAGER</option>
@@ -1981,9 +2116,10 @@ function AdminPage() {
                     <button
                       onClick={handleAddAdminUser}
                       disabled={isAddingUser || !newUserEmail.trim()}
-                      className={`text-[9px] font-mono font-bold uppercase px-4 py-1.5 rounded-[9999px] transition-all ${
+                      className={`text-[9px] font-mono font-bold uppercase px-4 py-1.5 rounded-full transition-all ${
                         isDark ? "bg-white text-black hover:bg-neutral-200 disabled:opacity-30" : "bg-black text-white hover:bg-neutral-800 disabled:opacity-30 shadow-sm"
                       }`}
+                      style={{ borderRadius: "9999px" }}
                     >
                       {isAddingUser ? "Deploying" : "Deploy"}
                     </button>
@@ -1995,7 +2131,11 @@ function AdminPage() {
                       { role: "manager", desc: "Write access to database & inventory" },
                       { role: "admin", desc: "Root execution permissions on settings" },
                     ].map(r => (
-                      <div key={r.role} className={`p-3 border rounded-[16px] ${isDark ? "border-neutral-900 bg-neutral-950/10" : "border-[#D1D1D6] bg-neutral-50"}`}>
+                      <div 
+                        key={r.role} 
+                        className={`p-3 border ${isDark ? "border-neutral-900 bg-neutral-950/10" : "border-[#D1D1D6] bg-neutral-50"}`}
+                        style={{ borderRadius: "16px", borderColor: isDark ? undefined : "#D1D1D6" }}
+                      >
                         <p className={`text-[8px] font-mono font-bold uppercase ${isDark ? "text-neutral-300" : "text-neutral-800"}`}>{r.role}</p>
                         <p className={`text-[8px] font-mono mt-1 leading-relaxed ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{r.desc}</p>
                       </div>
@@ -2010,7 +2150,8 @@ function AdminPage() {
                           <select
                             value={u.role}
                             onChange={e => handleUpdateUserRole(u.id, e.target.value as any)}
-                            className={`text-[8px] font-mono font-semibold uppercase bg-transparent focus:outline-none focus:ring-1 border rounded-[9999px] px-3 py-0.5 ${isDark ? "text-neutral-400 border-neutral-800" : "text-neutral-550 border-[#D1D1D6] bg-white"}`}
+                            className={`text-[8px] font-mono font-semibold uppercase bg-transparent focus:outline-none focus:ring-1 border px-3 py-0.5 ${isDark ? "text-neutral-400 border-neutral-800" : "text-neutral-555 border-[#D1D1D6] bg-white"}`}
+                            style={{ borderRadius: "9999px", borderColor: isDark ? undefined : "#D1D1D6" }}
                           >
                             <option value="viewer">VIEWER</option>
                             <option value="manager">MANAGER</option>
@@ -2031,12 +2172,19 @@ function AdminPage() {
 
               <div className="space-y-3">
                 <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Identity Verification</h2>
-                <div className={`p-5 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-4`}>
+                <div 
+                  className={`p-5 border transition-all duration-300 ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"}`}
+                  style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? undefined : "#D1D1D6" }}
+                >
                   <div>
                     <p className={`text-[9px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Identified Payload</p>
                     <p className="text-xs font-mono font-semibold uppercase">{userEmail || "…"}</p>
                   </div>
-                  <button onClick={handleSignOut} className={`w-full rounded-[9999px] text-[10px] font-mono font-semibold uppercase px-4 py-2.5 transition-all ${isDark ? "bg-rose-500/10 text-rose-455 hover:bg-rose-500/20" : "bg-rose-50 text-rose-655 hover:bg-rose-100"}`}>
+                  <button 
+                    onClick={handleSignOut} 
+                    className={`w-full text-[10px] font-mono font-semibold uppercase px-4 py-2.5 transition-all ${isDark ? "bg-rose-500/10 text-rose-455 hover:bg-rose-500/20" : "bg-rose-50 text-rose-655 hover:bg-rose-100"}`}
+                    style={{ borderRadius: "9999px" }}
+                  >
                     TERMINATE SESSION
                   </button>
                 </div>
@@ -2051,9 +2199,12 @@ function AdminPage() {
       {selectedRow && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 animate-in fade-in duration-355">
           <div className="absolute inset-0 backdrop-blur-md bg-black/60 dark:bg-black/80" onClick={() => setSelectedRow(null)} />
-          <div className={`relative w-full max-w-lg p-8 border rounded-[24px] overflow-hidden space-y-6 max-h-[85vh] overflow-y-auto ${
-            isDark ? "bg-neutral-950 border-neutral-850" : "bg-white border-[#D1D1D6] shadow-[0_32px_64px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.08)]"
-          }`}>
+          <div 
+            className={`relative w-full max-w-lg p-8 border space-y-6 max-h-[85vh] overflow-y-auto ${
+              isDark ? "bg-neutral-950 border-neutral-850" : "bg-white border-[#D1D1D6] shadow-[0_32px_64px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.08)]"
+            }`}
+            style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? undefined : "#D1D1D6" }}
+          >
             <div className={`flex items-center justify-between border-b pb-3 dark:border-neutral-900 border-[#D1D1D6]`}>
               <h3 className={`text-xs font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-300" : "text-neutral-800"}`}>System Ledger Metadata</h3>
               <button onClick={() => setSelectedRow(null)} className={`${isDark ? "text-neutral-500 hover:text-white" : "text-neutral-400 hover:text-black"}`}><X size={14} /></button>
@@ -2069,8 +2220,11 @@ function AdminPage() {
               ))}
             </div>
             {selectedRow._type === "order" && (
-              <button onClick={() => handleArchiveOrder(selectedRow.id)}
-                className={`w-full py-2.5 rounded-[9999px] text-[9px] font-mono font-bold uppercase tracking-wide transition-all ${isDark ? "bg-rose-500/10 text-rose-455 hover:bg-rose-500/20" : "bg-rose-50 text-rose-655 hover:bg-rose-100"}`}>
+              <button 
+                onClick={() => handleArchiveOrder(selectedRow.id)}
+                className={`w-full py-2.5 text-[9px] font-mono font-bold uppercase tracking-wide transition-all ${isDark ? "bg-rose-500/10 text-rose-455 hover:bg-rose-500/20" : "bg-rose-50 text-rose-655 hover:bg-rose-100"}`}
+                style={{ borderRadius: "9999px" }}
+              >
                 Archive Order Record
               </button>
             )}
@@ -2087,7 +2241,10 @@ function AdminPage() {
 
 function Stat({ label, value, sub, isDark, led = "cyan" }: { label: string; value: string | number; sub: string; isDark: boolean; led?: "green" | "yellow" | "red" | "cyan" | "purple" | "neutral" }) {
   return (
-    <div className={`p-4 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_12px_24px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-1`}>
+    <div 
+      className={`p-4 border transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_12px_24px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-1`}
+      style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? undefined : "#D1D1D6" }}
+    >
       <div className="flex items-center justify-between gap-2">
         <p className={`text-[8px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{label}</p>
         <LedPulse color={led} />
@@ -2107,22 +2264,28 @@ function StatWithDelta({ label, value, sub, delta, isDark }: { label: string; va
   const deltaColor = delta !== null && delta > 0 ? "green" as const : delta !== null && delta < 0 ? "red" as const : "neutral" as const;
 
   return (
-    <div className={`p-4 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_12px_24px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-1`}>
+    <div 
+      className={`p-4 border transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_12px_24px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-1`}
+      style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? undefined : "#D1D1D6" }}
+    >
       <div className="flex items-center justify-between gap-2">
         <p className={`text-[8px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{label}</p>
         <LedPulse color={deltaColor} />
       </div>
       <div className="flex items-baseline gap-2 flex-wrap">
         <p 
-          className="text-xl font-semibold tracking-tight"
+          className="text-xl font-semibold tracking-tight animate-in fade-in duration-300"
           style={{ textShadow: isDark ? "0 0 10px rgba(255,255,255,0.1)" : "0 0 8px rgba(0,0,0,0.03)" }}
         >
           {value}
         </p>
         {delta !== null && (
-          <span className={`text-[8px] font-mono font-bold uppercase px-2 py-0.5 rounded-[9999px] ${
-            delta > 0 ? "text-emerald-500 bg-emerald-500/10" : delta < 0 ? "text-rose-500 bg-rose-500/10" : isDark ? "text-neutral-600" : "text-neutral-400"
-          }`}>
+          <span 
+            className={`text-[8px] font-mono font-bold uppercase px-2 py-0.5 ${
+              delta > 0 ? "text-emerald-500 bg-emerald-500/10" : delta < 0 ? "text-rose-500 bg-rose-500/10" : isDark ? "text-neutral-600" : "text-neutral-400"
+            }`}
+            style={{ borderRadius: "9999px" }}
+          >
             {delta > 0 ? "↑" : delta < 0 ? "↓" : "—"}{Math.abs(delta)}%
           </span>
         )}
@@ -2137,9 +2300,11 @@ function Input({ label, value, onChange, type = "text", isDark }: { label: strin
     <div className="space-y-1.5">
       <label className={`text-[9px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>{label}</label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)}
-        className={`w-full bg-transparent border rounded-[9999px] px-4 py-1.5 text-xs font-mono transition-all focus:outline-none focus:ring-1 ${
+        className={`w-full bg-transparent border px-4 py-1.5 text-xs font-mono transition-all focus:outline-none focus:ring-1 ${
           isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-[#D1D1D6] text-black focus:border-black focus:ring-black/5 bg-white shadow-sm"
-        }`} />
+        }`} 
+        style={{ borderRadius: "9999px", borderColor: isDark ? undefined : "#D1D1D6" }}
+      />
     </div>
   );
 }
