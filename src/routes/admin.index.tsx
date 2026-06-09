@@ -1,17 +1,3 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { fetchProducts } from "@/lib/useProducts";
-import { offer } from "@/config/site";
-import { toast } from "sonner";
-import { Edit3, Archive, X, Menu, RefreshCw, BarChart2, Lock, CheckSquare, Square, Trash2, Eye, EyeOff, GripVertical, Users, TrendingUp, TrendingDown, Minus, Terminal, Cpu, Zap, Activity, AlertTriangle, Play } from "lucide-react";
-import { requireAdmin } from "@/lib/admin-guard";
-
-
-// ────────────────────────────────────────────────────────────────────────────
-// TYPES & ROUTE DEFINITION
-// ────────────────────────────────────────────────────────────────────────────
-
 type SiteContent = {
   hero_headline: string;
   hero_subheadline: string;
@@ -174,6 +160,19 @@ const TelemetryCanvas = ({ events, isDark, canvasRefExternal }: { events: PageEv
   }, [canvasRefExternal, spawnPacket]);
 
   useEffect(() => {
+    if (events.length > prevEventsLength.current) {
+      const difference = events.length - prevEventsLength.current;
+      for (let i = 0; i < difference; i++) {
+        const ev = events[i];
+        if (ev) {
+          spawnPacket(ev.event_type);
+        }
+      }
+    }
+    prevEventsLength.current = events.length;
+  }, [events, spawnPacket]);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -307,7 +306,7 @@ const TelemetryCanvas = ({ events, isDark, canvasRefExternal }: { events: PageEv
   }, [isDark]);
 
   return (
-    <div className="relative w-full h-32 md:h-36 rounded-3xl border border-[#E5E5EA] dark:border-neutral-800/50 bg-white/50 dark:bg-neutral-900/10 shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]">
+    <div className="relative w-full h-32 md:h-36 rounded-[24px] border border-[#D1D1D6] dark:border-neutral-800/50 bg-white/50 dark:bg-neutral-900/10 shadow-[0_12px_24px_rgba(0,0,0,0.02)] overflow-hidden">
       <div className="absolute top-3 left-4 flex items-center gap-2 pointer-events-none">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
         <span className="text-[8px] font-mono tracking-widest text-neutral-400 dark:text-neutral-500 uppercase">SYS_TELEMETRY_STREAM</span>
@@ -353,8 +352,8 @@ function AiAgentConsole({ isDark, onSimulatePacket }: { isDark: boolean; onSimul
   }, [thinkingSpeed]);
 
   return (
-    <div className={`p-6 border rounded-3xl relative overflow-hidden transition-all duration-300 ${
-      isDark ? "bg-neutral-950/45 border-neutral-800/80" : "bg-white border-[#E5E5EA] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.09),0_2px_6px_rgba(0,0,0,0.04)]"
+    <div className={`p-6 border rounded-[24px] relative overflow-hidden transition-all duration-300 ${
+      isDark ? "bg-neutral-950/45 border-neutral-800/80" : "bg-white border-[#D1D1D6] shadow-[0_24px_48px_rgba(0,0,0,0.03)] hover:shadow-[0_24px_48px_rgba(0,0,0,0.06)]"
     }`}>
       {/* Grid line indicator background */}
       <div className="absolute top-0 right-0 p-3 flex items-center gap-1.5 pointer-events-none text-[8px] font-mono tracking-widest text-neutral-400 dark:text-neutral-500 uppercase">
@@ -374,7 +373,7 @@ function AiAgentConsole({ isDark, onSimulatePacket }: { isDark: boolean; onSimul
         </div>
 
         {/* Live typing diagnostic output console */}
-        <div className={`p-4 border rounded-2xl font-mono text-[9px] h-32 overflow-y-auto space-y-1.5 ${
+        <div className={`p-4 border rounded-[16px] font-mono text-[9px] h-32 overflow-y-auto space-y-1.5 ${
           isDark ? "bg-black/80 border-neutral-900 text-purple-300" : "bg-neutral-50 border-[#E5E5EA] text-purple-700"
         }`}>
           {logs.map((log, index) => (
@@ -418,7 +417,7 @@ function AiAgentConsole({ isDark, onSimulatePacket }: { isDark: boolean; onSimul
                       return [`[${t}] SYSTEM: Manual telemetry override payload [${signal.toUpperCase()}] injected.`, ...prev];
                     });
                   }}
-                  className="flex-1 min-w-[50px] text-[8px] font-mono font-black uppercase tracking-widest border py-1.5 rounded-full hover:bg-purple-500/10 hover:border-purple-500/40 transition-all dark:border-neutral-850 dark:text-neutral-400 dark:hover:text-purple-300 border-[#E5E5EA] text-neutral-600"
+                  className="flex-1 min-w-[50px] text-[8px] font-mono font-black uppercase tracking-widest border py-1.5 rounded-[9999px] hover:bg-purple-500/10 hover:border-purple-500/40 transition-all dark:border-neutral-850 dark:text-neutral-400 dark:hover:text-purple-300 border-[#E5E5EA] text-neutral-600 bg-white shadow-sm"
                 >
                   {signal}
                 </button>
@@ -1104,7 +1103,7 @@ function AdminPage() {
       <div 
         className={`min-h-screen flex flex-col items-center justify-center ${isDark ? "bg-black text-white" : "bg-[#f5f5f7] text-black"}`}
         style={{
-          fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif'
+          fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "SF Pro", "SF Compact", "Helvetica Neue", Helvetica, Arial, sans-serif'
         }}
       >
         <div className="space-y-4 text-center max-w-sm px-6">
@@ -1129,7 +1128,7 @@ function AdminPage() {
     <div 
       className={`min-h-screen relative ${isDark ? "bg-black text-neutral-100 selection:bg-neutral-800" : "bg-[#f5f5f7] text-neutral-900 selection:bg-neutral-200"}`}
       style={{
-        fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif'
+        fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "SF Pro", "SF Compact", "Helvetica Neue", Helvetica, Arial, sans-serif'
       }}
     >
       <div className="absolute top-0 left-0 w-full h-[2px] bg-sky-500/10 dark:bg-white/5 pointer-events-none animate-bounce z-40 opacity-40" style={{ animationDuration: "12s" }} />
@@ -1143,24 +1142,24 @@ function AdminPage() {
       />
 
       {/* ── NAV ── */}
-      <nav className={`sticky top-0 z-50 backdrop-blur-md border-b ${isDark ? "bg-black/80 border-neutral-800/60" : "bg-white/80 border-[#E5E5EA]"}`}>
+      <nav className={`sticky top-0 z-50 backdrop-blur-md border-b ${isDark ? "bg-black/80 border-neutral-800/60" : "bg-white/80 border-[#D1D1D6]"}`}>
         <div className="max-w-7xl mx-auto flex items-center justify-between px-6 py-3.5">
           <div className="flex items-center gap-3">
-            <span className={`text-[10px] font-mono tracking-[0.3em] font-semibold border px-3 py-1 uppercase ${isDark ? "border-neutral-800 text-neutral-400" : "border-[#E5E5EA] text-neutral-550 bg-white shadow-sm rounded-full"}`}>
+            <span className={`text-[10px] font-mono tracking-[0.3em] font-semibold border px-3 py-1 uppercase ${isDark ? "border-neutral-800 text-neutral-400" : "border-[#D1D1D6] text-neutral-555 bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04)] rounded-[9999px]"}`}>
               COMMAND CENTER
             </span>
             <LedPulse color="green" />
           </div>
 
-          <div className="hidden md:flex items-center justify-center gap-2 p-1 bg-[#e8e8ed]/60 dark:bg-neutral-900/60 rounded-full">
+          <div className="hidden md:flex items-center justify-center gap-2 p-1 bg-[#e8e8ed]/60 dark:bg-neutral-900/60 rounded-[9999px]">
             {navSections.map(s => (
               <button
                 key={s}
                 onClick={() => setSection(s)}
-                className={`text-[10px] font-mono font-medium uppercase tracking-widest transition-all duration-200 px-4 py-1.5 rounded-full ${
+                className={`text-[10px] font-mono font-medium uppercase tracking-widest transition-all duration-200 px-4 py-1.5 rounded-[9999px] ${
                   section === s
                     ? isDark ? "text-white bg-neutral-900" : "text-black bg-white shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
-                    : isDark ? "text-neutral-500 hover:text-neutral-300" : "text-neutral-550 hover:text-neutral-800"
+                    : isDark ? "text-neutral-550 hover:text-neutral-300" : "text-neutral-550 hover:text-neutral-800"
                 }`}
               >
                 {s}
@@ -1176,15 +1175,15 @@ function AdminPage() {
         </div>
 
         {mobileMenuOpen && (
-          <div className={`md:hidden border-t ${isDark ? "border-neutral-900 bg-black" : "border-[#E5E5EA] bg-white"} px-6 py-4 space-y-2`}>
+          <div className={`md:hidden border-t ${isDark ? "border-neutral-900 bg-black" : "border-[#D1D1D6] bg-white"} px-6 py-4 space-y-2`}>
             {navSections.map(s => (
               <button
                 key={s}
                 onClick={() => { setSection(s); setMobileMenuOpen(false); }}
-                className={`block w-full text-left text-[10px] font-mono uppercase tracking-widest py-2 px-3 rounded-full ${
+                className={`block w-full text-left text-[10px] font-mono uppercase tracking-widest py-2 px-3 rounded-[9999px] ${
                   section === s
                     ? isDark ? "text-white bg-neutral-900" : "text-black bg-[#e8e8ed]"
-                    : isDark ? "text-neutral-500" : "text-neutral-400"
+                    : isDark ? "text-neutral-550" : "text-neutral-400"
                 }`}
               >
                 {s}
@@ -1211,10 +1210,10 @@ function AdminPage() {
 
               <button
                 onClick={handleOpenJarvis}
-                className={`text-[9px] font-mono font-semibold tracking-wider uppercase px-4 py-2 border transition-all rounded-full ${
+                className={`text-[9px] font-mono font-semibold tracking-wider uppercase px-4 py-2 border transition-all rounded-[9999px] ${
                   isDark
                     ? "border-neutral-800 text-neutral-300 hover:bg-neutral-900/50 hover:text-white"
-                    : "border-[#E5E5EA] text-neutral-700 bg-white hover:bg-neutral-50 hover:text-black shadow-[0_2px_8px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)]"
+                    : "border-[#D1D1D6] text-neutral-700 bg-white hover:bg-neutral-50 hover:text-black shadow-[0_2px_8px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)]"
                 }`}
               >
                 JARVIS CONSOLE →
@@ -1227,10 +1226,10 @@ function AdminPage() {
                 <button
                   key={r}
                   onClick={() => setRevenueRange(r as any)}
-                  className={`text-[9px] font-mono font-bold uppercase px-4 py-1.5 transition-all rounded-full ${
+                  className={`text-[9px] font-mono font-bold uppercase px-4 py-1.5 transition-all rounded-[9999px] ${
                     revenueRange === r
                       ? isDark ? "bg-white text-black shadow-sm" : "bg-black text-white shadow-sm"
-                      : isDark ? "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/50" : "text-neutral-550 bg-white hover:text-neutral-900 border border-[#E5E5EA] shadow-[0_1px_4px_rgba(0,0,0,0.05)]"
+                      : isDark ? "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/50" : "text-neutral-550 bg-white hover:text-neutral-900 border border-[#D1D1D6] shadow-[0_1px_4px_rgba(0,0,0,0.05)]"
                   }`}
                 >
                   {r}
@@ -1239,7 +1238,7 @@ function AdminPage() {
             </div>
 
             {/* ── REVENUE HERO ── */}
-            <div className={`p-6 border rounded-3xl relative overflow-hidden transition-all duration-300 ${isDark ? "bg-neutral-950/40 border-neutral-800/80" : "bg-white border-[#E5E5EA] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.09),0_2px_6px_rgba(0,0,0,0.04)]"}`}>
+            <div className={`p-6 border rounded-[24px] relative overflow-hidden transition-all duration-300 ${isDark ? "bg-neutral-950/40 border-neutral-800/80" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.09),0_2px_6px_rgba(0,0,0,0.04)]"}`}>
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
@@ -1254,7 +1253,7 @@ function AdminPage() {
                       {fmt$(filteredRevenue)}
                     </p>
                     {revenueDelta !== null && (
-                      <div className={`flex items-center gap-1 px-3 py-1 rounded-full text-[9px] font-mono font-bold uppercase ${
+                      <div className={`flex items-center gap-1 px-3 py-1 rounded-[9999px] text-[9px] font-mono font-bold uppercase ${
                         revenueDelta > 0
                           ? "bg-emerald-500/10 text-emerald-500"
                           : revenueDelta < 0
@@ -1273,12 +1272,12 @@ function AdminPage() {
                   {sparklineData.map((d, i) => (
                     <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group relative">
                       <div
-                        className={`w-full transition-all duration-300 rounded-full ${isDark ? "bg-neutral-800 group-hover:bg-neutral-600" : "bg-neutral-200 group-hover:bg-neutral-400"}`}
+                        className={`w-full transition-all duration-300 rounded-[9999px] ${isDark ? "bg-neutral-800 group-hover:bg-neutral-600" : "bg-neutral-200 group-hover:bg-neutral-400"}`}
                         style={{ height: `${(d.value / sparkMax) * 100}%`, minHeight: d.value > 0 ? "3px" : "1px" }}
                       />
                       <span className={`text-[8px] font-mono ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>{d.label.slice(0, 1)}</span>
                       {d.value > 0 && (
-                        <div className={`absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[8px] font-mono font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border ${isDark ? "bg-neutral-900 text-white border-neutral-700" : "bg-white text-black border-[#E5E5EA] shadow-[0_2px_8px_rgba(0,0,0,0.08)] rounded-full"}`}>
+                        <div className={`absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[8px] font-mono font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border ${isDark ? "bg-neutral-900 text-white border-neutral-700" : "bg-white text-black border-[#D1D1D6] shadow-[0_2px_8px_rgba(0,0,0,0.08)] rounded-[9999px]"}`}>
                           {fmt$(d.value)}
                         </div>
                       )}
@@ -1305,7 +1304,7 @@ function AdminPage() {
                 { label: "Failed Orders", count: failedOrders.length, color: "text-rose-500", led: "red" as const },
                 { label: "Published Items", count: products.filter(p => p.is_published).length, color: isDark ? "text-neutral-300" : "text-neutral-800", led: "neutral" as const },
               ].map(item => (
-                <div key={item.label} className={`p-4 border rounded-3xl transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#E5E5EA] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"}`}>
+                <div key={item.label} className={`p-4 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"}`}>
                   <div className="flex items-center justify-between gap-2">
                     <p className={`text-[8px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{item.label}</p>
                     <LedPulse color={item.led} />
@@ -1332,11 +1331,11 @@ function AdminPage() {
             />
 
             {/* ── CONVERSION FUNNEL ── */}
-            <div className={`p-6 border rounded-3xl transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#E5E5EA] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-4`}>
+            <div className={`p-6 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-4`}>
               <div className="flex items-center gap-4 justify-between">
                 <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Live Conversion Flow</p>
                 {!hasEventData && (
-                  <span className={`text-[8px] font-mono tracking-wider uppercase px-2.5 py-0.5 border ${isDark ? "border-neutral-800 text-neutral-500" : "border-[#E5E5EA] text-neutral-400 bg-white rounded-full shadow-sm"}`}>
+                  <span className={`text-[8px] font-mono tracking-wider uppercase px-2.5 py-0.5 border ${isDark ? "border-neutral-800 text-neutral-500" : "border-[#D1D1D6] text-neutral-450 bg-white rounded-[9999px] shadow-sm"}`}>
                     Telemetry hook standby
                   </span>
                 )}
@@ -1352,12 +1351,12 @@ function AdminPage() {
                   <div key={step.label} className="flex items-center gap-4">
                     <div className="w-32 flex-shrink-0 flex items-center gap-2">
                       <LedPulse color={step.led} active={step.value !== null && step.value > 0} />
-                      <span className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-500" : "text-neutral-450"}`}>{step.label}</span>
+                      <span className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{step.label}</span>
                     </div>
-                    <div className={`flex-1 h-2 relative rounded-full overflow-hidden ${isDark ? "bg-neutral-900" : "bg-neutral-100"}`}>
+                    <div className={`flex-1 h-2 relative rounded-[9999px] overflow-hidden ${isDark ? "bg-neutral-900" : "bg-neutral-100"}`}>
                       {step.value !== null && (
                         <div
-                          className={`h-full transition-all duration-700 ease-out rounded-full ${isDark ? "bg-neutral-300" : "bg-neutral-800"}`}
+                          className={`h-full transition-all duration-700 ease-out rounded-[9999px] ${isDark ? "bg-neutral-300" : "bg-neutral-800"}`}
                           style={{ width: `${((step.value ?? 0) / funnelMax) * 100}%`, opacity: 1 - i * 0.12 }}
                         />
                       )}
@@ -1379,10 +1378,10 @@ function AdminPage() {
             {topProducts.length > 0 && (
               <div className="space-y-3">
                 <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Top Products by Revenue</p>
-                <div className={`border rounded-3xl overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#E5E5EA] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"}`}>
+                <div className={`border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"}`}>
                   <table className="w-full text-left">
                     <thead>
-                      <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${isDark ? "text-neutral-500 border-neutral-900 bg-neutral-950/50" : "text-neutral-500 border-[#E5E5EA] bg-[#f5f5f7]"}`}>
+                      <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${isDark ? "text-neutral-500 border-neutral-900 bg-neutral-950/50" : "text-neutral-500 border-[#D1D1D6] bg-[#f5f5f7]"}`}>
                         <th className="px-5 py-3 font-semibold">Product Title</th>
                         <th className="px-5 py-3 font-semibold text-right">Revenue</th>
                         <th className="px-5 py-3 font-semibold text-right">Orders</th>
@@ -1409,7 +1408,7 @@ function AdminPage() {
         ════════════════════════════════════════════════════════════════ */}
         {section === "products" && (
           <div className="space-y-10 animate-in fade-in duration-500">
-            <div className="flex items-end justify-between flex-wrap gap-4 border-b pb-4 dark:border-neutral-900 border-[#E5E5EA]">
+            <div className="flex items-end justify-between flex-wrap gap-4 border-b pb-4 dark:border-neutral-900 border-[#D1D1D6]">
               <div>
                 <h1 className="text-xl font-medium tracking-tight">Products</h1>
                 <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>MANAGE DEPLOYED ITEMS</p>
@@ -1418,22 +1417,22 @@ function AdminPage() {
               <div className="flex gap-2 flex-wrap">
                 <button
                   onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
-                  className={`text-[9px] font-mono font-semibold uppercase px-4 py-2 border transition-all rounded-full ${
+                  className={`text-[9px] font-mono font-semibold uppercase px-4 py-2 border transition-all rounded-[9999px] ${
                     selectMode
                       ? isDark ? "border-white bg-white text-black" : "border-black bg-black text-white shadow-sm"
-                      : isDark ? "border-neutral-800 text-neutral-355 hover:bg-neutral-900/40" : "border-[#E5E5EA] text-neutral-705 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)] hover:bg-neutral-50"
+                      : isDark ? "border-neutral-800 text-neutral-355 hover:bg-neutral-900/40" : "border-[#D1D1D6] text-neutral-705 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)] hover:bg-neutral-50"
                   }`}>
                   {selectMode ? "Cancel" : "Select"}
                 </button>
                 <button onClick={handleSyncPrintful} disabled={isSyncing}
-                  className={`flex items-center gap-1.5 text-[9px] font-mono font-semibold uppercase px-4 py-2 border transition-all rounded-full ${
-                    isDark ? "border-neutral-800 text-neutral-355 hover:bg-neutral-900/40" : "border-[#E5E5EA] text-neutral-705 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)] hover:bg-neutral-50"
+                  className={`flex items-center gap-1.5 text-[9px] font-mono font-semibold uppercase px-4 py-2 border transition-all rounded-[9999px] ${
+                    isDark ? "border-neutral-800 text-neutral-355 hover:bg-neutral-900/40" : "border-[#D1D1D6] text-neutral-705 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)] hover:bg-neutral-50"
                   }`}>
                   <RefreshCw size={11} className={isSyncing ? "animate-spin" : ""} />
                   {isSyncing ? "Syncing" : "Sync Printful"}
                 </button>
                 <button onClick={() => setProductFormOpen(!productFormOpen)}
-                  className={`text-[9px] font-mono font-bold uppercase px-5 py-2 transition-all rounded-full ${
+                  className={`text-[9px] font-mono font-bold uppercase px-5 py-2 transition-all rounded-[9999px] ${
                     isDark ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800 shadow-sm"
                   }`}>
                   {productFormOpen ? "Close Form" : "New Product"}
@@ -1443,22 +1442,22 @@ function AdminPage() {
 
             {/* ── Bulk Toolbar ── */}
             {selectMode && selectedIds.size > 0 && (
-              <div className={`flex items-center gap-4 p-3 rounded-full animate-in slide-in-from-top-2 duration-200 border ${isDark ? "bg-neutral-950 border-neutral-800" : "bg-white border-[#E5E5EA] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"}`}>
+              <div className={`flex items-center gap-4 p-3 rounded-[9999px] animate-in slide-in-from-top-2 duration-200 border ${isDark ? "bg-neutral-950 border-neutral-800" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"}`}>
                 <span className={`text-[9px] font-mono font-semibold uppercase ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>{selectedIds.size} selected</span>
                 <div className="flex gap-2 ml-auto">
-                  <button onClick={selectAllProducts} className={`text-[9px] font-mono uppercase px-3 py-1.5 border rounded-full transition-all ${isDark ? "border-neutral-800 text-neutral-400 hover:text-white" : "border-[#E5E5EA] text-neutral-600 hover:text-black bg-white shadow-sm"}`}>
+                  <button onClick={selectAllProducts} className={`text-[9px] font-mono uppercase px-3 py-1.5 border rounded-[9999px] transition-all ${isDark ? "border-neutral-800 text-neutral-400 hover:text-white" : "border-neutral-200 text-neutral-600 hover:text-black bg-white shadow-sm"}`}>
                     {selectedIds.size === orderedProducts.length ? "Deselect All" : "Select All"}
                   </button>
                   <button onClick={() => bulkPublish(true)} disabled={isBulkActing}
-                    className="flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 rounded-full transition-all">
+                    className="flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 rounded-[9999px] transition-all">
                     <Eye size={10} /> Publish
                   </button>
                   <button onClick={() => bulkPublish(false)} disabled={isBulkActing}
-                    className={`flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 rounded-full transition-all ${isDark ? "bg-neutral-900 text-neutral-400 hover:bg-neutral-800" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"}`}>
+                    className={`flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 rounded-[9999px] transition-all ${isDark ? "bg-neutral-900 text-neutral-400 hover:bg-neutral-800" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"}`}>
                     <EyeOff size={10} /> Unpublish
                   </button>
                   <button onClick={bulkDelete} disabled={isBulkActing}
-                    className="flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 rounded-full transition-all">
+                    className="flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 rounded-[9999px] transition-all">
                     <Trash2 size={10} /> Delete
                   </button>
                 </div>
@@ -1467,7 +1466,7 @@ function AdminPage() {
 
             {/* ── Product Form ── */}
             {productFormOpen && (
-              <div className={`p-6 border rounded-3xl space-y-6 animate-in slide-in-from-top-3 duration-300 ${isDark ? "bg-neutral-950/40 border-neutral-800" : "bg-white border-[#E5E5EA] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"}`}>
+              <div className={`p-6 border rounded-[24px] overflow-hidden space-y-6 animate-in slide-in-from-top-3 duration-300 ${isDark ? "bg-neutral-950/40 border-neutral-800" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"}`}>
                 <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>
                   {productForm.editingId ? "Modify Product Engine" : "Create Product Hook"}
                 </h2>
@@ -1481,20 +1480,20 @@ function AdminPage() {
                 <div className="space-y-1.5">
                   <label className={`text-[9px] font-mono font-semibold uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Description</label>
                   <textarea value={productForm.description} onChange={e => setProductForm(f => ({ ...f, description: e.target.value }))}
-                    className={`w-full bg-transparent border rounded-2xl px-4 py-2.5 text-xs font-mono resize-none focus:outline-none focus:ring-1 ${
-                      isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-[#E5E5EA] text-black focus:border-black focus:ring-black/5 bg-white shadow-sm"
+                    className={`w-full bg-transparent border rounded-[16px] px-4 py-2.5 text-xs font-mono resize-none focus:outline-none focus:ring-1 ${
+                      isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-[#D1D1D6] text-black focus:border-black focus:ring-black/5 bg-white shadow-sm"
                     }`} rows={3} />
                 </div>
                 <div className="flex items-center justify-between">
                   <button onClick={() => setProductForm(f => ({ ...f, is_published: !f.is_published }))}
-                    className={`text-[9px] font-mono font-semibold uppercase px-4 py-1.5 rounded-full border transition-all ${
+                    className={`text-[9px] font-mono font-semibold uppercase px-4 py-1.5 rounded-[9999px] border transition-all ${
                       productForm.is_published ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-rose-500/10 text-rose-500 border-rose-500/20"
                     }`}>
                     {productForm.is_published ? "Status: Deployed" : "Status: Draft"}
                   </button>
                   <div className="flex gap-2">
                     <button onClick={resetProductForm} className={`text-[9px] font-mono uppercase px-3 py-2 ${isDark ? "text-neutral-500 hover:text-white" : "text-neutral-450 hover:text-black"}`}>Cancel</button>
-                    <button onClick={saveProduct} className={`text-[9px] font-mono font-bold uppercase px-6 py-2 transition-all rounded-full ${
+                    <button onClick={saveProduct} className={`text-[9px] font-mono font-bold uppercase px-6 py-2 transition-all rounded-[9999px] ${
                       isDark ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800 shadow-sm"
                     }`}>
                       {productForm.editingId ? "Save Engine" : "Build Hook"}
@@ -1521,12 +1520,12 @@ function AdminPage() {
                 return (
                   <div
                     key={p.id}
-                    className={`group relative transition-all duration-300 rounded-3xl overflow-hidden border ${
+                    className={`group relative transition-all duration-300 rounded-[24px] overflow-hidden border ${
                       isDark 
                         ? isSelected ? "border-neutral-100 bg-neutral-900/40" : "border-neutral-900 bg-neutral-950/20 hover:border-neutral-800" 
                         : isSelected 
                           ? "border-black bg-white shadow-[0_8px_32px_rgba(0,0,0,0.12),0_2px_8px_rgba(0,0,0,0.08)]" 
-                          : "border-[#E5E5EA] bg-white hover:border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.10),0_2px_6px_rgba(0,0,0,0.06)] hover:-translate-y-0.5"
+                          : "border-[#D1D1D6] bg-white hover:border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.10),0_2px_6px_rgba(0,0,0,0.06)] hover:-translate-y-0.5"
                     } ${isDragging ? "opacity-35 scale-95" : ""} ${isDragTarget ? isDark ? "ring-1 ring-white/30" : "ring-1 ring-black/10" : ""}`}
                     draggable={!selectMode}
                     onDragStart={() => handleDragStart(p.id)}
@@ -1549,24 +1548,24 @@ function AdminPage() {
                       </div>
                     )}
                     {isPrintful && (
-                      <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-sky-500/10 text-sky-400 text-[7px] font-mono font-bold uppercase border border-sky-500/10">
+                      <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-0.5 px-1.5 py-0.5 rounded-[9999px] bg-sky-500/10 text-sky-400 text-[7px] font-mono font-bold uppercase border border-sky-500/10">
                         <Lock size={6} /> PF
                       </div>
                     )}
                     {/* ── Product Image with Apple-style drop shadow ── */}
-                    <div className="relative flex aspect-[4/5] items-center justify-center overflow-hidden p-4 bg-[#FAFAFA]">
+                    <div className="relative flex aspect-[4/5] items-center justify-center overflow-hidden p-4 bg-[#FAFAFA] rounded-t-[24px]">
                       {p.image_urls && p.image_urls.length > 1 ? (
                         <img
                           src={p.image_urls[1]}
                           alt={p.title}
-                          className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500 rounded-2xl"
+                          className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500 rounded-[16px]"
                           style={{ filter: "drop-shadow(0 6px 18px rgba(0,0,0,0.13)) drop-shadow(0 2px 6px rgba(0,0,0,0.08))" }}
                         />
                       ) : p.image_urls && p.image_urls[0] ? (
                         <img
                           src={p.image_urls[0]}
                           alt={p.title}
-                          className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500 rounded-2xl"
+                          className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500 rounded-[16px]"
                           style={{ filter: "drop-shadow(0 6px 18px rgba(0,0,0,0.13)) drop-shadow(0 2px 6px rgba(0,0,0,0.08))" }}
                         />
                       ) : (
@@ -1609,19 +1608,19 @@ function AdminPage() {
         ════════════════════════════════════════════════════════════════ */}
         {section === "orders" && (
           <div className="space-y-8 animate-in fade-in duration-500">
-            <div className="flex items-end justify-between flex-wrap gap-4 border-b pb-4 dark:border-neutral-900 border-[#E5E5EA]">
+            <div className="flex items-end justify-between flex-wrap gap-4 border-b pb-4 dark:border-neutral-900 border-[#D1D1D6]">
               <div>
                 <h1 className="text-xl font-medium tracking-tight">Ledger Registry</h1>
                 <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>ORDER INVOICING RECORDS</p>
               </div>
 
               <input type="text" placeholder="FILTER LEDGER…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                className={`text-[9px] font-mono border rounded-full px-4 py-2 w-48 bg-transparent focus:outline-none focus:ring-1 ${
-                  isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-[#E5E5EA] text-black focus:border-black focus:ring-black/10 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
+                className={`text-[9px] font-mono border rounded-[9999px] px-4 py-2 w-48 bg-transparent focus:outline-none focus:ring-1 ${
+                  isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-[#D1D1D6] text-black focus:border-black focus:ring-black/10 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
                 }`} />
             </div>
 
-            <div className="flex gap-2 p-1 bg-[#e8e8ed]/40 dark:bg-neutral-900/40 rounded-full w-fit">
+            <div className="flex gap-2 p-1 bg-[#e8e8ed]/40 dark:bg-neutral-900/40 rounded-[9999px] w-fit">
               {([
                 { key: "all", label: "Registry", count: activeOrders.length },
                 { key: "paid", label: "Paid", count: paidOrders.length },
@@ -1631,14 +1630,14 @@ function AdminPage() {
                 <button
                   key={tab.key}
                   onClick={() => setOrderStatusFilter(tab.key)}
-                  className={`flex items-center gap-2 px-4 py-1.5 text-[9px] font-mono font-semibold uppercase tracking-widest transition-all rounded-full ${
+                  className={`flex items-center gap-2 px-4 py-1.5 text-[9px] font-mono font-semibold uppercase tracking-widest transition-all rounded-[9999px] ${
                     orderStatusFilter === tab.key
                       ? isDark ? "text-white bg-neutral-900 shadow-sm" : "text-black bg-white shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
-                      : isDark ? "text-neutral-550 hover:text-neutral-350" : "text-neutral-550 hover:text-neutral-800"
+                      : isDark ? "text-neutral-550 hover:text-neutral-350" : "text-neutral-555 hover:text-neutral-800"
                   }`}
                 >
                   {tab.label}
-                  <span className={`text-[8px] font-mono px-2 py-0.5 rounded-full ${
+                  <span className={`text-[8px] font-mono px-2 py-0.5 rounded-[9999px] ${
                     orderStatusFilter === tab.key
                       ? isDark ? "bg-white text-black" : "bg-black text-white"
                       : isDark ? "bg-neutral-900 text-neutral-500" : "bg-neutral-100 text-neutral-500"
@@ -1647,11 +1646,11 @@ function AdminPage() {
               ))}
             </div>
 
-            <div className={`overflow-x-auto border rounded-3xl overflow-hidden ${isDark ? "border-neutral-900" : "border-[#E5E5EA] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} bg-white dark:bg-transparent`}>
+            <div className={`overflow-x-auto border rounded-[24px] overflow-hidden ${isDark ? "border-neutral-900" : "border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} bg-white dark:bg-transparent`}>
               <table className="w-full text-left">
                 <thead>
                   <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${
-                    isDark ? "text-neutral-500 border-neutral-900 bg-neutral-950/50" : "text-neutral-500 border-[#E5E5EA] bg-[#f5f5f7]"
+                    isDark ? "text-neutral-500 border-neutral-900 bg-neutral-950/50" : "text-neutral-500 border-[#D1D1D6] bg-[#f5f5f7]"
                   }`}>
                     <th className="px-5 py-3 font-semibold">Invoicing Email</th>
                     <th className="px-5 py-3 font-semibold">Recipient Identity</th>
@@ -1670,7 +1669,7 @@ function AdminPage() {
                       <td className={`px-5 py-3.5 text-[10px] uppercase font-mono ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>{o.name || "—"}</td>
                       <td className="px-5 py-3.5 text-xs font-mono font-medium">{fmt$(o.amount_cents)}</td>
                       <td className="px-5 py-3.5">
-                        <span className={`text-[8px] font-mono font-bold uppercase px-2.5 py-1 rounded-full flex items-center gap-1.5 w-fit ${
+                        <span className={`text-[8px] font-mono font-bold uppercase px-2.5 py-1 rounded-[9999px] flex items-center gap-1.5 w-fit ${
                           o.status === "paid" ? "bg-emerald-500/10 text-emerald-500" :
                           o.status === "pending" ? "bg-amber-500/10 text-amber-500" :
                           "bg-rose-500/10 text-rose-500"
@@ -1698,22 +1697,22 @@ function AdminPage() {
         ════════════════════════════════════════════════════════════════ */}
         {section === "leads" && (
           <div className="space-y-8 animate-in fade-in duration-500">
-            <div className="flex items-end justify-between flex-wrap gap-4 border-b pb-4 dark:border-neutral-900 border-[#E5E5EA]">
+            <div className="flex items-end justify-between flex-wrap gap-4 border-b pb-4 dark:border-neutral-900 border-[#D1D1D6]">
               <div>
                 <h1 className="text-xl font-medium tracking-tight">Leads Engine</h1>
                 <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>MARKETING CAPTURE HOOKS</p>
               </div>
 
               <input type="text" placeholder="FILTER LEADS…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                className={`text-[9px] font-mono border rounded-full px-4 py-2 w-48 bg-transparent focus:outline-none focus:ring-1 ${
-                  isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-[#E5E5EA] text-black focus:border-black focus:ring-black/10 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
+                className={`text-[9px] font-mono border rounded-[9999px] px-4 py-2 w-48 bg-transparent focus:outline-none focus:ring-1 ${
+                  isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-[#D1D1D6] text-black focus:border-black focus:ring-black/10 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
                 }`} />
             </div>
-            <div className={`overflow-x-auto border rounded-3xl overflow-hidden ${isDark ? "border-neutral-900" : "border-[#E5E5EA] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} bg-white dark:bg-transparent`}>
+            <div className={`overflow-x-auto border rounded-[24px] overflow-hidden ${isDark ? "border-neutral-900" : "border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} bg-white dark:bg-transparent`}>
               <table className="w-full text-left">
                 <thead>
                   <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${
-                    isDark ? "text-neutral-500 border-neutral-900 bg-neutral-950/50" : "text-neutral-500 border-[#E5E5EA] bg-[#f5f5f7]"
+                    isDark ? "text-neutral-500 border-neutral-900 bg-neutral-950/50" : "text-neutral-500 border-[#D1D1D6] bg-[#f5f5f7]"
                   }`}>
                     <th className="px-5 py-3 font-semibold">Capture email</th>
                     <th className="px-5 py-3 font-semibold">Registered</th>
@@ -1723,7 +1722,7 @@ function AdminPage() {
                   {filteredLeads.map(l => (
                     <tr key={l.id} className={`border-b last:border-0 ${isDark ? "border-neutral-900 hover:bg-neutral-900/30" : "border-[#F2F2F7] hover:bg-neutral-50/50"}`}>
                       <td className="px-5 py-4 text-xs font-semibold lowercase font-mono">{l.email}</td>
-                      <td className={`px-5 py-4 text-[10px] font-mono uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{fmtDate(l.created_at)}</td>
+                      <td className={`px-5 py-4 text-[10px] font-mono uppercase ${isDark ? "text-neutral-550" : "text-neutral-455"}`}>{fmtDate(l.created_at)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1737,7 +1736,7 @@ function AdminPage() {
         ════════════════════════════════════════════════════════════════ */}
         {section === "analytics" && (
           <div className="space-y-10 animate-in fade-in duration-500">
-            <div className="flex items-end justify-between flex-wrap gap-4 border-b pb-4 dark:border-neutral-900 border-[#E5E5EA]">
+            <div className="flex items-end justify-between flex-wrap gap-4 border-b pb-4 dark:border-neutral-900 border-[#D1D1D6]">
               <div>
                 <h1 className="text-xl font-medium tracking-tight">System Telemetry</h1>
                 <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>USER ACTIVITY CORE LOGS</p>
@@ -1746,10 +1745,10 @@ function AdminPage() {
               <div className="flex gap-1">
                 {(["7", "14", "30"] as const).map(r => (
                   <button key={r} onClick={() => setAnalyticsRange(r)}
-                    className={`text-[9px] font-mono font-bold uppercase px-3 py-1.5 transition-all rounded-full ${
+                    className={`text-[9px] font-mono font-bold uppercase px-3 py-1.5 transition-all rounded-[9999px] ${
                       analyticsRange === r
                         ? isDark ? "bg-white text-black" : "bg-black text-white"
-                        : isDark ? "text-neutral-450 hover:text-white" : "text-neutral-550 bg-white border border-[#E5E5EA] hover:text-black shadow-[0_1px_4px_rgba(0,0,0,0.05)]"
+                        : isDark ? "text-neutral-450 hover:text-white" : "text-neutral-550 bg-white border border-[#D1D1D6] hover:text-black shadow-[0_1px_4px_rgba(0,0,0,0.05)]"
                     }`}>
                     {r}D
                   </button>
@@ -1758,12 +1757,12 @@ function AdminPage() {
             </div>
 
             {!hasEventData && (
-              <div className={`p-6 border rounded-3xl space-y-4 ${isDark ? "border-neutral-900 bg-neutral-950/30" : "border-[#E5E5EA] bg-white shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"}`}>
+              <div className={`p-6 border rounded-[24px] overflow-hidden space-y-4 ${isDark ? "border-neutral-900 bg-neutral-950/30" : "border-[#D1D1D6] bg-white shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"}`}>
                 <p className={`text-[10px] font-mono font-bold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Tracker Inactive</p>
                 <p className={`text-xs leading-relaxed ${isDark ? "text-neutral-400" : "text-neutral-600"}`}>
                   Bind the client-side telemetry dispatcher to monitor user sessions, clicks, and page view triggers.
                 </p>
-                <pre className={`text-[9px] p-4 overflow-x-auto font-mono rounded-2xl ${isDark ? "bg-neutral-950 border border-neutral-900 text-neutral-400" : "bg-neutral-50 border border-[#E5E5EA] text-neutral-600"}`}>
+                <pre className={`text-[9px] p-4 overflow-x-auto font-mono rounded-2xl ${isDark ? "bg-neutral-950 border border-neutral-900 text-neutral-400" : "bg-neutral-50 border border-[#D1D1D6] text-neutral-600"}`}>
 {`export function trackEvent(type, data = {}) {
   supabase.from('page_events').insert([{
     event_type: type,
@@ -1789,17 +1788,17 @@ function AdminPage() {
               <Stat label="Checkout Starts" value={analyticsEvents.filter(e => e.event_type === "checkout_start").length.toLocaleString()} sub="initiated checkout" isDark={isDark} />
             </div>
 
-            <div className={`p-6 border rounded-3xl transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#E5E5EA] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-4`}>
+            <div className={`p-6 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-4`}>
               <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Daily Telemetry Pulse</p>
               <div className="flex items-end gap-1.5 h-32 pt-4">
                 {analyticsChartData.map((d, i) => (
                   <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group relative">
                     <div
-                      className={`w-full transition-all duration-300 rounded-full ${isDark ? "bg-neutral-800 group-hover:bg-neutral-550" : "bg-neutral-200 group-hover:bg-neutral-355"}`}
+                      className={`w-full transition-all duration-300 rounded-[9999px] ${isDark ? "bg-neutral-800 group-hover:bg-neutral-550" : "bg-neutral-200 group-hover:bg-neutral-355"}`}
                       style={{ height: `${(d.views / chartMax) * 100}%`, minHeight: d.views > 0 ? "3px" : "1px" }}
                     />
                     {d.views > 0 && (
-                      <div className={`absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[8px] font-mono font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border ${isDark ? "bg-neutral-900 text-white border-neutral-850" : "bg-white text-black border-[#E5E5EA] shadow-[0_2px_8px_rgba(0,0,0,0.08)] rounded-full"}`}>
+                      <div className={`absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[8px] font-mono font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border ${isDark ? "bg-neutral-900 text-white border-neutral-850" : "bg-white text-black border-[#D1D1D6] shadow-[0_2px_8px_rgba(0,0,0,0.08)] rounded-[9999px]"}`}>
                         {d.views}
                       </div>
                     )}
@@ -1817,7 +1816,7 @@ function AdminPage() {
                 {topReferrers.length === 0 ? (
                   <p className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-700" : "text-neutral-300"}`}>Empty logs</p>
                 ) : (
-                  <div className={`p-4 border rounded-3xl transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#E5E5EA] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-2.5`}>
+                  <div className={`p-4 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-2.5`}>
                     {topReferrers.map(([ref, count]) => (
                       <div key={ref} className={`flex items-center justify-between gap-4 py-1.5 border-b last:border-0 dark:border-neutral-900/40 border-[#F2F2F7]`}>
                         <span className={`text-[10px] font-mono truncate uppercase ${isDark ? "text-neutral-400" : "text-neutral-600"}`}>{ref || "direct"}</span>
@@ -1832,7 +1831,7 @@ function AdminPage() {
                 {topPaths.length === 0 ? (
                   <p className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-700" : "text-neutral-300"}`}>Empty logs</p>
                 ) : (
-                  <div className={`p-4 border rounded-3xl transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#E5E5EA] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-2.5`}>
+                  <div className={`p-4 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-2.5`}>
                     {topPaths.map(([path, count]) => (
                       <div key={path} className={`flex items-center justify-between gap-4 py-1.5 border-b last:border-0 dark:border-neutral-900/40 border-[#F2F2F7]`}>
                         <span className={`text-[9px] font-mono truncate ${isDark ? "text-neutral-400" : "text-neutral-600"}`}>{path}</span>
@@ -1847,10 +1846,10 @@ function AdminPage() {
             {Object.keys(productClickMap).length > 0 && (
               <div className="space-y-3">
                 <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Interaction CTR</p>
-                <div className={`border rounded-3xl overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#E5E5EA] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"}`}>
+                <div className={`border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"}`}>
                   <table className="w-full text-left">
                     <thead>
-                      <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${isDark ? "text-neutral-500 border-neutral-900 bg-neutral-950/50" : "text-neutral-500 border-[#E5E5EA] bg-[#f5f5f7]"}`}>
+                      <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${isDark ? "text-neutral-500 border-neutral-900 bg-neutral-950/50" : "text-neutral-500 border-[#D1D1D6] bg-[#f5f5f7]"}`}>
                         <th className="px-5 py-3 font-semibold">Node Item</th>
                         <th className="px-5 py-3 font-semibold text-right">Activity Pulses</th>
                       </tr>
@@ -1879,7 +1878,7 @@ function AdminPage() {
                 <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Geographic Distribution</p>
                 <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
                   {geoBreakdown.map(([country, count]) => (
-                    <div key={country} className={`p-4 border rounded-2xl transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#E5E5EA] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"}`}>
+                    <div key={country} className={`p-4 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"}`}>
                       <p className={`text-[8px] font-mono uppercase tracking-wider ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{country}</p>
                       <p className="text-lg font-bold tracking-tight mt-1">{count}</p>
                     </div>
@@ -1895,7 +1894,7 @@ function AdminPage() {
         ════════════════════════════════════════════════════════════════ */}
         {section === "settings" && (
           <div className="max-w-2xl space-y-10 animate-in fade-in duration-500">
-            <div className="border-b pb-4 dark:border-neutral-900 border-[#E5E5EA]">
+            <div className="border-b pb-4 dark:border-neutral-900 border-[#D1D1D6]">
               <h1 className="text-xl font-medium tracking-tight">System Settings</h1>
               <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>ROOT HOOK CONTROL</p>
             </div>
@@ -1904,10 +1903,10 @@ function AdminPage() {
 
               <div className="space-y-3">
                 <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Theme Adaptation</h2>
-                <div className={`p-5 border rounded-2xl transition-all duration-300 ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-[#E5E5EA] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-4`}>
+                <div className={`p-5 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-4`}>
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-mono uppercase tracking-widest">Interface Mode</span>
-                    <div className={`flex border rounded-full overflow-hidden ${isDark ? "border-neutral-800" : "border-[#E5E5EA]"}`}>
+                    <div className={`flex border rounded-[9999px] overflow-hidden ${isDark ? "border-neutral-800" : "border-[#D1D1D6]"}`}>
                       <button
                         onClick={() => {
                           setIsDark(false);
@@ -1915,7 +1914,7 @@ function AdminPage() {
                           document.documentElement.classList.remove("dark");
                           saveSiteConfig({ ...siteContent, theme: "light" });
                         }}
-                        className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all rounded-full ${!isDark ? "bg-black text-white" : "text-neutral-400 hover:bg-neutral-900"}`}
+                        className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all rounded-[9999px] ${!isDark ? "bg-black text-white" : "text-neutral-400 hover:bg-neutral-900"}`}
                       >
                         LIGHT
                       </button>
@@ -1926,7 +1925,7 @@ function AdminPage() {
                           localStorage.setItem("theme", "dark");
                           saveSiteConfig({ ...siteContent, theme: "dark" });
                         }}
-                        className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all rounded-full ${isDark ? "bg-white text-black" : "text-neutral-550 hover:bg-neutral-100"}`}
+                        className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all rounded-[9999px] ${isDark ? "bg-white text-black" : "text-neutral-550 hover:bg-neutral-100"}`}
                       >
                         DARK
                       </button>
@@ -1937,7 +1936,7 @@ function AdminPage() {
 
               <div className="space-y-3">
                 <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Team Registry Access</h2>
-                <div className={`p-5 border rounded-2xl transition-all duration-300 ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-[#E5E5EA] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-6`}>
+                <div className={`p-5 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-6`}>
                   <div className="flex gap-3 flex-wrap items-end">
                     <div className="flex-1 min-w-[200px] space-y-1.5">
                       <label className={`text-[8px] font-mono font-semibold uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>ADD TEAM MEMBER</label>
@@ -1946,8 +1945,8 @@ function AdminPage() {
                         placeholder="EMAIL ADDR…"
                         value={newUserEmail}
                         onChange={e => setNewUserEmail(e.target.value)}
-                        className={`w-full bg-transparent border rounded-full px-4 py-1.5 text-[10px] font-mono uppercase focus:outline-none focus:ring-1 ${
-                          isDark ? "border-neutral-850 text-white placeholder-neutral-700 focus:border-white focus:ring-white/25" : "border-[#E5E5EA] text-black placeholder-neutral-350 focus:border-black focus:ring-black/10 bg-white shadow-sm"
+                        className={`w-full bg-transparent border rounded-[9999px] px-4 py-1.5 text-[10px] font-mono uppercase focus:outline-none focus:ring-1 ${
+                          isDark ? "border-neutral-850 text-white placeholder-neutral-700 focus:border-white focus:ring-white/25" : "border-[#D1D1D6] text-black placeholder-neutral-350 focus:border-black focus:ring-black/10 bg-white shadow-sm"
                         }`}
                       />
                     </div>
@@ -1956,8 +1955,8 @@ function AdminPage() {
                       <select
                         value={newUserRole}
                         onChange={e => setNewUserRole(e.target.value as any)}
-                        className={`text-[9px] font-mono font-semibold uppercase bg-transparent border rounded-full px-3 py-1.5 focus:outline-none focus:ring-1 ${
-                          isDark ? "border-neutral-850 text-white focus:border-white focus:ring-white/25" : "border-[#E5E5EA] text-black focus:border-black focus:ring-black/10 bg-white shadow-sm"
+                        className={`text-[9px] font-mono font-semibold uppercase bg-transparent border rounded-[9999px] px-3 py-1.5 focus:outline-none focus:ring-1 ${
+                          isDark ? "border-neutral-850 text-white focus:border-white focus:ring-white/25" : "border-[#D1D1D6] text-black focus:border-black focus:ring-black/10 bg-white shadow-sm"
                         }`}
                       >
                         <option value="viewer">VIEWER</option>
@@ -1968,7 +1967,7 @@ function AdminPage() {
                     <button
                       onClick={handleAddAdminUser}
                       disabled={isAddingUser || !newUserEmail.trim()}
-                      className={`text-[9px] font-mono font-bold uppercase px-4 py-1.5 rounded-full transition-all ${
+                      className={`text-[9px] font-mono font-bold uppercase px-4 py-1.5 rounded-[9999px] transition-all ${
                         isDark ? "bg-white text-black hover:bg-neutral-200 disabled:opacity-30" : "bg-black text-white hover:bg-neutral-800 disabled:opacity-30 shadow-sm"
                       }`}
                     >
@@ -1982,7 +1981,7 @@ function AdminPage() {
                       { role: "manager", desc: "Write access to database & inventory" },
                       { role: "admin", desc: "Root execution permissions on settings" },
                     ].map(r => (
-                      <div key={r.role} className={`p-3 border rounded-2xl ${isDark ? "border-neutral-900 bg-neutral-950/10" : "border-[#E5E5EA] bg-neutral-50"}`}>
+                      <div key={r.role} className={`p-3 border rounded-[16px] ${isDark ? "border-neutral-900 bg-neutral-950/10" : "border-[#D1D1D6] bg-neutral-50"}`}>
                         <p className={`text-[8px] font-mono font-bold uppercase ${isDark ? "text-neutral-300" : "text-neutral-800"}`}>{r.role}</p>
                         <p className={`text-[8px] font-mono mt-1 leading-relaxed ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{r.desc}</p>
                       </div>
@@ -1990,14 +1989,14 @@ function AdminPage() {
                   </div>
 
                   {adminUsers.length > 0 ? (
-                    <div className="space-y-1.5 pt-4 border-t dark:border-neutral-900 border-[#E5E5EA]">
+                    <div className="space-y-1.5 pt-4 border-t dark:border-neutral-900 border-[#D1D1D6]">
                       {adminUsers.map(u => (
                         <div key={u.id} className={`flex items-center justify-between gap-4 py-2 border-b last:border-0 dark:border-neutral-900 border-[#F2F2F7]`}>
                           <span className="text-[10px] font-mono font-semibold truncate flex-1">{u.email}</span>
                           <select
                             value={u.role}
                             onChange={e => handleUpdateUserRole(u.id, e.target.value as any)}
-                            className={`text-[8px] font-mono font-semibold uppercase bg-transparent focus:outline-none focus:ring-1 border rounded-full px-3 py-0.5 ${isDark ? "text-neutral-400 border-neutral-800" : "text-neutral-550 border-[#E5E5EA] bg-white"}`}
+                            className={`text-[8px] font-mono font-semibold uppercase bg-transparent focus:outline-none focus:ring-1 border rounded-[9999px] px-3 py-0.5 ${isDark ? "text-neutral-400 border-neutral-800" : "text-neutral-550 border-[#D1D1D6] bg-white"}`}
                           >
                             <option value="viewer">VIEWER</option>
                             <option value="manager">MANAGER</option>
@@ -2018,12 +2017,12 @@ function AdminPage() {
 
               <div className="space-y-3">
                 <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Identity Verification</h2>
-                <div className={`p-5 border rounded-2xl transition-all duration-300 ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-[#E5E5EA] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-4`}>
+                <div className={`p-5 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-4`}>
                   <div>
                     <p className={`text-[9px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Identified Payload</p>
                     <p className="text-xs font-mono font-semibold uppercase">{userEmail || "…"}</p>
                   </div>
-                  <button onClick={handleSignOut} className={`w-full rounded-full text-[10px] font-mono font-semibold uppercase px-4 py-2.5 transition-all ${isDark ? "bg-rose-500/10 text-rose-455 hover:bg-rose-500/20" : "bg-rose-50 text-rose-655 hover:bg-rose-100"}`}>
+                  <button onClick={handleSignOut} className={`w-full rounded-[9999px] text-[10px] font-mono font-semibold uppercase px-4 py-2.5 transition-all ${isDark ? "bg-rose-500/10 text-rose-455 hover:bg-rose-500/20" : "bg-rose-50 text-rose-655 hover:bg-rose-100"}`}>
                     TERMINATE SESSION
                   </button>
                 </div>
@@ -2038,10 +2037,10 @@ function AdminPage() {
       {selectedRow && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 animate-in fade-in duration-355">
           <div className="absolute inset-0 backdrop-blur-md bg-black/60 dark:bg-black/80" onClick={() => setSelectedRow(null)} />
-          <div className={`relative w-full max-w-lg p-8 border rounded-3xl space-y-6 max-h-[85vh] overflow-y-auto ${
-            isDark ? "bg-neutral-950 border-neutral-850" : "bg-white border-[#E5E5EA] shadow-[0_32px_64px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.08)]"
+          <div className={`relative w-full max-w-lg p-8 border rounded-[24px] overflow-hidden space-y-6 max-h-[85vh] overflow-y-auto ${
+            isDark ? "bg-neutral-950 border-neutral-850" : "bg-white border-[#D1D1D6] shadow-[0_32px_64px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.08)]"
           }`}>
-            <div className={`flex items-center justify-between border-b pb-3 dark:border-neutral-900 border-[#E5E5EA]`}>
+            <div className={`flex items-center justify-between border-b pb-3 dark:border-neutral-900 border-[#D1D1D6]`}>
               <h3 className={`text-xs font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-300" : "text-neutral-800"}`}>System Ledger Metadata</h3>
               <button onClick={() => setSelectedRow(null)} className={`${isDark ? "text-neutral-500 hover:text-white" : "text-neutral-400 hover:text-black"}`}><X size={14} /></button>
             </div>
@@ -2057,7 +2056,7 @@ function AdminPage() {
             </div>
             {selectedRow._type === "order" && (
               <button onClick={() => handleArchiveOrder(selectedRow.id)}
-                className={`w-full py-2.5 rounded-full text-[9px] font-mono font-bold uppercase tracking-wide transition-all ${isDark ? "bg-rose-500/10 text-rose-455 hover:bg-rose-500/20" : "bg-rose-50 text-rose-655 hover:bg-rose-100"}`}>
+                className={`w-full py-2.5 rounded-[9999px] text-[9px] font-mono font-bold uppercase tracking-wide transition-all ${isDark ? "bg-rose-500/10 text-rose-455 hover:bg-rose-500/20" : "bg-rose-50 text-rose-655 hover:bg-rose-100"}`}>
                 Archive Order Record
               </button>
             )}
@@ -2074,7 +2073,7 @@ function AdminPage() {
 
 function Stat({ label, value, sub, isDark, led = "cyan" }: { label: string; value: string | number; sub: string; isDark: boolean; led?: "green" | "yellow" | "red" | "cyan" | "purple" | "neutral" }) {
   return (
-    <div className={`p-4 border rounded-3xl transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#E5E5EA] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-1`}>
+    <div className={`p-4 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_12px_24px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-1`}>
       <div className="flex items-center justify-between gap-2">
         <p className={`text-[8px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{label}</p>
         <LedPulse color={led} />
@@ -2094,7 +2093,7 @@ function StatWithDelta({ label, value, sub, delta, isDark }: { label: string; va
   const deltaColor = delta !== null && delta > 0 ? "green" as const : delta !== null && delta < 0 ? "red" as const : "neutral" as const;
 
   return (
-    <div className={`p-4 border rounded-3xl transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#E5E5EA] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-1`}>
+    <div className={`p-4 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_12px_24px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-1`}>
       <div className="flex items-center justify-between gap-2">
         <p className={`text-[8px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{label}</p>
         <LedPulse color={deltaColor} />
@@ -2107,7 +2106,7 @@ function StatWithDelta({ label, value, sub, delta, isDark }: { label: string; va
           {value}
         </p>
         {delta !== null && (
-          <span className={`text-[8px] font-mono font-bold uppercase px-2 py-0.5 rounded-full ${
+          <span className={`text-[8px] font-mono font-bold uppercase px-2 py-0.5 rounded-[9999px] ${
             delta > 0 ? "text-emerald-500 bg-emerald-500/10" : delta < 0 ? "text-rose-500 bg-rose-500/10" : isDark ? "text-neutral-600" : "text-neutral-400"
           }`}>
             {delta > 0 ? "↑" : delta < 0 ? "↓" : "—"}{Math.abs(delta)}%
@@ -2124,8 +2123,8 @@ function Input({ label, value, onChange, type = "text", isDark }: { label: strin
     <div className="space-y-1.5">
       <label className={`text-[9px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>{label}</label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)}
-        className={`w-full bg-transparent border rounded-full px-4 py-1.5 text-xs font-mono transition-all focus:outline-none focus:ring-1 ${
-          isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-[#E5E5EA] text-black focus:border-black focus:ring-black/5 bg-white shadow-sm"
+        className={`w-full bg-transparent border rounded-[9999px] px-4 py-1.5 text-xs font-mono transition-all focus:outline-none focus:ring-1 ${
+          isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-[#D1D1D6] text-black focus:border-black focus:ring-black/5 bg-white shadow-sm"
         }`} />
     </div>
   );
