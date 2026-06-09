@@ -25,7 +25,7 @@ export const Route = createFileRoute("/sitemap.xml")({
         ];
 
         const { data: products } = await (supabase as any).from("products_public").select("slug").eq("is_published", true);
-        const productUrls = products?.
+        const productUrls = (products as Array<{ slug: string | null }> | null)?.
           filter((p) => p?.slug)
           .map((p) => ({ path: `/offer/${p.slug}`, changefreq: "weekly", priority: "0.8" })) ?? [];
 
