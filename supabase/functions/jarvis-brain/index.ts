@@ -532,10 +532,69 @@ async function runJarvisChat(
   return firstMessage.content || "";
 }
 
+async function requireAdminCaller(req: Request): Promise<Response | null> {
+  const authHeader = req.headers.get("Authorization") || req.headers.get("authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 401,
+    });
+  }
+  const token = authHeader.slice("Bearer ".length);
+  try {
+    // Verify token by calling Supabase auth endpoint
+    const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` },
+    });
+    if (!userRes.ok) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+      });
+    }
+    const user = await userRes.json();
+    const userId = user?.id;
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+      });
+    }
+    // Check admin role via has_role RPC using service role
+    const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/has_role`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ _user_id: userId, _role: "admin" }),
+    });
+    const isAdmin = await rpcRes.json();
+    if (isAdmin !== true) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 403,
+      });
+    }
+    return null;
+  } catch {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 401,
+    });
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+
+  const authError = await requireAdminCaller(req);
+  if (authError) return authError;
+
+
 
   try {
     const { tool, args } = await req.json();
