@@ -7,7 +7,8 @@ export const PUBLIC_PRODUCT_COLUMNS =
   "id, slug, title, description, price_cents, price_cents_discounted, currency, image_urls, is_published, is_archived, display_order, variants, created_at, updated_at";
 
 export async function fetchProducts({ onlyPublished = true }: UseProductsOptions = {}) {
-  let q = supabase.from("products").select(PUBLIC_PRODUCT_COLUMNS).order("created_at", { ascending: false });
+  // Query the public-safe view to avoid exposing internal fulfillment columns to anon users.
+  let q = (supabase as any).from("products_public").select(PUBLIC_PRODUCT_COLUMNS).order("created_at", { ascending: false });
   if (onlyPublished) q = q.eq("is_published", true);
   const { data, error } = await q;
   if (error) throw error;
