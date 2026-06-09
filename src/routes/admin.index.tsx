@@ -1,3 +1,17 @@
+mport { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { fetchProducts } from "@/lib/useProducts";
+import { offer } from "@/config/site";
+import { toast } from "sonner";
+import { Edit3, Archive, X, Menu, RefreshCw, BarChart2, Lock, CheckSquare, Square, Trash2, Eye, EyeOff, GripVertical, Users, TrendingUp, TrendingDown, Minus, Terminal, Cpu, Zap, Activity, AlertTriangle, Play } from "lucide-react";
+import { requireAdmin } from "@/lib/admin-guard";
+
+
+// ────────────────────────────────────────────────────────────────────────────
+// TYPES & ROUTE DEFINITION
+// ────────────────────────────────────────────────────────────────────────────
+
 type SiteContent = {
   hero_headline: string;
   hero_subheadline: string;
