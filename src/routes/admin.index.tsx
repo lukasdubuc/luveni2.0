@@ -1162,24 +1162,23 @@ function AdminPage() {
       />
 
       {/* ── NAV ── */}
-      <nav className={`sticky top-0 z-50 backdrop-blur-md border-b ${isDark ? "bg-black/80 border-neutral-800/60" : "bg-white/80 border-[#D1D1D6]"}`}>
-        <div className="max-w-7xl mx-auto flex items-center justify-between px-6 py-3.5">
-          <div className="flex items-center gap-3">
-            <span className={`text-[10px] font-mono tracking-[0.3em] font-semibold border px-3 py-1 uppercase ${isDark ? "border-neutral-800 text-neutral-400" : "border-[#D1D1D6] text-neutral-555 bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04)] rounded-[9999px]"}`}>
-              COMMAND CENTER
-            </span>
-            <LedPulse color="green" />
-          </div>
+      <nav className={`sticky top-0 z-50 backdrop-blur-xl border-b ${isDark ? "bg-black/90 border-white/[0.06]" : "bg-white/90 border-black/[0.07]"}`}>
+        <div className="relative flex items-center justify-center px-6 py-3">
 
-          <div className="hidden md:flex items-center justify-center gap-2 p-1 bg-[#e8e8ed]/60 dark:bg-neutral-900/60 rounded-[9999px]">
+          {/* Centered nav pill */}
+          <div className={`hidden md:flex items-center justify-center gap-0.5 p-1 rounded-[9999px] ${isDark ? "bg-neutral-900/80" : "bg-[#e8e8ed]/80"}`}>
             {navSections.map(s => (
               <button
                 key={s}
                 onClick={() => setSection(s)}
-                className={`text-[10px] font-mono font-medium uppercase tracking-widest transition-all duration-200 px-4 py-1.5 rounded-[9999px] ${
+                className={`text-[10px] font-mono font-semibold uppercase tracking-widest transition-all duration-200 px-4 py-1.5 rounded-[9999px] ${
                   section === s
-                    ? isDark ? "text-white bg-neutral-900" : "text-black bg-white shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
-                    : isDark ? "text-neutral-550 hover:text-neutral-350" : "text-neutral-550 hover:text-neutral-800"
+                    ? isDark
+                      ? "text-white bg-neutral-800 shadow-[0_1px_6px_rgba(0,0,0,0.5)]"
+                      : "text-black bg-white shadow-[0_2px_10px_rgba(0,0,0,0.10),0_1px_3px_rgba(0,0,0,0.06)]"
+                    : isDark
+                      ? "text-neutral-500 hover:text-neutral-200"
+                      : "text-neutral-500 hover:text-neutral-900"
                 }`}
               >
                 {s}
@@ -1187,23 +1186,27 @@ function AdminPage() {
             ))}
           </div>
 
-          <div className="flex items-center gap-4">
-            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100">
+          {/* Mobile hamburger — pinned right */}
+          <div className="absolute right-6 flex items-center">
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className={`md:hidden p-1.5 rounded-[9999px] transition-colors ${isDark ? "text-neutral-400 hover:text-white hover:bg-neutral-900" : "text-neutral-500 hover:text-black hover:bg-neutral-100"}`}
+            >
               <Menu size={16} />
             </button>
           </div>
         </div>
 
         {mobileMenuOpen && (
-          <div className={`md:hidden border-t ${isDark ? "border-neutral-900 bg-black" : "border-[#D1D1D6] bg-white"} px-6 py-4 space-y-2`}>
+          <div className={`md:hidden border-t ${isDark ? "border-neutral-900 bg-black" : "border-[#D1D1D6] bg-white"} px-5 py-3 space-y-1`}>
             {navSections.map(s => (
               <button
                 key={s}
                 onClick={() => { setSection(s); setMobileMenuOpen(false); }}
-                className={`block w-full text-left text-[10px] font-mono uppercase tracking-widest py-2 px-3 rounded-[9999px] ${
+                className={`block w-full text-left text-[10px] font-mono font-semibold uppercase tracking-widest py-2 px-3 rounded-[9999px] transition-all ${
                   section === s
                     ? isDark ? "text-white bg-neutral-900" : "text-black bg-[#e8e8ed]"
-                    : isDark ? "text-neutral-555" : "text-neutral-400"
+                    : isDark ? "text-neutral-500 hover:text-neutral-200" : "text-neutral-400 hover:text-neutral-900"
                 }`}
               >
                 {s}
@@ -1213,7 +1216,7 @@ function AdminPage() {
         )}
       </nav>
 
-      <main className="relative max-w-7xl mx-auto px-6 py-10 space-y-10 z-10">
+      <main className="relative w-full px-8 py-10 space-y-10 z-10">
 
         {/* ════════════════════════════════════════════════════════════════
             OVERVIEW
@@ -1223,7 +1226,7 @@ function AdminPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-xl font-medium tracking-tight flex items-center gap-2">
-                  Command Center Console
+                  Dashboard
                 </h1>
                 <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>JARVIS_AI OPTIMIZATION CORE DEPLOYED</p>
               </div>
