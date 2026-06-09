@@ -174,19 +174,6 @@ const TelemetryCanvas = ({ events, isDark, canvasRefExternal }: { events: PageEv
   }, [canvasRefExternal, spawnPacket]);
 
   useEffect(() => {
-    if (events.length > prevEventsLength.current) {
-      const difference = events.length - prevEventsLength.current;
-      for (let i = 0; i < difference; i++) {
-        const ev = events[i];
-        if (ev) {
-          spawnPacket(ev.event_type);
-        }
-      }
-    }
-    prevEventsLength.current = events.length;
-  }, [events, spawnPacket]);
-
-  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -320,7 +307,7 @@ const TelemetryCanvas = ({ events, isDark, canvasRefExternal }: { events: PageEv
   }, [isDark]);
 
   return (
-    <div className="relative w-full h-32 md:h-36 rounded-2xl border border-neutral-200 dark:border-neutral-800/50 bg-neutral-50/30 dark:bg-neutral-900/10">
+    <div className="relative w-full h-32 md:h-36 rounded-3xl border border-[#d2d2d7] dark:border-neutral-800/50 bg-white/50 dark:bg-neutral-900/10 shadow-[0_12px_24px_rgba(0,0,0,0.02)]">
       <div className="absolute top-3 left-4 flex items-center gap-2 pointer-events-none">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
         <span className="text-[8px] font-mono tracking-widest text-neutral-400 dark:text-neutral-500 uppercase">SYS_TELEMETRY_STREAM</span>
@@ -366,8 +353,8 @@ function AiAgentConsole({ isDark, onSimulatePacket }: { isDark: boolean; onSimul
   }, [thinkingSpeed]);
 
   return (
-    <div className={`p-6 border rounded-2xl relative overflow-hidden transition-all duration-300 ${
-      isDark ? "bg-neutral-950/45 border-neutral-800/80" : "bg-white border-neutral-200 shadow-[0_12px_40px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.06)]"
+    <div className={`p-6 border rounded-3xl relative overflow-hidden transition-all duration-300 ${
+      isDark ? "bg-neutral-950/45 border-neutral-800/80" : "bg-white border-[#d2d2d7] shadow-[0_24px_48px_rgba(0,0,0,0.03)] hover:shadow-[0_24px_48px_rgba(0,0,0,0.06)]"
     }`}>
       {/* Grid line indicator background */}
       <div className="absolute top-0 right-0 p-3 flex items-center gap-1.5 pointer-events-none text-[8px] font-mono tracking-widest text-neutral-400 dark:text-neutral-500 uppercase">
@@ -387,7 +374,7 @@ function AiAgentConsole({ isDark, onSimulatePacket }: { isDark: boolean; onSimul
         </div>
 
         {/* Live typing diagnostic output console */}
-        <div className={`p-4 border rounded font-mono text-[9px] h-32 overflow-y-auto space-y-1.5 ${
+        <div className={`p-4 border rounded-2xl font-mono text-[9px] h-32 overflow-y-auto space-y-1.5 ${
           isDark ? "bg-black/80 border-neutral-900 text-purple-300" : "bg-neutral-50 border-neutral-100 text-purple-700"
         }`}>
           {logs.map((log, index) => (
@@ -412,7 +399,7 @@ function AiAgentConsole({ isDark, onSimulatePacket }: { isDark: boolean; onSimul
               step={500}
               value={thinkingSpeed} 
               onChange={e => setThinkingSpeed(Number(e.target.value))}
-              className="w-full h-1 bg-neutral-200 dark:bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+              className="w-full h-1 bg-neutral-200 dark:bg-neutral-800 rounded-full appearance-none cursor-pointer accent-purple-500"
             />
           </div>
 
@@ -431,7 +418,7 @@ function AiAgentConsole({ isDark, onSimulatePacket }: { isDark: boolean; onSimul
                       return [`[${t}] SYSTEM: Manual telemetry override payload [${signal.toUpperCase()}] injected.`, ...prev];
                     });
                   }}
-                  className="flex-1 min-w-[50px] text-[8px] font-mono font-black uppercase tracking-widest border py-1.5 rounded hover:bg-purple-500/10 hover:border-purple-500/40 transition-all dark:border-neutral-850 dark:text-neutral-400 dark:hover:text-purple-300 border-neutral-200 text-neutral-600"
+                  className="flex-1 min-w-[50px] text-[8px] font-mono font-black uppercase tracking-widest border py-1.5 rounded-full hover:bg-purple-500/10 hover:border-purple-500/40 transition-all dark:border-neutral-850 dark:text-neutral-400 dark:hover:text-purple-300 border-neutral-200 text-neutral-600"
                 >
                   {signal}
                 </button>
@@ -1115,7 +1102,7 @@ function AdminPage() {
   if (isLoadingAuth) {
     return (
       <div 
-        className={`min-h-screen flex flex-col items-center justify-center ${isDark ? "bg-black text-white" : "bg-neutral-50 text-black"}`}
+        className={`min-h-screen flex flex-col items-center justify-center ${isDark ? "bg-black text-white" : "bg-[#f5f5f7] text-black"}`}
         style={{
           fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Helvetica, Arial, sans-serif'
         }}
@@ -1156,30 +1143,27 @@ function AdminPage() {
       />
 
       {/* ── NAV ── */}
-      <nav className={`sticky top-0 z-50 backdrop-blur-md border-b ${isDark ? "bg-black/80 border-neutral-800/60" : "bg-white/80 border-neutral-200"}`}>
+      <nav className={`sticky top-0 z-50 backdrop-blur-md border-b ${isDark ? "bg-black/80 border-neutral-800/60" : "bg-white/80 border-[#d2d2d7]"}`}>
         <div className="max-w-7xl mx-auto flex items-center justify-between px-6 py-3.5">
           <div className="flex items-center gap-3">
-            <span className={`text-[10px] font-mono tracking-[0.3em] font-semibold border px-2 py-0.5 uppercase ${isDark ? "border-neutral-800 text-neutral-400" : "border-neutral-200 text-neutral-550 bg-white shadow-sm rounded-md"}`}>
+            <span className={`text-[10px] font-mono tracking-[0.3em] font-semibold border px-3 py-1 uppercase ${isDark ? "border-neutral-800 text-neutral-400" : "border-[#d2d2d7] text-neutral-550 bg-white shadow-sm rounded-full"}`}>
               COMMAND CENTER
             </span>
             <LedPulse color="green" />
           </div>
 
-          <div className="hidden md:flex items-center justify-center gap-7">
+          <div className="hidden md:flex items-center justify-center gap-2 p-1 bg-[#e8e8ed]/60 dark:bg-neutral-900/60 rounded-full">
             {navSections.map(s => (
               <button
                 key={s}
                 onClick={() => setSection(s)}
-                className={`text-[10px] font-mono font-medium uppercase tracking-widest transition-all relative py-1 ${
+                className={`text-[10px] font-mono font-medium uppercase tracking-widest transition-all duration-200 px-4 py-1.5 rounded-full ${
                   section === s
-                    ? isDark ? "text-white" : "text-black"
+                    ? isDark ? "text-white bg-neutral-900" : "text-black bg-white shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
                     : isDark ? "text-neutral-500 hover:text-neutral-300" : "text-neutral-550 hover:text-neutral-800"
                 }`}
               >
                 {s}
-                {section === s && (
-                  <span className={`absolute bottom-0 left-0 w-full h-[1px] ${isDark ? "bg-white" : "bg-black"}`} />
-                )}
               </button>
             ))}
           </div>
@@ -1197,9 +1181,9 @@ function AdminPage() {
               <button
                 key={s}
                 onClick={() => { setSection(s); setMobileMenuOpen(false); }}
-                className={`block w-full text-left text-[10px] font-mono uppercase tracking-widest py-2 ${
+                className={`block w-full text-left text-[10px] font-mono uppercase tracking-widest py-2 px-3 rounded-full ${
                   section === s
-                    ? isDark ? "text-white" : "text-black"
+                    ? isDark ? "text-white bg-neutral-900" : "text-black bg-[#e8e8ed]"
                     : isDark ? "text-neutral-500" : "text-neutral-400"
                 }`}
               >
@@ -1227,10 +1211,10 @@ function AdminPage() {
 
               <button
                 onClick={handleOpenJarvis}
-                className={`text-[9px] font-mono font-semibold tracking-wider uppercase px-4 py-2 border transition-all ${
+                className={`text-[9px] font-mono font-semibold tracking-wider uppercase px-4 py-2 border transition-all rounded-full ${
                   isDark
                     ? "border-neutral-800 text-neutral-300 hover:bg-neutral-900/50 hover:text-white"
-                    : "border-neutral-200 text-neutral-700 bg-white hover:bg-neutral-50 hover:text-black rounded-lg shadow-sm"
+                    : "border-[#d2d2d7] text-neutral-700 bg-white hover:bg-neutral-50 hover:text-black shadow-sm"
                 }`}
               >
                 JARVIS CONSOLE →
@@ -1243,10 +1227,10 @@ function AdminPage() {
                 <button
                   key={r}
                   onClick={() => setRevenueRange(r as any)}
-                  className={`text-[9px] font-mono font-bold uppercase px-3 py-1.5 transition-all rounded-lg ${
+                  className={`text-[9px] font-mono font-bold uppercase px-4 py-1.5 transition-all rounded-full ${
                     revenueRange === r
-                      ? isDark ? "bg-white text-black" : "bg-black text-white"
-                      : isDark ? "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/50" : "text-neutral-550 bg-white hover:text-neutral-900 border border-neutral-200"
+                      ? isDark ? "bg-white text-black shadow-sm" : "bg-black text-white shadow-sm"
+                      : isDark ? "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/50" : "text-neutral-550 bg-white hover:text-neutral-900 border border-[#d2d2d7] shadow-sm"
                   }`}
                 >
                   {r}
@@ -1255,7 +1239,7 @@ function AdminPage() {
             </div>
 
             {/* ── REVENUE HERO ── */}
-            <div className={`p-6 border rounded-2xl relative overflow-hidden transition-all duration-300 ${isDark ? "bg-neutral-950/40 border-neutral-800/80" : "bg-white border-neutral-200 shadow-[0_12px_40px_rgba(0,0,0,0.03)]"}`}>
+            <div className={`p-6 border rounded-3xl relative overflow-hidden transition-all duration-300 ${isDark ? "bg-neutral-950/40 border-neutral-800/80" : "bg-white border-[#d2d2d7] shadow-[0_24px_48px_rgba(0,0,0,0.03)]"}`}>
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
@@ -1270,7 +1254,7 @@ function AdminPage() {
                       {fmt$(filteredRevenue)}
                     </p>
                     {revenueDelta !== null && (
-                      <div className={`flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase ${
+                      <div className={`flex items-center gap-1 px-3 py-1 rounded-full text-[9px] font-mono font-bold uppercase ${
                         revenueDelta > 0
                           ? "bg-emerald-500/10 text-emerald-500"
                           : revenueDelta < 0
@@ -1289,12 +1273,12 @@ function AdminPage() {
                   {sparklineData.map((d, i) => (
                     <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group relative">
                       <div
-                        className={`w-full transition-all duration-300 rounded-[1px] ${isDark ? "bg-neutral-800 group-hover:bg-neutral-600" : "bg-neutral-200 group-hover:bg-neutral-400"}`}
+                        className={`w-full transition-all duration-300 rounded-full ${isDark ? "bg-neutral-800 group-hover:bg-neutral-600" : "bg-neutral-200 group-hover:bg-neutral-400"}`}
                         style={{ height: `${(d.value / sparkMax) * 100}%`, minHeight: d.value > 0 ? "3px" : "1px" }}
                       />
                       <span className={`text-[8px] font-mono ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>{d.label.slice(0, 1)}</span>
                       {d.value > 0 && (
-                        <div className={`absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[8px] font-mono font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border ${isDark ? "bg-neutral-900 text-white border-neutral-700" : "bg-white text-black border-neutral-200 shadow-sm rounded"}`}>
+                        <div className={`absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[8px] font-mono font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border ${isDark ? "bg-neutral-900 text-white border-neutral-700" : "bg-white text-black border-neutral-200 shadow-sm rounded-full"}`}>
                           {fmt$(d.value)}
                         </div>
                       )}
@@ -1321,7 +1305,7 @@ function AdminPage() {
                 { label: "Failed Orders", count: failedOrders.length, color: "text-rose-500", led: "red" as const },
                 { label: "Published Items", count: products.filter(p => p.is_published).length, color: isDark ? "text-neutral-300" : "text-neutral-800", led: "neutral" as const },
               ].map(item => (
-                <div key={item.label} className={`p-4 border rounded-2xl transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200 shadow-[0_8px_24px_rgba(0,0,0,0.03)]"}`}>
+                <div key={item.label} className={`p-4 border rounded-3xl transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#d2d2d7] shadow-[0_12px_24px_rgba(0,0,0,0.02)]"}`}>
                   <div className="flex items-center justify-between gap-2">
                     <p className={`text-[8px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{item.label}</p>
                     <LedPulse color={item.led} />
@@ -1348,11 +1332,11 @@ function AdminPage() {
             />
 
             {/* ── CONVERSION FUNNEL ── */}
-            <div className={`p-6 border rounded-2xl transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200 shadow-[0_12px_40px_rgba(0,0,0,0.03)]"} space-y-4`}>
+            <div className={`p-6 border rounded-3xl transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#d2d2d7] shadow-[0_24px_48px_rgba(0,0,0,0.03)]"} space-y-4`}>
               <div className="flex items-center gap-4 justify-between">
                 <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Live Conversion Flow</p>
                 {!hasEventData && (
-                  <span className={`text-[8px] font-mono tracking-wider uppercase px-2 py-0.5 border ${isDark ? "border-neutral-800 text-neutral-500" : "border-neutral-200 text-neutral-400 rounded"}`}>
+                  <span className={`text-[8px] font-mono tracking-wider uppercase px-2.5 py-0.5 border ${isDark ? "border-neutral-800 text-neutral-500" : "border-neutral-200 text-neutral-400 bg-white rounded-full shadow-sm"}`}>
                     Telemetry hook standby
                   </span>
                 )}
@@ -1370,10 +1354,10 @@ function AdminPage() {
                       <LedPulse color={step.led} active={step.value !== null && step.value > 0} />
                       <span className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-500" : "text-neutral-450"}`}>{step.label}</span>
                     </div>
-                    <div className={`flex-1 h-2 relative rounded overflow-hidden ${isDark ? "bg-neutral-900" : "bg-neutral-100"}`}>
+                    <div className={`flex-1 h-2 relative rounded-full overflow-hidden ${isDark ? "bg-neutral-900" : "bg-neutral-100"}`}>
                       {step.value !== null && (
                         <div
-                          className={`h-full transition-all duration-700 ease-out rounded ${isDark ? "bg-neutral-300" : "bg-neutral-800"}`}
+                          className={`h-full transition-all duration-700 ease-out rounded-full ${isDark ? "bg-neutral-300" : "bg-neutral-800"}`}
                           style={{ width: `${((step.value ?? 0) / funnelMax) * 100}%`, opacity: 1 - i * 0.12 }}
                         />
                       )}
@@ -1395,7 +1379,7 @@ function AdminPage() {
             {topProducts.length > 0 && (
               <div className="space-y-3">
                 <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Top Products by Revenue</p>
-                <div className={`border rounded-2xl overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200 shadow-[0_12px_40px_rgba(0,0,0,0.03)]"}`}>
+                <div className={`border rounded-3xl overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#d2d2d7] shadow-[0_24px_48px_rgba(0,0,0,0.03)]"}`}>
                   <table className="w-full text-left">
                     <thead>
                       <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${isDark ? "text-neutral-500 border-neutral-900 bg-neutral-950/50" : "text-neutral-500 border-neutral-200 bg-[#f5f5f7]"}`}>
@@ -1434,23 +1418,23 @@ function AdminPage() {
               <div className="flex gap-2 flex-wrap">
                 <button
                   onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
-                  className={`text-[9px] font-mono font-semibold uppercase px-4 py-2 border transition-all rounded-lg ${
+                  className={`text-[9px] font-mono font-semibold uppercase px-4 py-2 border transition-all rounded-full ${
                     selectMode
-                      ? isDark ? "border-white bg-white text-black" : "border-black bg-black text-white"
-                      : isDark ? "border-neutral-800 text-neutral-355 hover:bg-neutral-900/40" : "border-neutral-200 text-neutral-705 bg-white shadow-sm hover:bg-neutral-50"
+                      ? isDark ? "border-white bg-white text-black" : "border-black bg-black text-white shadow-sm"
+                      : isDark ? "border-neutral-800 text-neutral-355 hover:bg-neutral-900/40" : "border-[#d2d2d7] text-neutral-705 bg-white shadow-sm hover:bg-neutral-50"
                   }`}>
                   {selectMode ? "Cancel" : "Select"}
                 </button>
                 <button onClick={handleSyncPrintful} disabled={isSyncing}
-                  className={`flex items-center gap-1.5 text-[9px] font-mono font-semibold uppercase px-4 py-2 border transition-all rounded-lg ${
-                    isDark ? "border-neutral-800 text-neutral-355 hover:bg-neutral-900/40" : "border-neutral-200 text-neutral-705 bg-white shadow-sm hover:bg-neutral-50"
+                  className={`flex items-center gap-1.5 text-[9px] font-mono font-semibold uppercase px-4 py-2 border transition-all rounded-full ${
+                    isDark ? "border-neutral-800 text-neutral-355 hover:bg-neutral-900/40" : "border-[#d2d2d7] text-neutral-705 bg-white shadow-sm hover:bg-neutral-50"
                   }`}>
                   <RefreshCw size={11} className={isSyncing ? "animate-spin" : ""} />
                   {isSyncing ? "Syncing" : "Sync Printful"}
                 </button>
                 <button onClick={() => setProductFormOpen(!productFormOpen)}
-                  className={`text-[9px] font-mono font-bold uppercase px-5 py-2 transition-all rounded-lg ${
-                    isDark ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800"
+                  className={`text-[9px] font-mono font-bold uppercase px-5 py-2 transition-all rounded-full ${
+                    isDark ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800 shadow-sm"
                   }`}>
                   {productFormOpen ? "Close Form" : "New Product"}
                 </button>
@@ -1459,22 +1443,22 @@ function AdminPage() {
 
             {/* ── Bulk Toolbar ── */}
             {selectMode && selectedIds.size > 0 && (
-              <div className={`flex items-center gap-4 p-3 rounded-2xl animate-in slide-in-from-top-2 duration-200 border ${isDark ? "bg-neutral-950 border-neutral-800" : "bg-white border-neutral-200 shadow-[0_12px_40px_rgba(0,0,0,0.03)]"}`}>
+              <div className={`flex items-center gap-4 p-3 rounded-full animate-in slide-in-from-top-2 duration-200 border ${isDark ? "bg-neutral-950 border-neutral-800" : "bg-white border-[#d2d2d7] shadow-[0_24px_48px_rgba(0,0,0,0.03)]"}`}>
                 <span className={`text-[9px] font-mono font-semibold uppercase ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>{selectedIds.size} selected</span>
                 <div className="flex gap-2 ml-auto">
-                  <button onClick={selectAllProducts} className={`text-[9px] font-mono uppercase px-3 py-1.5 border rounded-lg transition-all ${isDark ? "border-neutral-800 text-neutral-400 hover:text-white" : "border-neutral-200 text-neutral-600 hover:text-black bg-white shadow-sm"}`}>
+                  <button onClick={selectAllProducts} className={`text-[9px] font-mono uppercase px-3 py-1.5 border rounded-full transition-all ${isDark ? "border-neutral-800 text-neutral-400 hover:text-white" : "border-neutral-200 text-neutral-600 hover:text-black bg-white shadow-sm"}`}>
                     {selectedIds.size === orderedProducts.length ? "Deselect All" : "Select All"}
                   </button>
                   <button onClick={() => bulkPublish(true)} disabled={isBulkActing}
-                    className="flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 rounded-lg transition-all">
+                    className="flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 rounded-full transition-all">
                     <Eye size={10} /> Publish
                   </button>
                   <button onClick={() => bulkPublish(false)} disabled={isBulkActing}
-                    className={`flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 rounded-lg transition-all ${isDark ? "bg-neutral-900 text-neutral-400 hover:bg-neutral-800" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"}`}>
+                    className={`flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 rounded-full transition-all ${isDark ? "bg-neutral-900 text-neutral-400 hover:bg-neutral-800" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"}`}>
                     <EyeOff size={10} /> Unpublish
                   </button>
                   <button onClick={bulkDelete} disabled={isBulkActing}
-                    className="flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 rounded-lg transition-all">
+                    className="flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 rounded-full transition-all">
                     <Trash2 size={10} /> Delete
                   </button>
                 </div>
@@ -1483,7 +1467,7 @@ function AdminPage() {
 
             {/* ── Product Form ── */}
             {productFormOpen && (
-              <div className={`p-6 border rounded-2xl space-y-6 animate-in slide-in-from-top-3 duration-300 ${isDark ? "bg-neutral-950/40 border-neutral-800" : "bg-white border-neutral-200 shadow-[0_12px_40px_rgba(0,0,0,0.03)]"}`}>
+              <div className={`p-6 border rounded-3xl space-y-6 animate-in slide-in-from-top-3 duration-300 ${isDark ? "bg-neutral-950/40 border-neutral-800" : "bg-white border-[#d2d2d7] shadow-[0_24px_48px_rgba(0,0,0,0.03)]"}`}>
                 <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>
                   {productForm.editingId ? "Modify Product Engine" : "Create Product Hook"}
                 </h2>
@@ -1497,21 +1481,21 @@ function AdminPage() {
                 <div className="space-y-1.5">
                   <label className={`text-[9px] font-mono font-semibold uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Description</label>
                   <textarea value={productForm.description} onChange={e => setProductForm(f => ({ ...f, description: e.target.value }))}
-                    className={`w-full bg-transparent border rounded-xl px-3 py-2 text-xs font-mono resize-none focus:outline-none focus:ring-1 ${
-                      isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-neutral-200 text-black focus:border-black focus:ring-black/5"
+                    className={`w-full bg-transparent border rounded-2xl px-4 py-2.5 text-xs font-mono resize-none focus:outline-none focus:ring-1 ${
+                      isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-[#d2d2d7] text-black focus:border-black focus:ring-black/5 bg-white shadow-sm"
                     }`} rows={3} />
                 </div>
                 <div className="flex items-center justify-between">
                   <button onClick={() => setProductForm(f => ({ ...f, is_published: !f.is_published }))}
-                    className={`text-[9px] font-mono font-semibold uppercase px-3 py-1.5 rounded-lg border transition-all ${
+                    className={`text-[9px] font-mono font-semibold uppercase px-4 py-1.5 rounded-full border transition-all ${
                       productForm.is_published ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-rose-500/10 text-rose-500 border-rose-500/20"
                     }`}>
                     {productForm.is_published ? "Status: Deployed" : "Status: Draft"}
                   </button>
                   <div className="flex gap-2">
                     <button onClick={resetProductForm} className={`text-[9px] font-mono uppercase px-3 py-2 ${isDark ? "text-neutral-500 hover:text-white" : "text-neutral-450 hover:text-black"}`}>Cancel</button>
-                    <button onClick={saveProduct} className={`text-[9px] font-mono font-bold uppercase px-6 py-2 transition-all rounded-lg ${
-                      isDark ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800"
+                    <button onClick={saveProduct} className={`text-[9px] font-mono font-bold uppercase px-6 py-2 transition-all rounded-full ${
+                      isDark ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800 shadow-sm"
                     }`}>
                       {productForm.editingId ? "Save Engine" : "Build Hook"}
                     </button>
@@ -1537,10 +1521,10 @@ function AdminPage() {
                 return (
                   <div
                     key={p.id}
-                    className={`group relative transition-all duration-300 rounded-2xl overflow-hidden border ${
+                    className={`group relative transition-all duration-300 rounded-3xl overflow-hidden border ${
                       isDark 
                         ? isSelected ? "border-neutral-100 bg-neutral-900/40" : "border-neutral-900 bg-neutral-950/20 hover:border-neutral-800" 
-                        : isSelected ? "border-black bg-white shadow-lg" : "border-neutral-200 bg-white hover:border-neutral-300 shadow-[0_12px_24px_rgba(0,0,0,0.03)] hover:shadow-[0_16px_36px_rgba(0,0,0,0.06)]"
+                        : isSelected ? "border-black bg-white shadow-lg" : "border-[#d2d2d7] bg-white hover:border-neutral-400 shadow-[0_12px_24px_rgba(0,0,0,0.03)] hover:shadow-[0_18px_48px_rgba(0,0,0,0.06)]"
                     } ${isDragging ? "opacity-35 scale-95" : ""} ${isDragTarget ? isDark ? "ring-1 ring-white/30" : "ring-1 ring-black/10" : ""}`}
                     draggable={!selectMode}
                     onDragStart={() => handleDragStart(p.id)}
@@ -1563,15 +1547,15 @@ function AdminPage() {
                       </div>
                     )}
                     {isPrintful && (
-                      <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-0.5 px-1.5 py-0.5 rounded-[2px] bg-sky-500/10 text-sky-400 text-[7px] font-mono font-bold uppercase border border-sky-500/10">
+                      <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-sky-500/10 text-sky-400 text-[7px] font-mono font-bold uppercase border border-sky-500/10">
                         <Lock size={6} /> PF
                       </div>
                     )}
                     <div className="relative flex aspect-[4/5] items-center justify-center overflow-hidden p-4">
                       {p.image_urls && p.image_urls.length > 1 ? (
-                        <img src={p.image_urls[1]} alt={p.title} className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500 rounded-xl filter drop-shadow-[0_8px_16px_rgba(0,0,0,0.06)]" />
+                        <img src={p.image_urls[1]} alt={p.title} className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500 rounded-2xl filter drop-shadow-[0_10px_20px_rgba(0,0,0,0.06)]" />
                       ) : p.image_urls && p.image_urls[0] ? (
-                        <img src={p.image_urls[0]} alt={p.title} className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500 rounded-xl filter drop-shadow-[0_8px_16px_rgba(0,0,0,0.06)]" />
+                        <img src={p.image_urls[0]} alt={p.title} className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500 rounded-2xl filter drop-shadow-[0_10px_20px_rgba(0,0,0,0.06)]" />
                       ) : (
                         <span className={`text-[8px] font-mono uppercase tracking-widest ${isDark ? "text-neutral-800" : "text-neutral-300"}`}>Empty visual</span>
                       )}
@@ -1619,12 +1603,12 @@ function AdminPage() {
               </div>
 
               <input type="text" placeholder="FILTER LEDGER…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                className={`text-[9px] font-mono border rounded px-3 py-2 w-48 bg-transparent focus:outline-none focus:ring-1 ${
-                  isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-neutral-250 text-black focus:border-black focus:ring-black/10 bg-white"
+                className={`text-[9px] font-mono border rounded-full px-4 py-2 w-48 bg-transparent focus:outline-none focus:ring-1 ${
+                  isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-[#d2d2d7] text-black focus:border-black focus:ring-black/10 bg-white shadow-sm"
                 }`} />
             </div>
 
-            <div className={`flex gap-0 border-b ${isDark ? "border-neutral-900" : "border-neutral-200"}`}>
+            <div className="flex gap-2 p-1 bg-[#e8e8ed]/40 dark:bg-neutral-900/40 rounded-full w-fit">
               {([
                 { key: "all", label: "Registry", count: activeOrders.length },
                 { key: "paid", label: "Paid", count: paidOrders.length },
@@ -1634,14 +1618,14 @@ function AdminPage() {
                 <button
                   key={tab.key}
                   onClick={() => setOrderStatusFilter(tab.key)}
-                  className={`flex items-center gap-2 px-4 py-2.5 text-[9px] font-mono font-semibold uppercase tracking-widest border-b-2 transition-all -mb-px ${
+                  className={`flex items-center gap-2 px-4 py-1.5 text-[9px] font-mono font-semibold uppercase tracking-widest transition-all rounded-full ${
                     orderStatusFilter === tab.key
-                      ? isDark ? "border-white text-white" : "border-black text-black"
-                      : isDark ? "border-transparent text-neutral-550 hover:text-neutral-350" : "border-transparent text-neutral-455 hover:text-neutral-800"
+                      ? isDark ? "text-white bg-neutral-900 shadow-sm" : "text-black bg-white shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+                      : isDark ? "text-neutral-550 hover:text-neutral-350" : "text-neutral-550 hover:text-neutral-800"
                   }`}
                 >
                   {tab.label}
-                  <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded ${
+                  <span className={`text-[8px] font-mono px-2 py-0.5 rounded-full ${
                     orderStatusFilter === tab.key
                       ? isDark ? "bg-white text-black" : "bg-black text-white"
                       : isDark ? "bg-neutral-900 text-neutral-500" : "bg-neutral-100 text-neutral-500"
@@ -1650,7 +1634,7 @@ function AdminPage() {
               ))}
             </div>
 
-            <div className="overflow-x-auto border dark:border-neutral-900 border-neutral-200 rounded-2xl overflow-hidden shadow-[0_12px_40px_rgba(0,0,0,0.03)] bg-white dark:bg-transparent">
+            <div className="overflow-x-auto border dark:border-neutral-900 border-[#d2d2d7] rounded-3xl overflow-hidden shadow-[0_24px_48px_rgba(0,0,0,0.03)] bg-white dark:bg-transparent">
               <table className="w-full text-left">
                 <thead>
                   <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${
@@ -1673,7 +1657,7 @@ function AdminPage() {
                       <td className={`px-5 py-3.5 text-[10px] uppercase font-mono ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>{o.name || "—"}</td>
                       <td className="px-5 py-3.5 text-xs font-mono font-medium">{fmt$(o.amount_cents)}</td>
                       <td className="px-5 py-3.5">
-                        <span className={`text-[8px] font-mono font-bold uppercase px-2 py-0.5 rounded-lg flex items-center gap-1.5 w-fit ${
+                        <span className={`text-[8px] font-mono font-bold uppercase px-2.5 py-1 rounded-full flex items-center gap-1.5 w-fit ${
                           o.status === "paid" ? "bg-emerald-500/10 text-emerald-500" :
                           o.status === "pending" ? "bg-amber-500/10 text-amber-500" :
                           "bg-rose-500/10 text-rose-500"
@@ -1708,11 +1692,11 @@ function AdminPage() {
               </div>
 
               <input type="text" placeholder="FILTER LEADS…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                className={`text-[9px] font-mono border rounded px-3 py-2 w-48 bg-transparent focus:outline-none focus:ring-1 ${
-                  isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-neutral-250 text-black focus:border-black focus:ring-black/10 bg-white"
+                className={`text-[9px] font-mono border rounded-full px-4 py-2 w-48 bg-transparent focus:outline-none focus:ring-1 ${
+                  isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-[#d2d2d7] text-black focus:border-black focus:ring-black/10 bg-white shadow-sm"
                 }`} />
             </div>
-            <div className="overflow-x-auto border dark:border-neutral-900 border-neutral-200 rounded-2xl overflow-hidden shadow-[0_12px_40px_rgba(0,0,0,0.03)] bg-white dark:bg-transparent">
+            <div className="overflow-x-auto border dark:border-neutral-900 border-[#d2d2d7] rounded-3xl overflow-hidden shadow-[0_24px_48px_rgba(0,0,0,0.03)] bg-white dark:bg-transparent">
               <table className="w-full text-left">
                 <thead>
                   <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${
@@ -1749,10 +1733,10 @@ function AdminPage() {
               <div className="flex gap-1">
                 {(["7", "14", "30"] as const).map(r => (
                   <button key={r} onClick={() => setAnalyticsRange(r)}
-                    className={`text-[9px] font-mono font-bold uppercase px-3 py-1.5 transition-all rounded-lg ${
+                    className={`text-[9px] font-mono font-bold uppercase px-3 py-1.5 transition-all rounded-full ${
                       analyticsRange === r
                         ? isDark ? "bg-white text-black" : "bg-black text-white"
-                        : isDark ? "text-neutral-450 hover:text-white" : "text-neutral-500 bg-white border border-neutral-200 hover:text-black"
+                        : isDark ? "text-neutral-450 hover:text-white" : "text-neutral-550 bg-white border border-[#d2d2d7] hover:text-black shadow-sm"
                     }`}>
                     {r}D
                   </button>
@@ -1761,12 +1745,12 @@ function AdminPage() {
             </div>
 
             {!hasEventData && (
-              <div className={`p-6 border rounded-2xl space-y-4 ${isDark ? "border-neutral-900 bg-neutral-950/30" : "border-neutral-200 bg-white shadow-[0_12px_40px_rgba(0,0,0,0.03)]"}`}>
+              <div className={`p-6 border rounded-3xl space-y-4 ${isDark ? "border-neutral-900 bg-neutral-950/30" : "border-[#d2d2d7] bg-white shadow-[0_24px_48px_rgba(0,0,0,0.03)]"}`}>
                 <p className={`text-[10px] font-mono font-bold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Tracker Inactive</p>
                 <p className={`text-xs leading-relaxed ${isDark ? "text-neutral-400" : "text-neutral-600"}`}>
                   Bind the client-side telemetry dispatcher to monitor user sessions, clicks, and page view triggers.
                 </p>
-                <pre className={`text-[9px] p-4 overflow-x-auto font-mono rounded-xl ${isDark ? "bg-neutral-950 border border-neutral-900 text-neutral-400" : "bg-neutral-50 border border-neutral-200 text-neutral-600"}`}>
+                <pre className={`text-[9px] p-4 overflow-x-auto font-mono rounded-2xl ${isDark ? "bg-neutral-950 border border-neutral-900 text-neutral-400" : "bg-neutral-50 border border-[#d2d2d7] text-neutral-600"}`}>
 {`export function trackEvent(type, data = {}) {
   supabase.from('page_events').insert([{
     event_type: type,
@@ -1793,17 +1777,17 @@ function AdminPage() {
               <Stat label="Checkout Starts" value={analyticsEvents.filter(e => e.event_type === "checkout_start").length.toLocaleString()} sub="initiated checkout" isDark={isDark} />
             </div>
 
-            <div className={`p-6 border rounded-2xl transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200 shadow-[0_12px_40px_rgba(0,0,0,0.03)]"} space-y-4`}>
+            <div className={`p-6 border rounded-3xl transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#d2d2d7] shadow-[0_24px_48px_rgba(0,0,0,0.03)]"} space-y-4`}>
               <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Daily Telemetry Pulse</p>
               <div className="flex items-end gap-1.5 h-32 pt-4">
                 {analyticsChartData.map((d, i) => (
                   <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group relative">
                     <div
-                      className={`w-full transition-all duration-300 rounded-[1px] ${isDark ? "bg-neutral-800 group-hover:bg-neutral-550" : "bg-neutral-200 group-hover:bg-neutral-355"}`}
+                      className={`w-full transition-all duration-300 rounded-full ${isDark ? "bg-neutral-800 group-hover:bg-neutral-550" : "bg-neutral-200 group-hover:bg-neutral-355"}`}
                       style={{ height: `${(d.views / chartMax) * 100}%`, minHeight: d.views > 0 ? "3px" : "1px" }}
                     />
                     {d.views > 0 && (
-                      <div className={`absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[8px] font-mono font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border ${isDark ? "bg-neutral-900 text-white border-neutral-850" : "bg-white text-black border-neutral-200 shadow-sm rounded-lg"}`}>
+                      <div className={`absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[8px] font-mono font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border ${isDark ? "bg-neutral-900 text-white border-neutral-850" : "bg-white text-black border-neutral-200 shadow-sm rounded-full"}`}>
                         {d.views}
                       </div>
                     )}
@@ -1821,7 +1805,7 @@ function AdminPage() {
                 {topReferrers.length === 0 ? (
                   <p className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-700" : "text-neutral-300"}`}>Empty logs</p>
                 ) : (
-                  <div className={`p-4 border rounded-2xl transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200 shadow-[0_12px_40px_rgba(0,0,0,0.03)]"} space-y-2.5`}>
+                  <div className={`p-4 border rounded-3xl transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#d2d2d7] shadow-[0_24px_48px_rgba(0,0,0,0.03)]"} space-y-2.5`}>
                     {topReferrers.map(([ref, count]) => (
                       <div key={ref} className="flex items-center justify-between gap-4 py-1.5 border-b last:border-0 dark:border-neutral-900/40 border-neutral-100">
                         <span className={`text-[10px] font-mono truncate uppercase ${isDark ? "text-neutral-400" : "text-neutral-600"}`}>{ref || "direct"}</span>
@@ -1836,7 +1820,7 @@ function AdminPage() {
                 {topPaths.length === 0 ? (
                   <p className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-700" : "text-neutral-300"}`}>Empty logs</p>
                 ) : (
-                  <div className={`p-4 border rounded-2xl transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200 shadow-[0_12px_40px_rgba(0,0,0,0.03)]"} space-y-2.5`}>
+                  <div className={`p-4 border rounded-3xl transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#d2d2d7] shadow-[0_24px_48px_rgba(0,0,0,0.03)]"} space-y-2.5`}>
                     {topPaths.map(([path, count]) => (
                       <div key={path} className="flex items-center justify-between gap-4 py-1.5 border-b last:border-0 dark:border-neutral-900/40 border-neutral-100">
                         <span className={`text-[9px] font-mono truncate ${isDark ? "text-neutral-400" : "text-neutral-600"}`}>{path}</span>
@@ -1851,7 +1835,7 @@ function AdminPage() {
             {Object.keys(productClickMap).length > 0 && (
               <div className="space-y-3">
                 <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Interaction CTR</p>
-                <div className={`border rounded-2xl overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200 shadow-[0_12px_40px_rgba(0,0,0,0.03)]"}`}>
+                <div className={`border rounded-3xl overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#d2d2d7] shadow-[0_24px_48px_rgba(0,0,0,0.03)]"}`}>
                   <table className="w-full text-left">
                     <thead>
                       <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${isDark ? "text-neutral-500 border-neutral-900 bg-neutral-950/50" : "text-neutral-500 border-neutral-200 bg-[#f5f5f7]"}`}>
@@ -1883,7 +1867,7 @@ function AdminPage() {
                 <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Geographic Distribution</p>
                 <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
                   {geoBreakdown.map(([country, count]) => (
-                    <div key={country} className={`p-4 border rounded-2xl transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200 shadow-[0_8px_24px_rgba(0,0,0,0.03)]"}`}>
+                    <div key={country} className={`p-4 border rounded-2xl transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#d2d2d7] shadow-[0_8px_24px_rgba(0,0,0,0.03)]"}`}>
                       <p className={`text-[8px] font-mono uppercase tracking-wider ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{country}</p>
                       <p className="text-lg font-bold tracking-tight mt-1">{count}</p>
                     </div>
@@ -1908,10 +1892,10 @@ function AdminPage() {
 
               <div className="space-y-3">
                 <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Theme Adaptation</h2>
-                <div className={`p-5 border rounded-2xl transition-all duration-300 ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-neutral-200 shadow-[0_12px_40px_rgba(0,0,0,0.03)]"} space-y-4`}>
+                <div className={`p-5 border rounded-2xl transition-all duration-300 ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-[#d2d2d7] shadow-[0_24px_48px_rgba(0,0,0,0.03)]"} space-y-4`}>
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-mono uppercase tracking-widest">Interface Mode</span>
-                    <div className={`flex border rounded-lg overflow-hidden ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
+                    <div className={`flex border rounded-full overflow-hidden ${isDark ? "border-neutral-800" : "border-[#d2d2d7]"}`}>
                       <button
                         onClick={() => {
                           setIsDark(false);
@@ -1919,7 +1903,7 @@ function AdminPage() {
                           document.documentElement.classList.remove("dark");
                           saveSiteConfig({ ...siteContent, theme: "light" });
                         }}
-                        className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all ${!isDark ? "bg-black text-white" : "text-neutral-400 hover:bg-neutral-900"}`}
+                        className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all rounded-full ${!isDark ? "bg-black text-white" : "text-neutral-400 hover:bg-neutral-900"}`}
                       >
                         LIGHT
                       </button>
@@ -1930,7 +1914,7 @@ function AdminPage() {
                           localStorage.setItem("theme", "dark");
                           saveSiteConfig({ ...siteContent, theme: "dark" });
                         }}
-                        className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all ${isDark ? "bg-white text-black" : "text-neutral-550 hover:bg-neutral-100"}`}
+                        className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all rounded-full ${isDark ? "bg-white text-black" : "text-neutral-550 hover:bg-neutral-100"}`}
                       >
                         DARK
                       </button>
@@ -1941,7 +1925,7 @@ function AdminPage() {
 
               <div className="space-y-3">
                 <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Team Registry Access</h2>
-                <div className={`p-5 border rounded-2xl transition-all duration-300 ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-neutral-200 shadow-[0_12px_40px_rgba(0,0,0,0.03)]"} space-y-6`}>
+                <div className={`p-5 border rounded-2xl transition-all duration-300 ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-[#d2d2d7] shadow-[0_24px_48px_rgba(0,0,0,0.03)]"} space-y-6`}>
                   <div className="flex gap-3 flex-wrap items-end">
                     <div className="flex-1 min-w-[200px] space-y-1.5">
                       <label className={`text-[8px] font-mono font-semibold uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>ADD TEAM MEMBER</label>
@@ -1950,8 +1934,8 @@ function AdminPage() {
                         placeholder="EMAIL ADDR…"
                         value={newUserEmail}
                         onChange={e => setNewUserEmail(e.target.value)}
-                        className={`w-full bg-transparent border rounded-lg px-3 py-1.5 text-[10px] font-mono uppercase focus:outline-none focus:ring-1 ${
-                          isDark ? "border-neutral-850 text-white placeholder-neutral-700 focus:border-white focus:ring-white/25" : "border-neutral-200 text-black placeholder-neutral-350 focus:border-black focus:ring-black/10 bg-white"
+                        className={`w-full bg-transparent border rounded-full px-4 py-1.5 text-[10px] font-mono uppercase focus:outline-none focus:ring-1 ${
+                          isDark ? "border-neutral-850 text-white placeholder-neutral-700 focus:border-white focus:ring-white/25" : "border-[#d2d2d7] text-black placeholder-neutral-350 focus:border-black focus:ring-black/10 bg-white shadow-sm"
                         }`}
                       />
                     </div>
@@ -1960,8 +1944,8 @@ function AdminPage() {
                       <select
                         value={newUserRole}
                         onChange={e => setNewUserRole(e.target.value as any)}
-                        className={`text-[9px] font-mono font-semibold uppercase bg-transparent border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 ${
-                          isDark ? "border-neutral-850 text-white focus:border-white focus:ring-white/25" : "border-neutral-200 text-black focus:border-black focus:ring-black/10 bg-white shadow-sm"
+                        className={`text-[9px] font-mono font-semibold uppercase bg-transparent border rounded-full px-3 py-1.5 focus:outline-none focus:ring-1 ${
+                          isDark ? "border-neutral-850 text-white focus:border-white focus:ring-white/25" : "border-[#d2d2d7] text-black focus:border-black focus:ring-black/10 bg-white shadow-sm"
                         }`}
                       >
                         <option value="viewer">VIEWER</option>
@@ -1972,8 +1956,8 @@ function AdminPage() {
                     <button
                       onClick={handleAddAdminUser}
                       disabled={isAddingUser || !newUserEmail.trim()}
-                      className={`text-[9px] font-mono font-bold uppercase px-4 py-1.5 rounded-lg transition-all ${
-                        isDark ? "bg-white text-black hover:bg-neutral-200 disabled:opacity-30" : "bg-black text-white hover:bg-neutral-800 disabled:opacity-30"
+                      className={`text-[9px] font-mono font-bold uppercase px-4 py-1.5 rounded-full transition-all ${
+                        isDark ? "bg-white text-black hover:bg-neutral-200 disabled:opacity-30" : "bg-black text-white hover:bg-neutral-800 disabled:opacity-30 shadow-sm"
                       }`}
                     >
                       {isAddingUser ? "Deploying" : "Deploy"}
@@ -1986,7 +1970,7 @@ function AdminPage() {
                       { role: "manager", desc: "Write access to database & inventory" },
                       { role: "admin", desc: "Root execution permissions on settings" },
                     ].map(r => (
-                      <div key={r.role} className={`p-3 border rounded-xl ${isDark ? "border-neutral-900 bg-neutral-950/10" : "border-neutral-200 bg-neutral-50"}`}>
+                      <div key={r.role} className={`p-3 border rounded-2xl ${isDark ? "border-neutral-900 bg-neutral-950/10" : "border-[#d2d2d7] bg-neutral-50"}`}>
                         <p className={`text-[8px] font-mono font-bold uppercase ${isDark ? "text-neutral-300" : "text-neutral-800"}`}>{r.role}</p>
                         <p className={`text-[8px] font-mono mt-1 leading-relaxed ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{r.desc}</p>
                       </div>
@@ -2001,7 +1985,7 @@ function AdminPage() {
                           <select
                             value={u.role}
                             onChange={e => handleUpdateUserRole(u.id, e.target.value as any)}
-                            className={`text-[8px] font-mono font-semibold uppercase bg-transparent focus:outline-none focus:ring-1 border rounded-lg px-1.5 py-0.5 ${isDark ? "text-neutral-400 border-neutral-800" : "text-neutral-550 border-neutral-200 bg-white"}`}
+                            className={`text-[8px] font-mono font-semibold uppercase bg-transparent focus:outline-none focus:ring-1 border rounded-full px-3 py-0.5 ${isDark ? "text-neutral-400 border-neutral-800" : "text-neutral-550 border-[#d2d2d7] bg-white"}`}
                           >
                             <option value="viewer">VIEWER</option>
                             <option value="manager">MANAGER</option>
@@ -2022,12 +2006,12 @@ function AdminPage() {
 
               <div className="space-y-3">
                 <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Identity Verification</h2>
-                <div className={`p-5 border rounded-2xl transition-all duration-300 ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-neutral-200 shadow-[0_12px_40px_rgba(0,0,0,0.03)]"} space-y-4`}>
+                <div className={`p-5 border rounded-2xl transition-all duration-300 ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-[#d2d2d7] shadow-[0_24px_48px_rgba(0,0,0,0.03)]"} space-y-4`}>
                   <div>
                     <p className={`text-[9px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Identified Payload</p>
                     <p className="text-xs font-mono font-semibold uppercase">{userEmail || "…"}</p>
                   </div>
-                  <button onClick={handleSignOut} className={`w-full rounded-lg text-[10px] font-mono font-semibold uppercase px-4 py-2.5 transition-all ${isDark ? "bg-rose-500/10 text-rose-455 hover:bg-rose-500/20" : "bg-rose-50 text-rose-655 hover:bg-rose-100"}`}>
+                  <button onClick={handleSignOut} className={`w-full rounded-full text-[10px] font-mono font-semibold uppercase px-4 py-2.5 transition-all ${isDark ? "bg-rose-500/10 text-rose-455 hover:bg-rose-500/20" : "bg-rose-50 text-rose-655 hover:bg-rose-100"}`}>
                     TERMINATE SESSION
                   </button>
                 </div>
@@ -2042,8 +2026,8 @@ function AdminPage() {
       {selectedRow && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 animate-in fade-in duration-355">
           <div className="absolute inset-0 backdrop-blur-md bg-black/60 dark:bg-black/80" onClick={() => setSelectedRow(null)} />
-          <div className={`relative w-full max-w-lg p-8 border rounded-2xl space-y-6 max-h-[85vh] overflow-y-auto ${
-            isDark ? "bg-neutral-950 border-neutral-850" : "bg-white border-neutral-200 shadow-xl"
+          <div className={`relative w-full max-w-lg p-8 border rounded-3xl space-y-6 max-h-[85vh] overflow-y-auto ${
+            isDark ? "bg-neutral-950 border-neutral-850" : "bg-white border-[#d2d2d7] shadow-[0_32px_64px_rgba(0,0,0,0.08)]"
           }`}>
             <div className="flex items-center justify-between border-b pb-3 dark:border-neutral-900 border-neutral-150">
               <h3 className={`text-xs font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-300" : "text-neutral-800"}`}>System Ledger Metadata</h3>
@@ -2061,7 +2045,7 @@ function AdminPage() {
             </div>
             {selectedRow._type === "order" && (
               <button onClick={() => handleArchiveOrder(selectedRow.id)}
-                className={`w-full py-2.5 rounded-lg text-[9px] font-mono font-bold uppercase tracking-wide transition-all ${isDark ? "bg-rose-500/10 text-rose-455 hover:bg-rose-500/20" : "bg-rose-50 text-rose-655 hover:bg-rose-100"}`}>
+                className={`w-full py-2.5 rounded-full text-[9px] font-mono font-bold uppercase tracking-wide transition-all ${isDark ? "bg-rose-500/10 text-rose-455 hover:bg-rose-500/20" : "bg-rose-50 text-rose-655 hover:bg-rose-100"}`}>
                 Archive Order Record
               </button>
             )}
@@ -2078,7 +2062,7 @@ function AdminPage() {
 
 function Stat({ label, value, sub, isDark, led = "cyan" }: { label: string; value: string | number; sub: string; isDark: boolean; led?: "green" | "yellow" | "red" | "cyan" | "purple" | "neutral" }) {
   return (
-    <div className={`p-4 border rounded-2xl transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200 shadow-[0_8px_24px_rgba(0,0,0,0.03)]"} space-y-1`}>
+    <div className={`p-4 border rounded-3xl transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#d2d2d7] shadow-[0_12px_24px_rgba(0,0,0,0.02)]"} space-y-1`}>
       <div className="flex items-center justify-between gap-2">
         <p className={`text-[8px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{label}</p>
         <LedPulse color={led} />
@@ -2098,21 +2082,21 @@ function StatWithDelta({ label, value, sub, delta, isDark }: { label: string; va
   const deltaColor = delta !== null && delta > 0 ? "green" as const : delta !== null && delta < 0 ? "red" as const : "neutral" as const;
 
   return (
-    <div className={`p-4 border rounded-2xl transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-neutral-200 shadow-[0_8px_24px_rgba(0,0,0,0.03)]"} space-y-1`}>
+    <div className={`p-4 border rounded-3xl transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#d2d2d7] shadow-[0_12px_24px_rgba(0,0,0,0.02)]"} space-y-1`}>
       <div className="flex items-center justify-between gap-2">
         <p className={`text-[8px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{label}</p>
         <LedPulse color={deltaColor} />
       </div>
       <div className="flex items-baseline gap-2 flex-wrap">
         <p 
-          className="text-xl font-semibold tracking-tight font-sans"
+          className="text-xl font-semibold tracking-tight"
           style={{ textShadow: isDark ? "0 0 10px rgba(255,255,255,0.1)" : "0 0 8px rgba(0,0,0,0.03)" }}
         >
           {value}
         </p>
         {delta !== null && (
-          <span className={`text-[8px] font-mono font-bold uppercase ${
-            delta > 0 ? "text-emerald-500" : delta < 0 ? "text-rose-500" : isDark ? "text-neutral-600" : "text-neutral-400"
+          <span className={`text-[8px] font-mono font-bold uppercase px-2 py-0.5 rounded-full ${
+            delta > 0 ? "text-emerald-500 bg-emerald-500/10" : delta < 0 ? "text-rose-500 bg-rose-500/10" : isDark ? "text-neutral-600" : "text-neutral-400"
           }`}>
             {delta > 0 ? "↑" : delta < 0 ? "↓" : "—"}{Math.abs(delta)}%
           </span>
@@ -2128,8 +2112,8 @@ function Input({ label, value, onChange, type = "text", isDark }: { label: strin
     <div className="space-y-1.5">
       <label className={`text-[9px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>{label}</label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)}
-        className={`w-full bg-transparent border rounded-lg px-3 py-1.5 text-xs font-mono transition-all focus:outline-none focus:ring-1 ${
-          isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-neutral-200 text-black focus:border-black focus:ring-black/5 bg-white"
+        className={`w-full bg-transparent border rounded-full px-4 py-1.5 text-xs font-mono transition-all focus:outline-none focus:ring-1 ${
+          isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-[#d2d2d7] text-black focus:border-black focus:ring-black/5 bg-white shadow-sm"
         }`} />
     </div>
   );
