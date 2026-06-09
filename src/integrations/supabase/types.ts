@@ -137,6 +137,13 @@ export type Database = {
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "orders_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       page_events: {
@@ -176,6 +183,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "page_events_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_public"
             referencedColumns: ["id"]
           },
         ]
@@ -305,7 +319,57 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      products_public: {
+        Row: {
+          created_at: string | null
+          currency: string | null
+          description: string | null
+          display_order: number | null
+          id: string | null
+          image_urls: string[] | null
+          is_archived: boolean | null
+          is_published: boolean | null
+          price_cents: number | null
+          price_cents_discounted: number | null
+          slug: string | null
+          title: string | null
+          updated_at: string | null
+          variants: Json | null
+        }
+        Insert: {
+          created_at?: string | null
+          currency?: string | null
+          description?: string | null
+          display_order?: number | null
+          id?: string | null
+          image_urls?: string[] | null
+          is_archived?: boolean | null
+          is_published?: boolean | null
+          price_cents?: number | null
+          price_cents_discounted?: number | null
+          slug?: string | null
+          title?: string | null
+          updated_at?: string | null
+          variants?: Json | null
+        }
+        Update: {
+          created_at?: string | null
+          currency?: string | null
+          description?: string | null
+          display_order?: number | null
+          id?: string | null
+          image_urls?: string[] | null
+          is_archived?: boolean | null
+          is_published?: boolean | null
+          price_cents?: number | null
+          price_cents_discounted?: number | null
+          slug?: string | null
+          title?: string | null
+          updated_at?: string | null
+          variants?: Json | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       delete_order: { Args: { order_id: string }; Returns: undefined }
