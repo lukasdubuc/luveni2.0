@@ -2,6 +2,6 @@ project_id = "vgmfezyklrlgoaiscfee"
 [functions.jarvis-google]
 verify_jwt = false
 [functions.jarvis-brain]
-verify_jwt = false
+verify_jwt = true
 [functions.discord-bot]
 verify_jwt = false

@@ -3,9 +3,11 @@
 // ─────────────────────────────────────────────────────────────
 import { createFileRoute } from '@tanstack/react-router';
 import JarvisHub from '@/components/jarvis/JarvisHub';
+import { requireAdmin } from '@/lib/admin-guard';
 
 export const Route = createFileRoute('/admin/jarvis')({
   ssr: false,
+  beforeLoad: requireAdmin,
   component: () => (
     <div style={{ 
       minHeight: '100vh', 
