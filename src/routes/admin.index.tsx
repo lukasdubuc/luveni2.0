@@ -1173,7 +1173,7 @@ function AdminPage() {
                 className={`text-[10px] font-mono font-medium uppercase tracking-widest transition-all duration-200 px-4 py-1.5 rounded-[9999px] ${
                   section === s
                     ? isDark ? "text-white bg-neutral-900" : "text-black bg-white shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
-                    : isDark ? "text-neutral-550 hover:text-neutral-300" : "text-neutral-550 hover:text-neutral-800"
+                    : isDark ? "text-neutral-550 hover:text-neutral-350" : "text-neutral-550 hover:text-neutral-800"
                 }`}
               >
                 {s}
@@ -1197,7 +1197,7 @@ function AdminPage() {
                 className={`block w-full text-left text-[10px] font-mono uppercase tracking-widest py-2 px-3 rounded-[9999px] ${
                   section === s
                     ? isDark ? "text-white bg-neutral-900" : "text-black bg-[#e8e8ed]"
-                    : isDark ? "text-neutral-550" : "text-neutral-400"
+                    : isDark ? "text-neutral-555" : "text-neutral-400"
                 }`}
               >
                 {s}
@@ -1457,7 +1457,7 @@ function AdminPage() {
             {/* ── Bulk Toolbar ── */}
             {selectMode && selectedIds.size > 0 && (
               <div className={`flex items-center gap-4 p-3 rounded-[9999px] animate-in slide-in-from-top-2 duration-200 border ${isDark ? "bg-neutral-950 border-neutral-800" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"}`}>
-                <span className={`text-[9px] font-mono font-semibold uppercase ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>{selectedIds.size} selected</span>
+                <span className={`text-[9px] font-mono font-semibold uppercase ${isDark ? "text-neutral-400" : "text-neutral-550"}`}>{selectedIds.size} selected</span>
                 <div className="flex gap-2 ml-auto">
                   <button onClick={selectAllProducts} className={`text-[9px] font-mono uppercase px-3 py-1.5 border rounded-[9999px] transition-all ${isDark ? "border-neutral-800 text-neutral-400 hover:text-white" : "border-neutral-200 text-neutral-600 hover:text-black bg-white shadow-sm"}`}>
                     {selectedIds.size === orderedProducts.length ? "Deselect All" : "Select All"}
@@ -1692,7 +1692,7 @@ function AdminPage() {
                           {o.status}
                         </span>
                       </td>
-                      <td className={`px-5 py-3.5 text-[10px] font-mono uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>{fmtDate(o.created_at)}</td>
+                      <td className={`px-5 py-3.5 text-[10px] font-mono uppercase ${isDark ? "text-neutral-550" : "text-neutral-400"}`}>{fmtDate(o.created_at)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1919,7 +1919,7 @@ function AdminPage() {
                 <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Theme Adaptation</h2>
                 <div className={`p-5 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-4`}>
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono uppercase tracking-widest">Interface Mode</span>
+                    <span className="text-[10px] font-mono uppercase trackingest">Interface Mode</span>
                     <div className={`flex border rounded-[9999px] overflow-hidden ${isDark ? "border-neutral-800" : "border-[#D1D1D6]"}`}>
                       <button
                         onClick={() => {
@@ -1939,7 +1939,7 @@ function AdminPage() {
                           localStorage.setItem("theme", "dark");
                           saveSiteConfig({ ...siteContent, theme: "dark" });
                         }}
-                        className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all rounded-[9999px] ${isDark ? "bg-white text-black" : "text-neutral-550 hover:bg-neutral-100"}`}
+                        className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all rounded-[9999px] ${isDark ? "bg-white text-black" : "text-neutral-555 hover:bg-neutral-100"}`}
                       >
                         DARK
                       </button>
@@ -2031,7 +2031,7 @@ function AdminPage() {
 
               <div className="space-y-3">
                 <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Identity Verification</h2>
-                <div className={`p-5 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"}`} space-y-4>
+                <div className={`p-5 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "bg-neutral-950/30 border-neutral-900" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-4`}>
                   <div>
                     <p className={`text-[9px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Identified Payload</p>
                     <p className="text-xs font-mono font-semibold uppercase">{userEmail || "…"}</p>
