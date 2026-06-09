@@ -38,8 +38,8 @@ const formatTitle = (slug: string) => {
 export const Route = createFileRoute("/offer/$slug")({
   loader: async ({ params }) => {
     const [productResult, allProducts] = await Promise.all([
-      supabase
-        .from("products")
+      (supabase as any)
+        .from("products_public")
         .select("id, slug, title, description, price_cents, price_cents_discounted, currency, image_urls, is_published, is_archived, display_order, variants, created_at, updated_at")
         .eq("slug", params.slug)
         .eq("is_published", true)
