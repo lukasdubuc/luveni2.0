@@ -1,28 +1,8 @@
-// ────────────────────────────────────────────────────────────────────────────
-// LOVABLE COMPILER DIRECTIVE:
-// Dear Lovable Code Agent: Please scan your local "public/lovable-uploads/" 
-// directory and replace the placeholder paths (e.g. "/lovable-uploads/input_file_0.png")
-// below with the ACTUAL UUID filenames of the uploaded images. 
-// Match them as follows:
-// - input_file_0.png: Transparent kuffiyeh girl logo graphic
-// - input_file_1.png: Black folded shirt flatlay mockup on white
-// - input_file_2.png: Flat front black t-shirt mockup
-// - input_file_3.png: Model wearing the black t-shirt
-// - input_file_4.png: Hat left profile (heart showing)
-// - input_file_5.png: Hat front left angle
-// - input_file_6.png: Hat front right angle
-// - input_file_7.png: Hat right profile (plain)
-// - input_file_8.png: Hat back view with buckle
-// - input_file_9.png: Hat front view centered
-// - input_file_10.png: Hat top down view
-// ────────────────────────────────────────────────────────────────────────────
-
 import { createFileRoute } from "@tanstack/react-router";
 import { site } from "@/config/site";
 import { useEffect, useRef, useState } from "react";
-import { Shield, Sparkles, Eye, Users, ChevronLeft, ChevronRight } from "lucide-react";
+import { Shield, Sparkles, Eye, Users } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/about")({
   head: () => ({
@@ -36,31 +16,34 @@ export const Route = createFileRoute("/about")({
   component: About,
 });
 
-// ─── APPLE STICKY LOCAL NAVIGATION ────────────────────────────────────────
-function LocalNav({ onBuy }: { onBuy: () => void }) {
+// ─── STAGED ASSETS (LOVABLE WRITER: SCAN WORKSPACE & WRITE ACTUAL UUID STRINGS HERE) ───
+const SHIRT_LOGO = "/lovable-uploads/input_file_0.png";       // Transparent kuffiyeh girl logo graphic
+const SHIRT_FOLDED = "/lovable-uploads/input_file_1.png";     // Black folded shirt flatlay mockup on white
+const SHIRT_FLAT = "/lovable-uploads/input_file_2.png";       // Flat front black t-shirt mockup
+const SHIRT_MODEL = "/lovable-uploads/input_file_3.png";      // Model wearing the black t-shirt
+
+const HAT_ANGLE_0 = "/lovable-uploads/input_file_9.png";      // Hat front view centered
+const HAT_ANGLE_1 = "/lovable-uploads/input_file_5.png";      // Hat front left angle
+const HAT_ANGLE_2 = "/lovable-uploads/input_file_4.png";      // Hat left profile (heart showing)
+const HAT_ANGLE_3 = "/lovable-uploads/input_file_8.png";      // Hat back view with buckle
+const HAT_ANGLE_4 = "/lovable-uploads/input_file_7.png";      // Hat right profile (plain)
+const HAT_ANGLE_5 = "/lovable-uploads/input_file_6.png";      // Hat front right angle
+const HAT_ANGLE_6 = "/lovable-uploads/input_file_10.png";     // Hat top down view
+
+// ─── CAD BLUEPRINT GRID PATTERN ───────────────────────────────────────────
+function BlueprintGrid() {
   return (
-    <div className="sticky top-0 z-40 w-full backdrop-blur-md bg-background/80 border-b border-black/5 dark:border-white/5 transition-all">
-      <div className="max-w-7xl mx-auto px-6 h-12 flex items-center justify-between">
-        <span className="text-[11px] font-semibold tracking-tight text-foreground flex items-center gap-1.5">
-          {site.brand} <span className="text-muted-foreground font-normal">Hardware Design</span>
-        </span>
-        <div className="flex items-center gap-6">
-          <a href="#shirt-hero" className="text-[10px] font-mono tracking-wider text-muted-foreground hover:text-foreground transition-colors uppercase hidden sm:inline-block">GZ R-01</a>
-          <a href="#details" className="text-[10px] font-mono tracking-wider text-muted-foreground hover:text-foreground transition-colors uppercase hidden sm:inline-block">Sub-Highlight</a>
-          <a href="#story" className="text-[10px] font-mono tracking-wider text-muted-foreground hover:text-foreground transition-colors uppercase hidden sm:inline-block">Philosophy</a>
-          <button
-            onClick={onBuy}
-            className="bg-foreground text-background text-[10px] font-bold tracking-wider uppercase px-4 py-1.5 rounded-full hover:opacity-90 active:scale-[0.97] transition-all"
-          >
-            Buy
-          </button>
-        </div>
-      </div>
-    </div>
+    <div className="absolute inset-0 pointer-events-none opacity-[0.04] mix-blend-screen z-0" style={{
+      backgroundImage: `
+        linear-gradient(to right, rgba(255,255,255,0.15) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255,255,255,0.15) 1px, transparent 1px)
+      `,
+      backgroundSize: "40px 44px"
+    }} />
   );
 }
 
-// ─── FADE UP ENTRY EFFECT ─────────────────────────────────────────────────
+// ─── SMOOTH SCROLL TRANSITION CONTAINER ──────────────────────────────────
 function FadeUp({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
@@ -72,7 +55,7 @@ function FadeUp({ children, delay = 0 }: { children: React.ReactNode; delay?: nu
     }
     const obs = new IntersectionObserver(
       ([e]) => { if (e.isIntersecting) { setVisible(true); obs.unobserve(e.target); } },
-      { threshold: 0.05, rootMargin: "0px 0px -60px 0px" }
+      { threshold: 0.05, rootMargin: "0px 0px -80px 0px" }
     );
     if (ref.current) obs.observe(ref.current);
     return () => obs.disconnect();
@@ -84,49 +67,17 @@ function FadeUp({ children, delay = 0 }: { children: React.ReactNode; delay?: nu
       style={{
         opacity: visible ? 1 : 0,
         transform: visible ? "translateY(0)" : "translateY(24px)",
-        transition: `opacity 0.8s cubic-bezier(0.16,1,0.3,1) ${delay}ms, transform 0.8s cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
+        transition: `opacity 0.9s cubic-bezier(0.16,1,0.3,1) ${delay}ms, transform 0.9s cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
       }}
+      className="motion-reduce:opacity-100 motion-reduce:transform-none"
     >
       {children}
     </div>
   );
 }
 
-// ─── PARALLAX IMAGE ───────────────────────────────────────────────────────
-function ParallaxImage({ src, alt }: { src: string; alt: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const imgRef = useRef<HTMLImageElement>(null);
-
-  useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const onScroll = () => {
-      if (!ref.current || !imgRef.current) return;
-      const rect = ref.current.getBoundingClientRect();
-      const vh = window.innerHeight;
-      const progress = 1 - (rect.bottom / (vh + rect.height));
-      const clampedProgress = Math.max(0, Math.min(1, progress));
-      imgRef.current.style.transform = `translateY(${clampedProgress * -50}px) scale(1.10)`;
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  return (
-    <div ref={ref} className="w-full h-full overflow-hidden">
-      <img
-        ref={imgRef}
-        src={src}
-        alt={alt}
-        className="w-full h-full object-cover animate-fade-in"
-        style={{ transition: "transform 0.1s linear", willChange: "transform" }}
-      />
-    </div>
-  );
-}
-
 // ─── DUAL-VIEW HERO INTERACTIVE STAGE (FLAT VS MODEL) ────────────────────
-function InteractiveHeroStage({ shirtFlat, shirtModel }: { shirtFlat: string; shirtModel: string }) {
+function InteractiveHeroStage() {
   const [activeTab, setActiveTab] = useState<"flat" | "model">("flat");
   const containerRef = useRef<HTMLDivElement>(null);
   const flatImgRef = useRef<HTMLImageElement>(null);
@@ -162,32 +113,30 @@ function InteractiveHeroStage({ shirtFlat, shirtModel }: { shirtFlat: string; sh
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full bg-neutral-50/50 dark:bg-neutral-950/20 border-b md:border-b-0 md:border-r border-black/10 dark:border-white/10 overflow-hidden flex flex-col justify-between"
+      className="relative w-full h-full bg-neutral-950 overflow-hidden flex flex-col justify-between border-b md:border-b-0 md:border-r border-white/5"
       style={{ minHeight: "65vh" }}
     >
+      <BlueprintGrid />
+
+      {/* Dynamic hardware backlighting */}
       <div
         className="absolute inset-0 pointer-events-none rounded-full"
         style={{
-          background: "radial-gradient(circle at 50% 50%, rgba(120,120,120,0.04) 0%, transparent 65%)",
+          background: "radial-gradient(circle at 50% 50%, rgba(255,255,255,0.035) 0%, transparent 65%)",
         }}
       />
-
-      <div className="absolute inset-0 pointer-events-none opacity-25 dark:opacity-10" style={{
-        backgroundImage: "radial-gradient(var(--border) 1px, transparent 0)",
-        backgroundSize: "24px 24px"
-      }} />
 
       <div className="flex-1 w-full relative flex items-center justify-center p-8">
         {/* Frame A: Flat Mockup View */}
         <img
           ref={flatImgRef}
-          src={shirtFlat}
+          src={SHIRT_FLAT}
           alt="GZ R-01 tee front layout"
           className="absolute max-h-[82%] max-w-[82%] object-contain select-none transition-all duration-750 ease-out"
           style={{
             opacity: activeTab === "flat" && entered ? 1 : 0,
             visibility: activeTab === "flat" ? "visible" : "hidden",
-            filter: "drop-shadow(0 20px 45px rgba(0,0,0,0.12))",
+            filter: "drop-shadow(0 30px 60px rgba(0,0,0,0.85))",
           }}
           draggable={false}
         />
@@ -195,26 +144,27 @@ function InteractiveHeroStage({ shirtFlat, shirtModel }: { shirtFlat: string; sh
         {/* Frame B: On-Model Lifestyle View */}
         <img
           ref={modelImgRef}
-          src={shirtModel}
+          src={SHIRT_MODEL}
           alt="GZ R-01 tee on model"
           className="absolute max-h-[82%] max-w-[82%] object-contain select-none transition-all duration-750 ease-out rounded-2xl"
           style={{
             opacity: activeTab === "model" && entered ? 1 : 0,
             visibility: activeTab === "model" ? "visible" : "hidden",
-            filter: "drop-shadow(0 20px 45px rgba(0,0,0,0.15))",
+            filter: "drop-shadow(0 30px 60px rgba(0,0,0,0.85))",
           }}
           draggable={false}
         />
       </div>
 
+      {/* Hardware Controller Switcher */}
       <div className="relative z-20 pb-6 w-full flex flex-col items-center gap-3">
-        <div className="flex p-0.5 rounded-full bg-neutral-200/60 dark:bg-neutral-800/60 backdrop-blur-sm border border-black/5">
+        <div className="flex p-0.5 rounded-full bg-neutral-900 border border-white/5 backdrop-blur-sm">
           <button
             onClick={() => setActiveTab("flat")}
             className={`px-4 py-1.5 text-[10px] font-mono tracking-wider uppercase rounded-full transition-all duration-300 ${
               activeTab === "flat"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
+                ? "bg-white text-black shadow-sm"
+                : "text-neutral-500 hover:text-white"
             }`}
           >
             Flat Layout
@@ -223,8 +173,8 @@ function InteractiveHeroStage({ shirtFlat, shirtModel }: { shirtFlat: string; sh
             onClick={() => setActiveTab("model")}
             className={`px-4 py-1.5 text-[10px] font-mono tracking-wider uppercase rounded-full transition-all duration-300 ${
               activeTab === "model"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
+                ? "bg-white text-black shadow-sm"
+                : "text-neutral-500 hover:text-white"
             }`}
           >
             On Model
@@ -236,10 +186,9 @@ function InteractiveHeroStage({ shirtFlat, shirtModel }: { shirtFlat: string; sh
             fontFamily: "monospace",
             fontSize: "8.5px",
             letterSpacing: "0.3em",
-            color: "var(--color-muted-foreground)",
+            color: "rgba(255,255,255,0.3)",
             textTransform: "uppercase",
           }}
-          className="opacity-60"
         >
           Signature GZ R-01 Tee
         </span>
@@ -249,8 +198,18 @@ function InteractiveHeroStage({ shirtFlat, shirtModel }: { shirtFlat: string; sh
 }
 
 // ─── ROTATABLE 360° ZERO-LAG STACKED ROTATOR (HEART DAD HAT) ──────────────
-function SubHighlightRotator({ hatAngles }: { hatAngles: Array<{ name: string; src: string }> }) {
+function SubHighlightRotator() {
   const [angleIndex, setAngleIndex] = useState(0);
+
+  const hatAngles = [
+    { name: "Front Flat View", src: HAT_ANGLE_0 },
+    { name: "Front Left Tilt", src: HAT_ANGLE_1 },
+    { name: "Left Profile (Logo Detail)", src: HAT_ANGLE_2 },
+    { name: "Back View (Brass Adjuster)", src: HAT_ANGLE_3 },
+    { name: "Right Profile (Minimal)", src: HAT_ANGLE_4 },
+    { name: "Front Right Tilt", src: HAT_ANGLE_5 },
+    { name: "Top-Down View", src: HAT_ANGLE_6 },
+  ];
 
   const handleNext = () => {
     setAngleIndex((prev) => (prev + 1) % hatAngles.length);
@@ -261,14 +220,15 @@ function SubHighlightRotator({ hatAngles }: { hatAngles: Array<{ name: string; s
   };
 
   return (
-    <div className="bg-neutral-50 dark:bg-neutral-950/20 rounded-[28px] p-8 md:p-12 border border-black/5 dark:border-white/5 flex flex-col items-center w-full animate-fade-in">
+    <div className="bg-neutral-950 rounded-[28px] p-8 md:p-12 border border-white/5 flex flex-col items-center w-full relative">
+      <BlueprintGrid />
       
       {/* 360° Stack Stage - Preloads all images inside absolute layout to guarantee zero lag */}
-      <div className="relative w-full aspect-square max-w-[320px] flex items-center justify-center overflow-hidden mb-6">
+      <div className="relative w-full aspect-square max-w-[320px] flex items-center justify-center overflow-hidden mb-6 z-10">
         <div
           className="absolute inset-0 pointer-events-none rounded-full"
           style={{
-            background: "radial-gradient(circle at 50% 50%, rgba(120,120,120,0.06) 0%, transparent 70%)",
+            background: "radial-gradient(circle at 50% 50%, rgba(255,255,255,0.035) 0%, transparent 70%)",
           }}
         />
         
@@ -281,50 +241,47 @@ function SubHighlightRotator({ hatAngles }: { hatAngles: Array<{ name: string; s
             style={{
               opacity: angleIndex === idx ? 1 : 0,
               visibility: angleIndex === idx ? "visible" : "hidden",
-              filter: "drop-shadow(0 20px 40px rgba(0,0,0,0.12))",
+              filter: "drop-shadow(0 20px 40px rgba(0,0,0,0.85))",
             }}
             draggable={false}
           />
         ))}
       </div>
 
-      {/* Controller Controls */}
-      <div className="w-full max-w-xs space-y-4">
+      {/* Scrub Timeline Indicators */}
+      <div className="w-full max-w-xs space-y-4 z-10">
         <div className="flex items-center justify-between text-center">
           <button
             onClick={handlePrev}
-            className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center text-muted-foreground hover:text-foreground transition-all active:scale-90"
+            className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-neutral-500 hover:text-white transition-all active:scale-90"
           >
-            <ChevronLeft size={16} />
+            <ChevronLeft size={14} />
           </button>
           
           <div className="space-y-0.5">
-            <span className="text-[10px] font-mono tracking-widest text-muted-foreground uppercase block">Perspective</span>
-            <span className="text-xs font-semibold text-foreground">{hatAngles[angleIndex].name}</span>
+            <span className="text-[9px] font-mono tracking-widest text-neutral-500 uppercase block">PERSPECTIVE</span>
+            <span className="text-[11px] font-medium text-white">{hatAngles[angleIndex].name}</span>
           </div>
 
           <button
             onClick={handleNext}
-            className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center text-muted-foreground hover:text-foreground transition-all active:scale-90"
+            className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-neutral-500 hover:text-white transition-all active:scale-90"
           >
-            <ChevronRight size={16} />
+            <ChevronRight size={14} />
           </button>
         </div>
 
-        <div className="relative pt-2">
-          <input
-            type="range"
-            min="0"
-            max={hatAngles.length - 1}
-            value={angleIndex}
-            onChange={(e) => setAngleIndex(Number(e.target.value))}
-            className="w-full h-1 bg-neutral-200 dark:bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-foreground"
-          />
-          <div className="flex justify-between text-[8px] font-mono text-muted-foreground mt-2 px-1">
-            <span>0° FRONT</span>
-            <span>180° REAR</span>
-            <span>360° LOOP</span>
-          </div>
+        {/* Minimal scrub selector dots track (Apple Style) */}
+        <div className="flex justify-center items-center gap-1.5 pt-2">
+          {hatAngles.map((_, idx) => (
+            <button
+              key={idx}
+              onClick={() => setAngleIndex(idx)}
+              className={`h-1.5 rounded-full transition-all duration-300 ${
+                angleIndex === idx ? "w-4 bg-white" : "w-1.5 bg-white/20 hover:bg-white/40"
+              }`}
+            />
+          ))}
         </div>
       </div>
     </div>
@@ -336,20 +293,36 @@ function About() {
   const zoomRef = useRef<HTMLDivElement>(null);
   const [zoomVisible, setZoomVisible] = useState(false);
 
-  // ─── COMPILER COMPATIBLE DESIGN DECLARATIONS ───
-  // Declaring design layouts in internal scope ensures zero bundling strip errors
-  const SHIRT_LOGO = "/lovable-uploads/input_file_0.png";
-  const SHIRT_FOLDED = "/lovable-uploads/input_file_1.png";
-  const SHIRT_FLAT = "/lovable-uploads/input_file_2.png";
-  const SHIRT_MODEL = "/lovable-uploads/input_file_3.png";
+  useEffect(() => {
+    const obs = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) { setZoomVisible(true); obs.disconnect(); } },
+      { threshold: 0.1 }
+    );
+    if (zoomRef.current) obs.observe(zoomRef.current);
+    return () => obs.disconnect();
+  }, []);
 
-  const HAT_ANGLE_0 = "/lovable-uploads/input_file_9.png";
-  const HAT_ANGLE_1 = "/lovable-uploads/input_file_5.png";
-  const HAT_ANGLE_2 = "/lovable-uploads/input_file_4.png";
-  const HAT_ANGLE_3 = "/lovable-uploads/input_file_8.png";
-  const HAT_ANGLE_4 = "/lovable-uploads/input_file_7.png";
-  const HAT_ANGLE_5 = "/lovable-uploads/input_file_6.png";
-  const HAT_ANGLE_6 = "/lovable-uploads/input_file_10.png";
+  const handleAddToCart = () => {
+    try {
+      const cart = JSON.parse(localStorage.getItem("cart") || "[]");
+      const item = {
+        id: "f3cb47f6-0d11-4b97-9e3b-29d306607819",
+        title: "GZ R-01 (organic, unisex)",
+        price: 2800,
+        image: SHIRT_FLAT,
+        quantity: 1,
+      };
+      const idx = cart.findIndex((i: any) => i.id === item.id);
+      if (idx > -1) cart[idx].quantity += 1;
+      else cart.push(item);
+      localStorage.setItem("cart", JSON.stringify(cart));
+      window.dispatchEvent(new Event("storage"));
+      window.dispatchEvent(new Event("cart-updated"));
+      toast.success("Added GZ R-01 to cart");
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const DETAILS = [
     {
@@ -379,114 +352,8 @@ function About() {
     { icon: Users, title: "Community", desc: "Built for real people in real fits — not for a runway." },
   ];
 
-  // Dynamic Image State populated directly from database sync
-  const [shirtFlat, setShirtFlat] = useState(SHIRT_FLAT);
-  const [shirtFolded, setShirtFolded] = useState(SHIRT_FOLDED);
-  const [shirtModel, setShirtModel] = useState(SHIRT_MODEL);
-  const [shirtLogo, setShirtLogo] = useState(SHIRT_LOGO);
-
-  const [hatAngles, setHatAngles] = useState([
-    { name: "Front Flat View", src: HAT_ANGLE_0 },
-    { name: "Front Left Tilt", src: HAT_ANGLE_1 },
-    { name: "Left Profile (Logo Detail)", src: HAT_ANGLE_2 },
-    { name: "Back View (Brass Adjuster)", src: HAT_ANGLE_3 },
-    { name: "Right Profile (Minimal)", src: HAT_ANGLE_4 },
-    { name: "Front Right Tilt", src: HAT_ANGLE_5 },
-    { name: "Top-Down View", src: HAT_ANGLE_6 },
-  ]);
-
-  // Query your Supabase database live on load to fetch synced Printful images instantly
-  useEffect(() => {
-    async function fetchAssets() {
-      try {
-        const [prodRes, configRes] = await Promise.all([
-          supabase.from("products").select("*"),
-          supabase.from("site_config").select("*").eq("id", "main").maybeSingle(),
-        ]);
-
-        // Tier 1: Look in the synced products table (synced from Printful)
-        if (prodRes.data) {
-          const shirt = prodRes.data.find(p => p.id === "f3cb47f6-0d11-4b97-9e3b-29d306607819" || p.slug?.includes("gz-r-01"));
-          if (shirt && shirt.image_urls && shirt.image_urls.length > 0) {
-            setShirtFlat(shirt.image_urls[2] || shirt.image_urls[0]); // Flat front layout
-            setShirtFolded(shirt.image_urls[1] || shirt.image_urls[0]); // Folded shirt layout
-            setShirtModel(shirt.image_urls[3] || shirt.image_urls[0]); // Model t-shirt
-            setShirtLogo(shirt.image_urls[0] || shirt.image_urls[1]); // Chest print detail logo
-          }
-
-          const hat = prodRes.data.find(p => p.slug?.includes("hat") || p.slug?.includes("cap") || p.title?.toLowerCase().includes("hat"));
-          if (hat && hat.image_urls && hat.image_urls.length >= 6) {
-            setHatAngles([
-              { name: "Front Flat View", src: hat.image_urls[0] },
-              { name: "Front Left Tilt", src: hat.image_urls[1] },
-              { name: "Left Profile (Logo Detail)", src: hat.image_urls[2] },
-              { name: "Back View (Brass Adjuster)", src: hat.image_urls[3] },
-              { name: "Right Profile (Minimal)", src: hat.image_urls[4] },
-              { name: "Front Right Tilt", src: hat.image_urls[5] },
-              { name: "Top-Down View", src: hat.image_urls[6] || hat.image_urls[0] },
-            ]);
-          }
-        }
-
-        // Tier 2: Check custom site_config override columns
-        if (configRes.data) {
-          const cfg = configRes.data as any;
-          if (cfg.about_shirt_flat) setShirtFlat(cfg.about_shirt_flat);
-          if (cfg.about_shirt_folded) setShirtFolded(cfg.about_shirt_folded);
-          if (cfg.about_shirt_model) setShirtModel(cfg.about_shirt_model);
-          if (cfg.about_shirt_logo) setShirtLogo(cfg.about_shirt_logo);
-          if (cfg.about_hat_angles && cfg.about_hat_angles.length >= 7) {
-            setHatAngles([
-              { name: "Front Flat View", src: cfg.about_hat_angles[0] },
-              { name: "Front Left Tilt", src: cfg.about_hat_angles[1] },
-              { name: "Left Profile (Logo Detail)", src: cfg.about_hat_angles[2] },
-              { name: "Back View (Brass Adjuster)", src: cfg.about_hat_angles[3] },
-              { name: "Right Profile (Minimal)", src: cfg.about_hat_angles[4] },
-              { name: "Front Right Tilt", src: cfg.about_hat_angles[5] },
-              { name: "Top-Down View", src: cfg.about_hat_angles[6] },
-            ]);
-          }
-        }
-      } catch (e) {
-        console.error("Supabase asset fetch sequence failed:", e);
-      }
-    }
-    fetchAssets();
-  }, []);
-
-  useEffect(() => {
-    const obs = new IntersectionObserver(
-      ([e]) => { if (e.isIntersecting) { setZoomVisible(true); obs.disconnect(); } },
-      { threshold: 0.1 }
-    );
-    if (zoomRef.current) obs.observe(zoomRef.current);
-    return () => obs.disconnect();
-  }, []);
-
-  const handleAddToCart = () => {
-    try {
-      const cart = JSON.parse(localStorage.getItem("cart") || "[]");
-      const item = {
-        id: "f3cb47f6-0d11-4b97-9e3b-29d306607819",
-        title: "GZ R-01 (organic, unisex)",
-        price: 2800,
-        image: shirtFlat,
-        quantity: 1,
-      };
-      const idx = cart.findIndex((i: any) => i.id === item.id);
-      if (idx > -1) cart[idx].quantity += 1;
-      else cart.push(item);
-      localStorage.setItem("cart", JSON.stringify(cart));
-      window.dispatchEvent(new Event("storage"));
-      window.dispatchEvent(new Event("cart-updated"));
-      toast.success("Added GZ R-01 to cart");
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   return (
-    <div className="about-page w-full bg-background text-foreground selection:bg-neutral-800 transition-colors duration-300">
+    <div className="about-page w-full bg-black text-white selection:bg-neutral-800 transition-colors duration-300">
       
       {/* Sticky Navigation Subheader */}
       <LocalNav onBuy={handleAddToCart} />
@@ -494,38 +361,38 @@ function About() {
       {/* ══════════════════════════════════════════════════════════════════
           1. CINEMATIC PRODUCT HERO (SHIRT)
           ══════════════════════════════════════════════════════════════════ */}
-      <section id="shirt-hero" className="grid grid-cols-1 md:grid-cols-2 border-b border-black/10 dark:border-white/10" style={{ minHeight: "88vh" }}>
+      <section id="shirt-hero" className="grid grid-cols-1 md:grid-cols-2 border-b border-white/5" style={{ minHeight: "88vh" }}>
         
         {/* LEFT — Seamless Dynamic Spotlight Viewer */}
         <div className="relative">
-          <InteractiveHeroStage shirtFlat={shirtFlat} shirtModel={shirtModel} />
+          <InteractiveHeroStage />
         </div>
 
-        {/* RIGHT — Apple Spec & Info Column */}
+        {/* RIGHT — Technical Specs Column */}
         <div className="flex flex-col justify-center px-8 py-16 sm:px-12 md:px-16 lg:px-24">
           <FadeUp>
             <p
-              className="text-muted-foreground uppercase mb-4"
+              className="text-neutral-500 uppercase mb-4"
               style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "0.28em" }}
             >
               The Signature Silhouette
             </p>
 
             <h1
-              className="tracking-tighter text-foreground mb-6"
+              className="tracking-tighter text-white mb-6"
               style={{ fontSize: "clamp(34px, 5vw, 62px)", fontWeight: 200, lineHeight: 1.04, letterSpacing: "-0.035em" }}
             >
               The one you<br />
-              <span className="font-semibold text-foreground">reach for first.</span>
+              <span className="font-semibold text-white">reach for first.</span>
             </h1>
 
-            <p className="text-sm leading-relaxed text-muted-foreground mb-10 max-w-md font-light">
+            <p className="text-sm leading-relaxed text-neutral-400 mb-10 max-w-md font-light font-sans">
               Heavyweight combed organic cotton. Marked by the resilient Kuffiyeh Girl print—a subtle cultural emblem that is balanced, slow, and persistent.
               The GZ R-01 is the piece Luveni was built around — designed for your rotation, not the rack.
             </p>
 
             {/* Technical Specification Matrix */}
-            <div className="grid grid-cols-2 mb-10 border-t border-b border-black/10 dark:border-white/10">
+            <div className="grid grid-cols-2 mb-10 border-t border-b border-white/5">
               {[
                 ["Material", "100% Organic Cotton"],
                 ["Fit", "Relaxed / Boxy"],
@@ -536,17 +403,17 @@ function About() {
                   key={i}
                   className="py-4 pr-6"
                   style={{
-                    borderRight: i % 2 === 0 ? "1px solid rgba(128,128,128,0.15)" : "none",
-                    borderBottom: i < 2 ? "1px solid rgba(128,128,128,0.15)" : "none",
+                    borderRight: i % 2 === 0 ? "1px solid rgba(255,255,255,0.05)" : "none",
+                    borderBottom: i < 2 ? "1px solid rgba(255,255,255,0.05)" : "none",
                   }}
                 >
                   <span
-                    className="text-muted-foreground uppercase block mb-1"
+                    className="text-neutral-500 uppercase block mb-1"
                     style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "0.18em" }}
                   >
                     {label}
                   </span>
-                  <span className="text-foreground text-xs font-semibold">{val}</span>
+                  <span className="text-white text-xs font-semibold">{val}</span>
                 </div>
               ))}
             </div>
@@ -555,18 +422,18 @@ function About() {
             <div className="flex items-center justify-between gap-6 flex-wrap">
               <div>
                 <span
-                  className="text-muted-foreground uppercase block mb-1"
+                  className="text-neutral-500 uppercase block mb-1"
                   style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "0.18em" }}
                 >
                   Retail Price
                 </span>
-                <span className="text-foreground tracking-tighter" style={{ fontSize: "36px", fontWeight: 200 }}>
+                <span className="text-white tracking-tighter" style={{ fontSize: "36px", fontWeight: 200 }}>
                   $28
                 </span>
               </div>
               <button
                 onClick={handleAddToCart}
-                className="flex-1 max-w-xs bg-foreground text-background hover:opacity-90 active:scale-[0.97] transition-all py-4 px-8 border-none cursor-pointer rounded-full"
+                className="flex-1 max-w-xs bg-white text-black hover:bg-neutral-200 active:scale-[0.97] transition-all py-4 px-8 border-none cursor-pointer rounded-full"
                 style={{
                   fontFamily: "monospace",
                   fontSize: "10px",
@@ -588,18 +455,18 @@ function About() {
       <section
         id="details"
         ref={zoomRef}
-        className="border-b border-black/10 dark:border-white/10 bg-background"
+        className="border-b border-white/5 bg-black"
       >
-        <div className="px-8 py-12 sm:px-12 border-b border-black/10 dark:border-white/10">
+        <div className="px-8 py-12 sm:px-12 border-b border-white/5">
           <FadeUp>
             <p
-              className="text-muted-foreground uppercase mb-2"
+              className="text-neutral-500 uppercase mb-2"
               style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "0.26em" }}
             >
               Structure Detail
             </p>
             <h2
-              className="text-foreground tracking-tighter"
+              className="text-white tracking-tighter"
               style={{ fontSize: "clamp(24px, 3.5vw, 36px)", fontWeight: 200 }}
             >
               Every thread, considered.
@@ -613,7 +480,7 @@ function About() {
               key={i}
               className="group flex flex-col justify-between"
               style={{
-                borderRight: i < 2 ? "1px solid rgba(128,128,128,0.12)" : "none",
+                borderRight: i < 2 ? "1px solid rgba(255,255,255,0.05)" : "none",
                 opacity: zoomVisible ? 1 : 0,
                 transform: zoomVisible ? "translateY(0)" : "translateY(24px)",
                 transition: `opacity 0.8s cubic-bezier(0.16,1,0.3,1) ${i * 150}ms, transform 0.8s cubic-bezier(0.16,1,0.3,1) ${i * 150}ms`,
@@ -621,7 +488,7 @@ function About() {
             >
               {/* Detailed Asset Framing */}
               <div
-                className="w-full overflow-hidden bg-neutral-100 dark:bg-neutral-900 flex items-center justify-center p-6"
+                className="w-full overflow-hidden bg-neutral-950 flex items-center justify-center p-6 border-b border-white/5"
                 style={{ height: "clamp(280px, 34vw, 440px)" }}
               >
                 <img
@@ -632,15 +499,15 @@ function About() {
                 />
               </div>
               
-              <div className="px-8 py-8 border-t border-black/5 dark:border-white/5 bg-background">
+              <div className="px-8 py-8 bg-black">
                 <p
-                  className="text-muted-foreground uppercase mb-3"
+                  className="text-neutral-500 uppercase mb-3"
                   style={{ fontFamily: "monospace", fontSize: "9.5px", letterSpacing: "0.2em" }}
                 >
                   {String(i + 1).padStart(2, "0")} / {d.label}
                 </p>
-                <h3 className="text-foreground text-base font-semibold mb-2">{d.heading}</h3>
-                <p className="text-muted-foreground text-xs leading-relaxed font-light">{d.copy}</p>
+                <h3 className="text-white text-base font-semibold mb-2">{d.heading}</h3>
+                <p className="text-neutral-400 text-xs leading-relaxed font-light font-sans">{d.copy}</p>
               </div>
             </div>
           ))}
@@ -650,44 +517,23 @@ function About() {
       {/* ══════════════════════════════════════════════════════════════════
           3. SUB-HIGHLIGHT ROTATOR GALLERY (HAT)
           ══════════════════════════════════════════════════════════════════ */}
-      <section className="border-b border-black/10 dark:border-white/10 py-16 md:py-28">
+      <section className="border-b border-white/5 py-16 md:py-28">
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 lg:gap-20 items-center">
             
             {/* Seamless 360° Rotator Panel */}
-            <SubHighlightRotator hatAngles={hatAngles} />
+            <SubHighlightRotator />
 
             {/* Spec Descriptions */}
             <div className="space-y-6">
-              <span className="text-[10px] font-mono tracking-[0.25em] text-muted-foreground uppercase block">The Accessory Hook</span>
-              <h2 className="text-3xl sm:text-4xl font-light tracking-tighter text-foreground leading-none">
-                Heart dad hat.<br />
-                <span className="font-semibold">Pure embroidery.</span>
+              <span className="text-[10px] font-mono tracking-[0.25em] text-neutral-500 uppercase block">Sub-Highlight Piece</span>
+              <h2 className="text-3xl sm:text-4xl font-light tracking-tighter text-white leading-none">
+                Embroidered Dad Hat.<br />
+                <span className="font-semibold">Zero visual lag.</span>
               </h2>
-              <p className="text-sm leading-relaxed text-muted-foreground font-light max-w-md">
-                A classic structured profile, embroidered with our signature heart graphic. 
-                Built with robust Chino Twill, a custom brass strap slider, and ventilation eyelets to combine standard daily durability with high tactile wearability.
+              <p className="text-sm leading-relaxed text-neutral-400 font-light font-sans max-w-md">
+                A classic low-profile structure embroidered with our signature heart mark. Built with premium heavy chino cotton, a customized adjustable brass buckle closure, and layered visual angles designed for consistent, high-contrast style.
               </p>
-
-              {/* Dad Hat Technical Specs */}
-              <div className="grid grid-cols-2 gap-6 pt-6 border-t border-black/5 dark:border-white/5">
-                <div>
-                  <span className="text-[8.5px] font-mono tracking-widest text-muted-foreground uppercase block">Composition</span>
-                  <span className="text-xs font-semibold text-foreground mt-1 block">100% Chino Twill Cotton</span>
-                </div>
-                <div>
-                  <span className="text-[8.5px] font-mono tracking-widest text-muted-foreground uppercase block">Profile</span>
-                  <span className="text-xs font-semibold text-foreground mt-1 block">Low-profile / 6-panel</span>
-                </div>
-                <div>
-                  <span className="text-[8.5px] font-mono tracking-widest text-muted-foreground uppercase block">Strap Closure</span>
-                  <span className="text-xs font-semibold text-foreground mt-1 block">Adjustable buckle slider</span>
-                </div>
-                <div>
-                  <span className="text-[8.5px] font-mono tracking-widest text-muted-foreground uppercase block">Details</span>
-                  <span className="text-xs font-semibold text-foreground mt-1 block">Embroidered front relief</span>
-                </div>
-              </div>
             </div>
 
           </div>
@@ -697,25 +543,25 @@ function About() {
       {/* ══════════════════════════════════════════════════════════════════
           4. BRAND STORY + PHILOSOPHY DECK
           ══════════════════════════════════════════════════════════════════ */}
-      <section id="story" className="border-b border-black/10 dark:border-white/10 bg-muted/5">
+      <section id="story" className="border-b border-white/5 bg-neutral-950">
         <div className="grid grid-cols-1 md:grid-cols-2">
 
           {/* Left Column: Story Text */}
-          <div className="px-8 py-16 sm:px-12 md:px-16 lg:px-24 border-b md:border-b-0 md:border-r border-black/10 dark:border-white/10">
+          <div className="px-8 py-16 sm:px-12 md:px-16 lg:px-24 border-b md:border-b-0 md:border-r border-white/5">
             <FadeUp>
               <p
-                className="text-muted-foreground uppercase mb-5"
+                className="text-neutral-500 uppercase mb-5"
                 style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "0.26em" }}
               >
                 Our philosophy
               </p>
               <h2
-                className="text-foreground mb-8 tracking-tighter"
+                className="text-white mb-8 tracking-tighter"
                 style={{ fontSize: "clamp(26px, 3.5vw, 42px)", fontWeight: 200, lineHeight: 1.15 }}
               >
                 Cut through the noise<br />of fast fashion.
               </h2>
-              <div className="space-y-4 text-sm leading-relaxed text-muted-foreground font-light font-sans">
+              <div className="space-y-4 text-sm leading-relaxed text-neutral-400 font-light font-sans">
                 <p>
                   We believe what you wear should be as functional as it is aesthetic.{" "}
                   {site.brand} exists to cut through the noise of fast fashion — offering pieces that
@@ -727,9 +573,9 @@ function About() {
                 </p>
               </div>
 
-              <div className="mt-10 pt-8 border-t border-black/10 dark:border-white/10">
+              <div className="mt-10 pt-8 border-t border-white/5">
                 <p
-                  className="text-muted-foreground uppercase mb-4"
+                  className="text-neutral-500 uppercase mb-4"
                   style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "0.22em" }}
                 >
                   Strict Design Standards
@@ -741,19 +587,19 @@ function About() {
                     "Pieces made to be worn, not just owned.",
                     "Commitment to timeless, elevated essentials.",
                   ].map((s, i) => (
-                    <li key={i} className="text-xs text-muted-foreground flex items-start gap-2 font-light">
-                      <span className="mt-[6.5px] w-1.5 h-1.5 rounded-full bg-muted-foreground flex-shrink-0 opacity-65" />
+                    <li key={i} className="text-xs text-neutral-400 flex items-start gap-2 font-light">
+                      <span className="mt-[6.5px] w-1.5 h-1.5 rounded-full bg-white/40 flex-shrink-0" />
                       {s}
                     </li>
                   ))}
                 </ul>
               </div>
 
-              <div className="mt-10 pt-6 border-t border-black/10 dark:border-white/10 text-xs text-muted-foreground font-light font-mono">
+              <div className="mt-10 pt-6 border-t border-white/5 text-xs text-neutral-400 font-light font-mono">
                 Support inquiries /{" "}
                 <a
                   href="mailto:luveni.apparel@gmail.com"
-                  className="text-foreground underline underline-offset-2 hover:opacity-70 transition-opacity"
+                  className="text-white underline underline-offset-2 hover:opacity-70 transition-opacity"
                 >
                   luveni.apparel@gmail.com
                 </a>
@@ -762,18 +608,18 @@ function About() {
           </div>
 
           {/* Right Column: Values Grid */}
-          <div className="px-8 py-16 sm:px-12 md:px-16 lg:px-24 flex items-center bg-muted/20">
+          <div className="px-8 py-16 sm:px-12 md:px-16 lg:px-24 flex items-center bg-neutral-900/40">
             <FadeUp delay={120}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-12 sm:gap-10 font-sans">
                 {VALUES.map((v, i) => {
                   const Icon = v.icon;
                   return (
                     <div key={i} className="space-y-4">
-                      <div className="w-9 h-9 rounded-full bg-background flex items-center justify-center border border-black/5 dark:border-white/5 shadow-sm">
-                        <Icon size={14} className="text-foreground" />
+                      <div className="w-9 h-9 rounded-full bg-neutral-900 flex items-center justify-center border border-white/5 shadow-sm">
+                        <Icon size={14} className="text-white" />
                       </div>
-                      <h4 className="text-sm font-semibold text-foreground tracking-tight">{v.title}</h4>
-                      <p className="text-xs leading-relaxed text-muted-foreground font-light">
+                      <h4 className="text-sm font-semibold text-white tracking-tight">{v.title}</h4>
+                      <p className="text-xs leading-relaxed text-neutral-400 font-light">
                         {v.desc}
                       </p>
                     </div>
@@ -789,16 +635,16 @@ function About() {
           5. EDITORIAL CREDITS PANEL (MODEL HERO BANNER)
           ══════════════════════════════════════════════════════════════════ */}
       <section
-        className="relative overflow-hidden border-b border-black/10 dark:border-white/10"
+        className="relative overflow-hidden border-b border-white/5"
         style={{ height: "clamp(300px, 48vw, 580px)" }}
       >
         <ParallaxImage
-          src={shirtModel}
+          src={SHIRT_MODEL}
           alt="Luveni model closeup detail"
         />
         <div
           className="absolute inset-0 flex flex-col items-center justify-center text-center px-6"
-          style={{ background: "linear-gradient(rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.5) 100%)" }}
+          style={{ background: "linear-gradient(rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.6) 100%)" }}
         >
           <FadeUp>
             <p
