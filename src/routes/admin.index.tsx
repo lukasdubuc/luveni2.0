@@ -1161,8 +1161,84 @@ function AdminPage() {
         }}
       />
 
+
+      {/* ── DESKTOP SIDEBAR ── */}
+      <aside className={`hidden md:flex flex-col fixed left-0 top-0 h-screen w-56 z-50 border-r ${isDark ? "bg-neutral-950/98 border-white/[0.06]" : "bg-white/98 border-black/[0.07]"} backdrop-blur-xl`}>
+
+        {/* Brand */}
+        <div className={`px-5 pt-6 pb-5 border-b ${isDark ? "border-white/[0.05]" : "border-black/[0.06]"}`}>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" style={{ boxShadow: "0 0 6px #10b981", animation: "pulse 2s infinite" }} />
+            <span className={`text-[12px] font-mono font-bold uppercase tracking-[0.2em] ${isDark ? "text-white" : "text-neutral-900"}`}>Admin</span>
+          </div>
+          <p className={`text-[9px] font-mono pl-4 ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>
+            {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+          </p>
+        </div>
+
+        {/* Section Navigation */}
+        <div className="flex-1 px-2.5 py-4 space-y-0.5 overflow-y-auto">
+          {navSections.map(s => {
+            const icons: Record<string, string> = {
+              overview: "◎", products: "▦", orders: "≡", leads: "◉", analytics: "∿", settings: "⚙"
+            };
+            return (
+              <button
+                key={s}
+                onClick={() => setSection(s)}
+                className={`w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-[12px] text-[11px] font-mono font-semibold uppercase tracking-wider transition-all duration-150 ${
+                  section === s
+                    ? isDark
+                      ? "bg-white/[0.09] text-white"
+                      : "bg-black/[0.07] text-black"
+                    : isDark
+                      ? "text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.04]"
+                      : "text-neutral-400 hover:text-neutral-900 hover:bg-black/[0.04]"
+                }`}
+              >
+                <span className="text-[13px] w-4 text-center leading-none opacity-80">{icons[s] || "·"}</span>
+                {s}
+                {section === s && <span className={`ml-auto w-1 h-1 rounded-full ${isDark ? "bg-white" : "bg-black"}`} />}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Live KPIs */}
+        <div className={`mx-2.5 mb-2 rounded-[14px] p-3 space-y-2 ${isDark ? "bg-white/[0.03] border border-white/[0.05]" : "bg-black/[0.03] border border-black/[0.05]"}`}>
+          <p className={`text-[8px] font-mono font-bold uppercase tracking-[0.2em] mb-2 ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>Live</p>
+          {([
+            { label: "Revenue", value: fmt$(filteredRevenue) },
+            { label: "Paid Orders", value: String(paidOrders.length) },
+            { label: "Leads", value: String(activeLeads.length) },
+            { label: "Published", value: String(products.filter(p => p.is_published).length) },
+          ] as const).map(stat => (
+            <div key={stat.label} className="flex justify-between items-baseline gap-2">
+              <span className={`text-[9px] font-mono ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>{stat.label}</span>
+              <span className={`text-[11px] font-mono font-bold tabular-nums ${isDark ? "text-white" : "text-neutral-900"}`}>{stat.value}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Bottom actions */}
+        <div className={`px-2.5 py-3 border-t space-y-0.5 ${isDark ? "border-white/[0.05]" : "border-black/[0.06]"}`}>
+          <button
+            onClick={handleOpenJarvis}
+            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[10px] text-[10px] font-mono font-semibold uppercase tracking-wider transition-all ${isDark ? "text-neutral-500 hover:text-white hover:bg-white/[0.05]" : "text-neutral-400 hover:text-black hover:bg-black/[0.04]"}`}
+          >
+            <span className="text-[12px]">◈</span> AI Console
+          </button>
+          <button
+            onClick={handleSignOut}
+            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[10px] text-[10px] font-mono font-semibold uppercase tracking-wider transition-all ${isDark ? "text-neutral-600 hover:text-rose-400 hover:bg-rose-500/[0.07]" : "text-neutral-400 hover:text-rose-600 hover:bg-rose-50"}`}
+          >
+            <span className="text-[12px]">↑</span> Sign Out
+          </button>
+        </div>
+      </aside>
+
       {/* ── NAV ── */}
-      <nav className={`sticky top-0 z-50 backdrop-blur-xl border-b ${isDark ? "bg-black/90 border-white/[0.06]" : "bg-white/90 border-black/[0.07]"}`}>
+      <nav className={`md:hidden sticky top-0 z-50 backdrop-blur-xl border-b ${isDark ? "bg-black/90 border-white/[0.06]" : "bg-white/90 border-black/[0.07]"}`}>
         <div className="relative flex items-center justify-center px-6 py-3">
 
           {/* Centered nav pill */}
@@ -1216,14 +1292,15 @@ function AdminPage() {
         )}
       </nav>
 
-      <main className="relative w-full px-8 py-10 space-y-10 z-10">
+      <main className="relative w-full px-6 py-8 space-y-8 z-10 md:ml-56 md:px-10 md:py-10">
 
         {/* ════════════════════════════════════════════════════════════════
             OVERVIEW
         ════════════════════════════════════════════════════════════════ */}
         {section === "overview" && (
           <div className="space-y-10 animate-in fade-in duration-500">
-            <div className="flex items-end justify-between gap-4 flex-wrap">
+            {/* Mobile-only header */}
+            <div className="flex items-end justify-between gap-4 flex-wrap md:hidden">
               <div className="space-y-1">
                 <h1 className={`text-2xl font-semibold tracking-tight ${isDark ? "text-white" : "text-neutral-950"}`} style={{ letterSpacing: "-0.03em" }}>
                   Overview
@@ -1235,7 +1312,6 @@ function AdminPage() {
                   </p>
                 </div>
               </div>
-
               <button
                 onClick={handleOpenJarvis}
                 className={`group flex items-center gap-2 text-[9px] font-mono font-bold tracking-widest uppercase px-5 py-2.5 transition-all duration-200 rounded-[9999px] ${
@@ -1245,8 +1321,20 @@ function AdminPage() {
                 }`}
               >
                 AI Console
-                <span className={`transition-transform duration-200 group-hover:translate-x-0.5`}>→</span>
+                <span className="transition-transform duration-200 group-hover:translate-x-0.5">→</span>
               </button>
+            </div>
+            {/* Desktop-only section header */}
+            <div className="hidden md:flex items-center justify-between">
+              <div>
+                <h1 className={`text-3xl font-bold tracking-tight ${isDark ? "text-white" : "text-neutral-950"}`} style={{ letterSpacing: "-0.04em" }}>Overview</h1>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" style={{ boxShadow: "0 0 6px #10b981" }} />
+                  <p className={`text-[10px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>
+                    Live · {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+                  </p>
+                </div>
+              </div>
             </div>
 
             {/* Period Selector */}
@@ -1269,6 +1357,11 @@ function AdminPage() {
                 </button>
               ))}
             </div>
+
+            {/* ── REVENUE HERO + STATS DESKTOP BENTO ── */}
+            {/* On desktop these stack in a 2-column grid with period selector inline */}
+            <div className="md:grid md:grid-cols-3 md:gap-5">
+              <div className="md:col-span-2 space-y-5">
 
             {/* ── REVENUE HERO ── */}
             <div className={`relative rounded-[28px] overflow-hidden transition-all duration-500 ${
@@ -1361,37 +1454,52 @@ function AdminPage() {
             </div>
 
             {/* ── SUPPORTING STATS GRID ── */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <StatWithDelta label="Orders" value={ordersInPeriod} sub="paid this period" delta={ordersDelta} isDark={isDark} />
               <StatWithDelta label="Avg Ticket" value={fmt$(avgTicket)} sub="per paid order" delta={avgTicketDelta} isDark={isDark} />
               <Stat label="Conv Rate" value={`${convRate}%`} sub="checkout to paid" isDark={isDark} />
               <Stat label="Leads" value={activeLeads.length} sub="total captured" isDark={isDark} />
-              <Stat label="Add to Cart" value={currentPeriodAddToCart.toLocaleString()} sub="cart conversions" isDark={isDark} led="cyan" />
             </div>
+              </div>{/* end md:col-span-2 */}
 
-            {/* ── ORDER STATUS BREAKDOWN ── */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {([
-                { label: "Paid", count: paidOrders.length, dot: "#10b981", glow: "rgba(16,185,129,0.15)", textColor: "#10b981", bg: "rgba(16,185,129,0.05)" },
-                { label: "Pending", count: pendingOrders.length, dot: "#f59e0b", glow: "rgba(245,158,11,0.12)", textColor: isDark ? "#fbbf24" : "#d97706", bg: "rgba(245,158,11,0.05)" },
-                { label: "Failed", count: failedOrders.length, dot: "#ef4444", glow: "rgba(239,68,68,0.12)", textColor: "#ef4444", bg: "rgba(239,68,68,0.05)" },
-                { label: "Published", count: products.filter(p => p.is_published).length, dot: isDark ? "#a3a3a3" : "#525252", glow: "rgba(115,115,115,0.08)", textColor: isDark ? "#d4d4d4" : "#262626", bg: "rgba(115,115,115,0.04)" },
-              ] as const).map(item => (
-                <div
-                  key={item.label}
-                  className={`p-5 rounded-[20px] border relative overflow-hidden transition-all duration-300 ${
-                    isDark ? "border-white/[0.06] bg-neutral-950/50" : "border-black/[0.07] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.06)]"
-                  }`}
-                  style={{ background: isDark ? `radial-gradient(circle at top right, ${item.glow}, transparent 70%)` : undefined }}
-                >
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <p className={`text-[9px] font-mono font-semibold uppercase tracking-[0.15em] ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>{item.label}</p>
-                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: item.dot, boxShadow: `0 0 6px ${item.dot}` }} />
+              {/* Desktop right column: quick condensed metrics */}
+              <div className="hidden md:flex flex-col gap-4">
+                <div className={`p-5 rounded-[20px] border flex-1 ${isDark ? "border-white/[0.06] bg-neutral-950/50" : "border-black/[0.07] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.06)]"}`}>
+                  <p className={`text-[9px] font-mono font-semibold uppercase tracking-[0.15em] mb-4 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Order Pipeline</p>
+                  <div className="space-y-3">
+                    {([
+                      { label: "Paid", count: paidOrders.length, color: "#10b981" },
+                      { label: "Pending", count: pendingOrders.length, color: isDark ? "#fbbf24" : "#d97706" },
+                      { label: "Failed", count: failedOrders.length, color: "#ef4444" },
+                    ] as const).map(item => (
+                      <div key={item.label} className="flex items-center justify-between">
+                        <span className={`text-[9px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>{item.label}</span>
+                        <span className="text-[18px] font-bold tabular-nums" style={{ color: item.color, letterSpacing: "-0.03em" }}>{item.count}</span>
+                      </div>
+                    ))}
+                    <div className={`pt-2 border-t ${isDark ? "border-white/[0.05]" : "border-black/[0.05]"} flex items-center justify-between`}>
+                      <span className={`text-[9px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Published</span>
+                      <span className={`text-[18px] font-bold tabular-nums ${isDark ? "text-neutral-300" : "text-neutral-700"}`} style={{ letterSpacing: "-0.03em" }}>{products.filter(p => p.is_published).length}</span>
+                    </div>
                   </div>
-                  <p className="text-2xl font-bold tracking-tight" style={{ color: item.textColor, letterSpacing: "-0.03em", fontFeatureSettings: '"tnum"' }}>{item.count}</p>
                 </div>
-              ))}
-            </div>
+                <div className={`p-5 rounded-[20px] border ${isDark ? "border-white/[0.06] bg-neutral-950/50" : "border-black/[0.07] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.06)]"}`}>
+                  <p className={`text-[9px] font-mono font-semibold uppercase tracking-[0.15em] mb-4 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Conversion</p>
+                  <div className="space-y-3">
+                    {([
+                      { label: "Conv Rate", value: `${convRate}%` },
+                      { label: "Avg Ticket", value: fmt$(avgTicket) },
+                      { label: "Leads", value: String(activeLeads.length) },
+                    ] as const).map(item => (
+                      <div key={item.label} className="flex items-center justify-between">
+                        <span className={`text-[9px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>{item.label}</span>
+                        <span className={`text-[15px] font-bold tabular-nums ${isDark ? "text-white" : "text-neutral-900"}`} style={{ letterSpacing: "-0.02em" }}>{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>{/* end md:grid bento */}
 
             {/* ── TELEMETRY CANVAS ── */}
             <div className="space-y-3">
@@ -1423,7 +1531,6 @@ function AdminPage() {
                 {([
                   { label: "Page Views",      value: hasEventData ? funnelViews : null,         color: "#22d3ee", track: isDark ? "#0e3040" : "#e0f8ff" },
                   { label: "Product Clicks",  value: hasEventData ? funnelProductClicks : null,  color: "#818cf8", track: isDark ? "#1e1a40" : "#eef0ff" },
-                  { label: "Add to Cart",     value: hasEventData ? funnelAddToCart : null,      color: "#fb923c", track: isDark ? "#3a1f10" : "#fff4ee" },
                   { label: "Checkout Inits",  value: hasEventData ? funnelCheckoutStart : null,  color: "#facc15", track: isDark ? "#352e10" : "#fefce8" },
                   { label: "Purchases",       value: funnelPurchase,                             color: "#34d399", track: isDark ? "#0d2e1e" : "#f0fdf4" },
                 ] as const).map((step) => {
@@ -1847,6 +1954,31 @@ function AdminPage() {
               </div>
             </div>
 
+
+            {/* ── ORDER STATUS BREAKDOWN ── */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {([
+                { label: "Paid", count: paidOrders.length, dot: "#10b981", glow: "rgba(16,185,129,0.15)", textColor: "#10b981" },
+                { label: "Pending", count: pendingOrders.length, dot: "#f59e0b", glow: "rgba(245,158,11,0.12)", textColor: isDark ? "#fbbf24" : "#d97706" },
+                { label: "Failed", count: failedOrders.length, dot: "#ef4444", glow: "rgba(239,68,68,0.12)", textColor: "#ef4444" },
+                { label: "Published", count: products.filter(p => p.is_published).length, dot: isDark ? "#a3a3a3" : "#525252", glow: "rgba(115,115,115,0.08)", textColor: isDark ? "#d4d4d4" : "#262626" },
+              ] as const).map(item => (
+                <div
+                  key={item.label}
+                  className={`p-5 rounded-[20px] border relative overflow-hidden transition-all duration-300 ${
+                    isDark ? "border-white/[0.06] bg-neutral-950/50" : "border-black/[0.07] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.06)]"
+                  }`}
+                  style={{ background: isDark ? `radial-gradient(circle at top right, ${item.glow}, transparent 70%)` : undefined }}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <p className={`text-[9px] font-mono font-semibold uppercase tracking-[0.15em] ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>{item.label}</p>
+                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: item.dot, boxShadow: `0 0 6px ${item.dot}` }} />
+                  </div>
+                  <p className="text-2xl font-bold tracking-tight" style={{ color: item.textColor, letterSpacing: "-0.03em", fontFeatureSettings: '"tnum"' }}>{item.count}</p>
+                </div>
+              ))}
+            </div>
+
             {!hasEventData && (
               <div className={`p-6 border rounded-[24px] overflow-hidden space-y-4 ${isDark ? "border-neutral-900 bg-neutral-950/30" : "border-[#D1D1D6] bg-white shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"}`}>
                 <p className={`text-[10px] font-mono font-bold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Tracker Inactive</p>
@@ -1871,11 +2003,10 @@ function AdminPage() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Stat label="Page Views" value={analyticsEvents.filter(e => e.event_type === "page_view").length.toLocaleString()} sub={`last ${analyticsRange} days`} isDark={isDark} />
               <Stat label="Sessions" value={uniqueSessions.toLocaleString()} sub="unique visitors" isDark={isDark} />
               <Stat label="Product Clicks" value={analyticsEvents.filter(e => e.event_type === "product_click").length.toLocaleString()} sub="product page views" isDark={isDark} />
-              <Stat label="Add to Carts" value={getAddToCartCount(analyticsEvents).toLocaleString()} sub="add to cart conversions" isDark={isDark} led="cyan" />
               <Stat label="Checkout Starts" value={analyticsEvents.filter(e => e.event_type === "checkout_start").length.toLocaleString()} sub="initiated checkout" isDark={isDark} />
             </div>
 
