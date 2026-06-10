@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { site } from "@/config/site";
 import { useEffect, useRef, useState } from "react";
-import { Shield, Sparkles, Eye, Users, ChevronLeft, ChevronRight, Eye as InspectIcon } from "lucide-react";
+import { Shield, Sparkles, Eye, Users, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/about")({
@@ -16,22 +16,22 @@ export const Route = createFileRoute("/about")({
   component: About,
 });
 
-// ─── STATIC DATA CONFIGS (EXCLUSIVELY YOUR UPLOADED DESIGN) ─────────────────
+// ─── STATIC DESIGN DATA (MAPPED VIA LOVABLE COMPILE ROUTER) ──────────────
 const DETAILS = [
   {
-    img: "input_file_1.png", // Folded kuffiyeh girl shirt mockup
+    img: "/lovable-uploads/input_file_1.png", // Scanned image 2: Folded shirt flatlay mockup
     label: "Construction",
     heading: "Reinforced Collar",
     copy: "Double-needle neck ribbing designed to hold structured form wash after wash.",
   },
   {
-    img: "input_file_0.png", // Isolated kuffiyeh girl logo graphic
+    img: "/lovable-uploads/input_file_0.png", // Scanned image 1: Isolated transparent logo
     label: "Iconography",
     heading: "Kuffiyeh & Butterfly Emblem",
     copy: "Our signature front relief composition, balancing resilience, patience, and growth.",
   },
   {
-    img: "input_file_2.png", // Flat front kuffiyeh girl shirt mockup
+    img: "/lovable-uploads/input_file_2.png", // Scanned image 3: Flat front shirt mockup
     label: "Material",
     heading: "240 GSM Combed Cotton",
     copy: "Heavyweight tactile hand-feel that drapes seamlessly for high daily breathability.",
@@ -101,6 +101,39 @@ function FadeUp({ children, delay = 0 }: { children: React.ReactNode; delay?: nu
   );
 }
 
+// ─── PARALLAX IMAGE ───────────────────────────────────────────────────────
+function ParallaxImage({ src, alt }: { src: string; alt: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const onScroll = () => {
+      if (!ref.current || !imgRef.current) return;
+      const rect = ref.current.getBoundingClientRect();
+      const vh = window.innerHeight;
+      const progress = 1 - (rect.bottom / (vh + rect.height));
+      const clampedProgress = Math.max(0, Math.min(1, progress));
+      imgRef.current.style.transform = `translateY(${clampedProgress * -50}px) scale(1.10)`;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  return (
+    <div ref={ref} className="w-full h-full overflow-hidden">
+      <img
+        ref={imgRef}
+        src={src}
+        alt={alt}
+        className="w-full h-full object-cover"
+        style={{ transition: "transform 0.1s linear", willChange: "transform" }}
+      />
+    </div>
+  );
+}
+
 // ─── DUAL-VIEW HERO INTERACTIVE STAGE (FLAT VS MODEL) ────────────────────
 function InteractiveHeroStage() {
   const [activeTab, setActiveTab] = useState<"flat" | "model">("flat");
@@ -109,7 +142,6 @@ function InteractiveHeroStage() {
   const modelImgRef = useRef<HTMLImageElement>(null);
   const [entered, setEntered] = useState(false);
 
-  // Smooth layout-dependent zoom on scrolling
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const onScroll = () => {
@@ -142,7 +174,6 @@ function InteractiveHeroStage() {
       className="relative w-full h-full bg-neutral-50/50 dark:bg-neutral-950/20 border-b md:border-b-0 md:border-r border-black/10 dark:border-white/10 overflow-hidden flex flex-col justify-between"
       style={{ minHeight: "65vh" }}
     >
-      {/* Dynamic Keynote spotlight */}
       <div
         className="absolute inset-0 pointer-events-none rounded-full"
         style={{
@@ -150,13 +181,11 @@ function InteractiveHeroStage() {
         }}
       />
 
-      {/* Slide Crossfade Visualizer Container */}
       <div className="flex-1 w-full relative flex items-center justify-center p-8">
-        
         {/* Frame A: Flat Mockup View */}
         <img
           ref={flatImgRef}
-          src="input_file_2.png" // Image 3: Clean flat shirt front mockup
+          src="/lovable-uploads/input_file_2.png" // Scanned image 3: Flat shirt mockup front
           alt="GZ R-01 tee front layout"
           className="absolute max-h-[82%] max-w-[82%] object-contain select-none transition-all duration-700 ease-out"
           style={{
@@ -170,7 +199,7 @@ function InteractiveHeroStage() {
         {/* Frame B: On-Model Lifestyle View */}
         <img
           ref={modelImgRef}
-          src="input_file_3.png" // Image 4: Model wearing the shirt
+          src="/lovable-uploads/input_file_3.png" // Scanned image 4: Model wearing GZ R-01 shirt
           alt="GZ R-01 tee on model"
           className="absolute max-h-[82%] max-w-[82%] object-contain select-none transition-all duration-700 ease-out rounded-2xl"
           style={{
@@ -182,7 +211,6 @@ function InteractiveHeroStage() {
         />
       </div>
 
-      {/* Control Switcher Pills */}
       <div className="relative z-20 pb-6 w-full flex flex-col items-center gap-3">
         <div className="flex p-0.5 rounded-full bg-neutral-200/60 dark:bg-neutral-800/60 backdrop-blur-sm border border-black/5">
           <button
@@ -228,15 +256,15 @@ function InteractiveHeroStage() {
 function SubHighlightRotator() {
   const [angleIndex, setAngleIndex] = useState(0);
 
-  // Stacking frames locally to enable hardware rendering with zero visual flicker
+  // Prefixed static asset links for smooth compilation
   const hatAngles = [
-    { name: "Front Flat View", src: "input_file_9.png" },
-    { name: "Front Left Tilt", src: "input_file_5.png" },
-    { name: "Left Profile (Logo Detail)", src: "input_file_4.png" },
-    { name: "Back View (Brass Adjuster)", src: "input_file_8.png" },
-    { name: "Right Profile (Minimal)", src: "input_file_7.png" },
-    { name: "Front Right Tilt", src: "input_file_6.png" },
-    { name: "Top-Down View", src: "input_file_10.png" },
+    { name: "Front Flat View", src: "/lovable-uploads/input_file_9.png" },
+    { name: "Front Left Tilt", src: "/lovable-uploads/input_file_5.png" },
+    { name: "Left Profile (Logo Detail)", src: "/lovable-uploads/input_file_4.png" },
+    { name: "Back View (Brass Adjuster)", src: "/lovable-uploads/input_file_8.png" },
+    { name: "Right Profile (Minimal)", src: "/lovable-uploads/input_file_7.png" },
+    { name: "Front Right Tilt", src: "/lovable-uploads/input_file_6.png" },
+    { name: "Top-Down View", src: "/lovable-uploads/input_file_10.png" },
   ];
 
   const handleNext = () => {
@@ -250,7 +278,7 @@ function SubHighlightRotator() {
   return (
     <div className="bg-neutral-50 dark:bg-neutral-950/20 rounded-[28px] p-8 md:p-12 border border-black/5 dark:border-white/5 flex flex-col items-center w-full">
       
-      {/* 360° Stack Stage - Preloads all images on top of each other, toggles opacity */}
+      {/* Dynamic 360° Stack Stage - pre-renders all frames to avoid 404 flickering */}
       <div className="relative w-full aspect-square max-w-[320px] flex items-center justify-center overflow-hidden mb-6">
         <div
           className="absolute inset-0 pointer-events-none rounded-full"
@@ -275,7 +303,6 @@ function SubHighlightRotator() {
         ))}
       </div>
 
-      {/* Timeline Controls */}
       <div className="w-full max-w-xs space-y-4">
         <div className="flex items-center justify-between text-center">
           <button
@@ -298,7 +325,6 @@ function SubHighlightRotator() {
           </button>
         </div>
 
-        {/* Scrub Slider */}
         <div className="relative pt-2">
           <input
             type="range"
@@ -340,7 +366,7 @@ function About() {
         id: "f3cb47f6-0d11-4b97-9e3b-29d306607819",
         title: "GZ R-01 (organic, unisex)",
         price: 2800,
-        image: "input_file_2.png", // Flat shirt mockup front
+        image: "/lovable-uploads/input_file_2.png", // Flat front shirt mockup front
         quantity: 1,
       };
       const idx = cart.findIndex((i: any) => i.id === item.id);
@@ -371,7 +397,7 @@ function About() {
           <InteractiveHeroStage />
         </div>
 
-        {/* RIGHT — Apple Spec & Info Column */}
+        {/* RIGHT — Spec & Info Column */}
         <div className="flex flex-col justify-center px-8 py-16 sm:px-12 md:px-16 lg:px-24">
           <FadeUp>
             <p
@@ -662,13 +688,12 @@ function About() {
         className="relative overflow-hidden border-b border-black/10 dark:border-white/10"
         style={{ height: "clamp(300px, 48vw, 580px)" }}
       >
-        <img
-          src="input_file_3.png" // Image 4: Model wearing GZ R-01 shirt as massive background hero
+        <ParallaxImage
+          src="/lovable-uploads/input_file_3.png" // Scanned image 4: Model wearing GZ R-01 shirt
           alt="Luveni model closeup detail"
-          className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 hover:scale-[1.03]"
         />
         <div
-          className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 animate-in fade-in duration-500"
+          className="absolute inset-0 flex flex-col items-center justify-center text-center px-6"
           style={{ background: "linear-gradient(rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.5) 100%)" }}
         >
           <FadeUp>
