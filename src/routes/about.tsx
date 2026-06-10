@@ -3,6 +3,7 @@ import { site } from "@/config/site";
 import { useEffect, useRef, useState } from "react";
 import { Shield, Sparkles, Eye, Users, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/about")({
   head: () => ({
@@ -15,50 +16,6 @@ export const Route = createFileRoute("/about")({
   }),
   component: About,
 });
-
-// ─── TOP-LEVEL EXPLICIT STATIC ASSET CONSTANTS (FOR RELIABLE LOVABLE COMPILE) ───
-// These top-level declarations force the compiler to resolve your uploaded assets.
-const SHIRT_LOGO = "/lovable-uploads/input_file_0.png";       // Transparent kuffiyeh girl logo graphic
-const SHIRT_FOLDED = "/lovable-uploads/input_file_1.png";     // Black folded shirt flatlay mockup on white
-const SHIRT_FLAT = "/lovable-uploads/input_file_2.png";       // Flat front black t-shirt mockup
-const SHIRT_MODEL = "/lovable-uploads/input_file_3.png";      // Model wearing the black t-shirt
-
-const HAT_ANGLE_0 = "/lovable-uploads/input_file_9.png";      // Hat front view centered
-const HAT_ANGLE_1 = "/lovable-uploads/input_file_5.png";      // Hat front left angle
-const HAT_ANGLE_2 = "/lovable-uploads/input_file_4.png";      // Hat left profile (heart showing)
-const HAT_ANGLE_3 = "/lovable-uploads/input_file_8.png";      // Hat back view with buckle
-const HAT_ANGLE_4 = "/lovable-uploads/input_file_7.png";      // Hat right profile (plain)
-const HAT_ANGLE_5 = "/lovable-uploads/input_file_6.png";      // Hat front right angle
-const HAT_ANGLE_6 = "/lovable-uploads/input_file_10.png";     // Hat top down view
-
-// ─── COMPILATION STRUCTURAL SCHEMAS ─────────────────────────────────────────
-const DETAILS = [
-  {
-    img: SHIRT_FOLDED,
-    label: "Construction",
-    heading: "Reinforced Collar",
-    copy: "Double-needle neck ribbing designed to hold structured form wash after wash.",
-  },
-  {
-    img: SHIRT_LOGO,
-    label: "Iconography",
-    heading: "Kuffiyeh & Butterfly Emblem",
-    copy: "Our signature front relief composition, balancing resilience, patience, and growth.",
-  },
-  {
-    img: SHIRT_FLAT,
-    label: "Material",
-    heading: "240 GSM Combed Cotton",
-    copy: "Heavyweight tactile hand-feel that drapes seamlessly for high daily breathability.",
-  },
-];
-
-const VALUES = [
-  { icon: Shield, title: "Quality", desc: "Highest-grade fabrics selected to endure years of wear and wash." },
-  { icon: Sparkles, title: "Timeless", desc: "Silhouettes designed to outlast whatever season they drop in." },
-  { icon: Eye, title: "Minimal", desc: "Everything superfluous removed. Only the essential remains." },
-  { icon: Users, title: "Community", desc: "Built for real people in real fits — not for a runway." },
-];
 
 // ─── APPLE STICKY LOCAL NAVIGATION ────────────────────────────────────────
 function LocalNav({ onBuy }: { onBuy: () => void }) {
@@ -150,7 +107,7 @@ function ParallaxImage({ src, alt }: { src: string; alt: string }) {
 }
 
 // ─── DUAL-VIEW HERO INTERACTIVE STAGE (FLAT VS MODEL) ────────────────────
-function InteractiveHeroStage() {
+function InteractiveHeroStage({ shirtFlat, shirtModel }: { shirtFlat: string; shirtModel: string }) {
   const [activeTab, setActiveTab] = useState<"flat" | "model">("flat");
   const containerRef = useRef<HTMLDivElement>(null);
   const flatImgRef = useRef<HTMLImageElement>(null);
@@ -186,7 +143,7 @@ function InteractiveHeroStage() {
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full bg-neutral-50/50 dark:bg-neutral-950/20 border-b md:border-b-0 md:border-r border-black/10 dark:border-white/10 overflow-hidden flex flex-col justify-between"
+      className="relative w-full h-full bg-neutral-50/50 dark:bg-neutral-950/20 border-b md:border-b-0 md:border-r border-black/10 dark:border-white/10 overflow-hidden flex flex-col justify-between animate-fade-in"
       style={{ minHeight: "65vh" }}
     >
       <div
@@ -205,7 +162,7 @@ function InteractiveHeroStage() {
         {/* Frame A: Flat Mockup View */}
         <img
           ref={flatImgRef}
-          src={SHIRT_FLAT}
+          src={shirtFlat}
           alt="GZ R-01 tee front layout"
           className="absolute max-h-[82%] max-w-[82%] object-contain select-none transition-all duration-750 ease-out"
           style={{
@@ -219,7 +176,7 @@ function InteractiveHeroStage() {
         {/* Frame B: On-Model Lifestyle View */}
         <img
           ref={modelImgRef}
-          src={SHIRT_MODEL}
+          src={shirtModel}
           alt="GZ R-01 tee on model"
           className="absolute max-h-[82%] max-w-[82%] object-contain select-none transition-all duration-750 ease-out rounded-2xl"
           style={{
@@ -273,18 +230,8 @@ function InteractiveHeroStage() {
 }
 
 // ─── ROTATABLE 360° ZERO-LAG STACKED ROTATOR (HEART DAD HAT) ──────────────
-function SubHighlightRotator() {
+function SubHighlightRotator({ hatAngles }: { hatAngles: Array<{ name: string; src: string }> }) {
   const [angleIndex, setAngleIndex] = useState(0);
-
-  const hatAngles = [
-    { name: "Front Flat View", src: HAT_ANGLE_0 },
-    { name: "Front Left Tilt", src: HAT_ANGLE_1 },
-    { name: "Left Profile (Logo Detail)", src: HAT_ANGLE_2 },
-    { name: "Back View (Brass Adjuster)", src: HAT_ANGLE_3 },
-    { name: "Right Profile (Minimal)", src: HAT_ANGLE_4 },
-    { name: "Front Right Tilt", src: HAT_ANGLE_5 },
-    { name: "Top-Down View", src: HAT_ANGLE_6 },
-  ];
 
   const handleNext = () => {
     setAngleIndex((prev) => (prev + 1) % hatAngles.length);
@@ -295,9 +242,9 @@ function SubHighlightRotator() {
   };
 
   return (
-    <div className="bg-neutral-50 dark:bg-neutral-950/20 rounded-[28px] p-8 md:p-12 border border-black/5 dark:border-white/5 flex flex-col items-center w-full">
+    <div className="bg-neutral-50 dark:bg-neutral-950/20 rounded-[28px] p-8 md:p-12 border border-black/5 dark:border-white/5 flex flex-col items-center w-full animate-fade-in">
       
-      {/* 360° Stack Stage - pre-renders all frames to avoid 404 flickering */}
+      {/* 360° Stack Stage - Preloads all images inside absolute layout to guarantee zero lag */}
       <div className="relative w-full aspect-square max-w-[320px] flex items-center justify-center overflow-hidden mb-6">
         <div
           className="absolute inset-0 pointer-events-none rounded-full"
@@ -322,6 +269,7 @@ function SubHighlightRotator() {
         ))}
       </div>
 
+      {/* Controller Controls */}
       <div className="w-full max-w-xs space-y-4">
         <div className="flex items-center justify-between text-center">
           <button
@@ -344,6 +292,7 @@ function SubHighlightRotator() {
           </button>
         </div>
 
+        {/* Scrub Slider */}
         <div className="relative pt-2">
           <input
             type="range"
@@ -369,6 +318,81 @@ function About() {
   const zoomRef = useRef<HTMLDivElement>(null);
   const [zoomVisible, setZoomVisible] = useState(false);
 
+  // Dynamic Image State populated directly from database sync
+  const [shirtFlat, setShirtFlat] = useState("https://files.cdn.printful.com/files/78f/78fbe8e3abfd368625d5c143ffe0189d_preview.png");
+  const [shirtFolded, setShirtFolded] = useState("https://files.cdn.printful.com/files/268/268853a2dd3fa9e8733e12d2f22d014b_preview.png");
+  const [shirtModel, setShirtModel] = useState("https://files.cdn.printful.com/files/268/268853a2dd3fa9e8733e12d2f22d014b_preview.png");
+  const [shirtLogo, setShirtLogo] = useState("https://files.cdn.printful.com/files/9e8/9e876ce4efee7c0415d88386792f6f5d_preview.png");
+
+  const [hatAngles, setHatAngles] = useState([
+    { name: "Front Flat View", src: "https://files.cdn.printful.com/files/00c/00cea4e35a659a7022d01f2cb2641b4d_preview.png" },
+    { name: "Front Left Tilt", src: "https://files.cdn.printful.com/files/b68/b686c45246d81c9c12aa8a350ce773bd_preview.png" },
+    { name: "Left Profile (Logo Detail)", src: "https://files.cdn.printful.com/files/615/61572d86e70a8bfe299150c10432c496_preview.png" },
+    { name: "Back View (Brass Adjuster)", src: "https://files.cdn.printful.com/files/1f4/1f4017c83d3d8099557f471924905541_preview.png" },
+    { name: "Right Profile (Minimal)", src: "https://files.cdn.printful.com/files/78f/78fbe8e3abfd368625d5c143ffe0189d_preview.png" },
+    { name: "Front Right Tilt", src: "https://files.cdn.printful.com/files/9e8/9e876ce4efee7c0415d88386792f6f5d_preview.png" },
+    { name: "Top-Down View", src: "https://files.cdn.printful.com/files/268/268853a2dd3fa9e8733e12d2f22d014b_preview.png" },
+  ]);
+
+  // Query your Supabase database live on load to fetch synced Printful images instantly
+  useEffect(() => {
+    async function fetchAssets() {
+      try {
+        const [prodRes, configRes] = await Promise.all([
+          supabase.from("products").select("*"),
+          supabase.from("site_config").select("*").eq("id", "main").maybeSingle(),
+        ]);
+
+        // Tier 1: Look in the synced products table (synced from Printful)
+        if (prodRes.data) {
+          const shirt = prodRes.data.find(p => p.id === "f3cb47f6-0d11-4b97-9e3b-29d306607819" || p.slug?.includes("gz-r-01"));
+          if (shirt && shirt.image_urls && shirt.image_urls.length > 0) {
+            setShirtFlat(shirt.image_urls[2] || shirt.image_urls[0]); // Flat front layout
+            setShirtFolded(shirt.image_urls[1] || shirt.image_urls[0]); // Folded shirt layout
+            setShirtModel(shirt.image_urls[3] || shirt.image_urls[0]); // Model t-shirt
+            setShirtLogo(shirt.image_urls[0] || shirt.image_urls[1]); // Chest print detail logo
+          }
+
+          const hat = prodRes.data.find(p => p.slug?.includes("hat") || p.slug?.includes("cap") || p.title?.toLowerCase().includes("hat"));
+          if (hat && hat.image_urls && hat.image_urls.length >= 6) {
+            setHatAngles([
+              { name: "Front Flat View", src: hat.image_urls[0] },
+              { name: "Front Left Tilt", src: hat.image_urls[1] },
+              { name: "Left Profile (Logo Detail)", src: hat.image_urls[2] },
+              { name: "Back View (Brass Adjuster)", src: hat.image_urls[3] },
+              { name: "Right Profile (Minimal)", src: hat.image_urls[4] },
+              { name: "Front Right Tilt", src: hat.image_urls[5] },
+              { name: "Top-Down View", src: hat.image_urls[6] || hat.image_urls[0] },
+            ]);
+          }
+        }
+
+        // Tier 2: Check custom site_config override columns
+        if (configRes.data) {
+          const cfg = configRes.data as any;
+          if (cfg.about_shirt_flat) setShirtFlat(cfg.about_shirt_flat);
+          if (cfg.about_shirt_folded) setShirtFolded(cfg.about_shirt_folded);
+          if (cfg.about_shirt_model) setShirtModel(cfg.about_shirt_model);
+          if (cfg.about_shirt_logo) setShirtLogo(cfg.about_shirt_logo);
+          if (cfg.about_hat_angles && cfg.about_hat_angles.length >= 7) {
+            setHatAngles([
+              { name: "Front Flat View", src: cfg.about_hat_angles[0] },
+              { name: "Front Left Tilt", src: cfg.about_hat_angles[1] },
+              { name: "Left Profile (Logo Detail)", src: cfg.about_hat_angles[2] },
+              { name: "Back View (Brass Adjuster)", src: cfg.about_hat_angles[3] },
+              { name: "Right Profile (Minimal)", src: cfg.about_hat_angles[4] },
+              { name: "Front Right Tilt", src: cfg.about_hat_angles[5] },
+              { name: "Top-Down View", src: cfg.about_hat_angles[6] },
+            ]);
+          }
+        }
+      } catch (e) {
+        console.error("Supabase asset fetch sequence failed:", e);
+      }
+    }
+    fetchAssets();
+  }, []);
+
   useEffect(() => {
     const obs = new IntersectionObserver(
       ([e]) => { if (e.isIntersecting) { setZoomVisible(true); obs.disconnect(); } },
@@ -385,7 +409,7 @@ function About() {
         id: "f3cb47f6-0d11-4b97-9e3b-29d306607819",
         title: "GZ R-01 (organic, unisex)",
         price: 2800,
-        image: SHIRT_FLAT,
+        image: shirtFlat,
         quantity: 1,
       };
       const idx = cart.findIndex((i: any) => i.id === item.id);
@@ -400,10 +424,31 @@ function About() {
     }
   };
 
+  const currentDetails = [
+    {
+      img: shirtFolded,
+      label: "Construction",
+      heading: "Reinforced Collar",
+      copy: "Double-needle neck ribbing designed to hold structured form wash after wash.",
+    },
+    {
+      img: shirtLogo,
+      label: "Iconography",
+      heading: "Kuffiyeh & Butterfly Emblem",
+      copy: "Our signature front relief composition, balancing resilience, patience, and growth.",
+    },
+    {
+      img: shirtFlat,
+      label: "Material",
+      heading: "240 GSM Combed Cotton",
+      copy: "Heavyweight tactile hand-feel that drapes seamlessly for high daily breathability.",
+    },
+  ];
+
   return (
     <div className="about-page w-full bg-background text-foreground selection:bg-neutral-800 transition-colors duration-300">
       
-      {/* Sticky Top Local Sub-Nav */}
+      {/* Sticky Navigation Subheader */}
       <LocalNav onBuy={handleAddToCart} />
 
       {/* ══════════════════════════════════════════════════════════════════
@@ -411,12 +456,12 @@ function About() {
           ══════════════════════════════════════════════════════════════════ */}
       <section id="shirt-hero" className="grid grid-cols-1 md:grid-cols-2 border-b border-black/10 dark:border-white/10" style={{ minHeight: "88vh" }}>
         
-        {/* LEFT — Seamless Stage Visualizer */}
+        {/* LEFT — Seamless Dynamic Spotlight Viewer */}
         <div className="relative">
-          <InteractiveHeroStage />
+          <InteractiveHeroStage shirtFlat={shirtFlat} shirtModel={shirtModel} />
         </div>
 
-        {/* RIGHT — Apple Spec & Info Column */}
+        {/* RIGHT — Technical Specs Column */}
         <div className="flex flex-col justify-center px-8 py-16 sm:px-12 md:px-16 lg:px-24">
           <FadeUp>
             <p
@@ -466,7 +511,7 @@ function About() {
               ))}
             </div>
 
-            {/* Price block & Checkout Trigger */}
+            {/* Price Block & Action CTA */}
             <div className="flex items-center justify-between gap-6 flex-wrap">
               <div>
                 <span
@@ -523,7 +568,7 @@ function About() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3">
-          {DETAILS.map((d, i) => (
+          {currentDetails.map((d, i) => (
             <div
               key={i}
               className="group flex flex-col justify-between"
@@ -570,7 +615,7 @@ function About() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 lg:gap-20 items-center">
             
             {/* Seamless 360° Rotator Panel */}
-            <SubHighlightRotator />
+            <SubHighlightRotator hatAngles={hatAngles} />
 
             {/* Spec Descriptions */}
             <div className="space-y-6">
@@ -708,7 +753,7 @@ function About() {
         style={{ height: "clamp(300px, 48vw, 580px)" }}
       >
         <ParallaxImage
-          src={SHIRT_MODEL}
+          src={shirtModel}
           alt="Luveni model closeup detail"
         />
         <div
