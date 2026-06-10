@@ -13,46 +13,67 @@ export const Route = createFileRoute("/about")({
   component: About,
 });
 
+// ─── STABLE ROOT-RELATIVE DIRECT WORKSPACE ASSETS ───
+const TSHIRT_1 = "/unisex-organic-mid-light-crafter-t-shirt-black-front-6a28f7a4546cf.png";
+const TSHIRT_2 = "/unisex-organic-mid-light-crafter-t-shirt-black-front-6a28f7a454c19.png";
+const TSHIRT_3 = "/unisex-organic-mid-light-crafter-t-shirt-black-front-6a28f7a4550cd.png";
+const GRAPHIC_LOGO = "/design-lab-upscaled-6a25d1f65103a2.77471166-1780863478.png";
+
+// Naming Aliases to guarantee backward compatibility and eliminate ReferenceErrors
+const SHIRT_FLAT = TSHIRT_1;
+const SHIRT_FOLDED = TSHIRT_2;
+const SHIRT_MODEL = TSHIRT_3;
+const SHIRT_LOGO = GRAPHIC_LOGO;
+
+const HAT_ANGLE_0 = "/classic-dad-hat-black-front-6a28d8da62cc9.png";
+const HAT_ANGLE_1 = "/classic-dad-hat-black-left-front-6a28d8da63cca.png";
+const HAT_ANGLE_2 = "/classic-dad-hat-black-left-side-6a28d8da636fd.png";
+const HAT_ANGLE_3 = "/classic-dad-hat-black-back-6a28d8da63130.png";
+const HAT_ANGLE_4 = "/classic-dad-hat-black-right-side-6a28d8da633f3.png";
+const HAT_ANGLE_5 = "/classic-dad-hat-black-right-front-6a28d8da639e0.png";
+
 /* ──────────────────────────────────────────────────────────────────────────
     SINGLE, UNIFIED COMPONENT TREE (GUARANTEES 100% ERROR-FREE RUNTIME)
    ────────────────────────────────────────────────────────────────────────── */
 function About() {
-  // ─── STABLE ROOT-RELATIVE DIRECT WORKSPACE ASSETS ───
-  const SHIRT_FLAT = "/unisex-organic-mid-light-crafter-t-shirt-black-front-6a28f7a4546cf.png";
-  const SHIRT_FOLDED = "/unisex-organic-mid-light-crafter-t-shirt-black-front-6a28f7a454c19.png";
-  const SHIRT_MODEL = "/unisex-organic-mid-light-crafter-t-shirt-black-front-6a28f7a4550cd.png";
-  const SHIRT_LOGO = "/design-lab-upscaled-6a25d1f65103a2.77471166-1780863478.png";
-
-  const HAT_ANGLE_0 = "/classic-dad-hat-black-front-6a28d8da62cc9.png";
-  const HAT_ANGLE_1 = "/classic-dad-hat-black-left-front-6a28d8da63cca.png";
-  const HAT_ANGLE_2 = "/classic-dad-hat-black-left-side-6a28d8da636fd.png";
-  const HAT_ANGLE_3 = "/classic-dad-hat-black-back-6a28d8da63130.png";
-  const HAT_ANGLE_4 = "/classic-dad-hat-black-right-side-6a28d8da633f3.png";
-  const HAT_ANGLE_5 = "/classic-dad-hat-black-right-front-6a28d8da639e0.png";
-
-  // ─── HERO & EDITORIAL DYNAMIC SCROLL STATES ───
+  // ─── STATE HOOKS ───
   const [heroScrollP, setHeroScrollP] = useState(0);
   const [editorialScrollP, setEditorialScrollP] = useState(0);
   const [heroActiveTab, setHeroActiveTab] = useState<"flat" | "model">("flat");
   const [heroEntered, setHeroEntered] = useState(false);
   const [editorialEntered, setEditorialEntered] = useState(false);
+  const [hatAngleIndex, setHatAngleIndex] = useState(0);
+  const [featVisible, setFeatVisible] = useState([false, false, false]);
+  const [featScrollP, setFeatScrollP] = useState([0, 0, 0]);
 
-  // Consolidated window scroll performance tracker
+  // ─── COMPONENT REFS ───
+  const heroRef = useRef<HTMLDivElement>(null);
+  const rotatorContainerRef = useRef<HTMLDivElement>(null);
+  const editorialRef = useRef<HTMLDivElement>(null);
+  
+  const trigger0 = useRef<HTMLDivElement>(null);
+  const trigger1 = useRef<HTMLDivElement>(null);
+  const trigger2 = useRef<HTMLDivElement>(null);
+  const trigger3 = useRef<HTMLDivElement>(null);
+  const trigger4 = useRef<HTMLDivElement>(null);
+  const trigger5 = useRef<HTMLDivElement>(null);
+
+  const featRefs = [useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null)];
+
+  // ─── CONSOLIDATED SCROLL PERFORMANCE ENGINE ───
   useEffect(() => {
     const onScroll = () => {
       // Hero viewport calculations
-      const heroNode = document.getElementById("shirt-hero");
-      if (heroNode) {
-        const rect = heroNode.getBoundingClientRect();
+      if (heroRef.current) {
+        const rect = heroRef.current.getBoundingClientRect();
         const vh = window.innerHeight;
         const progress = 1 - rect.bottom / (vh + rect.height);
         setHeroScrollP(Math.max(0, Math.min(1, progress)));
       }
 
       // Editorial closing band calculations
-      const edNode = document.getElementById("editorial-parallax");
-      if (edNode) {
-        const rect = edNode.getBoundingClientRect();
+      if (editorialRef.current) {
+        const rect = editorialRef.current.getBoundingClientRect();
         const start = rect.top - window.innerHeight;
         const total = rect.height + window.innerHeight;
         setEditorialScrollP(Math.max(0, Math.min(1, -start / total)));
@@ -81,14 +102,12 @@ function About() {
     const targets = document.querySelectorAll(".reveal-on-scroll");
     targets.forEach((t) => observer.observe(t));
 
-    // Specific entry triggers for Hero and Editorial stages
-    const heroNode = document.getElementById("shirt-hero");
+    // Entry triggers for Hero and Editorial stages
     const heroObs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setHeroEntered(true); heroObs.disconnect(); } }, { threshold: 0.05 });
-    if (heroNode) heroObs.observe(heroNode);
+    if (heroRef.current) heroObs.observe(heroRef.current);
 
-    const edNode = document.getElementById("editorial-parallax");
     const edObs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setEditorialEntered(true); edObs.disconnect(); } }, { threshold: 0.05 });
-    if (edNode) edObs.observe(edNode);
+    if (editorialRef.current) edObs.observe(editorialRef.current);
 
     return () => {
       observer.disconnect();
@@ -98,14 +117,6 @@ function About() {
   }, []);
 
   // ─── SUB-HIGHLIGHT PERSPECTIVES ROTATOR STATE & SCROLL TRIGGERS ───
-  const [hatAngleIndex, setHatAngleIndex] = useState(0);
-  const trigger0 = useRef<HTMLDivElement>(null);
-  const trigger1 = useRef<HTMLDivElement>(null);
-  const trigger2 = useRef<HTMLDivElement>(null);
-  const trigger3 = useRef<HTMLDivElement>(null);
-  const trigger4 = useRef<HTMLDivElement>(null);
-  const trigger5 = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     const triggers = [trigger0, trigger1, trigger2, trigger3, trigger4, trigger5];
     const observers = triggers.map((ref, idx) => {
@@ -120,10 +131,6 @@ function About() {
   }, []);
 
   // ─── ANATOMY DETAIL ROWS INVIEW & SCROLL REVEALS ───
-  const featRefs = [useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null)];
-  const [featVisible, setFeatVisible] = useState([false, false, false]);
-  const [featScrollP, setFeatScrollP] = useState([0, 0, 0]);
-
   useEffect(() => {
     const observers = featRefs.map((ref, idx) => {
       const o = new IntersectionObserver(([e]) => {
@@ -166,9 +173,9 @@ function About() {
 
   // ─── CONFIGURATION STRUCTS ───
   const FEATURES = [
-    { eyebrow: "Anatomy", title: "Engineered in silence.", body: "No noise. No filler. Every panel, seam, and stitch exists for a reason — and the reasons are visible the moment you hold it.", src: SHIRT_FLAT, side: "right" as const },
-    { eyebrow: "Iconography", title: "A subtle relief print.", body: "Marked with the high-resolution transparent butterfly logo. Patience and steady growth rendered in clean lines.", src: SHIRT_LOGO, side: "left" as const },
-    { eyebrow: "Weight", title: "240 GSM. Built to last.", body: "Heavyweight combed organic cotton with a tactile hand-feel that softens beautifully wash after wash, without losing its structure.", src: SHIRT_FOLDED, side: "right" as const }
+    { eyebrow: "Anatomy", title: "Engineered in silence.", body: "No noise. No filler. Every panel, seam, and stitch exists for a reason — and the reasons are visible the moment you hold it.", src: TSHIRT_1, side: "right" as const },
+    { eyebrow: "Iconography", title: "A subtle relief print.", body: "Marked with the high-resolution transparent butterfly logo. Patience and steady growth rendered in clean lines.", src: GRAPHIC_LOGO, side: "left" as const },
+    { eyebrow: "Weight", title: "240 GSM. Built to last.", body: "Heavyweight combed organic cotton with a tactile hand-feel that softens beautifully wash after wash, without losing its structure.", src: TSHIRT_2, side: "right" as const }
   ];
 
   const VALUES = [
@@ -185,27 +192,6 @@ function About() {
     { name: "Back View (Brass Adjuster)", src: HAT_ANGLE_3 },
     { name: "Right Profile (Minimal)", src: HAT_ANGLE_4 },
     { name: "Front Right Tilt", src: HAT_ANGLE_5 },
-  ];
-
-  const DETAILS = [
-    {
-      img: SHIRT_FOLDED,
-      label: "Construction",
-      heading: "Reinforced Collar",
-      copy: "Double-needle neck ribbing designed to hold structured form wash after wash.",
-    },
-    {
-      img: SHIRT_LOGO,
-      label: "Iconography",
-      heading: "Kuffiyeh & Butterfly Emblem",
-      copy: "Our signature front relief composition, balancing resilience, patience, and growth.",
-    },
-    {
-      img: SHIRT_FLAT,
-      label: "Material",
-      heading: "240 GSM Combed Cotton",
-      copy: "Heavyweight tactile hand-feel that drapes seamlessly for high daily breathability.",
-    },
   ];
 
   return (
@@ -230,15 +216,12 @@ function About() {
       {/* ───────────────────────────────────────────────────────────────────
           B. CINEMATIC PRODUCT HERO (SHIRT EXPLODED VIEW)
           ─────────────────────────────────────────────────────────────────── */}
-      <section id="shirt-hero" className="grid grid-cols-1 md:grid-cols-2 border-b border-white/5" style={{ minHeight: "88vh" }}>
+      <section ref={heroRef} id="shirt-hero" className="grid grid-cols-1 md:grid-cols-2 border-b border-white/5" style={{ minHeight: "88vh" }}>
         
         {/* LEFT — Seamless Stage Visualizer */}
         <div className="relative w-full h-full bg-neutral-950 overflow-hidden flex flex-col justify-between border-b md:border-b-0 md:border-r border-white/5" style={{ minHeight: "65vh" }}>
           {/* Blueprint Grid inline */}
-          <div className="absolute inset-0 pointer-events-none opacity-[0.03] mix-blend-screen z-0" style={{
-            backgroundImage: "linear-gradient(to right, rgba(255,255,255,0.15) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.15) 1px, transparent 1px)",
-            backgroundSize: "40px 44px"
-          }} />
+          <BlueprintGrid />
           
           <div className="absolute inset-0 pointer-events-none rounded-full" style={{ background: "radial-gradient(circle at 50% 50%, rgba(255,255,255,0.04) 0%, transparent 65%)" }} />
 
@@ -338,10 +321,7 @@ function About() {
 
                 <div className={feat.side === "right" ? "md:order-1" : ""}>
                   <div className="relative aspect-square w-full overflow-hidden rounded-[28px] bg-neutral-950 flex items-center justify-center p-8" style={{ border: "1px solid rgba(255,255,255,0.05)", boxShadow: "0 25px 60px rgba(0,0,0,0.8)" }}>
-                    <div className="absolute inset-0 pointer-events-none opacity-[0.03] mix-blend-screen z-0" style={{
-                      backgroundImage: "linear-gradient(to right, rgba(255,255,255,0.15) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.15) 1px, transparent 1px)",
-                      backgroundSize: "40px 44px"
-                    }} />
+                    <BlueprintGrid />
                     <img src={feat.src} alt={feat.title} draggable={false} className="max-h-[85%] max-w-[85%] object-contain select-none transition-transform duration-100" style={{ transform: `translateY(${yOffset}px) scale(1.02)`, filter: "drop-shadow(0 20px 40px rgba(0,0,0,0.5))", willChange: "transform" }} />
                   </div>
                 </div>
@@ -352,7 +332,7 @@ function About() {
       </div>
 
       {/* ───────────────────────────────────────────────────────────────────
-          4. THE 360° SCROLL ROTATOR (HAT PORTRAIT - NO CONTRAST BOXES)
+          4. THE 360° SCROLL ROTATOR (HAT PORTRAIT - INLINED TRIGGERS)
           ─────────────────────────────────────────────────────────────────── */}
       <section id="rotator" ref={rotatorContainerRef} className="relative bg-black border-b border-white/5" style={{ height: "240vh" }}>
         
@@ -368,10 +348,7 @@ function About() {
 
         <div className="sticky top-0 h-screen w-full flex flex-col justify-between overflow-hidden">
           {/* Subtle grid background directly rendered inline */}
-          <div className="absolute inset-0 pointer-events-none opacity-[0.03] mix-blend-screen z-0" style={{
-            backgroundImage: "linear-gradient(to right, rgba(255,255,255,0.15) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.15) 1px, transparent 1px)",
-            backgroundSize: "40px 44px"
-          }} />
+          <BlueprintGrid />
           
           <div className="pt-20 px-6 text-center z-20">
             <p className="text-[10px] font-mono tracking-[0.3em] text-neutral-500 uppercase mb-2">Sub-Highlight Piece</p>
