@@ -16,355 +16,526 @@ export const Route = createFileRoute("/about")({
   component: About,
 });
 
-// ────────────────────────────────────────────────────────────────────────────
-// LIGHTWEIGHT INTERSECTION OBSERVER CONTAINER FOR FADE-UP ANIMATIONS
-// ────────────────────────────────────────────────────────────────────────────
-function FadeInDirection({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
+// ─── FADE UP ON SCROLL ────────────────────────────────────────────────────
+function FadeUp({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [isVisible, setIsVisible] = useState(false);
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    if (mediaQuery.matches) {
-      setIsVisible(true);
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setVisible(true);
       return;
     }
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setIsVisible(true);
-          observer.unobserve(entry.target);
-        }
-      },
-      { threshold: 0.05, rootMargin: "0px 0px -45px 0px" }
+    const obs = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) { setVisible(true); obs.unobserve(e.target); } },
+      { threshold: 0.05, rootMargin: "0px 0px -40px 0px" }
     );
-
-    if (ref.current) {
-      observer.observe(ref.current);
-    }
-
-    return () => observer.disconnect();
+    if (ref.current) obs.observe(ref.current);
+    return () => obs.disconnect();
   }, []);
 
   return (
     <div
       ref={ref}
       style={{
-        opacity: isVisible ? 1 : 0,
-        transform: isVisible ? "translateY(0)" : "translateY(24px)",
-        transition: "opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1)",
-        transitionDelay: `${delay}ms`,
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(28px)",
+        transition: `opacity 0.75s cubic-bezier(0.16,1,0.3,1) ${delay}ms, transform 0.75s cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
       }}
-      className="motion-reduce:opacity-100 motion-reduce:transform-none"
     >
       {children}
     </div>
   );
 }
 
-function About() {
-  const heroImageRef = useRef<HTMLImageElement>(null);
-  const zoomSectionRef = useRef<HTMLDivElement>(null);
-  const [heroVisible, setHeroVisible] = useState(false);
-  const [zoomVisible, setZoomVisible] = useState(false);
+// ─── PARALLAX IMAGE ───────────────────────────────────────────────────────
+function ParallaxImage({ src, alt }: { src: string; alt: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
 
-  // IntersectionObserver to scale hero image from 1.0 to 1.12
   useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    if (mediaQuery.matches) {
-      setHeroVisible(true);
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setHeroVisible(true);
-        }
-      },
-      { threshold: 0.1 }
-    );
-
-    if (heroImageRef.current) {
-      observer.observe(heroImageRef.current);
-    }
-
-    return () => observer.disconnect();
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const onScroll = () => {
+      if (!ref.current || !imgRef.current) return;
+      const rect = ref.current.getBoundingClientRect();
+      const vh = window.innerHeight;
+      const progress = 1 - (rect.bottom / (vh + rect.height));
+      const clampedProgress = Math.max(0, Math.min(1, progress));
+      imgRef.current.style.transform = `translateY(${clampedProgress * -40}px) scale(1.08)`;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // IntersectionObserver to trigger stagger on zoom strip elements
+  return (
+    <div ref={ref} className="w-full h-full overflow-hidden">
+      <img
+        ref={imgRef}
+        src={src}
+        alt={alt}
+        className="w-full h-full object-cover"
+        style={{ transition: "transform 0.1s linear", willChange: "transform" }}
+      />
+    </div>
+  );
+}
+
+// ─── CINEMATIC ZOOM IMAGE (GZ R-01 hero) ─────────────────────────────────
+function CinematicProduct() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [entered, setEntered] = useState(false);
+
+  // Scroll-driven scale: zooms from 1.0 to 1.18 as section scrolls through viewport
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setZoomVisible(true);
-        }
-      },
-      { threshold: 0.15 }
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const onScroll = () => {
+      if (!containerRef.current || !imgRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const vh = window.innerHeight;
+      const progress = Math.max(0, Math.min(1, 1 - rect.bottom / (vh + rect.height)));
+      imgRef.current.style.transform = `scale(${1 + progress * 0.18})`;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Fade in on entry
+  useEffect(() => {
+    const obs = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) { setEntered(true); obs.disconnect(); } },
+      { threshold: 0.1 }
     );
+    if (containerRef.current) obs.observe(containerRef.current);
+    return () => obs.disconnect();
+  }, []);
 
-    if (zoomSectionRef.current) {
-      observer.observe(zoomSectionRef.current);
-    }
+  return (
+    <div
+      ref={containerRef}
+      className="relative w-full h-full bg-neutral-950 overflow-hidden flex items-center justify-center"
+      style={{ minHeight: "60vh" }}
+    >
+      {/* Ambient glow behind shirt */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: "radial-gradient(ellipse 60% 50% at 50% 55%, rgba(255,255,255,0.035) 0%, transparent 70%)",
+        }}
+      />
+      <img
+        ref={imgRef}
+        src="https://files.cdn.printful.com/files/78f/78fbe8e3abfd368625d5c143ffe0189d_preview.png"
+        alt="GZ R-01 Organic Unisex Tee"
+        className="relative z-10 select-none"
+        style={{
+          maxHeight: "82%",
+          maxWidth: "82%",
+          objectFit: "contain",
+          opacity: entered ? 1 : 0,
+          transition: "opacity 1.1s cubic-bezier(0.16,1,0.3,1), transform 0.12s linear",
+          willChange: "transform",
+          filter: "drop-shadow(0 40px 80px rgba(0,0,0,0.7))",
+        }}
+        draggable={false}
+      />
+      {/* Bottom label */}
+      <div
+        className="absolute bottom-6 left-0 right-0 flex justify-center z-20"
+        style={{
+          opacity: entered ? 1 : 0,
+          transition: "opacity 1.4s cubic-bezier(0.16,1,0.3,1) 0.3s",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "monospace",
+            fontSize: "9px",
+            letterSpacing: "0.28em",
+            color: "rgba(255,255,255,0.28)",
+            textTransform: "uppercase",
+          }}
+        >
+          GZ R-01 · Organic Unisex · $28
+        </span>
+      </div>
+    </div>
+  );
+}
 
-    return () => observer.disconnect();
+// ─── MAIN COMPONENT ───────────────────────────────────────────────────────
+function About() {
+  const zoomRef = useRef<HTMLDivElement>(null);
+  const [zoomVisible, setZoomVisible] = useState(false);
+
+  useEffect(() => {
+    const obs = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) { setZoomVisible(true); obs.disconnect(); } },
+      { threshold: 0.1 }
+    );
+    if (zoomRef.current) obs.observe(zoomRef.current);
+    return () => obs.disconnect();
   }, []);
 
   const handleAddToCart = () => {
     try {
-      const existingCart = JSON.parse(localStorage.getItem("cart") || "[]");
+      const cart = JSON.parse(localStorage.getItem("cart") || "[]");
       const item = {
-        id: "f3cb47f6-0d11-4b97-9e3b-29d306607819", // Standard GZ R-01 Product ID
+        id: "f3cb47f6-0d11-4b97-9e3b-29d306607819",
         title: "GZ R-01 (organic, unisex)",
-        price: 2800, // Cents
+        price: 2800,
         image: "https://files.cdn.printful.com/files/78f/78fbe8e3abfd368625d5c143ffe0189d_preview.png",
         quantity: 1,
       };
-
-      const existingIndex = existingCart.findIndex((i: any) => i.id === item.id);
-      if (existingIndex > -1) {
-        existingCart[existingIndex].quantity += 1;
-      } else {
-        existingCart.push(item);
-      }
-
-      localStorage.setItem("cart", JSON.stringify(existingCart));
+      const idx = cart.findIndex((i: any) => i.id === item.id);
+      if (idx > -1) cart[idx].quantity += 1;
+      else cart.push(item);
+      localStorage.setItem("cart", JSON.stringify(cart));
       window.dispatchEvent(new Event("storage"));
       window.dispatchEvent(new Event("cart-updated"));
-      toast.success("Added GZ R-01 (organic, unisex) to cart");
+      toast.success("Added GZ R-01 to cart");
     } catch (e) {
-      console.error("Cart action error:", e);
+      console.error(e);
     }
   };
 
-  const zoomStripCols = [
+  // ── Detail strip: three zoomed angles of GZ R-01
+  const details = [
     {
       img: "https://files.cdn.printful.com/files/615/61572d86e70a8bfe299150c10432c496_preview.png",
-      label: "CONSTRUCTION",
-      heading: "Ribbed Collar",
-      copy: "Reinforced double-needle stitching designed to maintain shape wash after wash.",
+      label: "Construction",
+      heading: "Ribbed collar",
+      copy: "Double-needle reinforcement. Holds its shape after a hundred washes.",
     },
     {
       img: "https://files.cdn.printful.com/files/9e8/9e876ce4efee7c0415d88386792f6f5d_preview.png",
-      label: "SIGNATURE",
-      heading: "Bonsai Embroidery",
-      copy: "Our minimal, high-density emblem represents resilient elegance and steady growth.",
+      label: "Signature",
+      heading: "Bonsai mark",
+      copy: "High-density embroidery at the chest. Patience rendered in thread.",
     },
     {
       img: "https://files.cdn.printful.com/files/1f4/1f4017c83d3d8099557f471924905541_preview.png",
-      label: "SENSORY",
-      heading: "Textured Organic Cotton",
-      copy: "Subtle slub character provides a premium tactile experience with ultimate breathability.",
+      label: "Material",
+      heading: "Organic cotton",
+      copy: "240 GSM. Substantial hand-feel. Breathable for every-day wear.",
     },
   ];
 
-  const brandValues = [
-    {
-      icon: Shield,
-      title: "Quality",
-      description: "We select fabrics of the highest grade, built to endure years of wear and wash.",
-    },
-    {
-      icon: Sparkles,
-      title: "Timeless",
-      description: "Designed for longevity, our silhouettes transcend seasonal fast-fashion cycles.",
-    },
-    {
-      icon: Eye,
-      title: "Minimal",
-      description: "Removing the superfluous to highlight impeccable details and drape.",
-    },
-    {
-      icon: Users,
-      title: "Community",
-      description: "Partnering with local craftspeople and nurturing global wearers.",
-    },
+  // ── Brand values
+  const values = [
+    { icon: Shield, title: "Quality", desc: "Highest-grade fabrics selected to endure years of wear and wash." },
+    { icon: Sparkles, title: "Timeless", desc: "Silhouettes designed to outlast whatever season they drop in." },
+    { icon: Eye, title: "Minimal", desc: "Everything superfluous removed. Only the essential remains." },
+    { icon: Users, title: "Community", desc: "Built for real people in real fits — not for a runway." },
   ];
 
   return (
-    <div className="w-full bg-background text-foreground transition-colors duration-300">
-      
-      {/* ───────────────────────────────────────────────────────────────────
-          SECTION 1: PRODUCT HERO
-          ─────────────────────────────────────────────────────────────────── */}
-      <section className="grid grid-cols-1 md:grid-cols-2 min-h-[calc(100vh-80px)] border-b border-black/10 dark:border-white/10">
-        
-        {/* Left column: GZ R-01 image on black background */}
-        <div className="bg-neutral-950 relative flex items-center justify-center overflow-hidden h-[50vh] md:h-auto min-h-[400px]">
-          <img
-            ref={heroImageRef}
-            src="https://files.cdn.printful.com/files/78f/78fbe8e3abfd368625d5c143ffe0189d_preview.png"
-            alt="GZ R-01 Signature T-Shirt"
-            className="max-h-[85%] max-w-[85%] object-contain select-none"
-            style={{
-              transform: heroVisible ? "scale(1.12)" : "scale(1.0)",
-              transition: "transform 0.9s cubic-bezier(0.16, 1, 0.3, 1)",
-            }}
-          />
+    <div className="w-full bg-background text-foreground">
+
+      {/* ══════════════════════════════════════════════════════════════════
+          1. CINEMATIC PRODUCT HERO
+          ══════════════════════════════════════════════════════════════════ */}
+      <section className="grid grid-cols-1 md:grid-cols-2 border-b border-black/10 dark:border-white/10" style={{ minHeight: "92vh" }}>
+
+        {/* LEFT — full bleed shirt, scroll zoom */}
+        <div className="relative border-b md:border-b-0 md:border-r border-black/10 dark:border-white/10" style={{ minHeight: "56vh" }}>
+          <CinematicProduct />
         </div>
 
-        {/* Right column: Details */}
-        <div className="flex flex-col justify-center p-8 sm:p-12 md:p-16 lg:p-24">
-          <FadeInDirection>
-            <span className="text-[10px] font-mono tracking-[0.25em] text-muted-foreground uppercase">
-              Signature Piece · GZ R-01
-            </span>
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight mt-3 mb-6">
-              The one you reach for first.
-            </h1>
-            <p className="text-sm leading-relaxed text-muted-foreground mb-10 max-w-lg">
-              Crafted from heavyweight, combed organic cotton, the GZ R-01 balances a relaxed, modern silhouette with highly structured lines. 
-              Finished with our minimal Bonsai emblem, it represents slow, intentional design built for the everyday rotation.
+        {/* RIGHT — product info */}
+        <div className="flex flex-col justify-center px-8 py-16 sm:px-12 md:px-16 lg:px-20">
+          <FadeUp>
+            <p
+              className="text-muted-foreground uppercase mb-5"
+              style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "0.26em" }}
+            >
+              Signature piece · GZ R-01
             </p>
 
-            {/* 2x2 specs grid */}
-            <div className="grid grid-cols-2 gap-x-8 gap-y-6 mb-10 py-8 border-t border-b border-black/10 dark:border-white/10">
-              <div>
-                <span className="text-[9px] font-mono tracking-widest text-muted-foreground uppercase block">Material</span>
-                <span className="text-xs font-semibold mt-1 block">100% Organic Cotton</span>
-              </div>
-              <div>
-                <span className="text-[9px] font-mono tracking-widest text-muted-foreground uppercase block">Fit</span>
-                <span className="text-xs font-semibold mt-1 block">Relaxed / Boxy</span>
-              </div>
-              <div>
-                <span className="text-[9px] font-mono tracking-widest text-muted-foreground uppercase block">Weight</span>
-                <span className="text-xs font-semibold mt-1 block">Heavyweight 240 GSM</span>
-              </div>
-              <div>
-                <span className="text-[9px] font-mono tracking-widest text-muted-foreground uppercase block">Care</span>
-                <span className="text-xs font-semibold mt-1 block">Machine Wash Cold</span>
-              </div>
+            <h1
+              className="tracking-tight text-foreground mb-6"
+              style={{ fontSize: "clamp(32px, 4.5vw, 56px)", fontWeight: 300, lineHeight: 1.06, letterSpacing: "-0.025em" }}
+            >
+              The one you<br />
+              <span style={{ fontWeight: 600 }}>reach for first.</span>
+            </h1>
+
+            <p className="text-sm leading-relaxed text-muted-foreground mb-10 max-w-md" style={{ fontWeight: 300 }}>
+              Heavyweight combed organic cotton. A bonsai mark reduced to its most essential form.
+              The GZ R-01 is the piece Luveni was built around — designed for your rotation, not the rack.
+            </p>
+
+            {/* Specs */}
+            <div
+              className="grid grid-cols-2 mb-10 border-t border-b border-black/10 dark:border-white/10"
+              style={{ gap: 0 }}
+            >
+              {[
+                ["Material", "100% Organic Cotton"],
+                ["Fit", "Relaxed / Boxy"],
+                ["Weight", "Heavyweight 240 GSM"],
+                ["Care", "Machine Wash Cold"],
+              ].map(([label, val], i) => (
+                <div
+                  key={i}
+                  className="py-4 pr-6"
+                  style={{
+                    borderRight: i % 2 === 0 ? "0.5px solid" : "none",
+                    borderBottom: i < 2 ? "0.5px solid" : "none",
+                    borderColor: "rgba(128,128,128,0.15)",
+                  }}
+                >
+                  <span
+                    className="text-muted-foreground uppercase block mb-1"
+                    style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "0.18em" }}
+                  >
+                    {label}
+                  </span>
+                  <span className="text-foreground text-xs font-medium">{val}</span>
+                </div>
+              ))}
             </div>
 
-            {/* Pricing & Button */}
-            <div className="flex flex-row items-center justify-between gap-6">
+            {/* Price + CTA */}
+            <div className="flex items-center justify-between gap-4 flex-wrap">
               <div>
-                <span className="text-[9px] font-mono tracking-widest text-muted-foreground uppercase block">Retail Price</span>
-                <span className="text-3xl font-semibold tracking-tight">$28</span>
+                <span
+                  className="text-muted-foreground uppercase block mb-1"
+                  style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "0.18em" }}
+                >
+                  Price
+                </span>
+                <span className="text-foreground" style={{ fontSize: "32px", fontWeight: 300, letterSpacing: "-0.02em" }}>
+                  $28
+                </span>
               </div>
               <button
                 onClick={handleAddToCart}
-                className="flex-1 max-w-xs text-center font-mono tracking-widest text-[10px] font-bold px-8 py-4 bg-foreground text-background hover:opacity-90 active:scale-[0.98] transition-all uppercase"
+                className="flex-1 max-w-xs bg-foreground text-background hover:opacity-80 active:scale-[0.97] transition-all"
+                style={{
+                  padding: "14px 32px",
+                  fontFamily: "monospace",
+                  fontSize: "10px",
+                  letterSpacing: "0.2em",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  border: "none",
+                  cursor: "pointer",
+                }}
               >
-                Add To Cart
+                Add to Cart
               </button>
             </div>
-          </FadeInDirection>
+          </FadeUp>
         </div>
       </section>
 
-      {/* ───────────────────────────────────────────────────────────────────
-          SECTION 2: ZOOM DETAIL STRIP
-          ─────────────────────────────────────────────────────────────────── */}
-      <section ref={zoomSectionRef} className="w-full bg-muted/30 py-16 md:py-24 border-b border-black/10 dark:border-white/10">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 lg:gap-12">
-            {zoomStripCols.map((col, index) => (
+      {/* ══════════════════════════════════════════════════════════════════
+          2. DETAIL STRIP — three close-up angles
+          ══════════════════════════════════════════════════════════════════ */}
+      <section
+        ref={zoomRef}
+        className="border-b border-black/10 dark:border-white/10"
+        style={{ background: "var(--background)" }}
+      >
+        {/* Header */}
+        <div className="px-6 py-10 border-b border-black/10 dark:border-white/10">
+          <FadeUp>
+            <p
+              className="text-muted-foreground uppercase mb-2"
+              style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "0.26em" }}
+            >
+              Detail · GZ R-01
+            </p>
+            <h2
+              className="text-foreground"
+              style={{ fontSize: "clamp(20px, 3vw, 32px)", fontWeight: 300, letterSpacing: "-0.02em" }}
+            >
+              Every thread, considered.
+            </h2>
+          </FadeUp>
+        </div>
+
+        {/* 3-col strip */}
+        <div className="grid grid-cols-1 md:grid-cols-3">
+          {details.map((d, i) => (
+            <div
+              key={i}
+              className="group"
+              style={{
+                borderRight: i < 2 ? "0.5px solid rgba(128,128,128,0.15)" : "none",
+                opacity: zoomVisible ? 1 : 0,
+                transform: zoomVisible ? "translateY(0)" : "translateY(32px)",
+                transition: `opacity 0.8s cubic-bezier(0.16,1,0.3,1) ${i * 160}ms, transform 0.8s cubic-bezier(0.16,1,0.3,1) ${i * 160}ms`,
+              }}
+            >
+              {/* Image — tall, fills, hover slight zoom */}
               <div
-                key={index}
-                style={{
-                  opacity: zoomVisible ? 1 : 0,
-                  transform: zoomVisible ? "translateY(0)" : "translateY(24px)",
-                  transition: "opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1)",
-                  transitionDelay: zoomVisible ? `${index * 150}ms` : "0ms",
-                }}
-                className="group flex flex-col pointer-events-auto motion-reduce:opacity-100 motion-reduce:transform-none"
+                className="w-full overflow-hidden bg-neutral-100 dark:bg-neutral-900"
+                style={{ height: "clamp(260px, 32vw, 420px)" }}
               >
-                <div className="aspect-[3/4] w-full overflow-hidden bg-neutral-900 relative">
-                  <img
-                    src={col.img}
-                    alt={col.heading}
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                  />
-                </div>
-                <div className="mt-6 space-y-2">
-                  <span className="text-[9px] font-mono tracking-[0.2em] text-muted-foreground uppercase block">
-                    {col.label}
-                  </span>
-                  <h3 className="text-lg font-medium text-foreground">
-                    {col.heading}
-                  </h3>
-                  <p className="text-xs leading-relaxed text-muted-foreground">
-                    {col.copy}
-                  </p>
-                </div>
+                <img
+                  src={d.img}
+                  alt={d.heading}
+                  className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+                  style={{ display: "block" }}
+                />
               </div>
-            ))}
-          </div>
+              {/* Info */}
+              <div className="px-7 py-8 border-t border-black/10 dark:border-white/10">
+                <p
+                  className="text-muted-foreground uppercase mb-3"
+                  style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "0.22em" }}
+                >
+                  {String(i + 1).padStart(2, "0")} — {d.label}
+                </p>
+                <h3 className="text-foreground text-base font-medium mb-2">{d.heading}</h3>
+                <p className="text-muted-foreground text-xs leading-relaxed" style={{ fontWeight: 300 }}>{d.copy}</p>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* ───────────────────────────────────────────────────────────────────
-          SECTION 3: BRAND STORY + VALUES (INTEGRATING ORIGINAL COPY)
-          ─────────────────────────────────────────────────────────────────── */}
-      <section className="max-w-7xl mx-auto px-6 py-16 md:py-32">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 lg:gap-24">
-          
-          {/* Left Column: Brand Story (Original context & text) */}
-          <div className="flex flex-col justify-center">
-            <FadeInDirection>
-              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight text-foreground leading-tight mb-6">
-                Cut through the noise of fast fashion.
-              </h2>
-              <div className="space-y-4 text-sm leading-relaxed text-muted-foreground font-normal">
-                <p>
-                  We believe that what you wear should be as functional as it is aesthetic. 
-                  We started {site.brand} to cut through the noise of fast fashion, 
-                  offering pieces that prioritize longevity over trends.
-                </p>
-                <p>
-                  Every garment we release is crafted to be a staple in your rotation—designed 
-                  to feel better, last longer, and fit seamlessly into your personal style.
-                </p>
-                
-                <div className="pt-4 border-t border-black/10 dark:border-white/10">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground mb-3">Our standards</h3>
-                  <ul className="list-disc space-y-2 pl-5 text-xs text-muted-foreground">
-                    <li>Quality through simplicity.</li>
-                    <li>Minimalist design, maximum impact.</li>
-                    <li>Pieces made to be worn, not just owned.</li>
-                    <li>Commitment to timeless, elevated essentials.</li>
-                  </ul>
-                </div>
+      {/* ══════════════════════════════════════════════════════════════════
+          3. BRAND STORY + VALUES
+          ══════════════════════════════════════════════════════════════════ */}
+      <section className="border-b border-black/10 dark:border-white/10">
+        <div className="grid grid-cols-1 md:grid-cols-2">
 
-                <div className="pt-4 text-xs">
-                  <p>
-                    For inquiries, feedback, or support, reach us at{" "}
-                    <a className="text-foreground underline hover:opacity-80" href="mailto:luveni.apparel@gmail.com">
-                      luveni.apparel@gmail.com
-                    </a>.
-                  </p>
-                </div>
+          {/* Left — story */}
+          <div
+            className="px-8 py-16 sm:px-12 md:px-16 lg:px-20 border-b md:border-b-0 md:border-r border-black/10 dark:border-white/10"
+          >
+            <FadeUp>
+              <p
+                className="text-muted-foreground uppercase mb-5"
+                style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "0.26em" }}
+              >
+                Our approach
+              </p>
+              <h2
+                className="text-foreground mb-7"
+                style={{ fontSize: "clamp(22px, 3vw, 36px)", fontWeight: 300, letterSpacing: "-0.02em", lineHeight: 1.2 }}
+              >
+                Cut through the noise<br />of fast fashion.
+              </h2>
+              <div className="space-y-4 text-sm leading-relaxed text-muted-foreground" style={{ fontWeight: 300 }}>
+                <p>
+                  We believe what you wear should be as functional as it is aesthetic.{" "}
+                  {site.brand} exists to cut through the noise of fast fashion — offering pieces that
+                  prioritize longevity over trends.
+                </p>
+                <p>
+                  Every garment is crafted to be a staple in your rotation. Designed to feel better,
+                  last longer, and fit seamlessly into your personal style.
+                </p>
               </div>
-            </FadeInDirection>
+
+              <div className="mt-8 pt-8 border-t border-black/10 dark:border-white/10">
+                <p
+                  className="text-muted-foreground uppercase mb-4"
+                  style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "0.22em" }}
+                >
+                  Standards
+                </p>
+                <ul className="space-y-2">
+                  {[
+                    "Quality through simplicity.",
+                    "Minimalist design, maximum impact.",
+                    "Pieces made to be worn, not just owned.",
+                    "Commitment to timeless, elevated essentials.",
+                  ].map((s, i) => (
+                    <li key={i} className="text-xs text-muted-foreground flex items-start gap-2" style={{ fontWeight: 300 }}>
+                      <span className="mt-[5px] w-1 h-1 rounded-full bg-muted-foreground flex-shrink-0 opacity-50" />
+                      {s}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="mt-8 pt-6 border-t border-black/10 dark:border-white/10 text-xs text-muted-foreground" style={{ fontWeight: 300 }}>
+                Reach us at{" "}
+                <a
+                  href="mailto:luveni.apparel@gmail.com"
+                  className="text-foreground underline underline-offset-2 hover:opacity-60 transition-opacity"
+                >
+                  luveni.apparel@gmail.com
+                </a>
+              </div>
+            </FadeUp>
           </div>
 
-          {/* Right Column: Values 2x2 grid */}
-          <div className="flex items-center">
-            <FadeInDirection delay={100}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 lg:gap-10">
-                {brandValues.map((value, i) => {
-                  const Icon = value.icon;
+          {/* Right — values */}
+          <div className="px-8 py-16 sm:px-12 md:px-16 lg:px-20 flex items-center">
+            <FadeUp delay={120}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
+                {values.map((v, i) => {
+                  const Icon = v.icon;
                   return (
-                    <div key={i} className="space-y-3">
-                      <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-foreground">
-                        <Icon size={14} />
+                    <div key={i}>
+                      <div
+                        className="w-8 h-8 rounded-full bg-muted flex items-center justify-center mb-4"
+                      >
+                        <Icon size={13} className="text-foreground" />
                       </div>
-                      <h4 className="text-sm font-semibold text-foreground">
-                        {value.title}
-                      </h4>
-                      <p className="text-xs leading-relaxed text-muted-foreground">
-                        {value.description}
+                      <h4 className="text-sm font-semibold text-foreground mb-2">{v.title}</h4>
+                      <p className="text-xs leading-relaxed text-muted-foreground" style={{ fontWeight: 300 }}>
+                        {v.desc}
                       </p>
                     </div>
                   );
                 })}
               </div>
-            </FadeInDirection>
+            </FadeUp>
           </div>
+        </div>
+      </section>
 
+      {/* ══════════════════════════════════════════════════════════════════
+          4. FULL-WIDTH EDITORIAL IMAGE BAND
+             Uses the third Printful preview as an atmospheric wide shot
+          ══════════════════════════════════════════════════════════════════ */}
+      <section
+        className="relative overflow-hidden border-b border-black/10 dark:border-white/10"
+        style={{ height: "clamp(280px, 45vw, 560px)" }}
+      >
+        <ParallaxImage
+          src="https://files.cdn.printful.com/files/1f4/1f4017c83d3d8099557f471924905541_preview.png"
+          alt="Luveni fabric detail"
+        />
+        {/* Dark overlay + centered text */}
+        <div
+          className="absolute inset-0 flex flex-col items-center justify-center text-center px-6"
+          style={{ background: "rgba(0,0,0,0.42)" }}
+        >
+          <FadeUp>
+            <p
+              className="uppercase mb-3"
+              style={{
+                fontFamily: "monospace",
+                fontSize: "9px",
+                letterSpacing: "0.28em",
+                color: "rgba(255,255,255,0.45)",
+              }}
+            >
+              Luveni · {new Date().getFullYear()}
+            </p>
+            <p
+              style={{
+                fontSize: "clamp(24px, 4vw, 48px)",
+                fontWeight: 200,
+                letterSpacing: "-0.025em",
+                color: "#fff",
+                lineHeight: 1.1,
+              }}
+            >
+              Designed for the<br />
+              <span style={{ fontWeight: 500 }}>everyday uniform.</span>
+            </p>
+          </FadeUp>
         </div>
       </section>
 
