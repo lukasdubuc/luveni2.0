@@ -1,7 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { site } from "@/config/site";
 import { useEffect, useRef, useState } from "react";
-import { Shield, Sparkles, Eye, Users } from "lucide-react";
+import { Shield, Sparkles, Eye, Users, ChevronLeft, ChevronRight } from "lucide-react";
 
 export const Route = createFileRoute("/about")({
   head: () => ({
@@ -257,7 +257,7 @@ function About() {
         {/* RIGHT — Technical Specs Column (with CSS Reveal) */}
         <div className="flex flex-col justify-center px-8 py-16 sm:px-12 md:px-16 lg:px-24">
           <div className="reveal-on-scroll transition-all duration-[900ms] ease-out opacity-0 translate-y-6 [&.revealed]:opacity-100 [&.revealed]:translate-y-0">
-            <p className="text-neutral-500 uppercase mb-4 animate-pulse" style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "0.28em" }}>The Signature Silhouette</p>
+            <p className="text-neutral-500 uppercase mb-4" style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "0.28em" }}>The Signature Silhouette</p>
             <h1 className="tracking-tighter text-foreground mb-6" style={{ fontSize: "clamp(34px, 5vw, 62px)", fontWeight: 200, lineHeight: 1.04, letterSpacing: "-0.035em" }}>
               The one you<br />
               <span className="font-semibold text-foreground">reach for first.</span>
@@ -403,9 +403,40 @@ function About() {
       </section>
 
       {/* ───────────────────────────────────────────────────────────────────
-          4. PHILOSOPHY CONVICTION DECK
+          4. THE STUDIO (ABOUT US SECTION)
           ─────────────────────────────────────────────────────────────────── */}
-      <section id="story" className="bg-background px-6 py-40 border-b border-border">
+      <section id="story" className="relative py-24 sm:py-36 border-b border-border bg-background">
+        <div className="absolute inset-0 pointer-events-none opacity-[0.03] mix-blend-screen z-0" style={{
+          backgroundImage: "linear-gradient(to right, var(--border) 1px, transparent 1px), linear-gradient(to bottom, var(--border) 1px, transparent 1px)",
+          backgroundSize: "40px 44px"
+        }} />
+        <div className="mx-auto max-w-[1200px] px-6 grid grid-cols-1 md:grid-cols-2 gap-12 lg:gap-24">
+          <div className="reveal-on-scroll transition-all duration-[900ms] ease-out opacity-0 translate-y-6 [&.revealed]:opacity-100 [&.revealed]:translate-y-0">
+            <p className="text-[10px] font-mono tracking-[0.24em] text-neutral-500 uppercase mb-4">The Studio</p>
+            <h2 className="text-foreground tracking-tighter" style={{ fontFamily: "'SF Pro Display', -apple-system, system-ui", fontSize: "clamp(34px, 4.8vw, 64px)", lineHeight: 1.04, fontWeight: 200 }}>
+              Formed in quiet conviction.<br />
+              <span className="font-semibold">Built by hands who notice.</span>
+            </h2>
+          </div>
+          <div className="reveal-on-scroll transition-all duration-[900ms] ease-out opacity-0 translate-y-6 [&.revealed]:opacity-100 [&.revealed]:translate-y-0 flex flex-col justify-center space-y-6 text-sm leading-relaxed text-muted-foreground font-light font-sans">
+            <p>
+              Luveni was established as an independent design collective seeking to restore intent to everyday garments. 
+              We believe clothing should carry weight—both in its physical hand-feel and its design discipline. We exist 
+              to serve those who look closely, appreciate structural gravity, and value the quiet details of construction.
+            </p>
+            <p>
+              Our team oversees every stage of development, from initial silhouette sketching in our studio to final-checkpoint inspections. 
+              We do not manufacture for mass shelves or trend-driven clearance cycles. Instead, we iterate exhaustively on a single 
+              uniform block until it satisfies our standard for physical longevity and uncompromised drape.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ───────────────────────────────────────────────────────────────────
+          5. PHILOSOPHY CONVICTION DECK
+          ─────────────────────────────────────────────────────────────────── */}
+      <section className="bg-background px-6 py-40 border-b border-border">
         <div className="mx-auto max-w-[900px] text-center transition-all duration-[900ms] ease-out opacity-0 translate-y-6 [&.revealed]:opacity-100 [&.revealed]:translate-y-0 reveal-on-scroll">
           <p className="mb-5 text-[11px] font-semibold uppercase tracking-[0.24em]" style={{ background: "linear-gradient(90deg,#ff8a3d,#ff5e9b,#7c5cff,#3dc6ff)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
             The Story
@@ -433,7 +464,7 @@ function About() {
       </section>
 
       {/* ───────────────────────────────────────────────────────────────────
-          5. EDITORIAL FOOTER PARALLAX CARD
+          6. EDITORIAL FOOTER PARALLAX CARD
           ─────────────────────────────────────────────────────────────────── */}
       <section ref={editorialRef} id="editorial-parallax" className="relative overflow-hidden border-b border-border" style={{ height: "clamp(340px, 48vw, 620px)" }}>
         <div className="w-full h-full overflow-hidden">
