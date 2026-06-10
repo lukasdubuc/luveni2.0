@@ -1,22 +1,3 @@
-// ────────────────────────────────────────────────────────────────────────────
-// LOVABLE COMPILER DIRECTIVE:
-// Dear Lovable Code Agent: Please scan your local "public/lovable-uploads/" 
-// directory and replace the placeholder paths (e.g. "/lovable-uploads/input_file_0.png")
-// below with the ACTUAL UUID filenames of the uploaded images. 
-// Match them as follows:
-// - input_file_0.png: Transparent kuffiyeh girl logo graphic
-// - input_file_1.png: Black folded shirt flatlay mockup on white
-// - input_file_2.png: Flat front black t-shirt mockup
-// - input_file_3.png: Model wearing the black t-shirt
-// - input_file_4.png: Hat left profile (heart showing)
-// - input_file_5.png: Hat front left angle
-// - input_file_6.png: Hat front right angle
-// - input_file_7.png: Hat right profile (plain)
-// - input_file_8.png: Hat back view with buckle
-// - input_file_9.png: Hat front view centered
-// - input_file_10.png: Hat top down view
-// ────────────────────────────────────────────────────────────────────────────
-
 import { createFileRoute } from "@tanstack/react-router";
 import { site } from "@/config/site";
 import { useEffect, useRef, useState } from "react";
@@ -35,22 +16,22 @@ export const Route = createFileRoute("/about")({
   component: About,
 });
 
-// ─── STATIC DESIGN DATA (COMPILER WILL CONVERT THESE STRINGS TO REAL UUID PATHS) ───
+// ─── STATIC DATA CONFIGS (LOVABLE WRITER: REPLACE THESE WITH THE STAGED UUID FILENAMES) ───
 const DETAILS = [
   {
-    img: "/lovable-uploads/input_file_1.png", // [Lovable: Replace with folded shirt flatlay mockup]
+    img: "/lovable-uploads/input_file_1.png", // [Lovable: Replace with folded shirt mockup filename]
     label: "Construction",
     heading: "Reinforced Collar",
     copy: "Double-needle neck ribbing designed to hold structured form wash after wash.",
   },
   {
-    img: "/lovable-uploads/input_file_0.png", // [Lovable: Replace with isolated transparent logo]
+    img: "/lovable-uploads/input_file_0.png", // [Lovable: Replace with transparent logo mockup filename]
     label: "Iconography",
     heading: "Kuffiyeh & Butterfly Emblem",
     copy: "Our signature front relief composition, balancing resilience, patience, and growth.",
   },
   {
-    img: "/lovable-uploads/input_file_2.png", // [Lovable: Replace with flat front shirt mockup]
+    img: "/lovable-uploads/input_file_2.png", // [Lovable: Replace with flat front shirt mockup filename]
     label: "Material",
     heading: "240 GSM Combed Cotton",
     copy: "Heavyweight tactile hand-feel that drapes seamlessly for high daily breathability.",
@@ -193,6 +174,7 @@ function InteractiveHeroStage() {
       className="relative w-full h-full bg-neutral-50/50 dark:bg-neutral-950/20 border-b md:border-b-0 md:border-r border-black/10 dark:border-white/10 overflow-hidden flex flex-col justify-between"
       style={{ minHeight: "65vh" }}
     >
+      {/* Dynamic spotlight backlighting */}
       <div
         className="absolute inset-0 pointer-events-none rounded-full"
         style={{
@@ -200,17 +182,23 @@ function InteractiveHeroStage() {
         }}
       />
 
+      {/* Blueprint background grid lines for a precise CAD aesthetic */}
+      <div className="absolute inset-0 pointer-events-none opacity-25 dark:opacity-10" style={{
+        backgroundImage: "radial-gradient(var(--border) 1px, transparent 0)",
+        backgroundSize: "24px 24px"
+      }} />
+
       <div className="flex-1 w-full relative flex items-center justify-center p-8">
         {/* Frame A: Flat Mockup View */}
         <img
           ref={flatImgRef}
-          src="/lovable-uploads/input_file_2.png" // [Lovable: Replace with flat front shirt mockup]
+          src="/lovable-uploads/input_file_2.png" // [Lovable: Replace with flat front shirt mockup UUID]
           alt="GZ R-01 tee front layout"
-          className="absolute max-h-[82%] max-w-[82%] object-contain select-none transition-all duration-700 ease-out"
+          className="absolute max-h-[82%] max-w-[82%] object-contain select-none transition-all duration-750 ease-out"
           style={{
             opacity: activeTab === "flat" && entered ? 1 : 0,
             visibility: activeTab === "flat" ? "visible" : "hidden",
-            filter: "drop-shadow(0 20px 45px rgba(0,0,0,0.12))",
+            filter: "drop-shadow(0 20px 45px rgba(0,0,0,0.08))",
           }}
           draggable={false}
         />
@@ -218,13 +206,13 @@ function InteractiveHeroStage() {
         {/* Frame B: On-Model Lifestyle View */}
         <img
           ref={modelImgRef}
-          src="/lovable-uploads/input_file_3.png" // [Lovable: Replace with model wearing GZ R-01 shirt]
+          src="/lovable-uploads/input_file_3.png" // [Lovable: Replace with model wearing GZ R-01 shirt UUID]
           alt="GZ R-01 tee on model"
-          className="absolute max-h-[82%] max-w-[82%] object-contain select-none transition-all duration-700 ease-out rounded-2xl"
+          className="absolute max-h-[82%] max-w-[82%] object-contain select-none transition-all duration-750 ease-out rounded-2xl"
           style={{
             opacity: activeTab === "model" && entered ? 1 : 0,
             visibility: activeTab === "model" ? "visible" : "hidden",
-            filter: "drop-shadow(0 20px 45px rgba(0,0,0,0.15))",
+            filter: "drop-shadow(0 20px 45px rgba(0,0,0,0.12))",
           }}
           draggable={false}
         />
@@ -277,13 +265,13 @@ function SubHighlightRotator() {
 
   // Stacked arrays mapped using exact compile-directive relative imports
   const hatAngles = [
-    { name: "Front Flat View", src: "/lovable-uploads/input_file_9.png" }, // [Lovable: Replace with hat front view]
-    { name: "Front Left Tilt", src: "/lovable-uploads/input_file_5.png" }, // [Lovable: Replace with hat front left]
-    { name: "Left Profile (Logo Detail)", src: "/lovable-uploads/input_file_4.png" }, // [Lovable: Replace with hat left profile]
-    { name: "Back View (Brass Adjuster)", src: "/lovable-uploads/input_file_8.png" }, // [Lovable: Replace with hat back view]
-    { name: "Right Profile (Minimal)", src: "/lovable-uploads/input_file_7.png" }, // [Lovable: Replace with hat right profile]
-    { name: "Front Right Tilt", src: "/lovable-uploads/input_file_6.png" }, // [Lovable: Replace with hat front right]
-    { name: "Top-Down View", src: "/lovable-uploads/input_file_10.png" }, // [Lovable: Replace with hat top down]
+    { name: "Front Flat View", src: "/lovable-uploads/input_file_9.png" }, // [Lovable: Replace with hat front view UUID]
+    { name: "Front Left Tilt", src: "/lovable-uploads/input_file_5.png" }, // [Lovable: Replace with hat front left UUID]
+    { name: "Left Profile (Logo Detail)", src: "/lovable-uploads/input_file_4.png" }, // [Lovable: Replace with hat left profile UUID]
+    { name: "Back View (Brass Adjuster)", src: "/lovable-uploads/input_file_8.png" }, // [Lovable: Replace with hat back view UUID]
+    { name: "Right Profile (Minimal)", src: "/lovable-uploads/input_file_7.png" }, // [Lovable: Replace with hat right profile UUID]
+    { name: "Front Right Tilt", src: "/lovable-uploads/input_file_6.png" }, // [Lovable: Replace with hat front right UUID]
+    { name: "Top-Down View", src: "/lovable-uploads/input_file_10.png" }, // [Lovable: Replace with hat top down UUID]
   ];
 
   const handleNext = () => {
@@ -387,7 +375,7 @@ function About() {
         id: "f3cb47f6-0d11-4b97-9e3b-29d306607819",
         title: "GZ R-01 (organic, unisex)",
         price: 2800,
-        image: "/lovable-uploads/input_file_2.png", // [Lovable: Replace with flat front shirt mockup]
+        image: "/lovable-uploads/input_file_2.png", // [Lovable: Replace with flat front shirt mockup UUID]
         quantity: 1,
       };
       const idx = cart.findIndex((i: any) => i.id === item.id);
@@ -710,7 +698,7 @@ function About() {
         style={{ height: "clamp(300px, 48vw, 580px)" }}
       >
         <ParallaxImage
-          src="/lovable-uploads/input_file_3.png" // [Lovable: Replace with model wearing GZ R-01 shirt]
+          src="/lovable-uploads/input_file_3.png" // [Lovable: Replace with model wearing GZ R-01 shirt UUID]
           alt="Luveni model closeup detail"
         />
         <div
