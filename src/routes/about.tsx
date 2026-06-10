@@ -16,7 +16,30 @@ export const Route = createFileRoute("/about")({
   component: About,
 });
 
-// ─── FADE UP ON SCROLL ────────────────────────────────────────────────────
+// ─── APPLE STICKY LOCAL NAVIGATION ────────────────────────────────────────
+function LocalNav({ onBuy }: { onBuy: () => void }) {
+  return (
+    <div className="sticky top-0 z-40 w-full backdrop-blur-md bg-background/80 border-b border-black/5 dark:border-white/5 transition-all">
+      <div className="max-w-7xl mx-auto px-6 h-12 flex items-center justify-between">
+        <span className="text-[11px] font-semibold tracking-tight text-foreground flex items-center gap-1.5">
+          GZ R-01 <span className="text-muted-foreground font-normal">Overview</span>
+        </span>
+        <div className="flex items-center gap-6">
+          <a href="#details" className="text-[10px] font-mono tracking-wider text-muted-foreground hover:text-foreground transition-colors uppercase hidden sm:inline-block">Details</a>
+          <a href="#story" className="text-[10px] font-mono tracking-wider text-muted-foreground hover:text-foreground transition-colors uppercase hidden sm:inline-block">Our Story</a>
+          <button
+            onClick={onBuy}
+            className="bg-foreground text-background text-[10px] font-bold tracking-wider uppercase px-3.5 py-1.5 rounded-full hover:opacity-90 active:scale-[0.97] transition-all"
+          >
+            Buy
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── FADE UP ON SCROLL (APPLE ENTRY) ──────────────────────────────────────
 function FadeUp({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
@@ -28,7 +51,7 @@ function FadeUp({ children, delay = 0 }: { children: React.ReactNode; delay?: nu
     }
     const obs = new IntersectionObserver(
       ([e]) => { if (e.isIntersecting) { setVisible(true); obs.unobserve(e.target); } },
-      { threshold: 0.05, rootMargin: "0px 0px -40px 0px" }
+      { threshold: 0.05, rootMargin: "0px 0px -60px 0px" }
     );
     if (ref.current) obs.observe(ref.current);
     return () => obs.disconnect();
@@ -39,8 +62,8 @@ function FadeUp({ children, delay = 0 }: { children: React.ReactNode; delay?: nu
       ref={ref}
       style={{
         opacity: visible ? 1 : 0,
-        transform: visible ? "translateY(0)" : "translateY(28px)",
-        transition: `opacity 0.75s cubic-bezier(0.16,1,0.3,1) ${delay}ms, transform 0.75s cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
+        transform: visible ? "translateY(0)" : "translateY(24px)",
+        transition: `opacity 0.8s cubic-bezier(0.16,1,0.3,1) ${delay}ms, transform 0.8s cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
       }}
     >
       {children}
@@ -61,7 +84,7 @@ function ParallaxImage({ src, alt }: { src: string; alt: string }) {
       const vh = window.innerHeight;
       const progress = 1 - (rect.bottom / (vh + rect.height));
       const clampedProgress = Math.max(0, Math.min(1, progress));
-      imgRef.current.style.transform = `translateY(${clampedProgress * -40}px) scale(1.08)`;
+      imgRef.current.style.transform = `translateY(${clampedProgress * -50}px) scale(1.10)`;
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
@@ -81,13 +104,12 @@ function ParallaxImage({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-// ─── CINEMATIC ZOOM IMAGE (GZ R-01 hero) ─────────────────────────────────
+// ─── CINEMATIC ZOOM IMAGE (KEYNOTE PRESENTATION STAGE) ───────────────────
 function CinematicProduct() {
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const [entered, setEntered] = useState(false);
 
-  // Scroll-driven scale: zooms from 1.0 to 1.18 as section scrolls through viewport
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const onScroll = () => {
@@ -95,14 +117,13 @@ function CinematicProduct() {
       const rect = containerRef.current.getBoundingClientRect();
       const vh = window.innerHeight;
       const progress = Math.max(0, Math.min(1, 1 - rect.bottom / (vh + rect.height)));
-      imgRef.current.style.transform = `scale(${1 + progress * 0.18})`;
+      imgRef.current.style.transform = `scale(${1 + progress * 0.15})`;
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Fade in on entry
   useEffect(() => {
     const obs = new IntersectionObserver(
       ([e]) => { if (e.isIntersecting) { setEntered(true); obs.disconnect(); } },
@@ -115,14 +136,14 @@ function CinematicProduct() {
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full bg-neutral-950 overflow-hidden flex items-center justify-center"
-      style={{ minHeight: "60vh" }}
+      className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center border-b md:border-b-0 md:border-r border-neutral-900"
+      style={{ minHeight: "65vh" }}
     >
-      {/* Ambient glow behind shirt */}
+      {/* Immersive radial keynote backlighting */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: "radial-gradient(ellipse 60% 50% at 50% 55%, rgba(255,255,255,0.035) 0%, transparent 70%)",
+          background: "radial-gradient(ellipse 50% 45% at 50% 50%, rgba(255,255,255,0.04) 0%, transparent 60%)",
         }}
       />
       <img
@@ -131,41 +152,42 @@ function CinematicProduct() {
         alt="GZ R-01 Organic Unisex Tee"
         className="relative z-10 select-none"
         style={{
-          maxHeight: "82%",
-          maxWidth: "82%",
+          maxHeight: "80%",
+          maxWidth: "80%",
           objectFit: "contain",
           opacity: entered ? 1 : 0,
-          transition: "opacity 1.1s cubic-bezier(0.16,1,0.3,1), transform 0.12s linear",
+          transition: "opacity 1.2s cubic-bezier(0.16,1,0.3,1), transform 0.1s linear",
           willChange: "transform",
-          filter: "drop-shadow(0 40px 80px rgba(0,0,0,0.7))",
+          filter: "drop-shadow(0 30px 60px rgba(0,0,0,0.85))",
         }}
         draggable={false}
       />
-      {/* Bottom label */}
+      
+      {/* Bottom Technical Tag */}
       <div
         className="absolute bottom-6 left-0 right-0 flex justify-center z-20"
         style={{
           opacity: entered ? 1 : 0,
-          transition: "opacity 1.4s cubic-bezier(0.16,1,0.3,1) 0.3s",
+          transition: "opacity 1.5s cubic-bezier(0.16,1,0.3,1) 0.4s",
         }}
       >
         <span
           style={{
             fontFamily: "monospace",
-            fontSize: "9px",
-            letterSpacing: "0.28em",
-            color: "rgba(255,255,255,0.28)",
+            fontSize: "8.5px",
+            letterSpacing: "0.3em",
+            color: "rgba(255,255,255,0.3)",
             textTransform: "uppercase",
           }}
         >
-          GZ R-01 · Organic Unisex · $28
+          Model No: GZ R-01 · 240 GSM · $28
         </span>
       </div>
     </div>
   );
 }
 
-// ─── MAIN COMPONENT ───────────────────────────────────────────────────────
+// ─── MAIN ABOUT PAGE ─────────────────────────────────────────────────────
 function About() {
   const zoomRef = useRef<HTMLDivElement>(null);
   const [zoomVisible, setZoomVisible] = useState(false);
@@ -201,7 +223,6 @@ function About() {
     }
   };
 
-  // ── Detail strip: three zoomed angles of GZ R-01
   const details = [
     {
       img: "https://files.cdn.printful.com/files/615/61572d86e70a8bfe299150c10432c496_preview.png",
@@ -223,7 +244,6 @@ function About() {
     },
   ];
 
-  // ── Brand values
   const values = [
     { icon: Shield, title: "Quality", desc: "Highest-grade fabrics selected to endure years of wear and wash." },
     { icon: Sparkles, title: "Timeless", desc: "Silhouettes designed to outlast whatever season they drop in." },
@@ -232,46 +252,46 @@ function About() {
   ];
 
   return (
-    <div className="w-full bg-background text-foreground">
+    <div className="w-full bg-background text-foreground selection:bg-neutral-800 transition-colors duration-300">
+      
+      {/* Sticky Apple Local-Nav Subheader */}
+      <LocalNav onBuy={handleAddToCart} />
 
       {/* ══════════════════════════════════════════════════════════════════
           1. CINEMATIC PRODUCT HERO
           ══════════════════════════════════════════════════════════════════ */}
-      <section className="grid grid-cols-1 md:grid-cols-2 border-b border-black/10 dark:border-white/10" style={{ minHeight: "92vh" }}>
+      <section className="grid grid-cols-1 md:grid-cols-2 border-b border-black/10 dark:border-white/10" style={{ minHeight: "88vh" }}>
 
-        {/* LEFT — full bleed shirt, scroll zoom */}
-        <div className="relative border-b md:border-b-0 md:border-r border-black/10 dark:border-white/10" style={{ minHeight: "56vh" }}>
+        {/* LEFT — Product visual, black backdrop, reactive scroll zoom */}
+        <div className="relative">
           <CinematicProduct />
         </div>
 
-        {/* RIGHT — product info */}
-        <div className="flex flex-col justify-center px-8 py-16 sm:px-12 md:px-16 lg:px-20">
+        {/* RIGHT — Apple Spec & Callout Column */}
+        <div className="flex flex-col justify-center px-8 py-16 sm:px-12 md:px-16 lg:px-24">
           <FadeUp>
             <p
-              className="text-muted-foreground uppercase mb-5"
-              style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "0.26em" }}
+              className="text-muted-foreground uppercase mb-4"
+              style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "0.28em" }}
             >
-              Signature piece · GZ R-01
+              The Signature Silhouette
             </p>
 
             <h1
-              className="tracking-tight text-foreground mb-6"
-              style={{ fontSize: "clamp(32px, 4.5vw, 56px)", fontWeight: 300, lineHeight: 1.06, letterSpacing: "-0.025em" }}
+              className="tracking-tighter text-foreground mb-6"
+              style={{ fontSize: "clamp(34px, 5vw, 62px)", fontWeight: 200, lineHeight: 1.04, letterSpacing: "-0.035em" }}
             >
               The one you<br />
-              <span style={{ fontWeight: 600 }}>reach for first.</span>
+              <span className="font-semibold text-foreground">reach for first.</span>
             </h1>
 
-            <p className="text-sm leading-relaxed text-muted-foreground mb-10 max-w-md" style={{ fontWeight: 300 }}>
+            <p className="text-sm leading-relaxed text-muted-foreground mb-10 max-w-md font-light">
               Heavyweight combed organic cotton. A bonsai mark reduced to its most essential form.
               The GZ R-01 is the piece Luveni was built around — designed for your rotation, not the rack.
             </p>
 
-            {/* Specs */}
-            <div
-              className="grid grid-cols-2 mb-10 border-t border-b border-black/10 dark:border-white/10"
-              style={{ gap: 0 }}
-            >
+            {/* Tech Specs Comparison Table */}
+            <div className="grid grid-cols-2 mb-10 border-t border-b border-black/10 dark:border-white/10">
               {[
                 ["Material", "100% Organic Cotton"],
                 ["Fit", "Relaxed / Boxy"],
@@ -282,9 +302,8 @@ function About() {
                   key={i}
                   className="py-4 pr-6"
                   style={{
-                    borderRight: i % 2 === 0 ? "0.5px solid" : "none",
-                    borderBottom: i < 2 ? "0.5px solid" : "none",
-                    borderColor: "rgba(128,128,128,0.15)",
+                    borderRight: i % 2 === 0 ? "0.5px solid rgba(128,128,128,0.15)" : "none",
+                    borderBottom: i < 2 ? "0.5px solid rgba(128,128,128,0.15)" : "none",
                   }}
                 >
                   <span
@@ -293,36 +312,33 @@ function About() {
                   >
                     {label}
                   </span>
-                  <span className="text-foreground text-xs font-medium">{val}</span>
+                  <span className="text-foreground text-xs font-semibold">{val}</span>
                 </div>
               ))}
             </div>
 
-            {/* Price + CTA */}
-            <div className="flex items-center justify-between gap-4 flex-wrap">
+            {/* Price block and Button */}
+            <div className="flex items-center justify-between gap-6 flex-wrap">
               <div>
                 <span
                   className="text-muted-foreground uppercase block mb-1"
                   style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "0.18em" }}
                 >
-                  Price
+                  Retail Price
                 </span>
-                <span className="text-foreground" style={{ fontSize: "32px", fontWeight: 300, letterSpacing: "-0.02em" }}>
+                <span className="text-foreground tracking-tighter" style={{ fontSize: "36px", fontWeight: 200 }}>
                   $28
                 </span>
               </div>
               <button
                 onClick={handleAddToCart}
-                className="flex-1 max-w-xs bg-foreground text-background hover:opacity-80 active:scale-[0.97] transition-all"
+                className="flex-1 max-w-xs bg-foreground text-background hover:opacity-90 active:scale-[0.97] transition-all py-4 px-8 border-none cursor-pointer"
                 style={{
-                  padding: "14px 32px",
                   fontFamily: "monospace",
                   fontSize: "10px",
                   letterSpacing: "0.2em",
                   fontWeight: 700,
                   textTransform: "uppercase",
-                  border: "none",
-                  cursor: "pointer",
                 }}
               >
                 Add to Cart
@@ -333,66 +349,67 @@ function About() {
       </section>
 
       {/* ══════════════════════════════════════════════════════════════════
-          2. DETAIL STRIP — three close-up angles
+          2. THE CORE GRID — THREE SYSTEM CLOSE-UP TILES
           ══════════════════════════════════════════════════════════════════ */}
       <section
+        id="details"
         ref={zoomRef}
-        className="border-b border-black/10 dark:border-white/10"
-        style={{ background: "var(--background)" }}
+        className="border-b border-black/10 dark:border-white/10 bg-background"
       >
-        {/* Header */}
-        <div className="px-6 py-10 border-b border-black/10 dark:border-white/10">
+        {/* Title Block */}
+        <div className="px-8 py-12 sm:px-12 border-b border-black/10 dark:border-white/10">
           <FadeUp>
             <p
               className="text-muted-foreground uppercase mb-2"
               style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "0.26em" }}
             >
-              Detail · GZ R-01
+              Structure Detail
             </p>
             <h2
-              className="text-foreground"
-              style={{ fontSize: "clamp(20px, 3vw, 32px)", fontWeight: 300, letterSpacing: "-0.02em" }}
+              className="text-foreground tracking-tighter"
+              style={{ fontSize: "clamp(24px, 3.5vw, 36px)", fontWeight: 200 }}
             >
               Every thread, considered.
             </h2>
           </FadeUp>
         </div>
 
-        {/* 3-col strip */}
+        {/* Staggered Features Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3">
           {details.map((d, i) => (
             <div
               key={i}
-              className="group"
+              className="group flex flex-col justify-between"
               style={{
-                borderRight: i < 2 ? "0.5px solid rgba(128,128,128,0.15)" : "none",
+                borderRight: i < 2 ? "1px solid rgba(128,128,128,0.12)" : "none",
                 opacity: zoomVisible ? 1 : 0,
-                transform: zoomVisible ? "translateY(0)" : "translateY(32px)",
-                transition: `opacity 0.8s cubic-bezier(0.16,1,0.3,1) ${i * 160}ms, transform 0.8s cubic-bezier(0.16,1,0.3,1) ${i * 160}ms`,
+                transform: zoomVisible ? "translateY(0)" : "translateY(24px)",
+                transition: `opacity 0.8s cubic-bezier(0.16,1,0.3,1) ${i * 150}ms, transform 0.8s cubic-bezier(0.16,1,0.3,1) ${i * 150}ms`,
               }}
             >
-              {/* Image — tall, fills, hover slight zoom */}
+              {/* Product Frame */}
               <div
                 className="w-full overflow-hidden bg-neutral-100 dark:bg-neutral-900"
-                style={{ height: "clamp(260px, 32vw, 420px)" }}
+                style={{ height: "clamp(280px, 34vw, 440px)" }}
               >
                 <img
                   src={d.img}
                   alt={d.heading}
-                  className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+                  className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
                   style={{ display: "block" }}
                 />
               </div>
-              {/* Info */}
-              <div className="px-7 py-8 border-t border-black/10 dark:border-white/10">
+              
+              {/* Feature info */}
+              <div className="px-8 py-8 border-t border-black/5 dark:border-white/5 bg-background">
                 <p
                   className="text-muted-foreground uppercase mb-3"
-                  style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "0.22em" }}
+                  style={{ fontFamily: "monospace", fontSize: "9.5px", letterSpacing: "0.2em" }}
                 >
-                  {String(i + 1).padStart(2, "0")} — {d.label}
+                  {String(i + 1).padStart(2, "0")} / {d.label}
                 </p>
-                <h3 className="text-foreground text-base font-medium mb-2">{d.heading}</h3>
-                <p className="text-muted-foreground text-xs leading-relaxed" style={{ fontWeight: 300 }}>{d.copy}</p>
+                <h3 className="text-foreground text-base font-semibold mb-2">{d.heading}</h3>
+                <p className="text-muted-foreground text-xs leading-relaxed font-light">{d.copy}</p>
               </div>
             </div>
           ))}
@@ -400,29 +417,29 @@ function About() {
       </section>
 
       {/* ══════════════════════════════════════════════════════════════════
-          3. BRAND STORY + VALUES
+          3. ECOSYSTEM STORY + VALUES CARD DECK
           ══════════════════════════════════════════════════════════════════ */}
-      <section className="border-b border-black/10 dark:border-white/10">
+      <section id="story" className="border-b border-black/10 dark:border-white/10">
         <div className="grid grid-cols-1 md:grid-cols-2">
 
-          {/* Left — story */}
+          {/* Left Column: Mission statement */}
           <div
-            className="px-8 py-16 sm:px-12 md:px-16 lg:px-20 border-b md:border-b-0 md:border-r border-black/10 dark:border-white/10"
+            className="px-8 py-16 sm:px-12 md:px-16 lg:px-24 border-b md:border-b-0 md:border-r border-black/10 dark:border-white/10"
           >
             <FadeUp>
               <p
                 className="text-muted-foreground uppercase mb-5"
                 style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "0.26em" }}
               >
-                Our approach
+                Our philosophy
               </p>
               <h2
-                className="text-foreground mb-7"
-                style={{ fontSize: "clamp(22px, 3vw, 36px)", fontWeight: 300, letterSpacing: "-0.02em", lineHeight: 1.2 }}
+                className="text-foreground mb-8 tracking-tighter"
+                style={{ fontSize: "clamp(26px, 3.5vw, 42px)", fontWeight: 200, lineHeight: 1.15 }}
               >
                 Cut through the noise<br />of fast fashion.
               </h2>
-              <div className="space-y-4 text-sm leading-relaxed text-muted-foreground" style={{ fontWeight: 300 }}>
+              <div className="space-y-4 text-sm leading-relaxed text-muted-foreground font-light">
                 <p>
                   We believe what you wear should be as functional as it is aesthetic.{" "}
                   {site.brand} exists to cut through the noise of fast fashion — offering pieces that
@@ -434,33 +451,35 @@ function About() {
                 </p>
               </div>
 
-              <div className="mt-8 pt-8 border-t border-black/10 dark:border-white/10">
+              {/* Technical Standards Sub-card */}
+              <div className="mt-10 pt-8 border-t border-black/10 dark:border-white/10">
                 <p
                   className="text-muted-foreground uppercase mb-4"
                   style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "0.22em" }}
                 >
-                  Standards
+                  Strict Design Guidelines
                 </p>
-                <ul className="space-y-2">
+                <ul className="space-y-3">
                   {[
                     "Quality through simplicity.",
                     "Minimalist design, maximum impact.",
                     "Pieces made to be worn, not just owned.",
                     "Commitment to timeless, elevated essentials.",
                   ].map((s, i) => (
-                    <li key={i} className="text-xs text-muted-foreground flex items-start gap-2" style={{ fontWeight: 300 }}>
-                      <span className="mt-[5px] w-1 h-1 rounded-full bg-muted-foreground flex-shrink-0 opacity-50" />
+                    <li key={i} className="text-xs text-muted-foreground flex items-start gap-2 font-light">
+                      <span className="mt-[6.5px] w-1 h-1 rounded-full bg-muted-foreground flex-shrink-0 opacity-60" />
                       {s}
                     </li>
                   ))}
                 </ul>
               </div>
 
-              <div className="mt-8 pt-6 border-t border-black/10 dark:border-white/10 text-xs text-muted-foreground" style={{ fontWeight: 300 }}>
-                Reach us at{" "}
+              {/* Support contact info */}
+              <div className="mt-10 pt-6 border-t border-black/10 dark:border-white/10 text-xs text-muted-foreground font-light">
+                Support inquiries /{" "}
                 <a
                   href="mailto:luveni.apparel@gmail.com"
-                  className="text-foreground underline underline-offset-2 hover:opacity-60 transition-opacity"
+                  className="text-foreground underline underline-offset-2 hover:opacity-70 transition-opacity"
                 >
                   luveni.apparel@gmail.com
                 </a>
@@ -468,21 +487,19 @@ function About() {
             </FadeUp>
           </div>
 
-          {/* Right — values */}
-          <div className="px-8 py-16 sm:px-12 md:px-16 lg:px-20 flex items-center">
+          {/* Right Column: Values grid */}
+          <div className="px-8 py-16 sm:px-12 md:px-16 lg:px-24 flex items-center bg-muted/20">
             <FadeUp delay={120}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-12 sm:gap-10">
                 {values.map((v, i) => {
                   const Icon = v.icon;
                   return (
-                    <div key={i}>
-                      <div
-                        className="w-8 h-8 rounded-full bg-muted flex items-center justify-center mb-4"
-                      >
-                        <Icon size={13} className="text-foreground" />
+                    <div key={i} className="space-y-4">
+                      <div className="w-8 h-8 rounded-full bg-background flex items-center justify-center border border-black/5 dark:border-white/5 shadow-sm">
+                        <Icon size={14} className="text-foreground" />
                       </div>
-                      <h4 className="text-sm font-semibold text-foreground mb-2">{v.title}</h4>
-                      <p className="text-xs leading-relaxed text-muted-foreground" style={{ fontWeight: 300 }}>
+                      <h4 className="text-sm font-semibold text-foreground tracking-tight">{v.title}</h4>
+                      <p className="text-xs leading-relaxed text-muted-foreground font-light">
                         {v.desc}
                       </p>
                     </div>
@@ -494,22 +511,21 @@ function About() {
         </div>
       </section>
 
-      {/* ══════════════════════════════════════════════════════════════════
-          4. FULL-WIDTH EDITORIAL IMAGE BAND
-             Uses the third Printful preview as an atmospheric wide shot
-          ══════════════════════════════════════════════════════════════════ */}
+      {/* ───────────────────────────────────────────────────────────────────
+          4. FULL-WIDTH CINEMATIC BANNER
+          ─────────────────────────────────────────────────────────────────── */}
       <section
         className="relative overflow-hidden border-b border-black/10 dark:border-white/10"
-        style={{ height: "clamp(280px, 45vw, 560px)" }}
+        style={{ height: "clamp(300px, 48vw, 580px)" }}
       >
         <ParallaxImage
           src="https://files.cdn.printful.com/files/1f4/1f4017c83d3d8099557f471924905541_preview.png"
-          alt="Luveni fabric detail"
+          alt="Luveni fabric structural closeup"
         />
-        {/* Dark overlay + centered text */}
+        {/* Apple Editorial vignette overlay */}
         <div
           className="absolute inset-0 flex flex-col items-center justify-center text-center px-6"
-          style={{ background: "rgba(0,0,0,0.42)" }}
+          style={{ background: "linear-gradient(rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.5) 100%)" }}
         >
           <FadeUp>
             <p
@@ -517,23 +533,22 @@ function About() {
               style={{
                 fontFamily: "monospace",
                 fontSize: "9px",
-                letterSpacing: "0.28em",
-                color: "rgba(255,255,255,0.45)",
+                letterSpacing: "0.32em",
+                color: "rgba(255,255,255,0.55)",
               }}
             >
-              Luveni · {new Date().getFullYear()}
+              Luveni Core Systems · {new Date().getFullYear()}
             </p>
             <p
+              className="tracking-tighter text-white"
               style={{
-                fontSize: "clamp(24px, 4vw, 48px)",
-                fontWeight: 200,
-                letterSpacing: "-0.025em",
-                color: "#fff",
+                fontSize: "clamp(26px, 4.5vw, 52px)",
+                fontWeight: 100,
                 lineHeight: 1.1,
               }}
             >
               Designed for the<br />
-              <span style={{ fontWeight: 500 }}>everyday uniform.</span>
+              <span className="font-medium text-white">everyday uniform.</span>
             </p>
           </FadeUp>
         </div>
