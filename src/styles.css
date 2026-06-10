@@ -9,7 +9,7 @@
   --color-foreground: var(--foreground);
   --color-primary: var(--primary);
   --color-border: var(--border);
-  --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-sans: "SF Pro Display", "SF Pro Text", "SF Pro", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
   --font-mono: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
@@ -31,9 +31,9 @@ html { background-color: var(--background); }
 @layer base {
   /* 
     Apply flat, shadowless, uppercase styles globally to ALL elements, 
-    EXCEPT when they are descendants of, or are, the ".admin-page" element.
+    EXCEPT when they are descendants of, or are, the ".admin-page" or ".about-page" elements.
   */
-  *:not(.admin-page):not(.admin-page *) {
+  *:not(.admin-page):not(.admin-page *):not(.about-page):not(.about-page *) {
     border-radius: 0 !important;
     box-shadow: none !important;
     text-transform: uppercase;
@@ -51,8 +51,6 @@ html { background-color: var(--background); }
 }
 
 /* ── Mobile-only: zoom-in transition shop → offer/$slug only ── */
-/* No @view-transition { navigation: auto } — we rely solely on TanStack's   */
-/* viewTransition prop on the shop Link, so only that one direction triggers. */
 @media (max-width: 767px) {
   @keyframes vt-zoom-in {
     from {
