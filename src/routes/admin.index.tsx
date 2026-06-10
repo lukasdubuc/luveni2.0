@@ -1146,7 +1146,7 @@ function AdminPage() {
 
   return (
     <div 
-      className={`admin-page min-h-screen relative ${isDark ? "bg-black text-neutral-100 selection:bg-neutral-800" : "bg-[#f5f5f7] text-neutral-900 selection:bg-neutral-200"}`}
+      className={`admin-page min-h-screen relative overflow-x-hidden ${isDark ? "bg-neutral-950 text-neutral-100 selection:bg-neutral-800" : "bg-[#f5f5f7] text-neutral-900 selection:bg-neutral-200"}`}
       style={{
         fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "SF Pro", "SF Compact", "Helvetica Neue", Helvetica, Arial, sans-serif'
       }}
@@ -1238,59 +1238,82 @@ function AdminPage() {
       </aside>
 
       {/* ── NAV ── */}
-      <nav className={`md:hidden sticky top-0 z-50 backdrop-blur-xl border-b ${isDark ? "bg-black/90 border-white/[0.06]" : "bg-white/90 border-black/[0.07]"}`}>
-        <div className="relative flex items-center justify-center px-6 py-3">
-
-          {/* Centered nav pill */}
-          <div className={`hidden md:flex items-center justify-center gap-0.5 p-1 rounded-[9999px] ${isDark ? "bg-neutral-900/80" : "bg-[#e8e8ed]/80"}`}>
-            {navSections.map(s => (
-              <button
-                key={s}
-                onClick={() => setSection(s)}
-                className={`text-[10px] font-mono font-semibold uppercase tracking-widest transition-all duration-200 px-4 py-1.5 rounded-[9999px] ${
-                  section === s
-                    ? isDark
-                      ? "text-white bg-neutral-800 shadow-[0_1px_6px_rgba(0,0,0,0.5)]"
-                      : "text-black bg-white shadow-[0_2px_10px_rgba(0,0,0,0.10),0_1px_3px_rgba(0,0,0,0.06)]"
-                    : isDark
-                      ? "text-neutral-500 hover:text-neutral-200"
-                      : "text-neutral-500 hover:text-neutral-900"
-                }`}
-              >
-                {s}
-              </button>
-            ))}
+      <nav className={`md:hidden sticky top-0 z-50 backdrop-blur-xl border-b ${isDark ? "bg-neutral-950/90 border-white/[0.06]" : "bg-white/90 border-black/[0.07]"}`}>
+        {/* Brand + hamburger */}
+        <div className="relative flex items-center justify-center px-6 py-4">
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" style={{ boxShadow: "0 0 6px #10b981" }} />
+            <span className={`text-[10px] font-mono font-bold uppercase tracking-[0.22em] ${isDark ? "text-white" : "text-neutral-900"}`}>Admin</span>
           </div>
-
-          {/* Mobile hamburger — pinned right */}
-          <div className="absolute right-6 flex items-center">
+          <div className="absolute right-6">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className={`md:hidden p-1.5 rounded-[9999px] transition-colors ${isDark ? "text-neutral-400 hover:text-white hover:bg-neutral-900" : "text-neutral-500 hover:text-black hover:bg-neutral-100"}`}
+              className={`p-1.5 rounded-[9999px] transition-colors ${isDark ? "text-neutral-400 hover:text-white hover:bg-white/[0.06]" : "text-neutral-500 hover:text-black hover:bg-black/[0.06]"}`}
             >
               <Menu size={16} />
             </button>
           </div>
         </div>
+      </nav>
 
-        {mobileMenuOpen && (
-          <div className={`md:hidden border-t ${isDark ? "border-neutral-900 bg-black" : "border-[#D1D1D6] bg-white"} px-5 py-3 space-y-1`}>
-            {navSections.map(s => (
+      {/* ── MOBILE FULL-SCREEN NAV OVERLAY ── */}
+      {mobileMenuOpen && (
+        <div className={`md:hidden fixed inset-0 z-[100] flex flex-col font-mono animate-in fade-in duration-150 ${isDark ? "bg-neutral-950" : "bg-[#f5f5f7]"}`}>
+
+          {/* Header */}
+          <div className={`flex items-center justify-between px-7 py-5 border-b ${isDark ? "border-white/[0.05]" : "border-black/[0.05]"}`}>
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" style={{ boxShadow: "0 0 6px #10b981" }} />
+              <span className={`text-[10px] font-mono font-bold uppercase tracking-[0.22em] ${isDark ? "text-white" : "text-neutral-900"}`}>Admin</span>
+            </div>
+            <button
+              onClick={() => setMobileMenuOpen(false)}
+              className={`w-8 h-8 flex items-center justify-center rounded-full text-[14px] transition-all ${isDark ? "text-neutral-400 hover:text-white hover:bg-white/[0.06]" : "text-neutral-500 hover:text-black hover:bg-black/[0.06]"}`}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Nav items — full-screen, shop-page style */}
+          <div className="flex-1 flex flex-col justify-center px-7">
+            {navSections.map((s, i) => (
               <button
                 key={s}
                 onClick={() => { setSection(s); setMobileMenuOpen(false); }}
-                className={`block w-full text-left text-[10px] font-mono font-semibold uppercase tracking-widest py-2 px-3 rounded-[9999px] transition-all ${
-                  section === s
-                    ? isDark ? "text-white bg-neutral-900" : "text-black bg-[#e8e8ed]"
-                    : isDark ? "text-neutral-500 hover:text-neutral-200" : "text-neutral-400 hover:text-neutral-900"
+                className={`group w-full text-left py-6 transition-all duration-100 ${
+                  i < navSections.length - 1
+                    ? isDark ? "border-b border-white/[0.04]" : "border-b border-black/[0.04]"
+                    : ""
                 }`}
               >
-                {s}
+                <span className={`flex items-center justify-between font-mono uppercase ${
+                  section === s
+                    ? isDark ? "text-white" : "text-neutral-900"
+                    : isDark ? "text-neutral-600 group-hover:text-neutral-200" : "text-neutral-300 group-hover:text-neutral-800"
+                }`} style={{ fontSize: "clamp(24px, 6vw, 32px)", letterSpacing: "0.06em" }}>
+                  {s}
+                  {section === s && (
+                    <span className={`text-[8px] font-mono tracking-[0.2em] uppercase ${isDark ? "text-neutral-700" : "text-neutral-300"}`}>active</span>
+                  )}
+                </span>
               </button>
             ))}
           </div>
-        )}
-      </nav>
+
+          {/* Footer */}
+          <div className={`px-7 py-6 border-t flex items-center justify-between ${isDark ? "border-white/[0.04]" : "border-black/[0.04]"}`}>
+            <p className={`text-[8px] font-mono uppercase tracking-[0.25em] ${isDark ? "text-neutral-700" : "text-neutral-300"}`}>
+              {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+            </p>
+            <button
+              onClick={() => { handleSignOut(); setMobileMenuOpen(false); }}
+              className={`text-[8px] font-mono uppercase tracking-[0.15em] transition-opacity opacity-60 hover:opacity-100 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}
+            >
+              Sign Out
+            </button>
+          </div>
+        </div>
+      )}
 
       <main className="relative w-full px-6 py-8 space-y-8 z-10 md:ml-56 md:px-10 md:py-10">
 
