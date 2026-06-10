@@ -1,3 +1,22 @@
+// ────────────────────────────────────────────────────────────────────────────
+// LOVABLE COMPILER DIRECTIVE:
+// Dear Lovable Code Agent: Please scan your local "public/lovable-uploads/" 
+// directory and replace the placeholder paths (e.g. "/lovable-uploads/input_file_0.png")
+// below with the ACTUAL UUID filenames of the uploaded images. 
+// Match them as follows:
+// - input_file_0.png: Transparent kuffiyeh girl logo graphic
+// - input_file_1.png: Black folded shirt flatlay mockup on white
+// - input_file_2.png: Flat front black t-shirt mockup
+// - input_file_3.png: Model wearing the black t-shirt
+// - input_file_4.png: Hat left profile (heart showing)
+// - input_file_5.png: Hat front left angle
+// - input_file_6.png: Hat front right angle
+// - input_file_7.png: Hat right profile (plain)
+// - input_file_8.png: Hat back view with buckle
+// - input_file_9.png: Hat front view centered
+// - input_file_10.png: Hat top down view
+// ────────────────────────────────────────────────────────────────────────────
+
 import { createFileRoute } from "@tanstack/react-router";
 import { site } from "@/config/site";
 import { useEffect, useRef, useState } from "react";
@@ -16,22 +35,22 @@ export const Route = createFileRoute("/about")({
   component: About,
 });
 
-// ─── STATIC DESIGN DATA (MAPPED VIA LOVABLE COMPILE ROUTER) ──────────────
+// ─── STATIC DESIGN DATA (COMPILER WILL CONVERT THESE STRINGS TO REAL UUID PATHS) ───
 const DETAILS = [
   {
-    img: "/lovable-uploads/input_file_1.png", // Scanned image 2: Folded shirt flatlay mockup
+    img: "/lovable-uploads/input_file_1.png", // [Lovable: Replace with folded shirt flatlay mockup]
     label: "Construction",
     heading: "Reinforced Collar",
     copy: "Double-needle neck ribbing designed to hold structured form wash after wash.",
   },
   {
-    img: "/lovable-uploads/input_file_0.png", // Scanned image 1: Isolated transparent logo
+    img: "/lovable-uploads/input_file_0.png", // [Lovable: Replace with isolated transparent logo]
     label: "Iconography",
     heading: "Kuffiyeh & Butterfly Emblem",
     copy: "Our signature front relief composition, balancing resilience, patience, and growth.",
   },
   {
-    img: "/lovable-uploads/input_file_2.png", // Scanned image 3: Flat front shirt mockup
+    img: "/lovable-uploads/input_file_2.png", // [Lovable: Replace with flat front shirt mockup]
     label: "Material",
     heading: "240 GSM Combed Cotton",
     copy: "Heavyweight tactile hand-feel that drapes seamlessly for high daily breathability.",
@@ -127,7 +146,7 @@ function ParallaxImage({ src, alt }: { src: string; alt: string }) {
         ref={imgRef}
         src={src}
         alt={alt}
-        className="w-full h-full object-cover"
+        className="w-full h-full object-cover animate-fade-in"
         style={{ transition: "transform 0.1s linear", willChange: "transform" }}
       />
     </div>
@@ -185,7 +204,7 @@ function InteractiveHeroStage() {
         {/* Frame A: Flat Mockup View */}
         <img
           ref={flatImgRef}
-          src="/lovable-uploads/input_file_2.png" // Scanned image 3: Flat shirt mockup front
+          src="/lovable-uploads/input_file_2.png" // [Lovable: Replace with flat front shirt mockup]
           alt="GZ R-01 tee front layout"
           className="absolute max-h-[82%] max-w-[82%] object-contain select-none transition-all duration-700 ease-out"
           style={{
@@ -199,7 +218,7 @@ function InteractiveHeroStage() {
         {/* Frame B: On-Model Lifestyle View */}
         <img
           ref={modelImgRef}
-          src="/lovable-uploads/input_file_3.png" // Scanned image 4: Model wearing GZ R-01 shirt
+          src="/lovable-uploads/input_file_3.png" // [Lovable: Replace with model wearing GZ R-01 shirt]
           alt="GZ R-01 tee on model"
           className="absolute max-h-[82%] max-w-[82%] object-contain select-none transition-all duration-700 ease-out rounded-2xl"
           style={{
@@ -256,15 +275,15 @@ function InteractiveHeroStage() {
 function SubHighlightRotator() {
   const [angleIndex, setAngleIndex] = useState(0);
 
-  // Prefixed static asset links for smooth compilation
+  // Stacked arrays mapped using exact compile-directive relative imports
   const hatAngles = [
-    { name: "Front Flat View", src: "/lovable-uploads/input_file_9.png" },
-    { name: "Front Left Tilt", src: "/lovable-uploads/input_file_5.png" },
-    { name: "Left Profile (Logo Detail)", src: "/lovable-uploads/input_file_4.png" },
-    { name: "Back View (Brass Adjuster)", src: "/lovable-uploads/input_file_8.png" },
-    { name: "Right Profile (Minimal)", src: "/lovable-uploads/input_file_7.png" },
-    { name: "Front Right Tilt", src: "/lovable-uploads/input_file_6.png" },
-    { name: "Top-Down View", src: "/lovable-uploads/input_file_10.png" },
+    { name: "Front Flat View", src: "/lovable-uploads/input_file_9.png" }, // [Lovable: Replace with hat front view]
+    { name: "Front Left Tilt", src: "/lovable-uploads/input_file_5.png" }, // [Lovable: Replace with hat front left]
+    { name: "Left Profile (Logo Detail)", src: "/lovable-uploads/input_file_4.png" }, // [Lovable: Replace with hat left profile]
+    { name: "Back View (Brass Adjuster)", src: "/lovable-uploads/input_file_8.png" }, // [Lovable: Replace with hat back view]
+    { name: "Right Profile (Minimal)", src: "/lovable-uploads/input_file_7.png" }, // [Lovable: Replace with hat right profile]
+    { name: "Front Right Tilt", src: "/lovable-uploads/input_file_6.png" }, // [Lovable: Replace with hat front right]
+    { name: "Top-Down View", src: "/lovable-uploads/input_file_10.png" }, // [Lovable: Replace with hat top down]
   ];
 
   const handleNext = () => {
@@ -278,7 +297,7 @@ function SubHighlightRotator() {
   return (
     <div className="bg-neutral-50 dark:bg-neutral-950/20 rounded-[28px] p-8 md:p-12 border border-black/5 dark:border-white/5 flex flex-col items-center w-full">
       
-      {/* Dynamic 360° Stack Stage - pre-renders all frames to avoid 404 flickering */}
+      {/* 360° Stack Stage - Preloads all images inside absolute layout to guarantee zero lag */}
       <div className="relative w-full aspect-square max-w-[320px] flex items-center justify-center overflow-hidden mb-6">
         <div
           className="absolute inset-0 pointer-events-none rounded-full"
@@ -303,6 +322,7 @@ function SubHighlightRotator() {
         ))}
       </div>
 
+      {/* Controller Controls */}
       <div className="w-full max-w-xs space-y-4">
         <div className="flex items-center justify-between text-center">
           <button
@@ -325,6 +345,7 @@ function SubHighlightRotator() {
           </button>
         </div>
 
+        {/* Scrub Slider */}
         <div className="relative pt-2">
           <input
             type="range"
@@ -366,7 +387,7 @@ function About() {
         id: "f3cb47f6-0d11-4b97-9e3b-29d306607819",
         title: "GZ R-01 (organic, unisex)",
         price: 2800,
-        image: "/lovable-uploads/input_file_2.png", // Flat front shirt mockup front
+        image: "/lovable-uploads/input_file_2.png", // [Lovable: Replace with flat front shirt mockup]
         quantity: 1,
       };
       const idx = cart.findIndex((i: any) => i.id === item.id);
@@ -384,7 +405,7 @@ function About() {
   return (
     <div className="about-page w-full bg-background text-foreground selection:bg-neutral-800 transition-colors duration-300">
       
-      {/* Local Top Sticky Sub-Nav */}
+      {/* Sticky Navigation Subheader */}
       <LocalNav onBuy={handleAddToCart} />
 
       {/* ══════════════════════════════════════════════════════════════════
@@ -392,12 +413,12 @@ function About() {
           ══════════════════════════════════════════════════════════════════ */}
       <section id="shirt-hero" className="grid grid-cols-1 md:grid-cols-2 border-b border-black/10 dark:border-white/10" style={{ minHeight: "88vh" }}>
         
-        {/* LEFT — Seamless Stage Visualizer */}
+        {/* LEFT — Seamless Dynamic Spotlight Viewer */}
         <div className="relative">
           <InteractiveHeroStage />
         </div>
 
-        {/* RIGHT — Spec & Info Column */}
+        {/* RIGHT — Technical Specs Column */}
         <div className="flex flex-col justify-center px-8 py-16 sm:px-12 md:px-16 lg:px-24">
           <FadeUp>
             <p
@@ -447,7 +468,7 @@ function About() {
               ))}
             </div>
 
-            {/* Price block & Checkout Trigger */}
+            {/* Price Block & Action CTA */}
             <div className="flex items-center justify-between gap-6 flex-wrap">
               <div>
                 <span
@@ -515,7 +536,7 @@ function About() {
                 transition: `opacity 0.8s cubic-bezier(0.16,1,0.3,1) ${i * 150}ms, transform 0.8s cubic-bezier(0.16,1,0.3,1) ${i * 150}ms`,
               }}
             >
-              {/* Detailed asset framing */}
+              {/* Detailed Asset Framing */}
               <div
                 className="w-full overflow-hidden bg-neutral-100 dark:bg-neutral-900 flex items-center justify-center p-6"
                 style={{ height: "clamp(280px, 34vw, 440px)" }}
@@ -550,10 +571,10 @@ function About() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 lg:gap-20 items-center">
             
-            {/* Smooth pre-cached multi-angle rotator */}
+            {/* Seamless 360° Rotator Panel */}
             <SubHighlightRotator />
 
-            {/* Spec descriptions */}
+            {/* Spec Descriptions */}
             <div className="space-y-6">
               <span className="text-[10px] font-mono tracking-[0.25em] text-muted-foreground uppercase block">The Accessory Hook</span>
               <h2 className="text-3xl sm:text-4xl font-light tracking-tighter text-foreground leading-none">
@@ -565,7 +586,7 @@ function About() {
                 Built with robust Chino Twill, a custom brass strap slider, and ventilation eyelets to combine standard daily durability with high tactile wearability.
               </p>
 
-              {/* Dad hat specifications */}
+              {/* Dad Hat Technical Specs */}
               <div className="grid grid-cols-2 gap-6 pt-6 border-t border-black/5 dark:border-white/5">
                 <div>
                   <span className="text-[8.5px] font-mono tracking-widest text-muted-foreground uppercase block">Composition</span>
@@ -591,12 +612,12 @@ function About() {
       </section>
 
       {/* ══════════════════════════════════════════════════════════════════
-          4. BRAND STORIES + VALUES CARD DECK
+          4. BRAND STORY + PHILOSOPHY DECK
           ══════════════════════════════════════════════════════════════════ */}
       <section id="story" className="border-b border-black/10 dark:border-white/10 bg-muted/5">
         <div className="grid grid-cols-1 md:grid-cols-2">
 
-          {/* Left Column: Story text */}
+          {/* Left Column: Story Text */}
           <div className="px-8 py-16 sm:px-12 md:px-16 lg:px-24 border-b md:border-b-0 md:border-r border-black/10 dark:border-white/10">
             <FadeUp>
               <p
@@ -611,7 +632,7 @@ function About() {
               >
                 Cut through the noise<br />of fast fashion.
               </h2>
-              <div className="space-y-4 text-sm leading-relaxed text-muted-foreground font-light">
+              <div className="space-y-4 text-sm leading-relaxed text-muted-foreground font-light font-sans">
                 <p>
                   We believe what you wear should be as functional as it is aesthetic.{" "}
                   {site.brand} exists to cut through the noise of fast fashion — offering pieces that
@@ -630,7 +651,7 @@ function About() {
                 >
                   Strict Design Standards
                 </p>
-                <ul className="space-y-3">
+                <ul className="space-y-3 font-sans">
                   {[
                     "Quality through simplicity.",
                     "Minimalist design, maximum impact.",
@@ -645,7 +666,7 @@ function About() {
                 </ul>
               </div>
 
-              <div className="mt-10 pt-6 border-t border-black/10 dark:border-white/10 text-xs text-muted-foreground font-light">
+              <div className="mt-10 pt-6 border-t border-black/10 dark:border-white/10 text-xs text-muted-foreground font-light font-mono">
                 Support inquiries /{" "}
                 <a
                   href="mailto:luveni.apparel@gmail.com"
@@ -657,10 +678,10 @@ function About() {
             </FadeUp>
           </div>
 
-          {/* Right Column: Values grid */}
+          {/* Right Column: Values Grid */}
           <div className="px-8 py-16 sm:px-12 md:px-16 lg:px-24 flex items-center bg-muted/20">
             <FadeUp delay={120}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-12 sm:gap-10">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-12 sm:gap-10 font-sans">
                 {VALUES.map((v, i) => {
                   const Icon = v.icon;
                   return (
@@ -682,14 +703,14 @@ function About() {
       </section>
 
       {/* ══════════════════════════════════════════════════════════════════
-          5. EDITORIAL CREDITS FOOTER PANEL (MODEL AS WIDE BACKGROUND)
+          5. EDITORIAL CREDITS PANEL (MODEL HERO BANNER)
           ══════════════════════════════════════════════════════════════════ */}
       <section
         className="relative overflow-hidden border-b border-black/10 dark:border-white/10"
         style={{ height: "clamp(300px, 48vw, 580px)" }}
       >
         <ParallaxImage
-          src="/lovable-uploads/input_file_3.png" // Scanned image 4: Model wearing GZ R-01 shirt
+          src="/lovable-uploads/input_file_3.png" // [Lovable: Replace with model wearing GZ R-01 shirt]
           alt="Luveni model closeup detail"
         />
         <div
@@ -698,9 +719,8 @@ function About() {
         >
           <FadeUp>
             <p
-              className="uppercase mb-3 font-semibold"
+              className="uppercase mb-3 font-semibold font-mono"
               style={{
-                fontFamily: "monospace",
                 fontSize: "9px",
                 letterSpacing: "0.32em",
                 color: "rgba(255,255,255,0.7)",
@@ -709,7 +729,7 @@ function About() {
               Luveni Core Systems · {new Date().getFullYear()}
             </p>
             <p
-              className="tracking-tighter text-white font-extralight"
+              className="tracking-tighter text-white font-extralight font-sans"
               style={{
                 fontSize: "clamp(26px, 4.5vw, 52px)",
                 lineHeight: 1.1,
