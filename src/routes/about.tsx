@@ -1,9 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { site } from "@/config/site";
 import { useEffect, useRef, useState } from "react";
-import { Shield, Sparkles, Eye, Users, ChevronLeft, ChevronRight } from "lucide-react";
+import { Shield, Sparkles, Eye, Users, ChevronLeft, ChevronRight, Eye as InspectIcon } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/about")({
   head: () => ({
@@ -17,16 +16,28 @@ export const Route = createFileRoute("/about")({
   component: About,
 });
 
-// ─── GUARANTEED PRINTFUL BACKUP CDN ASSETS ─────────────────────────────────
-const SHIRT_FALLBACK_DEFAULT = [
-  "https://files.cdn.printful.com/files/78f/78fbe8e3abfd368625d5c143ffe0189d_preview.png", // Front flat
-  "https://files.cdn.printful.com/files/268/268853a2dd3fa9e8733e12d2f22d014b_preview.png", // Folded / Detail flatlay
-  "https://files.cdn.printful.com/files/615/61572d86e70a8bfe299150c10432c496_preview.png", // Collar close-up
-  "https://files.cdn.printful.com/files/9e8/9e876ce4efee7c0415d88386792f6f5d_preview.png", // Logo chest preview
-  "https://files.cdn.printful.com/files/1f4/1f4017c83d3d8099557f471924905541_preview.png"  // Fabric closeup
+// ─── STATIC DATA CONFIGS (EXCLUSIVELY YOUR UPLOADED DESIGN) ─────────────────
+const DETAILS = [
+  {
+    img: "input_file_1.png", // Folded kuffiyeh girl shirt mockup
+    label: "Construction",
+    heading: "Reinforced Collar",
+    copy: "Double-needle neck ribbing designed to hold structured form wash after wash.",
+  },
+  {
+    img: "input_file_0.png", // Isolated kuffiyeh girl logo graphic
+    label: "Iconography",
+    heading: "Kuffiyeh & Butterfly Emblem",
+    copy: "Our signature front relief composition, balancing resilience, patience, and growth.",
+  },
+  {
+    img: "input_file_2.png", // Flat front kuffiyeh girl shirt mockup
+    label: "Material",
+    heading: "240 GSM Combed Cotton",
+    copy: "Heavyweight tactile hand-feel that drapes seamlessly for high daily breathability.",
+  },
 ];
 
-// ─── STATIC DESIGN DATA ──────────────────────────────────────────────────
 const VALUES = [
   { icon: Shield, title: "Quality", desc: "Highest-grade fabrics selected to endure years of wear and wash." },
   { icon: Sparkles, title: "Timeless", desc: "Silhouettes designed to outlast whatever season they drop in." },
@@ -90,56 +101,26 @@ function FadeUp({ children, delay = 0 }: { children: React.ReactNode; delay?: nu
   );
 }
 
-// ─── PARALLAX IMAGE ───────────────────────────────────────────────────────
-function ParallaxImage({ src, alt, fallback }: { src: string; alt: string; fallback: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const imgRef = useRef<HTMLImageElement>(null);
-
-  useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const onScroll = () => {
-      if (!ref.current || !imgRef.current) return;
-      const rect = ref.current.getBoundingClientRect();
-      const vh = window.innerHeight;
-      const progress = 1 - (rect.bottom / (vh + rect.height));
-      const clampedProgress = Math.max(0, Math.min(1, progress));
-      imgRef.current.style.transform = `translateY(${clampedProgress * -50}px) scale(1.10)`;
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  return (
-    <div ref={ref} className="w-full h-full overflow-hidden">
-      <img
-        ref={imgRef}
-        src={src}
-        alt={alt}
-        className="w-full h-full object-cover"
-        style={{ transition: "transform 0.1s linear", willChange: "transform" }}
-        onError={(e) => {
-          e.currentTarget.src = fallback;
-        }}
-      />
-    </div>
-  );
-}
-
-// ─── CINEMATIC ZOOM IMAGE (KEYNOTE PRESENTATION STAGE) ───────────────────
-function CinematicProduct({ fallback }: { fallback: string }) {
+// ─── DUAL-VIEW HERO INTERACTIVE STAGE (FLAT VS MODEL) ────────────────────
+function InteractiveHeroStage() {
+  const [activeTab, setActiveTab] = useState<"flat" | "model">("flat");
   const containerRef = useRef<HTMLDivElement>(null);
-  const imgRef = useRef<HTMLImageElement>(null);
+  const flatImgRef = useRef<HTMLImageElement>(null);
+  const modelImgRef = useRef<HTMLImageElement>(null);
   const [entered, setEntered] = useState(false);
 
+  // Smooth layout-dependent zoom on scrolling
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const onScroll = () => {
-      if (!containerRef.current || !imgRef.current) return;
+      if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
       const vh = window.innerHeight;
       const progress = Math.max(0, Math.min(1, 1 - rect.bottom / (vh + rect.height)));
-      imgRef.current.style.transform = `scale(${1 + progress * 0.15})`;
+      
+      const scaleVal = 1 + progress * 0.12;
+      if (flatImgRef.current) flatImgRef.current.style.transform = `scale(${scaleVal})`;
+      if (modelImgRef.current) modelImgRef.current.style.transform = `scale(${scaleVal})`;
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
@@ -149,7 +130,7 @@ function CinematicProduct({ fallback }: { fallback: string }) {
   useEffect(() => {
     const obs = new IntersectionObserver(
       ([e]) => { if (e.isIntersecting) { setEntered(true); obs.disconnect(); } },
-      { threshold: 0.1 }
+      { threshold: 0.05 }
     );
     if (containerRef.current) obs.observe(containerRef.current);
     return () => obs.disconnect();
@@ -158,71 +139,104 @@ function CinematicProduct({ fallback }: { fallback: string }) {
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center border-b md:border-b-0 md:border-r border-neutral-950"
+      className="relative w-full h-full bg-neutral-50/50 dark:bg-neutral-950/20 border-b md:border-b-0 md:border-r border-black/10 dark:border-white/10 overflow-hidden flex flex-col justify-between"
       style={{ minHeight: "65vh" }}
     >
+      {/* Dynamic Keynote spotlight */}
       <div
-        className="absolute inset-0 pointer-events-none"
+        className="absolute inset-0 pointer-events-none rounded-full"
         style={{
-          background: "radial-gradient(ellipse 50% 45% at 50% 50%, rgba(255,255,255,0.04) 0%, transparent 60%)",
+          background: "radial-gradient(circle at 50% 50%, rgba(120,120,120,0.04) 0%, transparent 65%)",
         }}
       />
-      <img
-        ref={imgRef}
-        src="/lovable-uploads/GZ_R01_Flat.png" // Scanned placeholder for image 3
-        alt="GZ R-01 Organic Unisex Tee"
-        className="relative z-10 select-none"
-        style={{
-          maxHeight: "80%",
-          maxWidth: "80%",
-          objectFit: "contain",
-          opacity: entered ? 1 : 0,
-          transition: "opacity 1.2s cubic-bezier(0.16,1,0.3,1), transform 0.1s linear",
-          willChange: "transform",
-          filter: "drop-shadow(0 30px 60px rgba(0,0,0,0.85))",
-        }}
-        onError={(e) => {
-          e.currentTarget.src = fallback;
-        }}
-        draggable={false}
-      />
-      
-      <div
-        className="absolute bottom-6 left-0 right-0 flex justify-center z-20"
-        style={{
-          opacity: entered ? 1 : 0,
-          transition: "opacity 1.5s cubic-bezier(0.16,1,0.3,1) 0.4s",
-        }}
-      >
+
+      {/* Slide Crossfade Visualizer Container */}
+      <div className="flex-1 w-full relative flex items-center justify-center p-8">
+        
+        {/* Frame A: Flat Mockup View */}
+        <img
+          ref={flatImgRef}
+          src="input_file_2.png" // Image 3: Clean flat shirt front mockup
+          alt="GZ R-01 tee front layout"
+          className="absolute max-h-[82%] max-w-[82%] object-contain select-none transition-all duration-700 ease-out"
+          style={{
+            opacity: activeTab === "flat" && entered ? 1 : 0,
+            visibility: activeTab === "flat" ? "visible" : "hidden",
+            filter: "drop-shadow(0 20px 45px rgba(0,0,0,0.12))",
+          }}
+          draggable={false}
+        />
+
+        {/* Frame B: On-Model Lifestyle View */}
+        <img
+          ref={modelImgRef}
+          src="input_file_3.png" // Image 4: Model wearing the shirt
+          alt="GZ R-01 tee on model"
+          className="absolute max-h-[82%] max-w-[82%] object-contain select-none transition-all duration-700 ease-out rounded-2xl"
+          style={{
+            opacity: activeTab === "model" && entered ? 1 : 0,
+            visibility: activeTab === "model" ? "visible" : "hidden",
+            filter: "drop-shadow(0 20px 45px rgba(0,0,0,0.15))",
+          }}
+          draggable={false}
+        />
+      </div>
+
+      {/* Control Switcher Pills */}
+      <div className="relative z-20 pb-6 w-full flex flex-col items-center gap-3">
+        <div className="flex p-0.5 rounded-full bg-neutral-200/60 dark:bg-neutral-800/60 backdrop-blur-sm border border-black/5">
+          <button
+            onClick={() => setActiveTab("flat")}
+            className={`px-4 py-1.5 text-[10px] font-mono tracking-wider uppercase rounded-full transition-all duration-300 ${
+              activeTab === "flat"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Flat Layout
+          </button>
+          <button
+            onClick={() => setActiveTab("model")}
+            className={`px-4 py-1.5 text-[10px] font-mono tracking-wider uppercase rounded-full transition-all duration-300 ${
+              activeTab === "model"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            On Model
+          </button>
+        </div>
+        
         <span
           style={{
             fontFamily: "monospace",
             fontSize: "8.5px",
             letterSpacing: "0.3em",
-            color: "rgba(255,255,255,0.3)",
+            color: "var(--color-muted-foreground)",
             textTransform: "uppercase",
           }}
+          className="opacity-60"
         >
-          Model No: GZ R-01 · 240 GSM · $28
+          Signature GZ R-01 Tee
         </span>
       </div>
     </div>
   );
 }
 
-// ─── ROTATABLE 360° SUB-HIGHLIGHT (HEART DAD HAT) ─────────────────────────
-function SubHighlightRotator({ dbHatImages }: { dbHatImages: string[] }) {
+// ─── ROTATABLE 360° ZERO-LAG STACKED ROTATOR (HEART DAD HAT) ──────────────
+function SubHighlightRotator() {
   const [angleIndex, setAngleIndex] = useState(0);
 
-  // Fallback chain for dad hat rotation series using printful mockup assets as insurance
+  // Stacking frames locally to enable hardware rendering with zero visual flicker
   const hatAngles = [
-    { name: "Front View", local: "/lovable-uploads/Hat_Front.png", fallback: dbHatImages[0] || "https://files.cdn.printful.com/files/00c/00cea4e35a659a7022d01f2cb2641b4d_preview.png" },
-    { name: "Front Left", local: "/lovable-uploads/Hat_FrontLeft.png", fallback: dbHatImages[1] || "https://files.cdn.printful.com/files/b68/b686c45246d81c9c12aa8a350ce773bd_preview.png" },
-    { name: "Left Profile", local: "/lovable-uploads/Hat_Left.png", fallback: dbHatImages[2] || "https://files.cdn.printful.com/files/615/61572d86e70a8bfe299150c10432c496_preview.png" },
-    { name: "Back View", local: "/lovable-uploads/Hat_Back.png", fallback: dbHatImages[3] || "https://files.cdn.printful.com/files/1f4/1f4017c83d3d8099557f471924905541_preview.png" },
-    { name: "Right Profile", local: "/lovable-uploads/Hat_Right.png", fallback: dbHatImages[4] || "https://files.cdn.printful.com/files/78f/78fbe8e3abfd368625d5c143ffe0189d_preview.png" },
-    { name: "Front Right", local: "/lovable-uploads/Hat_FrontRight.png", fallback: dbHatImages[5] || "https://files.cdn.printful.com/files/9e8/9e876ce4efee7c0415d88386792f6f5d_preview.png" },
-    { name: "Top-Down Angle", local: "/lovable-uploads/Hat_TopDown.png", fallback: dbHatImages[6] || "https://files.cdn.printful.com/files/268/268853a2dd3fa9e8733e12d2f22d014b_preview.png" },
+    { name: "Front Flat View", src: "input_file_9.png" },
+    { name: "Front Left Tilt", src: "input_file_5.png" },
+    { name: "Left Profile (Logo Detail)", src: "input_file_4.png" },
+    { name: "Back View (Brass Adjuster)", src: "input_file_8.png" },
+    { name: "Right Profile (Minimal)", src: "input_file_7.png" },
+    { name: "Front Right Tilt", src: "input_file_6.png" },
+    { name: "Top-Down View", src: "input_file_10.png" },
   ];
 
   const handleNext = () => {
@@ -233,11 +247,10 @@ function SubHighlightRotator({ dbHatImages }: { dbHatImages: string[] }) {
     setAngleIndex((prev) => (prev - 1 + hatAngles.length) % hatAngles.length);
   };
 
-  const activeAngle = hatAngles[angleIndex];
-
   return (
     <div className="bg-neutral-50 dark:bg-neutral-950/20 rounded-[28px] p-8 md:p-12 border border-black/5 dark:border-white/5 flex flex-col items-center w-full">
       
+      {/* 360° Stack Stage - Preloads all images on top of each other, toggles opacity */}
       <div className="relative w-full aspect-square max-w-[320px] flex items-center justify-center overflow-hidden mb-6">
         <div
           className="absolute inset-0 pointer-events-none rounded-full"
@@ -245,18 +258,24 @@ function SubHighlightRotator({ dbHatImages }: { dbHatImages: string[] }) {
             background: "radial-gradient(circle at 50% 50%, rgba(120,120,120,0.06) 0%, transparent 70%)",
           }}
         />
-        <img
-          src={activeAngle.local}
-          alt={`Heart dad hat - ${activeAngle.name}`}
-          className="max-h-[85%] max-w-[85%] object-contain select-none transition-all duration-300"
-          style={{ filter: "drop-shadow(0 20px 40px rgba(0,0,0,0.15))" }}
-          onError={(e) => {
-            e.currentTarget.src = activeAngle.fallback;
-          }}
-          draggable={false}
-        />
+        
+        {hatAngles.map((angle, idx) => (
+          <img
+            key={idx}
+            src={angle.src}
+            alt={`Heart dad hat angle - ${angle.name}`}
+            className="absolute max-h-[85%] max-w-[85%] object-contain select-none transition-all duration-300"
+            style={{
+              opacity: angleIndex === idx ? 1 : 0,
+              visibility: angleIndex === idx ? "visible" : "hidden",
+              filter: "drop-shadow(0 20px 40px rgba(0,0,0,0.12))",
+            }}
+            draggable={false}
+          />
+        ))}
       </div>
 
+      {/* Timeline Controls */}
       <div className="w-full max-w-xs space-y-4">
         <div className="flex items-center justify-between text-center">
           <button
@@ -268,7 +287,7 @@ function SubHighlightRotator({ dbHatImages }: { dbHatImages: string[] }) {
           
           <div className="space-y-0.5">
             <span className="text-[10px] font-mono tracking-widest text-muted-foreground uppercase block">Perspective</span>
-            <span className="text-xs font-semibold text-foreground">{activeAngle.name}</span>
+            <span className="text-xs font-semibold text-foreground">{hatAngles[angleIndex].name}</span>
           </div>
 
           <button
@@ -279,6 +298,7 @@ function SubHighlightRotator({ dbHatImages }: { dbHatImages: string[] }) {
           </button>
         </div>
 
+        {/* Scrub Slider */}
         <div className="relative pt-2">
           <input
             type="range"
@@ -304,33 +324,6 @@ function About() {
   const zoomRef = useRef<HTMLDivElement>(null);
   const [zoomVisible, setZoomVisible] = useState(false);
 
-  // Live database fallback assets state
-  const [dbShirtImages, setDbShirtImages] = useState<string[]>([]);
-  const [dbHatImages, setDbHatImages] = useState<string[]>([]);
-
-  // Query live database products to load correct URLs on active environments
-  useEffect(() => {
-    async function loadBackupAssets() {
-      try {
-        const { data } = await supabase.from("products").select("*");
-        if (data && data.length > 0) {
-          const shirt = data.find(p => p.id === "f3cb47f6-0d11-4b97-9e3b-29d306607819" || p.slug?.includes("gz-r-01"));
-          if (shirt && shirt.image_urls && shirt.image_urls.length > 0) {
-            setDbShirtImages(shirt.image_urls);
-          }
-          
-          const hat = data.find(p => p.slug?.includes("hat") || p.slug?.includes("cap") || p.title?.toLowerCase().includes("hat"));
-          if (hat && hat.image_urls && hat.image_urls.length > 0) {
-            setDbHatImages(hat.image_urls);
-          }
-        }
-      } catch (err) {
-        console.error("Database asset fetch fallback loop failed:", err);
-      }
-    }
-    loadBackupAssets();
-  }, []);
-
   useEffect(() => {
     const obs = new IntersectionObserver(
       ([e]) => { if (e.isIntersecting) { setZoomVisible(true); obs.disconnect(); } },
@@ -347,7 +340,7 @@ function About() {
         id: "f3cb47f6-0d11-4b97-9e3b-29d306607819",
         title: "GZ R-01 (organic, unisex)",
         price: 2800,
-        image: dbShirtImages[0] || SHIRT_FALLBACK_DEFAULT[0],
+        image: "input_file_2.png", // Flat shirt mockup front
         quantity: 1,
       };
       const idx = cart.findIndex((i: any) => i.id === item.id);
@@ -362,35 +355,10 @@ function About() {
     }
   };
 
-  // Three detailed modules on the GZ R-01
-  const detailModules = [
-    {
-      local: "/lovable-uploads/GZ_R01_Folded.png", // Image 2: Folded shirt flatlay mockup
-      fallback: dbShirtImages[1] || SHIRT_FALLBACK_DEFAULT[1],
-      label: "Construction",
-      heading: "Ribbed collar",
-      copy: "Double-needle reinforcement. Holds its shape after a hundred washes.",
-    },
-    {
-      local: "/lovable-uploads/GZ_R01_Logo.png", // Image 1: Isolated transparent logo
-      fallback: dbShirtImages[3] || SHIRT_FALLBACK_DEFAULT[3],
-      label: "Signature",
-      heading: "Bonsai mark",
-      copy: "High-density embroidery at the chest. Patience rendered in thread.",
-    },
-    {
-      local: "/lovable-uploads/GZ_R01_Flat.png", // Image 3: Flat front shirt mockup
-      fallback: dbShirtImages[0] || SHIRT_FALLBACK_DEFAULT[0],
-      label: "Material",
-      heading: "Organic cotton",
-      copy: "240 GSM. Substantial hand-feel. Breathable for every-day wear.",
-    },
-  ];
-
   return (
     <div className="about-page w-full bg-background text-foreground selection:bg-neutral-800 transition-colors duration-300">
       
-      {/* Sticky Top Sub-Nav */}
+      {/* Local Top Sticky Sub-Nav */}
       <LocalNav onBuy={handleAddToCart} />
 
       {/* ══════════════════════════════════════════════════════════════════
@@ -398,9 +366,9 @@ function About() {
           ══════════════════════════════════════════════════════════════════ */}
       <section id="shirt-hero" className="grid grid-cols-1 md:grid-cols-2 border-b border-black/10 dark:border-white/10" style={{ minHeight: "88vh" }}>
         
-        {/* LEFT — Stage Vector */}
+        {/* LEFT — Seamless Stage Visualizer */}
         <div className="relative">
-          <CinematicProduct fallback={dbShirtImages[0] || SHIRT_FALLBACK_DEFAULT[0]} />
+          <InteractiveHeroStage />
         </div>
 
         {/* RIGHT — Apple Spec & Info Column */}
@@ -422,7 +390,7 @@ function About() {
             </h1>
 
             <p className="text-sm leading-relaxed text-muted-foreground mb-10 max-w-md font-light">
-              Heavyweight combed organic cotton. A bonsai mark reduced to its most essential form.
+              Heavyweight combed organic cotton. Marked by the resilient Kuffiyeh Girl print—a subtle cultural emblem that is balanced, slow, and persistent.
               The GZ R-01 is the piece Luveni was built around — designed for your rotation, not the rack.
             </p>
 
@@ -510,7 +478,7 @@ function About() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3">
-          {detailModules.map((d, i) => (
+          {DETAILS.map((d, i) => (
             <div
               key={i}
               className="group flex flex-col justify-between"
@@ -521,18 +489,16 @@ function About() {
                 transition: `opacity 0.8s cubic-bezier(0.16,1,0.3,1) ${i * 150}ms, transform 0.8s cubic-bezier(0.16,1,0.3,1) ${i * 150}ms`,
               }}
             >
+              {/* Detailed asset framing */}
               <div
-                className="w-full overflow-hidden bg-neutral-100 dark:bg-neutral-900"
+                className="w-full overflow-hidden bg-neutral-100 dark:bg-neutral-900 flex items-center justify-center p-6"
                 style={{ height: "clamp(280px, 34vw, 440px)" }}
               >
                 <img
-                  src={d.local}
+                  src={d.img}
                   alt={d.heading}
-                  className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
+                  className="max-h-[90%] max-w-[90%] object-contain transition-transform duration-700 ease-out group-hover:scale-[1.04]"
                   style={{ display: "block" }}
-                  onError={(e) => {
-                    e.currentTarget.src = d.fallback;
-                  }}
                 />
               </div>
               
@@ -558,8 +524,8 @@ function About() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 lg:gap-20 items-center">
             
-            {/* Interactive rotatable dad hat */}
-            <SubHighlightRotator dbHatImages={dbHatImages} />
+            {/* Smooth pre-cached multi-angle rotator */}
+            <SubHighlightRotator />
 
             {/* Spec descriptions */}
             <div className="space-y-6">
@@ -690,43 +656,42 @@ function About() {
       </section>
 
       {/* ══════════════════════════════════════════════════════════════════
-          5. EDITORIAL CREDITS FOOTER PANEL
+          5. EDITORIAL CREDITS FOOTER PANEL (MODEL AS WIDE BACKGROUND)
           ══════════════════════════════════════════════════════════════════ */}
       <section
         className="relative overflow-hidden border-b border-black/10 dark:border-white/10"
         style={{ height: "clamp(300px, 48vw, 580px)" }}
       >
-        <ParallaxImage
-          src="/lovable-uploads/GZ_R01_Model.png" // Image 4: Model wearing GZ R-01 shirt
-          alt="Luveni fabric closeup detail"
-          fallback={dbShirtImages[2] || SHIRT_FALLBACK_DEFAULT[2]}
+        <img
+          src="input_file_3.png" // Image 4: Model wearing GZ R-01 shirt as massive background hero
+          alt="Luveni model closeup detail"
+          className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 hover:scale-[1.03]"
         />
         <div
-          className="absolute inset-0 flex flex-col items-center justify-center text-center px-6"
-          style={{ background: "linear-gradient(rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.5) 100%)" }}
+          className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 animate-in fade-in duration-500"
+          style={{ background: "linear-gradient(rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.5) 100%)" }}
         >
           <FadeUp>
             <p
-              className="uppercase mb-3"
+              className="uppercase mb-3 font-semibold"
               style={{
                 fontFamily: "monospace",
                 fontSize: "9px",
                 letterSpacing: "0.32em",
-                color: "rgba(255,255,255,0.55)",
+                color: "rgba(255,255,255,0.7)",
               }}
             >
               Luveni Core Systems · {new Date().getFullYear()}
             </p>
             <p
-              className="tracking-tighter text-white"
+              className="tracking-tighter text-white font-extralight"
               style={{
                 fontSize: "clamp(26px, 4.5vw, 52px)",
-                fontWeight: 100,
                 lineHeight: 1.1,
               }}
             >
               Designed for the<br />
-              <span className="font-medium text-white">everyday uniform.</span>
+              <span className="font-semibold text-white">everyday uniform.</span>
             </p>
           </FadeUp>
         </div>
