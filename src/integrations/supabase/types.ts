@@ -256,6 +256,11 @@ export type Database = {
       }
       site_config: {
         Row: {
+          about_hat_angles: string[] | null
+          about_shirt_flat: string | null
+          about_shirt_folded: string | null
+          about_shirt_logo: string | null
+          about_shirt_model: string | null
           guarantee_days: string | null
           hero_cta: string | null
           hero_headline: string | null
@@ -269,6 +274,11 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          about_hat_angles?: string[] | null
+          about_shirt_flat?: string | null
+          about_shirt_folded?: string | null
+          about_shirt_logo?: string | null
+          about_shirt_model?: string | null
           guarantee_days?: string | null
           hero_cta?: string | null
           hero_headline?: string | null
@@ -282,6 +292,11 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          about_hat_angles?: string[] | null
+          about_shirt_flat?: string | null
+          about_shirt_folded?: string | null
+          about_shirt_logo?: string | null
+          about_shirt_model?: string | null
           guarantee_days?: string | null
           hero_cta?: string | null
           hero_headline?: string | null
