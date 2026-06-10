@@ -19,7 +19,7 @@ const TSHIRT_2 = "/unisex-organic-mid-light-crafter-t-shirt-black-front-6a28f7a4
 const TSHIRT_3 = "/unisex-organic-mid-light-crafter-t-shirt-black-front-6a28f7a4550cd.png";
 const GRAPHIC_LOGO = "/design-lab-upscaled-6a25d1f65103a2.77471166-1780863478.png";
 
-// Naming Aliases to guarantee backward compatibility and eliminate ReferenceErrors
+// Naming Aliases to guarantee 100% backward compatibility and eliminate ReferenceErrors
 const SHIRT_FLAT = TSHIRT_1;
 const SHIRT_FOLDED = TSHIRT_2;
 const SHIRT_MODEL = TSHIRT_3;
@@ -36,17 +36,7 @@ const HAT_ANGLE_5 = "/classic-dad-hat-black-right-front-6a28d8da639e0.png";
     SINGLE, UNIFIED COMPONENT TREE (GUARANTEES 100% ERROR-FREE RUNTIME)
    ────────────────────────────────────────────────────────────────────────── */
 function About() {
-  // ─── STATE HOOKS ───
-  const [heroScrollP, setHeroScrollP] = useState(0);
-  const [editorialScrollP, setEditorialScrollP] = useState(0);
-  const [heroActiveTab, setHeroActiveTab] = useState<"flat" | "model">("flat");
-  const [heroEntered, setHeroEntered] = useState(false);
-  const [editorialEntered, setEditorialEntered] = useState(false);
-  const [hatAngleIndex, setHatAngleIndex] = useState(0);
-  const [featVisible, setFeatVisible] = useState([false, false, false]);
-  const [featScrollP, setFeatScrollP] = useState([0, 0, 0]);
-
-  // ─── COMPONENT REFS ───
+  // ─── COMPONENT REFS (DECLARED ON MAIN SCOPE) ───
   const heroRef = useRef<HTMLDivElement>(null);
   const rotatorContainerRef = useRef<HTMLDivElement>(null);
   const editorialRef = useRef<HTMLDivElement>(null);
@@ -59,6 +49,16 @@ function About() {
   const trigger5 = useRef<HTMLDivElement>(null);
 
   const featRefs = [useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null)];
+
+  // ─── STATE HOOKS ───
+  const [heroScrollP, setHeroScrollP] = useState(0);
+  const [editorialScrollP, setEditorialScrollP] = useState(0);
+  const [heroActiveTab, setHeroActiveTab] = useState<"flat" | "model">("flat");
+  const [heroEntered, setHeroEntered] = useState(false);
+  const [editorialEntered, setEditorialEntered] = useState(false);
+  const [hatAngleIndex, setHatAngleIndex] = useState(0);
+  const [featVisible, setFeatVisible] = useState([false, false, false]);
+  const [featScrollP, setFeatScrollP] = useState([0, 0, 0]);
 
   // ─── CONSOLIDATED SCROLL PERFORMANCE ENGINE ───
   useEffect(() => {
@@ -194,11 +194,32 @@ function About() {
     { name: "Front Right Tilt", src: HAT_ANGLE_5 },
   ];
 
+  const DETAILS = [
+    {
+      img: SHIRT_FOLDED,
+      label: "Construction",
+      heading: "Reinforced Collar",
+      copy: "Double-needle neck ribbing designed to hold structured form wash after wash.",
+    },
+    {
+      img: SHIRT_LOGO,
+      label: "Iconography",
+      heading: "Kuffiyeh & Butterfly Emblem",
+      copy: "Our signature front relief composition, balancing resilience, patience, and growth.",
+    },
+    {
+      img: SHIRT_FLAT,
+      label: "Material",
+      heading: "240 GSM Combed Cotton",
+      copy: "Heavyweight tactile hand-feel that drapes seamlessly for high daily breathability.",
+    },
+  ];
+
   return (
     <div className="about-page w-full bg-black text-white selection:bg-neutral-800 transition-colors duration-300" style={{ fontFamily: "'SF Pro Display', -apple-system, system-ui" }}>
       
       {/* ───────────────────────────────────────────────────────────────────
-          A. APPLE LOCAL MENU (INLINED)
+          A. STICKY NAV BAR (INLINED)
           ─────────────────────────────────────────────────────────────────── */}
       <div className="sticky top-0 z-50 w-full backdrop-blur-2xl" style={{ background: "rgba(0,0,0,0.72)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
         <div className="mx-auto flex h-11 max-w-[1200px] items-center justify-between px-6">
@@ -214,14 +235,17 @@ function About() {
       </div>
 
       {/* ───────────────────────────────────────────────────────────────────
-          B. CINEMATIC PRODUCT HERO (SHIRT EXPLODED VIEW)
+          B. PRODUCT HERO SECTION (SHIRT EXPLODED STAGE)
           ─────────────────────────────────────────────────────────────────── */}
       <section ref={heroRef} id="shirt-hero" className="grid grid-cols-1 md:grid-cols-2 border-b border-white/5" style={{ minHeight: "88vh" }}>
         
         {/* LEFT — Seamless Stage Visualizer */}
         <div className="relative w-full h-full bg-neutral-950 overflow-hidden flex flex-col justify-between border-b md:border-b-0 md:border-r border-white/5" style={{ minHeight: "65vh" }}>
-          {/* Blueprint Grid inline */}
-          <BlueprintGrid />
+          {/* Blueprint Grid pattern rendered inlined directly */}
+          <div className="absolute inset-0 pointer-events-none opacity-[0.03] mix-blend-screen z-0" style={{
+            backgroundImage: "linear-gradient(to right, rgba(255,255,255,0.15) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.15) 1px, transparent 1px)",
+            backgroundSize: "40px 44px"
+          }} />
           
           <div className="absolute inset-0 pointer-events-none rounded-full" style={{ background: "radial-gradient(circle at 50% 50%, rgba(255,255,255,0.04) 0%, transparent 65%)" }} />
 
@@ -321,7 +345,10 @@ function About() {
 
                 <div className={feat.side === "right" ? "md:order-1" : ""}>
                   <div className="relative aspect-square w-full overflow-hidden rounded-[28px] bg-neutral-950 flex items-center justify-center p-8" style={{ border: "1px solid rgba(255,255,255,0.05)", boxShadow: "0 25px 60px rgba(0,0,0,0.8)" }}>
-                    <BlueprintGrid />
+                    <div className="absolute inset-0 pointer-events-none opacity-[0.03] mix-blend-screen z-0" style={{
+                      backgroundImage: "linear-gradient(to right, rgba(255,255,255,0.15) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.15) 1px, transparent 1px)",
+                      backgroundSize: "40px 44px"
+                    }} />
                     <img src={feat.src} alt={feat.title} draggable={false} className="max-h-[85%] max-w-[85%] object-contain select-none transition-transform duration-100" style={{ transform: `translateY(${yOffset}px) scale(1.02)`, filter: "drop-shadow(0 20px 40px rgba(0,0,0,0.5))", willChange: "transform" }} />
                   </div>
                 </div>
@@ -348,7 +375,10 @@ function About() {
 
         <div className="sticky top-0 h-screen w-full flex flex-col justify-between overflow-hidden">
           {/* Subtle grid background directly rendered inline */}
-          <BlueprintGrid />
+          <div className="absolute inset-0 pointer-events-none opacity-[0.03] mix-blend-screen z-0" style={{
+            backgroundImage: "linear-gradient(to right, rgba(255,255,255,0.15) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.15) 1px, transparent 1px)",
+            backgroundSize: "40px 44px"
+          }} />
           
           <div className="pt-20 px-6 text-center z-20">
             <p className="text-[10px] font-mono tracking-[0.3em] text-neutral-500 uppercase mb-2">Sub-Highlight Piece</p>
@@ -406,7 +436,7 @@ function About() {
           5. PHILOSOPHY CONVICTION DECK
           ─────────────────────────────────────────────────────────────────── */}
       <section id="story" className="bg-black px-6 py-40 border-b border-white/5">
-        <div ref={storyRef} className="mx-auto max-w-[900px] text-center transition-all duration-[900ms] ease-out opacity-0 translate-y-6 [&.revealed]:opacity-100 [&.revealed]:translate-y-0 reveal-on-scroll">
+        <div className="mx-auto max-w-[900px] text-center transition-all duration-[900ms] ease-out opacity-0 translate-y-6 [&.revealed]:opacity-100 [&.revealed]:translate-y-0 reveal-on-scroll">
           <p className="mb-5 text-[11px] font-semibold uppercase tracking-[0.24em]" style={{ background: "linear-gradient(90deg,#ff8a3d,#ff5e9b,#7c5cff,#3dc6ff)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
             The Story
           </p>
