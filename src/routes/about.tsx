@@ -13,7 +13,7 @@ export const Route = createFileRoute("/about")({
   component: About,
 });
 
-// ─── STABLE ROOT-RELATIVE STATIC ASSETS (DIRECT FROM YOUR PUBLIC FOLDER) ───
+// ─── STABLE ROOT-RELATIVE DIRECT WORKSPACE ASSETS ───
 const SHIRT_FLAT = "/unisex-organic-mid-light-crafter-t-shirt-black-front-6a28f7a4546cf.png";
 const SHIRT_FOLDED = "/unisex-organic-mid-light-crafter-t-shirt-black-front-6a28f7a454c19.png";
 const SHIRT_MODEL = "/unisex-organic-mid-light-crafter-t-shirt-black-front-6a28f7a4550cd.png";
@@ -26,7 +26,45 @@ const HAT_ANGLE_3 = "/classic-dad-hat-black-back-6a28d8da63130.png";
 const HAT_ANGLE_4 = "/classic-dad-hat-black-right-side-6a28d8da633f3.png";
 const HAT_ANGLE_5 = "/classic-dad-hat-black-right-front-6a28d8da639e0.png";
 
-// ─── HOVER/SCROLL GRID BLUEPRINT ──────────────────────────────────────────
+/* ───────────────────── DIRECT HELPER HOOKS ───────────────────── */
+
+function useReveal<T extends HTMLElement>(threshold = 0.1) {
+  const ref = useRef<T>(null);
+  const [v, setV] = useState(false);
+  useEffect(() => {
+    if (!ref.current) return;
+    const o = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) { setV(true); o.disconnect(); } },
+      { threshold }
+    );
+    o.observe(ref.current);
+    return () => o.disconnect();
+  }, [threshold]);
+  return { ref, visible: v };
+}
+
+function useScrollProgress<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [p, setP] = useState(0);
+  useEffect(() => {
+    const onScroll = () => {
+      if (!ref.current) return;
+      const r = ref.current.getBoundingClientRect();
+      const vh = window.innerHeight;
+      const start = r.top - vh;
+      const total = r.height + vh;
+      const raw = -start / total;
+      setP(Math.max(0, Math.min(1, raw)));
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+  return { ref, p };
+}
+
+/* ───────────────────── BLUEPRINT GRID BACKGROUND ───────────────────── */
+
 function BlueprintGrid() {
   return (
     <div className="absolute inset-0 pointer-events-none opacity-[0.03] mix-blend-screen z-0" style={{
@@ -39,7 +77,8 @@ function BlueprintGrid() {
   );
 }
 
-// ─── APPLE LOCAL SUB-NAV ──────────────────────────────────────────────────
+/* ───────────────────── APPLE STYLE LOCAL NAV ───────────────────── */
+
 function ProNav() {
   return (
     <div
@@ -70,67 +109,8 @@ function ProNav() {
   );
 }
 
-// ─── MOTION ENTRY EFFECT (INTERSECTION DRIVEN) ───────────────────────────
-function FadeUp({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
+/* ───────────────────── DUAL-VIEW HERO INTERACTIVE STAGE ──────────────────── */
 
-  useEffect(() => {
-    const obs = new IntersectionObserver(
-      ([e]) => { if (e.isIntersecting) { setVisible(true); obs.unobserve(e.target); } },
-      { threshold: 0.05, rootMargin: "0px 0px -60px 0px" }
-    );
-    if (ref.current) obs.observe(ref.current);
-    return () => obs.disconnect();
-  }, []);
-
-  return (
-    <div
-      ref={ref}
-      style={{
-        opacity: visible ? 1 : 0,
-        transform: visible ? "translateY(0)" : "translateY(24px)",
-        transition: `opacity 0.8s cubic-bezier(0.16,1,0.3,1) ${delay}ms, transform 0.8s cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
-      }}
-      className="motion-reduce:opacity-100 motion-reduce:transform-none"
-    >
-      {children}
-    </div>
-  );
-}
-
-// ─── HEROBAND PARALLAX LAYER ──────────────────────────────────────────────
-function ParallaxImage({ src, alt }: { src: string; alt: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const imgRef = useRef<HTMLImageElement>(null);
-
-  useEffect(() => {
-    const onScroll = () => {
-      if (!ref.current || !imgRef.current) return;
-      const rect = ref.current.getBoundingClientRect();
-      const vh = window.innerHeight;
-      const progress = 1 - (rect.bottom / (vh + rect.height));
-      imgRef.current.style.transform = `translateY(${Math.max(0, Math.min(1, progress)) * -50}px) scale(1.10)`;
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  return (
-    <div ref={ref} className="w-full h-full overflow-hidden">
-      <img
-        ref={imgRef}
-        src={src}
-        alt={alt}
-        className="w-full h-full object-cover"
-        style={{ transition: "transform 0.1s linear, opacity 0.5s ease-out", willChange: "transform" }}
-      />
-    </div>
-  );
-}
-
-// ─── DUAL-VIEW HERO INTERACTIVE STAGE (FLAT VS MODEL) ────────────────────
 interface HeroStageProps {
   shirtFlat: string;
   shirtModel: string;
@@ -184,7 +164,6 @@ function InteractiveHeroStage({ shirtFlat, shirtModel, shirtLogo }: HeroStagePro
       />
 
       <div className="flex-1 w-full relative flex items-center justify-center p-8">
-        {/* Frame A: Flat Mockup View */}
         <img
           ref={flatImgRef}
           src={shirtFlat}
@@ -198,7 +177,6 @@ function InteractiveHeroStage({ shirtFlat, shirtModel, shirtLogo }: HeroStagePro
           draggable={false}
         />
 
-        {/* Frame B: On-Model Lifestyle View */}
         <img
           ref={modelImgRef}
           src={shirtModel}
@@ -253,7 +231,8 @@ function InteractiveHeroStage({ shirtFlat, shirtModel, shirtLogo }: HeroStagePro
   );
 }
 
-// ─── ROTATABLE 360° ZERO-LAG STACKED ROTATOR (HEART DAD HAT) ──────────────
+// ─── ROTATABLE 360° SCROLL ROTATOR (HAT PORTRAIT) ─────────────────────
+
 interface RotatorProps {
   hatAngles: Array<{ name: string; src: string }>;
 }
@@ -275,6 +254,9 @@ function ScrollRotator({ hatAngles }: RotatorProps) {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  const handleNext = () => { setAngleIndex((prev) => (prev + 1) % hatAngles.length); };
+  const handlePrev = () => { setAngleIndex((prev) => (prev - 1 + hatAngles.length) % hatAngles.length); };
+
   return (
     <div
       ref={containerRef}
@@ -283,7 +265,6 @@ function ScrollRotator({ hatAngles }: RotatorProps) {
     >
       <BlueprintGrid />
       
-      {/* 360° Stack Stage - Preloads all images inside absolute layout to guarantee zero lag */}
       <div className="sticky top-1/4 w-full aspect-square max-w-[320px] flex items-center justify-center overflow-hidden mb-6 z-10">
         <div
           className="absolute inset-0 pointer-events-none rounded-full"
@@ -308,7 +289,6 @@ function ScrollRotator({ hatAngles }: RotatorProps) {
         ))}
       </div>
 
-      {/* Controller Controls */}
       <div className="sticky bottom-10 w-full max-w-xs space-y-4 z-10">
         <div className="flex items-center justify-between text-center">
           <button
@@ -345,12 +325,10 @@ function ScrollRotator({ hatAngles }: RotatorProps) {
       </div>
     </div>
   );
-
-  function handleNext() { setAngleIndex((prev) => (prev + 1) % hatAngles.length); }
-  function handlePrev() { setAngleIndex((prev) => (prev - 1 + hatAngles.length) % hatAngles.length); }
 }
 
 // ─── ANATOMY DETAIL ROWS (DETAILS LOOP) ───────────────────────────────────
+
 interface FeatureRowProps {
   eyebrow: string;
   title: string;
