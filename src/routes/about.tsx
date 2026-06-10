@@ -16,22 +16,37 @@ export const Route = createFileRoute("/about")({
   component: About,
 });
 
-// ─── STATIC DATA CONFIGS (LOVABLE WRITER: REPLACE THESE WITH THE STAGED UUID FILENAMES) ───
+// ─── TOP-LEVEL EXPLICIT STATIC ASSET CONSTANTS (FOR RELIABLE LOVABLE COMPILE) ───
+// These top-level declarations force the compiler to resolve your uploaded assets.
+const SHIRT_LOGO = "/lovable-uploads/input_file_0.png";       // Transparent kuffiyeh girl logo graphic
+const SHIRT_FOLDED = "/lovable-uploads/input_file_1.png";     // Black folded shirt flatlay mockup on white
+const SHIRT_FLAT = "/lovable-uploads/input_file_2.png";       // Flat front black t-shirt mockup
+const SHIRT_MODEL = "/lovable-uploads/input_file_3.png";      // Model wearing the black t-shirt
+
+const HAT_ANGLE_0 = "/lovable-uploads/input_file_9.png";      // Hat front view centered
+const HAT_ANGLE_1 = "/lovable-uploads/input_file_5.png";      // Hat front left angle
+const HAT_ANGLE_2 = "/lovable-uploads/input_file_4.png";      // Hat left profile (heart showing)
+const HAT_ANGLE_3 = "/lovable-uploads/input_file_8.png";      // Hat back view with buckle
+const HAT_ANGLE_4 = "/lovable-uploads/input_file_7.png";      // Hat right profile (plain)
+const HAT_ANGLE_5 = "/lovable-uploads/input_file_6.png";      // Hat front right angle
+const HAT_ANGLE_6 = "/lovable-uploads/input_file_10.png";     // Hat top down view
+
+// ─── COMPILATION STRUCTURAL SCHEMAS ─────────────────────────────────────────
 const DETAILS = [
   {
-    img: "/lovable-uploads/input_file_1.png", // [Lovable: Replace with folded shirt mockup filename]
+    img: SHIRT_FOLDED,
     label: "Construction",
     heading: "Reinforced Collar",
     copy: "Double-needle neck ribbing designed to hold structured form wash after wash.",
   },
   {
-    img: "/lovable-uploads/input_file_0.png", // [Lovable: Replace with transparent logo mockup filename]
+    img: SHIRT_LOGO,
     label: "Iconography",
     heading: "Kuffiyeh & Butterfly Emblem",
     copy: "Our signature front relief composition, balancing resilience, patience, and growth.",
   },
   {
-    img: "/lovable-uploads/input_file_2.png", // [Lovable: Replace with flat front shirt mockup filename]
+    img: SHIRT_FLAT,
     label: "Material",
     heading: "240 GSM Combed Cotton",
     copy: "Heavyweight tactile hand-feel that drapes seamlessly for high daily breathability.",
@@ -174,7 +189,6 @@ function InteractiveHeroStage() {
       className="relative w-full h-full bg-neutral-50/50 dark:bg-neutral-950/20 border-b md:border-b-0 md:border-r border-black/10 dark:border-white/10 overflow-hidden flex flex-col justify-between"
       style={{ minHeight: "65vh" }}
     >
-      {/* Dynamic spotlight backlighting */}
       <div
         className="absolute inset-0 pointer-events-none rounded-full"
         style={{
@@ -182,7 +196,6 @@ function InteractiveHeroStage() {
         }}
       />
 
-      {/* Blueprint background grid lines for a precise CAD aesthetic */}
       <div className="absolute inset-0 pointer-events-none opacity-25 dark:opacity-10" style={{
         backgroundImage: "radial-gradient(var(--border) 1px, transparent 0)",
         backgroundSize: "24px 24px"
@@ -192,13 +205,13 @@ function InteractiveHeroStage() {
         {/* Frame A: Flat Mockup View */}
         <img
           ref={flatImgRef}
-          src="/lovable-uploads/input_file_2.png" // [Lovable: Replace with flat front shirt mockup UUID]
+          src={SHIRT_FLAT}
           alt="GZ R-01 tee front layout"
           className="absolute max-h-[82%] max-w-[82%] object-contain select-none transition-all duration-750 ease-out"
           style={{
             opacity: activeTab === "flat" && entered ? 1 : 0,
             visibility: activeTab === "flat" ? "visible" : "hidden",
-            filter: "drop-shadow(0 20px 45px rgba(0,0,0,0.08))",
+            filter: "drop-shadow(0 20px 45px rgba(0,0,0,0.12))",
           }}
           draggable={false}
         />
@@ -206,13 +219,13 @@ function InteractiveHeroStage() {
         {/* Frame B: On-Model Lifestyle View */}
         <img
           ref={modelImgRef}
-          src="/lovable-uploads/input_file_3.png" // [Lovable: Replace with model wearing GZ R-01 shirt UUID]
+          src={SHIRT_MODEL}
           alt="GZ R-01 tee on model"
           className="absolute max-h-[82%] max-w-[82%] object-contain select-none transition-all duration-750 ease-out rounded-2xl"
           style={{
             opacity: activeTab === "model" && entered ? 1 : 0,
             visibility: activeTab === "model" ? "visible" : "hidden",
-            filter: "drop-shadow(0 20px 45px rgba(0,0,0,0.12))",
+            filter: "drop-shadow(0 20px 45px rgba(0,0,0,0.15))",
           }}
           draggable={false}
         />
@@ -263,15 +276,14 @@ function InteractiveHeroStage() {
 function SubHighlightRotator() {
   const [angleIndex, setAngleIndex] = useState(0);
 
-  // Stacked arrays mapped using exact compile-directive relative imports
   const hatAngles = [
-    { name: "Front Flat View", src: "/lovable-uploads/input_file_9.png" }, // [Lovable: Replace with hat front view UUID]
-    { name: "Front Left Tilt", src: "/lovable-uploads/input_file_5.png" }, // [Lovable: Replace with hat front left UUID]
-    { name: "Left Profile (Logo Detail)", src: "/lovable-uploads/input_file_4.png" }, // [Lovable: Replace with hat left profile UUID]
-    { name: "Back View (Brass Adjuster)", src: "/lovable-uploads/input_file_8.png" }, // [Lovable: Replace with hat back view UUID]
-    { name: "Right Profile (Minimal)", src: "/lovable-uploads/input_file_7.png" }, // [Lovable: Replace with hat right profile UUID]
-    { name: "Front Right Tilt", src: "/lovable-uploads/input_file_6.png" }, // [Lovable: Replace with hat front right UUID]
-    { name: "Top-Down View", src: "/lovable-uploads/input_file_10.png" }, // [Lovable: Replace with hat top down UUID]
+    { name: "Front Flat View", src: HAT_ANGLE_0 },
+    { name: "Front Left Tilt", src: HAT_ANGLE_1 },
+    { name: "Left Profile (Logo Detail)", src: HAT_ANGLE_2 },
+    { name: "Back View (Brass Adjuster)", src: HAT_ANGLE_3 },
+    { name: "Right Profile (Minimal)", src: HAT_ANGLE_4 },
+    { name: "Front Right Tilt", src: HAT_ANGLE_5 },
+    { name: "Top-Down View", src: HAT_ANGLE_6 },
   ];
 
   const handleNext = () => {
@@ -285,7 +297,7 @@ function SubHighlightRotator() {
   return (
     <div className="bg-neutral-50 dark:bg-neutral-950/20 rounded-[28px] p-8 md:p-12 border border-black/5 dark:border-white/5 flex flex-col items-center w-full">
       
-      {/* 360° Stack Stage - Preloads all images inside absolute layout to guarantee zero lag */}
+      {/* 360° Stack Stage - pre-renders all frames to avoid 404 flickering */}
       <div className="relative w-full aspect-square max-w-[320px] flex items-center justify-center overflow-hidden mb-6">
         <div
           className="absolute inset-0 pointer-events-none rounded-full"
@@ -310,7 +322,6 @@ function SubHighlightRotator() {
         ))}
       </div>
 
-      {/* Controller Controls */}
       <div className="w-full max-w-xs space-y-4">
         <div className="flex items-center justify-between text-center">
           <button
@@ -333,7 +344,6 @@ function SubHighlightRotator() {
           </button>
         </div>
 
-        {/* Scrub Slider */}
         <div className="relative pt-2">
           <input
             type="range"
@@ -375,7 +385,7 @@ function About() {
         id: "f3cb47f6-0d11-4b97-9e3b-29d306607819",
         title: "GZ R-01 (organic, unisex)",
         price: 2800,
-        image: "/lovable-uploads/input_file_2.png", // [Lovable: Replace with flat front shirt mockup UUID]
+        image: SHIRT_FLAT,
         quantity: 1,
       };
       const idx = cart.findIndex((i: any) => i.id === item.id);
@@ -393,7 +403,7 @@ function About() {
   return (
     <div className="about-page w-full bg-background text-foreground selection:bg-neutral-800 transition-colors duration-300">
       
-      {/* Sticky Navigation Subheader */}
+      {/* Sticky Top Local Sub-Nav */}
       <LocalNav onBuy={handleAddToCart} />
 
       {/* ══════════════════════════════════════════════════════════════════
@@ -401,12 +411,12 @@ function About() {
           ══════════════════════════════════════════════════════════════════ */}
       <section id="shirt-hero" className="grid grid-cols-1 md:grid-cols-2 border-b border-black/10 dark:border-white/10" style={{ minHeight: "88vh" }}>
         
-        {/* LEFT — Seamless Dynamic Spotlight Viewer */}
+        {/* LEFT — Seamless Stage Visualizer */}
         <div className="relative">
           <InteractiveHeroStage />
         </div>
 
-        {/* RIGHT — Technical Specs Column */}
+        {/* RIGHT — Apple Spec & Info Column */}
         <div className="flex flex-col justify-center px-8 py-16 sm:px-12 md:px-16 lg:px-24">
           <FadeUp>
             <p
@@ -456,7 +466,7 @@ function About() {
               ))}
             </div>
 
-            {/* Price Block & Action CTA */}
+            {/* Price block & Checkout Trigger */}
             <div className="flex items-center justify-between gap-6 flex-wrap">
               <div>
                 <span
@@ -698,7 +708,7 @@ function About() {
         style={{ height: "clamp(300px, 48vw, 580px)" }}
       >
         <ParallaxImage
-          src="/lovable-uploads/input_file_3.png" // [Lovable: Replace with model wearing GZ R-01 shirt UUID]
+          src={SHIRT_MODEL}
           alt="Luveni model closeup detail"
         />
         <div
