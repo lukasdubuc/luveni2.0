@@ -1,7 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { site } from "@/config/site";
 import { useEffect, useRef, useState } from "react";
-import HERO from "@/assets/about-hero.png";
+
+// ─── STATIC ASSET ROOT-RELATIVE PATHS (MAPPED TO YOUR PUBLIC DIRECTORY) ───
+const TSHIRT_1 = "/unisex-organic-mid-light-crafter-t-shirt-black-front-6a28f7a4546cf.png";
+const TSHIRT_2 = "/unisex-organic-mid-light-crafter-t-shirt-black-front-6a28f7a454c19.png";
+const TSHIRT_3 = "/unisex-organic-mid-light-crafter-t-shirt-black-front-6a28f7a4550cd.png";
+const GRAPHIC_LOGO = "/design-lab-upscaled-6a25d1f65103a2.77471166-1780863478.png";
+
+const HAT_FRONT = "/classic-dad-hat-black-front-6a28d8da62cc9.png";
+const HAT_LEFT_FRONT = "/classic-dad-hat-black-left-front-6a28d8da63cca.png";
+const HAT_LEFT = "/classic-dad-hat-black-left-side-6a28d8da636fd.png";
+const HAT_BACK = "/classic-dad-hat-black-back-6a28d8da63130.png";
+const HAT_RIGHT = "/classic-dad-hat-black-right-side-6a28d8da633f3.png";
+const HAT_RIGHT_FRONT = "/classic-dad-hat-black-right-front-6a28d8da639e0.png";
 
 export const Route = createFileRoute("/about")({
   head: () => ({
@@ -13,9 +25,9 @@ export const Route = createFileRoute("/about")({
   component: About,
 });
 
-/* ───────────────────── helpers ───────────────────── */
+/* ───────────────────── MOTION & SCROLL HOOKS ───────────────────── */
 
-function useReveal<T extends HTMLElement>(threshold = 0.15) {
+function useReveal<T extends HTMLElement>(threshold = 0.1) {
   const ref = useRef<T>(null);
   const [v, setV] = useState(false);
   useEffect(() => {
@@ -38,7 +50,9 @@ function useScrollProgress<T extends HTMLElement>() {
       if (!ref.current) return;
       const r = ref.current.getBoundingClientRect();
       const vh = window.innerHeight;
-      const raw = 1 - r.bottom / (vh + r.height);
+      const start = r.top - vh;
+      const total = r.height + vh;
+      const raw = -start / total;
       setP(Math.max(0, Math.min(1, raw)));
     };
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -48,7 +62,21 @@ function useScrollProgress<T extends HTMLElement>() {
   return { ref, p };
 }
 
-/* ───────────────────── sticky nav ───────────────────── */
+/* ───────────────────── APPLE BLUEPRINT GRID ───────────────────── */
+
+function BlueprintGrid() {
+  return (
+    <div className="absolute inset-0 pointer-events-none opacity-[0.03] mix-blend-screen z-0" style={{
+      backgroundImage: `
+        linear-gradient(to right, rgba(255,255,255,0.15) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255,255,255,0.15) 1px, transparent 1px)
+      `,
+      backgroundSize: "40px 44px"
+    }} />
+  );
+}
+
+/* ───────────────────── STICKY LOCAL NAV ───────────────────── */
 
 function ProNav() {
   return (
@@ -65,8 +93,8 @@ function ProNav() {
         </span>
         <div className="hidden items-center gap-7 text-[11px] text-white/60 sm:flex">
           <a href="#overview" className="transition-colors hover:text-white">Overview</a>
-          <a href="#design" className="transition-colors hover:text-white">Design</a>
-          <a href="#craft" className="transition-colors hover:text-white">Craft</a>
+          <a href="#anatomy" className="transition-colors hover:text-white">Anatomy</a>
+          <a href="#rotator" className="transition-colors hover:text-white">Perspectives</a>
           <a href="#story" className="transition-colors hover:text-white">Story</a>
         </div>
         <Link
@@ -80,35 +108,33 @@ function ProNav() {
   );
 }
 
-/* ───────────────────── hero ───────────────────── */
+/* ───────────────────── APPLE PRO CINEMATIC HERO ───────────────────── */
 
 function Hero() {
   const { ref, p } = useScrollProgress<HTMLDivElement>();
-  const scale = 1 + p * 0.18;
-  const y = p * -60;
-  const titleOpacity = 1 - p * 1.4;
+  
+  // Custom scroll scales and translates for the parallax exploded mockup
+  const scale = 1 + p * 0.12;
+  const y = p * -80;
+  const titleOpacity = 1 - p * 1.5;
+  const logoScale = 0.8 + p * 0.25;
+  const sideShirtX = p * 120;
 
   return (
     <section
       ref={ref}
       id="overview"
-      className="relative flex min-h-screen items-center justify-center overflow-hidden"
-      style={{
-        background:
-          "radial-gradient(ellipse at 50% 0%, #1c1c1f 0%, #0a0a0b 55%, #000 100%)",
-      }}
+      className="relative flex min-h-screen items-center justify-center overflow-hidden bg-black"
     >
-      {/* halo */}
+      <BlueprintGrid />
       <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
+        className="pointer-events-none absolute inset-0 z-10"
         style={{
-          background:
-            "radial-gradient(circle at 50% 60%, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 45%)",
+          background: "radial-gradient(circle at 50% 60%, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 50%)",
         }}
       />
 
-      <div className="relative z-10 mx-auto flex max-w-[1200px] flex-col items-center px-6 pt-24 text-center">
+      <div className="relative z-20 mx-auto flex max-w-[1200px] flex-col items-center px-6 pt-24 text-center">
         <p
           className="mb-4 text-[12px] font-semibold uppercase tracking-[0.18em]"
           style={{
@@ -126,111 +152,143 @@ function Hero() {
           style={{
             fontFamily: "'SF Pro Display', -apple-system, system-ui",
             fontWeight: 600,
-            fontSize: "clamp(56px, 9.5vw, 132px)",
-            lineHeight: 0.95,
-            letterSpacing: "-0.045em",
+            fontSize: "clamp(54px, 8.5vw, 114px)",
+            lineHeight: 0.98,
+            letterSpacing: "-0.04em",
             opacity: titleOpacity,
           }}
         >
-          Built for those who notice.
+          Built for those<br />
+          who notice.
         </h1>
         <p
-          className="mt-6 max-w-2xl text-balance text-[17px] font-light leading-relaxed text-white/70 sm:text-[20px]"
+          className="mt-6 max-w-2xl text-balance text-[16px] font-light leading-relaxed text-white/70 sm:text-[19px]"
           style={{ opacity: titleOpacity }}
         >
-          Heavyweight materials. Quiet construction. A point of view you can
-          feel the moment you put it on.
+          Heavyweight organic cotton, silent structural seams, and a detailed profile you appreciate the moment it drapes.
         </p>
       </div>
 
-      {/* product image */}
+      {/* Exploded product presentation stage */}
       <div
-        className="absolute inset-x-0 bottom-0 z-0 flex items-end justify-center"
-        style={{ transform: `translateY(${y}px) scale(${scale})`, transformOrigin: "50% 100%" }}
+        className="absolute inset-x-0 bottom-0 z-0 h-[65vh] flex items-end justify-center pointer-events-none"
+        style={{ transform: `translateY(${y}px)`, transformOrigin: "50% 100%" }}
       >
-        <img
-          src={HERO}
-          alt="Signature product"
-          className="h-auto w-[78vw] max-w-[1100px] select-none object-contain"
-          draggable={false}
-          style={{ filter: "drop-shadow(0 60px 120px rgba(0,0,0,0.85))" }}
-        />
-      </div>
+        <div className="relative w-full h-full flex items-center justify-center max-w-[1200px] px-6">
+          
+          {/* Layer A: Left close-up angle mockup */}
+          <img
+            src={TSHIRT_2}
+            alt="Anatomy detail A"
+            className="absolute left-[5%] bottom-10 w-[24vw] max-w-[280px] object-contain select-none transition-all duration-300"
+            style={{
+              transform: `translateX(${-sideShirtX}px) scale(0.95)`,
+              opacity: enteredHero(p) ? 0.35 : 0,
+              filter: "drop-shadow(0 20px 40px rgba(0,0,0,0.6))",
+            }}
+          />
 
-      {/* scroll cue */}
-      <div className="absolute bottom-6 left-1/2 z-20 -translate-x-1/2 text-[10px] uppercase tracking-[0.3em] text-white/40">
-        Scroll
+          {/* Layer B: Center focal flat mockup */}
+          <img
+            src={TSHIRT_1}
+            alt="Signature GZ R-01 flat"
+            className="absolute z-10 w-[52vw] max-w-[580px] object-contain select-none transition-transform duration-100 ease-out"
+            style={{
+              transform: `scale(${scale})`,
+              filter: "drop-shadow(0 40px 90px rgba(0,0,0,0.85))",
+            }}
+          />
+
+          {/* Layer C: Right close-up angle mockup */}
+          <img
+            src={TSHIRT_3}
+            alt="Anatomy detail B"
+            className="absolute right-[5%] bottom-10 w-[24vw] max-w-[280px] object-contain select-none transition-all duration-300"
+            style={{
+              transform: `translateX(${sideShirtX}px) scale(0.95)`,
+              opacity: enteredHero(p) ? 0.35 : 0,
+              filter: "drop-shadow(0 20px 40px rgba(0,0,0,0.6))",
+            }}
+          />
+
+          {/* Layer D: Zooming transparent graphic logo overlay */}
+          <div
+            className="absolute z-20 w-[18vw] max-w-[190px] aspect-square flex items-center justify-center rounded-full bg-black/40 border border-white/5 backdrop-blur-md"
+            style={{
+              top: "22%",
+              transform: `scale(${logoScale})`,
+              opacity: enteredHero(p) ? 0.9 : 0,
+              transition: "opacity 0.6s ease-out",
+            }}
+          >
+            <img
+              src={GRAPHIC_LOGO}
+              alt="Custom graphic emblem"
+              className="w-[78%] h-[78%] object-contain"
+            />
+          </div>
+          
+        </div>
       </div>
     </section>
   );
 }
 
-/* ───────────────────── feature row ───────────────────── */
+function enteredHero(p: number) {
+  return p > 0.05;
+}
+
+/* ───────────────────── FEATURES BLUEPRINT ROW ───────────────────── */
 
 function FeatureRow({
   eyebrow,
   title,
   body,
   side,
-  treatment = "default",
+  src,
 }: {
   eyebrow: string;
   title: string;
   body: string;
   side: "left" | "right";
-  treatment?: "default" | "mono" | "warm" | "cold";
+  src: string;
 }) {
   const { ref, visible } = useReveal<HTMLDivElement>();
   const { ref: pref, p } = useScrollProgress<HTMLDivElement>();
-  const y = (p - 0.5) * -80;
-
-  const filter =
-    treatment === "mono"
-      ? "grayscale(1) contrast(1.05) brightness(0.95)"
-      : treatment === "warm"
-      ? "saturate(1.2) hue-rotate(-10deg) brightness(1.02)"
-      : treatment === "cold"
-      ? "saturate(0.9) hue-rotate(180deg) brightness(0.9)"
-      : "none";
+  const y = (p - 0.5) * -60;
 
   return (
     <section
       ref={ref}
-      className="relative overflow-hidden py-32 sm:py-40"
+      className="relative overflow-hidden py-24 sm:py-36 border-b border-white/5"
       style={{ background: "#000" }}
     >
       <div
         className="mx-auto grid max-w-[1200px] grid-cols-1 items-center gap-16 px-6 md:grid-cols-2"
         style={{
           opacity: visible ? 1 : 0,
-          transform: visible ? "translateY(0)" : "translateY(40px)",
-          transition: "opacity 1s cubic-bezier(.16,1,.3,1), transform 1s cubic-bezier(.16,1,.3,1)",
+          transform: visible ? "translateY(0)" : "translateY(32px)",
+          transition: "opacity 0.9s cubic-bezier(.16,1,.3,1), transform 0.9s cubic-bezier(.16,1,.3,1)",
         }}
       >
         <div className={side === "right" ? "md:order-2" : ""}>
           <p
-            className="mb-5 text-[11px] font-semibold uppercase tracking-[0.22em]"
-            style={{
-              background: "linear-gradient(90deg,#ff8a3d,#ff5e9b,#7c5cff)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-            }}
+            className="mb-4 text-[10px] font-mono tracking-[0.24em] text-neutral-500 uppercase"
           >
             {eyebrow}
           </p>
           <h2
-            className="text-white"
+            className="text-white tracking-tighter"
             style={{
               fontFamily: "'SF Pro Display', -apple-system, system-ui",
-              fontSize: "clamp(38px, 5.4vw, 72px)",
-              lineHeight: 1.02,
-              letterSpacing: "-0.035em",
-              fontWeight: 600,
+              fontSize: "clamp(34px, 4.8vw, 64px)",
+              lineHeight: 1.04,
+              fontWeight: 200,
             }}
           >
             {title}
           </h2>
-          <p className="mt-6 max-w-md text-[16px] font-light leading-relaxed text-white/65 sm:text-[18px]">
+          <p className="mt-5 max-w-md text-[14px] font-light leading-relaxed text-neutral-400">
             {body}
           </p>
         </div>
@@ -240,22 +298,21 @@ function FeatureRow({
           className={side === "right" ? "md:order-1" : ""}
         >
           <div
-            className="relative aspect-square w-full overflow-hidden rounded-[32px]"
+            className="relative aspect-square w-full overflow-hidden rounded-[28px] bg-neutral-950 flex items-center justify-center p-8"
             style={{
-              background:
-                "radial-gradient(circle at 50% 40%, #1a1a1c 0%, #0a0a0b 70%, #000 100%)",
-              border: "1px solid rgba(255,255,255,0.06)",
-              boxShadow: "0 30px 80px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,255,255,0.02)",
+              border: "1px solid rgba(255,255,255,0.05)",
+              boxShadow: "0 25px 60px rgba(0,0,0,0.8)",
             }}
           >
+            <BlueprintGrid />
             <img
-              src={HERO}
+              src={src}
               alt={title}
               draggable={false}
-              className="absolute inset-0 h-full w-full object-contain p-10 select-none"
+              className="max-h-[85%] max-w-[85%] object-contain select-none transition-transform duration-100"
               style={{
-                transform: `translateY(${y}px) scale(1.04)`,
-                filter,
+                transform: `translateY(${y}px) scale(1.02)`,
+                filter: "drop-shadow(0 20px 40px rgba(0,0,0,0.5))",
                 willChange: "transform",
               }}
             />
@@ -266,70 +323,146 @@ function FeatureRow({
   );
 }
 
-/* ───────────────────── marquee strip ───────────────────── */
+/* ───────────────────── APPLE 360° SCROLL ROTATOR (HAT) ───────────────────── */
 
-function GalleryStrip() {
-  const items = ["MONO", "WARM", "COLD", "DEFAULT", "MONO", "WARM"];
-  const filters: Record<string, string> = {
-    MONO: "grayscale(1) contrast(1.05)",
-    WARM: "saturate(1.25) hue-rotate(-12deg) brightness(1.03)",
-    COLD: "saturate(0.85) hue-rotate(180deg) brightness(0.92)",
-    DEFAULT: "none",
-  };
+function ScrollRotator() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [angleIndex, setAngleIndex] = useState(0);
+  const [scrollFraction, setScrollFraction] = useState(0);
+
+  // Precise rotational angles mapped to your uploaded dad hat mockups
+  const hatAngles = [
+    { name: "Front view", src: HAT_FRONT },
+    { name: "Front left tilt", src: HAT_LEFT_FRONT },
+    { name: "Left profile", src: HAT_LEFT },
+    { name: "Back buckle detail", src: HAT_BACK },
+    { name: "Right profile", src: HAT_RIGHT },
+    { name: "Front right tilt", src: HAT_RIGHT_FRONT },
+  ];
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const vh = window.innerHeight;
+      
+      // Calculate scroll progress exclusively inside the rotator container boundary
+      const progress = -rect.top / (rect.height - vh);
+      const clamped = Math.max(0, Math.min(0.99, progress));
+      setScrollFraction(clamped);
+
+      // Scrub index seamlessly
+      const targetIndex = Math.floor(clamped * hatAngles.length);
+      setAngleIndex(targetIndex);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [hatAngles.length]);
+
   return (
-    <section className="overflow-hidden bg-black py-24">
-      <div className="mx-auto mb-10 max-w-[1200px] px-6">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/40">
-          The Lineup
-        </p>
-        <h3
-          className="mt-3 text-white"
-          style={{
-            fontFamily: "'SF Pro Display', -apple-system, system-ui",
-            fontSize: "clamp(28px, 4vw, 48px)",
-            letterSpacing: "-0.03em",
-            fontWeight: 600,
-          }}
-        >
-          Six finishes. One philosophy.
-        </h3>
-      </div>
-      <div className="flex gap-6 overflow-x-auto px-6 pb-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {items.map((k, i) => (
-          <div
-            key={i}
-            className="relative shrink-0 overflow-hidden rounded-[28px]"
-            style={{
-              width: "min(78vw, 420px)",
-              aspectRatio: "3/4",
-              background:
-                "radial-gradient(circle at 50% 30%, #1a1a1c 0%, #0a0a0b 70%, #000 100%)",
-              border: "1px solid rgba(255,255,255,0.05)",
-            }}
-          >
-            <img
-              src={HERO}
-              alt={k}
-              draggable={false}
-              className="absolute inset-0 h-full w-full object-contain p-8 select-none"
-              style={{ filter: filters[k] }}
-            />
-            <div className="absolute bottom-5 left-5 text-[10px] uppercase tracking-[0.3em] text-white/60">
-              {k}
-            </div>
+    <section
+      id="rotator"
+      ref={containerRef}
+      className="relative bg-black"
+      style={{ height: "240vh" }} // Sufficient vertical track for smooth scroll scrubbing
+    >
+      <div className="sticky top-0 h-screen w-full flex flex-col justify-between overflow-hidden">
+        <BlueprintGrid />
+        
+        {/* Title layer */}
+        <div className="pt-20 px-6 text-center z-20">
+          <p className="text-[10px] font-mono tracking-[0.3em] text-neutral-500 uppercase mb-2">Sub-Highlight Piece</p>
+          <h2 className="text-white tracking-tighter text-3xl sm:text-5xl font-extralight">
+            Embroidered Dad Hat.<br />
+            <span className="font-semibold text-white">Rotatable perspective.</span>
+          </h2>
+        </div>
+
+        {/* 360° Hardware Stage - Zero latency rendering using preloaded stacked layers */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="relative w-full aspect-square max-w-[340px] flex items-center justify-center">
+            
+            <div className="absolute inset-0 pointer-events-none rounded-full" style={{
+              background: "radial-gradient(circle at 50% 50%, rgba(255,255,255,0.035) 0%, transparent 65%)"
+            }} />
+
+            {hatAngles.map((angle, idx) => (
+              <img
+                key={idx}
+                src={angle.src}
+                alt={`Hat angle - ${angle.name}`}
+                className="absolute max-h-[85%] max-w-[85%] object-contain select-none transition-opacity duration-300"
+                style={{
+                  opacity: angleIndex === idx ? 1 : 0,
+                  visibility: angleIndex === idx ? "visible" : "hidden",
+                  filter: "drop-shadow(0 30px 60px rgba(0,0,0,0.85))",
+                }}
+                draggable={false}
+              />
+            ))}
           </div>
-        ))}
+        </div>
+
+        {/* Dynamic floating captions that fade up according to rotative quadrant */}
+        <div className="absolute bottom-28 left-6 right-6 flex justify-center text-center z-20">
+          <div className="max-w-xs relative h-10 w-full">
+            {[
+              "01 / Low-profile unstructured 6-panel design.",
+              "02 / Formed cleanly in durable chino twill.",
+              "03 / Front heart relief rendered in high-density thread.",
+              "04 / Completed with a custom brass buckle closure.",
+              "05 / Subtle ventilation eyelets on every panel.",
+              "06 / Curved visor structured for standard daily rotation."
+            ].map((text, idx) => (
+              <p
+                key={idx}
+                className="absolute inset-x-0 top-0 text-xs text-neutral-400 font-light transition-all duration-500 leading-relaxed font-sans"
+                style={{
+                  opacity: angleIndex === idx ? 0.95 : 0,
+                  transform: angleIndex === idx ? "translateY(0)" : "translateY(12px)",
+                }}
+              >
+                {text}
+              </p>
+            ))}
+          </div>
+        </div>
+
+        {/* Interactive Scrub Track Progress Indicator */}
+        <div className="pb-16 flex flex-col items-center gap-3 z-20">
+          <span className="text-[9px] font-mono text-neutral-500 tracking-widest uppercase">
+            {hatAngles[angleIndex]?.name || "Perspective"}
+          </span>
+          <div className="flex gap-1.5">
+            {hatAngles.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => {
+                  const targetScroll = containerRef.current
+                    ? containerRef.current.offsetTop + (idx / hatAngles.length) * (containerRef.current.offsetHeight - window.innerHeight)
+                    : 0;
+                  window.scrollTo({ top: targetScroll + 10, behavior: "smooth" });
+                }}
+                className={`h-1.5 rounded-full transition-all duration-500 ${
+                  angleIndex === idx ? "w-5 bg-white" : "w-1.5 bg-white/20 hover:bg-white/40"
+                }`}
+              />
+            ))}
+          </div>
+        </div>
+
       </div>
     </section>
   );
 }
 
-/* ───────────────────── story / values ───────────────────── */
+/* ───────────────────── BRAND CONVICTION / STATS ───────────────────── */
 
 function Story() {
   const { ref, visible } = useReveal<HTMLDivElement>();
   return (
-    <section id="story" className="bg-black px-6 py-40">
+    <section id="story" className="bg-black px-6 py-40 border-b border-white/5">
       <div
         ref={ref}
         className="mx-auto max-w-[900px] text-center"
@@ -350,23 +483,22 @@ function Story() {
           The Story
         </p>
         <h2
-          className="text-white"
+          className="text-white tracking-tighter"
           style={{
             fontFamily: "'SF Pro Display', -apple-system, system-ui",
             fontSize: "clamp(38px, 6vw, 84px)",
             lineHeight: 1.04,
-            letterSpacing: "-0.04em",
-            fontWeight: 600,
+            fontWeight: 200,
           }}
         >
           A wardrobe of quiet conviction.
         </h2>
-        <p className="mx-auto mt-8 max-w-2xl text-[18px] font-light leading-relaxed text-white/65 sm:text-[20px]">
+        <p className="mx-auto mt-8 max-w-2xl text-[18px] font-light leading-relaxed text-neutral-400 sm:text-[20px] font-sans">
           {site.brand} began as a refusal — refusal of trend cycles, of loud
           logos, of disposable seasons. Every piece is engineered to outlast
           the calendar and earn its place in your daily rotation.
         </p>
-        <div className="mt-14 grid grid-cols-2 gap-8 text-left sm:grid-cols-4">
+        <div className="mt-16 grid grid-cols-2 gap-8 text-left sm:grid-cols-4 border-t border-white/5 pt-12">
           {[
             ["240", "GSM heavyweight cotton"],
             ["07", "Production checkpoints"],
@@ -375,17 +507,16 @@ function Story() {
           ].map(([n, l]) => (
             <div key={l}>
               <div
-                className="text-white"
+                className="text-white tracking-tighter"
                 style={{
                   fontFamily: "'SF Pro Display', -apple-system, system-ui",
                   fontSize: "clamp(36px, 4vw, 56px)",
-                  letterSpacing: "-0.04em",
-                  fontWeight: 600,
+                  fontWeight: 200,
                 }}
               >
                 {n}
               </div>
-              <div className="mt-1 text-[12px] uppercase tracking-[0.18em] text-white/45">
+              <div className="mt-1 text-[11px] font-mono tracking-[0.18em] text-neutral-500 uppercase">
                 {l}
               </div>
             </div>
@@ -396,54 +527,23 @@ function Story() {
   );
 }
 
-/* ───────────────────── CTA ───────────────────── */
+/* ───────────────────── FULL BLEED MODEL PARALLAX BAND ───────────────────── */
 
-function CTA() {
+function EditorialEnd() {
   return (
-    <section
-      className="relative overflow-hidden px-6 py-40 text-center"
-      style={{
-        background:
-          "radial-gradient(ellipse at 50% 50%, #1a1a1c 0%, #0a0a0b 60%, #000 100%)",
-      }}
-    >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(circle at 50% 50%, rgba(124,92,255,0.12), transparent 60%)",
-        }}
-      />
-      <div className="relative">
-        <h2
-          className="mx-auto max-w-3xl text-white"
-          style={{
-            fontFamily: "'SF Pro Display', -apple-system, system-ui",
-            fontSize: "clamp(40px, 6vw, 84px)",
-            lineHeight: 1.02,
-            letterSpacing: "-0.04em",
-            fontWeight: 600,
-          }}
-        >
-          Find your first one.
-        </h2>
-        <p className="mx-auto mt-6 max-w-xl text-[16px] font-light leading-relaxed text-white/65 sm:text-[18px]">
-          Explore the full collection — every piece built with the same
-          obsessive attention to material, construction, and feel.
-        </p>
-        <Link
-          to="/shop"
-          className="mt-10 inline-block rounded-full bg-white px-8 py-4 text-[13px] font-semibold tracking-tight text-black transition-transform hover:scale-[1.02] active:scale-[0.98]"
-        >
-          Shop the collection →
-        </Link>
+    <section className="relative overflow-hidden border-b border-white/5" style={{ height: "clamp(340px, 48vw, 620px)" }}>
+      <ParallaxImage src={TSHIRT_3} alt="Luveni organic lineup closeup" />
+      <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6" style={{ background: "linear-gradient(rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.6) 100%)" }}>
+        <FadeUp>
+          <p className="uppercase mb-3 font-semibold font-mono" style={{ fontSize: "9px", letterSpacing: "0.32em", color: "rgba(255,255,255,0.7)" }}>Luveni Core Systems · {new Date().getFullYear()}</p>
+          <p className="tracking-tighter text-white font-extralight font-sans" style={{ fontSize: "clamp(26px, 4.5vw, 52px)", lineHeight: 1.1 }}>Designed for the<br /><span className="font-semibold text-white">everyday uniform.</span></p>
+        </FadeUp>
       </div>
     </section>
   );
 }
 
-/* ───────────────────── page ───────────────────── */
+/* ───────────────────── MAIN ROUTE PAGE ───────────────────── */
 
 function About() {
   return (
@@ -451,29 +551,29 @@ function About() {
       <ProNav />
       <Hero />
       <FeatureRow
-        eyebrow="Design"
+        eyebrow="Anatomy"
         title="Engineered in silence."
         body="No noise. No filler. Every panel, seam, and stitch exists for a reason — and the reasons are visible the moment you hold it."
         side="right"
-        treatment="default"
+        src={TSHIRT_1}
       />
       <FeatureRow
-        eyebrow="Material"
+        eyebrow="Iconography"
+        title="A subtle relief print."
+        body="Marked with the high-resolution transparent butterfly logo. Patience and steady growth rendered in clean lines."
+        side="left"
+        src={GRAPHIC_LOGO}
+      />
+      <FeatureRow
+        eyebrow="Weight"
         title="240 GSM. Built to last."
         body="Heavyweight combed organic cotton with a tactile hand-feel that softens beautifully wash after wash, without losing its structure."
-        side="left"
-        treatment="mono"
-      />
-      <FeatureRow
-        eyebrow="Craft"
-        title="Detail you can feel."
-        body="Reinforced collars, double-needle hems, and a relaxed silhouette designed to drape exactly the way the studio intended."
         side="right"
-        treatment="warm"
+        src={TSHIRT_2}
       />
-      <GalleryStrip />
+      <ScrollRotator />
       <Story />
-      <CTA />
+      <EditorialEnd />
     </div>
   );
 }
