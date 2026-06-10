@@ -29,7 +29,7 @@ function LocalNav({ onBuy }: { onBuy: () => void }) {
           <a href="#story" className="text-[10px] font-mono tracking-wider text-muted-foreground hover:text-foreground transition-colors uppercase hidden sm:inline-block">Our Story</a>
           <button
             onClick={onBuy}
-            className="bg-foreground text-background text-[10px] font-bold tracking-wider uppercase px-3.5 py-1.5 rounded-full hover:opacity-90 active:scale-[0.97] transition-all"
+            className="bg-foreground text-background text-[10px] font-bold tracking-wider uppercase px-4 py-1.5 rounded-full hover:opacity-90 active:scale-[0.97] transition-all"
           >
             Buy
           </button>
@@ -136,10 +136,9 @@ function CinematicProduct() {
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center border-b md:border-b-0 md:border-r border-neutral-900"
+      className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center border-b md:border-b-0 md:border-r border-neutral-950"
       style={{ minHeight: "65vh" }}
     >
-      {/* Immersive radial keynote backlighting */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
@@ -163,7 +162,6 @@ function CinematicProduct() {
         draggable={false}
       />
       
-      {/* Bottom Technical Tag */}
       <div
         className="absolute bottom-6 left-0 right-0 flex justify-center z-20"
         style={{
@@ -252,9 +250,9 @@ function About() {
   ];
 
   return (
-    <div className="w-full bg-background text-foreground selection:bg-neutral-800 transition-colors duration-300">
+    <div className="about-page w-full bg-background text-foreground selection:bg-neutral-800 transition-colors duration-300">
       
-      {/* Sticky Apple Local-Nav Subheader */}
+      {/* Local Sticky Nav */}
       <LocalNav onBuy={handleAddToCart} />
 
       {/* ══════════════════════════════════════════════════════════════════
@@ -262,12 +260,12 @@ function About() {
           ══════════════════════════════════════════════════════════════════ */}
       <section className="grid grid-cols-1 md:grid-cols-2 border-b border-black/10 dark:border-white/10" style={{ minHeight: "88vh" }}>
 
-        {/* LEFT — Product visual, black backdrop, reactive scroll zoom */}
+        {/* LEFT — Product Stage */}
         <div className="relative">
           <CinematicProduct />
         </div>
 
-        {/* RIGHT — Apple Spec & Callout Column */}
+        {/* RIGHT — Apple Spec & Info Column */}
         <div className="flex flex-col justify-center px-8 py-16 sm:px-12 md:px-16 lg:px-24">
           <FadeUp>
             <p
@@ -290,7 +288,7 @@ function About() {
               The GZ R-01 is the piece Luveni was built around — designed for your rotation, not the rack.
             </p>
 
-            {/* Tech Specs Comparison Table */}
+            {/* Tech Specs Grid */}
             <div className="grid grid-cols-2 mb-10 border-t border-b border-black/10 dark:border-white/10">
               {[
                 ["Material", "100% Organic Cotton"],
@@ -302,8 +300,8 @@ function About() {
                   key={i}
                   className="py-4 pr-6"
                   style={{
-                    borderRight: i % 2 === 0 ? "0.5px solid rgba(128,128,128,0.15)" : "none",
-                    borderBottom: i < 2 ? "0.5px solid rgba(128,128,128,0.15)" : "none",
+                    borderRight: i % 2 === 0 ? "1px solid rgba(128,128,128,0.15)" : "none",
+                    borderBottom: i < 2 ? "1px solid rgba(128,128,128,0.15)" : "none",
                   }}
                 >
                   <span
@@ -332,7 +330,7 @@ function About() {
               </div>
               <button
                 onClick={handleAddToCart}
-                className="flex-1 max-w-xs bg-foreground text-background hover:opacity-90 active:scale-[0.97] transition-all py-4 px-8 border-none cursor-pointer"
+                className="flex-1 max-w-xs bg-foreground text-background hover:opacity-90 active:scale-[0.97] transition-all py-4 px-8 border-none cursor-pointer rounded-full"
                 style={{
                   fontFamily: "monospace",
                   fontSize: "10px",
@@ -356,7 +354,6 @@ function About() {
         ref={zoomRef}
         className="border-b border-black/10 dark:border-white/10 bg-background"
       >
-        {/* Title Block */}
         <div className="px-8 py-12 sm:px-12 border-b border-black/10 dark:border-white/10">
           <FadeUp>
             <p
@@ -374,7 +371,6 @@ function About() {
           </FadeUp>
         </div>
 
-        {/* Staggered Features Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3">
           {details.map((d, i) => (
             <div
@@ -387,7 +383,6 @@ function About() {
                 transition: `opacity 0.8s cubic-bezier(0.16,1,0.3,1) ${i * 150}ms, transform 0.8s cubic-bezier(0.16,1,0.3,1) ${i * 150}ms`,
               }}
             >
-              {/* Product Frame */}
               <div
                 className="w-full overflow-hidden bg-neutral-100 dark:bg-neutral-900"
                 style={{ height: "clamp(280px, 34vw, 440px)" }}
@@ -400,7 +395,6 @@ function About() {
                 />
               </div>
               
-              {/* Feature info */}
               <div className="px-8 py-8 border-t border-black/5 dark:border-white/5 bg-background">
                 <p
                   className="text-muted-foreground uppercase mb-3"
@@ -451,7 +445,6 @@ function About() {
                 </p>
               </div>
 
-              {/* Technical Standards Sub-card */}
               <div className="mt-10 pt-8 border-t border-black/10 dark:border-white/10">
                 <p
                   className="text-muted-foreground uppercase mb-4"
@@ -467,14 +460,13 @@ function About() {
                     "Commitment to timeless, elevated essentials.",
                   ].map((s, i) => (
                     <li key={i} className="text-xs text-muted-foreground flex items-start gap-2 font-light">
-                      <span className="mt-[6.5px] w-1 h-1 rounded-full bg-muted-foreground flex-shrink-0 opacity-60" />
+                      <span className="mt-[6.5px] w-1.5 h-1.5 rounded-full bg-muted-foreground flex-shrink-0 opacity-65" />
                       {s}
                     </li>
                   ))}
                 </ul>
               </div>
 
-              {/* Support contact info */}
               <div className="mt-10 pt-6 border-t border-black/10 dark:border-white/10 text-xs text-muted-foreground font-light">
                 Support inquiries /{" "}
                 <a
@@ -495,7 +487,7 @@ function About() {
                   const Icon = v.icon;
                   return (
                     <div key={i} className="space-y-4">
-                      <div className="w-8 h-8 rounded-full bg-background flex items-center justify-center border border-black/5 dark:border-white/5 shadow-sm">
+                      <div className="w-9 h-9 rounded-full bg-background flex items-center justify-center border border-black/5 dark:border-white/5 shadow-sm">
                         <Icon size={14} className="text-foreground" />
                       </div>
                       <h4 className="text-sm font-semibold text-foreground tracking-tight">{v.title}</h4>
@@ -522,7 +514,6 @@ function About() {
           src="https://files.cdn.printful.com/files/1f4/1f4017c83d3d8099557f471924905541_preview.png"
           alt="Luveni fabric structural closeup"
         />
-        {/* Apple Editorial vignette overlay */}
         <div
           className="absolute inset-0 flex flex-col items-center justify-center text-center px-6"
           style={{ background: "linear-gradient(rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.5) 100%)" }}
@@ -540,7 +531,7 @@ function About() {
               Luveni Core Systems · {new Date().getFullYear()}
             </p>
             <p
-              className="tracking-tighter text-white"
+              className="tracking-tighter text-white animate-fade-in"
               style={{
                 fontSize: "clamp(26px, 4.5vw, 52px)",
                 fontWeight: 100,
