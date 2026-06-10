@@ -3,6 +3,7 @@ import { site } from "@/config/site";
 import { useEffect, useRef, useState } from "react";
 import { Shield, Sparkles, Eye, Users, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/about")({
   head: () => ({
@@ -16,28 +17,16 @@ export const Route = createFileRoute("/about")({
   component: About,
 });
 
-// ─── STATIC PRESENTATION DATA ─────────────────────────────────────────────
-const DETAILS = [
-  {
-    img: "input_file_1.png", // Folded shirt flatlay mockup on white background
-    label: "Construction",
-    heading: "Ribbed collar",
-    copy: "Double-needle reinforcement. Holds its shape after a hundred washes.",
-  },
-  {
-    img: "input_file_0.png", // Isolated transparent logo illustration
-    label: "Signature",
-    heading: "Bonsai mark",
-    copy: "High-density embroidery at the chest. Patience rendered in thread.",
-  },
-  {
-    img: "input_file_2.png", // Flat front black t-shirt mockup
-    label: "Material",
-    heading: "Organic cotton",
-    copy: "240 GSM. Substantial hand-feel. Breathable for every-day wear.",
-  },
+// ─── GUARANTEED PRINTFUL BACKUP CDN ASSETS ─────────────────────────────────
+const SHIRT_FALLBACK_DEFAULT = [
+  "https://files.cdn.printful.com/files/78f/78fbe8e3abfd368625d5c143ffe0189d_preview.png", // Front flat
+  "https://files.cdn.printful.com/files/268/268853a2dd3fa9e8733e12d2f22d014b_preview.png", // Folded / Detail flatlay
+  "https://files.cdn.printful.com/files/615/61572d86e70a8bfe299150c10432c496_preview.png", // Collar close-up
+  "https://files.cdn.printful.com/files/9e8/9e876ce4efee7c0415d88386792f6f5d_preview.png", // Logo chest preview
+  "https://files.cdn.printful.com/files/1f4/1f4017c83d3d8099557f471924905541_preview.png"  // Fabric closeup
 ];
 
+// ─── STATIC DESIGN DATA ──────────────────────────────────────────────────
 const VALUES = [
   { icon: Shield, title: "Quality", desc: "Highest-grade fabrics selected to endure years of wear and wash." },
   { icon: Sparkles, title: "Timeless", desc: "Silhouettes designed to outlast whatever season they drop in." },
@@ -102,7 +91,7 @@ function FadeUp({ children, delay = 0 }: { children: React.ReactNode; delay?: nu
 }
 
 // ─── PARALLAX IMAGE ───────────────────────────────────────────────────────
-function ParallaxImage({ src, alt }: { src: string; alt: string }) {
+function ParallaxImage({ src, alt, fallback }: { src: string; alt: string; fallback: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
 
@@ -129,13 +118,16 @@ function ParallaxImage({ src, alt }: { src: string; alt: string }) {
         alt={alt}
         className="w-full h-full object-cover"
         style={{ transition: "transform 0.1s linear", willChange: "transform" }}
+        onError={(e) => {
+          e.currentTarget.src = fallback;
+        }}
       />
     </div>
   );
 }
 
 // ─── CINEMATIC ZOOM IMAGE (KEYNOTE PRESENTATION STAGE) ───────────────────
-function CinematicProduct() {
+function CinematicProduct({ fallback }: { fallback: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const [entered, setEntered] = useState(false);
@@ -177,7 +169,7 @@ function CinematicProduct() {
       />
       <img
         ref={imgRef}
-        src="input_file_2.png" // Image 3: Flat front shirt vector
+        src="/lovable-uploads/GZ_R01_Flat.png" // Scanned placeholder for image 3
         alt="GZ R-01 Organic Unisex Tee"
         className="relative z-10 select-none"
         style={{
@@ -188,6 +180,9 @@ function CinematicProduct() {
           transition: "opacity 1.2s cubic-bezier(0.16,1,0.3,1), transform 0.1s linear",
           willChange: "transform",
           filter: "drop-shadow(0 30px 60px rgba(0,0,0,0.85))",
+        }}
+        onError={(e) => {
+          e.currentTarget.src = fallback;
         }}
         draggable={false}
       />
@@ -216,18 +211,18 @@ function CinematicProduct() {
 }
 
 // ─── ROTATABLE 360° SUB-HIGHLIGHT (HEART DAD HAT) ─────────────────────────
-function SubHighlightRotator() {
+function SubHighlightRotator({ dbHatImages }: { dbHatImages: string[] }) {
   const [angleIndex, setAngleIndex] = useState(0);
 
-  // Array of hat angles mapped to the uploaded hat files
+  // Fallback chain for dad hat rotation series using printful mockup assets as insurance
   const hatAngles = [
-    { name: "Front View", src: "input_file_9.png" },       // Angle 0: Front flat
-    { name: "Front Left", src: "input_file_5.png" },      // Angle 1: Front left tilt
-    { name: "Left Profile", src: "input_file_4.png" },    // Angle 2: Left side showing embroidered heart
-    { name: "Back View", src: "input_file_8.png" },       // Angle 3: Back adjuster buckle
-    { name: "Right Profile", src: "input_file_7.png" },   // Angle 4: Right plain profile
-    { name: "Front Right", src: "input_file_6.png" },     // Angle 5: Front right tilt
-    { name: "Top-Down Angle", src: "input_file_10.png" }, // Angle 6: Top-down profile
+    { name: "Front View", local: "/lovable-uploads/Hat_Front.png", fallback: dbHatImages[0] || "https://files.cdn.printful.com/files/00c/00cea4e35a659a7022d01f2cb2641b4d_preview.png" },
+    { name: "Front Left", local: "/lovable-uploads/Hat_FrontLeft.png", fallback: dbHatImages[1] || "https://files.cdn.printful.com/files/b68/b686c45246d81c9c12aa8a350ce773bd_preview.png" },
+    { name: "Left Profile", local: "/lovable-uploads/Hat_Left.png", fallback: dbHatImages[2] || "https://files.cdn.printful.com/files/615/61572d86e70a8bfe299150c10432c496_preview.png" },
+    { name: "Back View", local: "/lovable-uploads/Hat_Back.png", fallback: dbHatImages[3] || "https://files.cdn.printful.com/files/1f4/1f4017c83d3d8099557f471924905541_preview.png" },
+    { name: "Right Profile", local: "/lovable-uploads/Hat_Right.png", fallback: dbHatImages[4] || "https://files.cdn.printful.com/files/78f/78fbe8e3abfd368625d5c143ffe0189d_preview.png" },
+    { name: "Front Right", local: "/lovable-uploads/Hat_FrontRight.png", fallback: dbHatImages[5] || "https://files.cdn.printful.com/files/9e8/9e876ce4efee7c0415d88386792f6f5d_preview.png" },
+    { name: "Top-Down Angle", local: "/lovable-uploads/Hat_TopDown.png", fallback: dbHatImages[6] || "https://files.cdn.printful.com/files/268/268853a2dd3fa9e8733e12d2f22d014b_preview.png" },
   ];
 
   const handleNext = () => {
@@ -238,10 +233,11 @@ function SubHighlightRotator() {
     setAngleIndex((prev) => (prev - 1 + hatAngles.length) % hatAngles.length);
   };
 
+  const activeAngle = hatAngles[angleIndex];
+
   return (
-    <div className="bg-neutral-50 dark:bg-neutral-950/20 rounded-[28px] p-8 md:p-12 border border-black/5 dark:border-white/5 flex flex-col items-center">
+    <div className="bg-neutral-50 dark:bg-neutral-950/20 rounded-[28px] p-8 md:p-12 border border-black/5 dark:border-white/5 flex flex-col items-center w-full">
       
-      {/* Dynamic hardware visualization panel */}
       <div className="relative w-full aspect-square max-w-[320px] flex items-center justify-center overflow-hidden mb-6">
         <div
           className="absolute inset-0 pointer-events-none rounded-full"
@@ -250,15 +246,17 @@ function SubHighlightRotator() {
           }}
         />
         <img
-          src={hatAngles[angleIndex].src}
-          alt={`Heart dad hat - ${hatAngles[angleIndex].name}`}
+          src={activeAngle.local}
+          alt={`Heart dad hat - ${activeAngle.name}`}
           className="max-h-[85%] max-w-[85%] object-contain select-none transition-all duration-300"
           style={{ filter: "drop-shadow(0 20px 40px rgba(0,0,0,0.15))" }}
+          onError={(e) => {
+            e.currentTarget.src = activeAngle.fallback;
+          }}
           draggable={false}
         />
       </div>
 
-      {/* Manual perspective controller */}
       <div className="w-full max-w-xs space-y-4">
         <div className="flex items-center justify-between text-center">
           <button
@@ -270,7 +268,7 @@ function SubHighlightRotator() {
           
           <div className="space-y-0.5">
             <span className="text-[10px] font-mono tracking-widest text-muted-foreground uppercase block">Perspective</span>
-            <span className="text-xs font-semibold text-foreground">{hatAngles[angleIndex].name}</span>
+            <span className="text-xs font-semibold text-foreground">{activeAngle.name}</span>
           </div>
 
           <button
@@ -281,7 +279,6 @@ function SubHighlightRotator() {
           </button>
         </div>
 
-        {/* Scrub timeline */}
         <div className="relative pt-2">
           <input
             type="range"
@@ -307,6 +304,33 @@ function About() {
   const zoomRef = useRef<HTMLDivElement>(null);
   const [zoomVisible, setZoomVisible] = useState(false);
 
+  // Live database fallback assets state
+  const [dbShirtImages, setDbShirtImages] = useState<string[]>([]);
+  const [dbHatImages, setDbHatImages] = useState<string[]>([]);
+
+  // Query live database products to load correct URLs on active environments
+  useEffect(() => {
+    async function loadBackupAssets() {
+      try {
+        const { data } = await supabase.from("products").select("*");
+        if (data && data.length > 0) {
+          const shirt = data.find(p => p.id === "f3cb47f6-0d11-4b97-9e3b-29d306607819" || p.slug?.includes("gz-r-01"));
+          if (shirt && shirt.image_urls && shirt.image_urls.length > 0) {
+            setDbShirtImages(shirt.image_urls);
+          }
+          
+          const hat = data.find(p => p.slug?.includes("hat") || p.slug?.includes("cap") || p.title?.toLowerCase().includes("hat"));
+          if (hat && hat.image_urls && hat.image_urls.length > 0) {
+            setDbHatImages(hat.image_urls);
+          }
+        }
+      } catch (err) {
+        console.error("Database asset fetch fallback loop failed:", err);
+      }
+    }
+    loadBackupAssets();
+  }, []);
+
   useEffect(() => {
     const obs = new IntersectionObserver(
       ([e]) => { if (e.isIntersecting) { setZoomVisible(true); obs.disconnect(); } },
@@ -323,7 +347,7 @@ function About() {
         id: "f3cb47f6-0d11-4b97-9e3b-29d306607819",
         title: "GZ R-01 (organic, unisex)",
         price: 2800,
-        image: "input_file_2.png", // Flat shirt mockup front
+        image: dbShirtImages[0] || SHIRT_FALLBACK_DEFAULT[0],
         quantity: 1,
       };
       const idx = cart.findIndex((i: any) => i.id === item.id);
@@ -338,10 +362,35 @@ function About() {
     }
   };
 
+  // Three detailed modules on the GZ R-01
+  const detailModules = [
+    {
+      local: "/lovable-uploads/GZ_R01_Folded.png", // Image 2: Folded shirt flatlay mockup
+      fallback: dbShirtImages[1] || SHIRT_FALLBACK_DEFAULT[1],
+      label: "Construction",
+      heading: "Ribbed collar",
+      copy: "Double-needle reinforcement. Holds its shape after a hundred washes.",
+    },
+    {
+      local: "/lovable-uploads/GZ_R01_Logo.png", // Image 1: Isolated transparent logo
+      fallback: dbShirtImages[3] || SHIRT_FALLBACK_DEFAULT[3],
+      label: "Signature",
+      heading: "Bonsai mark",
+      copy: "High-density embroidery at the chest. Patience rendered in thread.",
+    },
+    {
+      local: "/lovable-uploads/GZ_R01_Flat.png", // Image 3: Flat front shirt mockup
+      fallback: dbShirtImages[0] || SHIRT_FALLBACK_DEFAULT[0],
+      label: "Material",
+      heading: "Organic cotton",
+      copy: "240 GSM. Substantial hand-feel. Breathable for every-day wear.",
+    },
+  ];
+
   return (
     <div className="about-page w-full bg-background text-foreground selection:bg-neutral-800 transition-colors duration-300">
       
-      {/* Sticky Top Local Sub-Nav */}
+      {/* Sticky Top Sub-Nav */}
       <LocalNav onBuy={handleAddToCart} />
 
       {/* ══════════════════════════════════════════════════════════════════
@@ -351,7 +400,7 @@ function About() {
         
         {/* LEFT — Stage Vector */}
         <div className="relative">
-          <CinematicProduct />
+          <CinematicProduct fallback={dbShirtImages[0] || SHIRT_FALLBACK_DEFAULT[0]} />
         </div>
 
         {/* RIGHT — Apple Spec & Info Column */}
@@ -461,10 +510,10 @@ function About() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3">
-          {DETAILS.map((d, i) => (
+          {detailModules.map((d, i) => (
             <div
               key={i}
-              className="group flex flex-col justify-between animate-fade-in"
+              className="group flex flex-col justify-between"
               style={{
                 borderRight: i < 2 ? "1px solid rgba(128,128,128,0.12)" : "none",
                 opacity: zoomVisible ? 1 : 0,
@@ -477,10 +526,13 @@ function About() {
                 style={{ height: "clamp(280px, 34vw, 440px)" }}
               >
                 <img
-                  src={d.img}
+                  src={d.local}
                   alt={d.heading}
                   className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
                   style={{ display: "block" }}
+                  onError={(e) => {
+                    e.currentTarget.src = d.fallback;
+                  }}
                 />
               </div>
               
@@ -507,7 +559,7 @@ function About() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 lg:gap-20 items-center">
             
             {/* Interactive rotatable dad hat */}
-            <SubHighlightRotator />
+            <SubHighlightRotator dbHatImages={dbHatImages} />
 
             {/* Spec descriptions */}
             <div className="space-y-6">
@@ -645,8 +697,9 @@ function About() {
         style={{ height: "clamp(300px, 48vw, 580px)" }}
       >
         <ParallaxImage
-          src="input_file_3.png" // Image 4: Model wearing GZ R-01 shirt
+          src="/lovable-uploads/GZ_R01_Model.png" // Image 4: Model wearing GZ R-01 shirt
           alt="Luveni fabric closeup detail"
+          fallback={dbShirtImages[2] || SHIRT_FALLBACK_DEFAULT[2]}
         />
         <div
           className="absolute inset-0 flex flex-col items-center justify-center text-center px-6"
