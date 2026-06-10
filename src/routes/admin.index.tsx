@@ -1223,89 +1223,139 @@ function AdminPage() {
         ════════════════════════════════════════════════════════════════ */}
         {section === "overview" && (
           <div className="space-y-10 animate-in fade-in duration-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-xl font-medium tracking-tight flex items-center gap-2">
-                  Dashboard
+            <div className="flex items-end justify-between gap-4 flex-wrap">
+              <div className="space-y-1">
+                <h1 className={`text-2xl font-semibold tracking-tight ${isDark ? "text-white" : "text-neutral-950"}`} style={{ letterSpacing: "-0.03em" }}>
+                  Overview
                 </h1>
-                <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>JARVIS_AI OPTIMIZATION CORE DEPLOYED</p>
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" style={{ boxShadow: "0 0 6px #10b981" }} />
+                  <p className={`text-[10px] font-mono font-medium ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>
+                    Live · {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+                  </p>
+                </div>
               </div>
 
               <button
                 onClick={handleOpenJarvis}
-                className={`text-[9px] font-mono font-semibold tracking-wider uppercase px-4 py-2 border transition-all rounded-[9999px] ${
+                className={`group flex items-center gap-2 text-[9px] font-mono font-bold tracking-widest uppercase px-5 py-2.5 transition-all duration-200 rounded-[9999px] ${
                   isDark
-                    ? "border-neutral-800 text-neutral-300 hover:bg-neutral-900/50 hover:text-white"
-                    : "border-[#D1D1D6] text-neutral-700 bg-white hover:bg-neutral-50 hover:text-black shadow-[0_2px_8px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)]"
+                    ? "border border-neutral-800 text-neutral-400 hover:border-neutral-600 hover:text-white hover:bg-white/[0.04]"
+                    : "border border-black/[0.10] text-neutral-600 bg-white hover:bg-neutral-50 hover:text-black shadow-[0_2px_12px_rgba(0,0,0,0.07)]"
                 }`}
               >
-                JARVIS CONSOLE →
+                AI Console
+                <span className={`transition-transform duration-200 group-hover:translate-x-0.5`}>→</span>
               </button>
             </div>
 
             {/* Period Selector */}
-            <div className="flex gap-2">
-              {["day", "week", "month", "all"].map(r => (
+            <div className={`inline-flex items-center gap-0.5 p-1 rounded-[9999px] ${isDark ? "bg-neutral-900/60" : "bg-neutral-100/80"}`}>
+              {(["day", "week", "month", "all"] as const).map(r => (
                 <button
                   key={r}
                   onClick={() => setRevenueRange(r as any)}
-                  className={`text-[9px] font-mono font-bold uppercase px-4 py-1.5 transition-all rounded-[9999px] ${
+                  className={`text-[9px] font-mono font-bold uppercase px-4 py-1.5 rounded-[9999px] transition-all duration-200 ${
                     revenueRange === r
-                      ? isDark ? "bg-white text-black shadow-sm" : "bg-black text-white shadow-sm"
-                      : isDark ? "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/50" : "text-neutral-550 bg-white hover:text-neutral-900 border border-[#D1D1D6] shadow-[0_1px_4px_rgba(0,0,0,0.05)]"
+                      ? isDark
+                        ? "bg-white text-black shadow-[0_2px_6px_rgba(0,0,0,0.3)]"
+                        : "bg-white text-black shadow-[0_2px_8px_rgba(0,0,0,0.12)]"
+                      : isDark
+                        ? "text-neutral-500 hover:text-neutral-200"
+                        : "text-neutral-500 hover:text-neutral-900"
                   }`}
                 >
-                  {r}
+                  {r === "day" ? "Today" : r === "week" ? "Week" : r === "month" ? "Month" : "All"}
                 </button>
               ))}
             </div>
 
             {/* ── REVENUE HERO ── */}
-            <div className={`p-6 border rounded-[24px] relative overflow-hidden transition-all duration-300 ${isDark ? "bg-neutral-950/40 border-neutral-800/80" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.09),0_2px_6px_rgba(0,0,0,0.04)]"}`}>
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
-                <div className="space-y-2">
+            <div className={`relative rounded-[28px] overflow-hidden transition-all duration-500 ${
+              isDark
+                ? "border border-white/[0.07] bg-neutral-950/70"
+                : "border border-black/[0.07] bg-white shadow-[0_8px_40px_rgba(0,0,0,0.08),0_2px_8px_rgba(0,0,0,0.04)]"
+            }`}>
+              {/* Subtle ambient glow */}
+              {isDark && (
+                <div className="absolute inset-0 pointer-events-none" style={{
+                  background: "radial-gradient(ellipse 60% 50% at 80% 20%, rgba(34,211,238,0.05), transparent)"
+                }} />
+              )}
+
+              <div className="p-8 flex flex-col md:flex-row md:items-end justify-between gap-8 relative z-10">
+                {/* Left — metric */}
+                <div className="space-y-4">
                   <div className="flex items-center gap-2">
-                    <LedPulse color="cyan" />
-                    <p className={`text-[9px] font-mono font-medium uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>System Revenue</p>
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" style={{ boxShadow: "0 0 8px #22d3ee" }} />
+                    <p className={`text-[9px] font-mono font-semibold uppercase tracking-[0.18em] ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>
+                      Revenue · {revenueRange === "day" ? "Today" : revenueRange === "week" ? "This Week" : revenueRange === "month" ? "This Month" : "All Time"}
+                    </p>
                   </div>
-                  <div className="flex items-baseline gap-3 flex-wrap">
-                    <p 
-                      className="text-4xl font-semibold tracking-tight transition-all"
-                      style={{ textShadow: isDark ? "0 0 15px rgba(255,255,255,0.12)" : "0 0 10px rgba(0,0,0,0.04)" }}
+                  <div>
+                    <p
+                      className={`text-5xl font-bold tracking-tight ${isDark ? "text-white" : "text-neutral-950"}`}
+                      style={{ letterSpacing: "-0.04em", fontFeatureSettings: '"tnum"' }}
                     >
                       {fmt$(filteredRevenue)}
                     </p>
-                    {revenueDelta !== null && (
-                      <div className={`flex items-center gap-1 px-3 py-1 rounded-[9999px] text-[9px] font-mono font-bold uppercase ${
-                        revenueDelta > 0
-                          ? "bg-emerald-500/10 text-emerald-500"
-                          : revenueDelta < 0
-                          ? "bg-rose-500/10 text-rose-500"
-                          : isDark ? "bg-neutral-800 text-neutral-400" : "bg-neutral-100 text-neutral-550"
-                      }`}>
-                        {revenueDelta > 0 ? <TrendingUp size={10} /> : revenueDelta < 0 ? <TrendingDown size={10} /> : <Minus size={10} />}
-                        {revenueDelta > 0 ? "+" : ""}{revenueDelta}% vs prior {revenueRange}
-                      </div>
-                    )}
                   </div>
+                  {revenueDelta !== null && (
+                    <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[9999px] text-[9px] font-mono font-bold uppercase tracking-wider ${
+                      revenueDelta > 0
+                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                        : revenueDelta < 0
+                        ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                        : isDark ? "bg-neutral-800 text-neutral-400 border border-neutral-700" : "bg-neutral-100 text-neutral-500 border border-neutral-200"
+                    }`}>
+                      {revenueDelta > 0 ? <TrendingUp size={10} /> : revenueDelta < 0 ? <TrendingDown size={10} /> : <Minus size={10} />}
+                      {revenueDelta > 0 ? "+" : ""}{revenueDelta}% vs prior {revenueRange}
+                    </div>
+                  )}
                 </div>
 
-                {/* 7-day sparkline bar style */}
-                <div className="flex items-end gap-1.5 h-14 w-full md:w-56 pt-2">
-                  {sparklineData.map((d, i) => (
-                    <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group relative">
-                      <div
-                        className={`w-full transition-all duration-300 rounded-[9999px] ${isDark ? "bg-neutral-800 group-hover:bg-neutral-600" : "bg-neutral-200 group-hover:bg-neutral-400"}`}
-                        style={{ height: `${(d.value / sparkMax) * 100}%`, minHeight: d.value > 0 ? "3px" : "1px" }}
-                      />
-                      <span className={`text-[8px] font-mono ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>{d.label.slice(0, 1)}</span>
-                      {d.value > 0 && (
-                        <div className={`absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[8px] font-mono font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border ${isDark ? "bg-neutral-900 text-white border-neutral-700" : "bg-white text-black border-[#D1D1D6] shadow-[0_2px_8px_rgba(0,0,0,0.08)] rounded-[9999px]"}`}>
-                          {fmt$(d.value)}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                {/* Right — SVG area sparkline */}
+                <div className="w-full md:w-72 space-y-1">
+                  <svg viewBox="0 0 280 72" className="w-full h-16" preserveAspectRatio="none">
+                    <defs>
+                      <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={isDark ? "#22d3ee" : "#0ea5e9"} stopOpacity="0.25" />
+                        <stop offset="100%" stopColor={isDark ? "#22d3ee" : "#0ea5e9"} stopOpacity="0" />
+                      </linearGradient>
+                    </defs>
+                    {sparklineData.length > 1 && (() => {
+                      const W = 280, H = 60, pad = 6;
+                      const pts = sparklineData.map((d, i) => ({
+                        x: pad + (i / (sparklineData.length - 1)) * (W - pad * 2),
+                        y: pad + (1 - d.value / sparkMax) * (H - pad * 2),
+                      }));
+                      const linePath = pts.map((p, i) => {
+                        if (i === 0) return `M ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
+                        const prev = pts[i - 1];
+                        const cx = ((prev.x + p.x) / 2).toFixed(1);
+                        return `C ${cx} ${prev.y.toFixed(1)} ${cx} ${p.y.toFixed(1)} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
+                      }).join(" ");
+                      const last = pts[pts.length - 1];
+                      const first = pts[0];
+                      const areaPath = linePath + ` L ${last.x.toFixed(1)} ${H} L ${first.x.toFixed(1)} ${H} Z`;
+                      return (
+                        <>
+                          <path d={areaPath} fill="url(#sparkGrad)" />
+                          <path d={linePath} fill="none" stroke={isDark ? "rgba(34,211,238,0.7)" : "rgba(14,165,233,0.8)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          {/* End dot */}
+                          <circle cx={last.x.toFixed(1)} cy={last.y.toFixed(1)} r="3" fill={isDark ? "#22d3ee" : "#0ea5e9"} />
+                        </>
+                      );
+                    })()}
+                  </svg>
+                  {/* Day labels */}
+                  <div className="flex justify-between px-1">
+                    {sparklineData.map((d, i) => (
+                      <span key={i} className={`text-[8px] font-mono ${isDark ? "text-neutral-700" : "text-neutral-400"}`}>
+                        {d.label.slice(0, 1)}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1321,25 +1371,31 @@ function AdminPage() {
 
             {/* ── ORDER STATUS BREAKDOWN ── */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[
-                { label: "Paid Orders", count: paidOrders.length, color: "text-emerald-500", led: "green" as const },
-                { label: "Pending Orders", count: pendingOrders.length, color: isDark ? "text-amber-400" : "text-amber-600", led: "yellow" as const },
-                { label: "Failed Orders", count: failedOrders.length, color: "text-rose-500", led: "red" as const },
-                { label: "Published Items", count: products.filter(p => p.is_published).length, color: isDark ? "text-neutral-300" : "text-neutral-800", led: "neutral" as const },
-              ].map(item => (
-                <div key={item.label} className={`p-4 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"}`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className={`text-[8px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{item.label}</p>
-                    <LedPulse color={item.led} />
+              {([
+                { label: "Paid", count: paidOrders.length, dot: "#10b981", glow: "rgba(16,185,129,0.15)", textColor: "#10b981", bg: "rgba(16,185,129,0.05)" },
+                { label: "Pending", count: pendingOrders.length, dot: "#f59e0b", glow: "rgba(245,158,11,0.12)", textColor: isDark ? "#fbbf24" : "#d97706", bg: "rgba(245,158,11,0.05)" },
+                { label: "Failed", count: failedOrders.length, dot: "#ef4444", glow: "rgba(239,68,68,0.12)", textColor: "#ef4444", bg: "rgba(239,68,68,0.05)" },
+                { label: "Published", count: products.filter(p => p.is_published).length, dot: isDark ? "#a3a3a3" : "#525252", glow: "rgba(115,115,115,0.08)", textColor: isDark ? "#d4d4d4" : "#262626", bg: "rgba(115,115,115,0.04)" },
+              ] as const).map(item => (
+                <div
+                  key={item.label}
+                  className={`p-5 rounded-[20px] border relative overflow-hidden transition-all duration-300 ${
+                    isDark ? "border-white/[0.06] bg-neutral-950/50" : "border-black/[0.07] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.06)]"
+                  }`}
+                  style={{ background: isDark ? `radial-gradient(circle at top right, ${item.glow}, transparent 70%)` : undefined }}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <p className={`text-[9px] font-mono font-semibold uppercase tracking-[0.15em] ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>{item.label}</p>
+                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: item.dot, boxShadow: `0 0 6px ${item.dot}` }} />
                   </div>
-                  <p className={`text-lg font-semibold tracking-tight mt-1 ${item.color}`}>{item.count}</p>
+                  <p className="text-2xl font-bold tracking-tight" style={{ color: item.textColor, letterSpacing: "-0.03em", fontFeatureSettings: '"tnum"' }}>{item.count}</p>
                 </div>
               ))}
             </div>
 
             {/* ── TELEMETRY CANVAS ── */}
             <div className="space-y-3">
-              <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Real-Time Telemetry Pipeline</p>
+              <p className={`text-[10px] font-mono font-semibold tracking-[0.15em] uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Telemetry</p>
               <TelemetryCanvas events={pageEvents} isDark={isDark} canvasRefExternal={telemetryCanvasRef} />
             </div>
 
@@ -1356,39 +1412,39 @@ function AdminPage() {
             {/* ── CONVERSION FUNNEL ── */}
             <div className={`p-6 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-4`}>
               <div className="flex items-center gap-4 justify-between">
-                <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Live Conversion Flow</p>
+                <p className={`text-[10px] font-mono font-semibold tracking-[0.15em] uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Conversion Funnel</p>
                 {!hasEventData && (
                   <span className={`text-[8px] font-mono tracking-wider uppercase px-2.5 py-0.5 border ${isDark ? "border-neutral-800 text-neutral-500" : "border-[#D1D1D6] text-neutral-450 bg-white rounded-[9999px] shadow-sm"}`}>
                     Telemetry hook standby
                   </span>
                 )}
               </div>
-              <div className="space-y-4">
-                {[
-                  { label: "Page Views", value: hasEventData ? funnelViews : null, led: "cyan" as const },
-                  { label: "Product Clicks", value: hasEventData ? funnelProductClicks : null, led: "cyan" as const },
-                  { label: "Add to Cart", value: hasEventData ? funnelAddToCart : null, led: "yellow" as const },
-                  { label: "Checkout Inits", value: hasEventData ? funnelCheckoutStart : null, led: "yellow" as const },
-                  { label: "Purchases", value: funnelPurchase, led: "green" as const },
-                ].map((step, i) => (
-                  <div key={step.label} className="flex items-center gap-4">
-                    <div className="w-32 flex-shrink-0 flex items-center gap-2">
-                      <LedPulse color={step.led} active={step.value !== null && step.value > 0} />
-                      <span className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{step.label}</span>
-                    </div>
-                    <div className={`flex-1 h-2 relative rounded-[9999px] overflow-hidden ${isDark ? "bg-neutral-900" : "bg-neutral-100"}`}>
-                      {step.value !== null && (
+              <div className="space-y-3">
+                {([
+                  { label: "Page Views",      value: hasEventData ? funnelViews : null,         color: "#22d3ee", track: isDark ? "#0e3040" : "#e0f8ff" },
+                  { label: "Product Clicks",  value: hasEventData ? funnelProductClicks : null,  color: "#818cf8", track: isDark ? "#1e1a40" : "#eef0ff" },
+                  { label: "Add to Cart",     value: hasEventData ? funnelAddToCart : null,      color: "#fb923c", track: isDark ? "#3a1f10" : "#fff4ee" },
+                  { label: "Checkout Inits",  value: hasEventData ? funnelCheckoutStart : null,  color: "#facc15", track: isDark ? "#352e10" : "#fefce8" },
+                  { label: "Purchases",       value: funnelPurchase,                             color: "#34d399", track: isDark ? "#0d2e1e" : "#f0fdf4" },
+                ] as const).map((step) => {
+                  const pct = step.value !== null ? ((step.value ?? 0) / funnelMax) * 100 : 0;
+                  return (
+                    <div key={step.label} className="flex items-center gap-4 group">
+                      <span className={`text-[9px] font-mono font-semibold uppercase tracking-wider w-28 flex-shrink-0 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>
+                        {step.label}
+                      </span>
+                      <div className="flex-1 h-2 rounded-[9999px] overflow-hidden" style={{ background: step.track }}>
                         <div
-                          className={`h-full transition-all duration-700 ease-out rounded-[9999px] ${isDark ? "bg-neutral-300" : "bg-neutral-800"}`}
-                          style={{ width: `${((step.value ?? 0) / funnelMax) * 100}%`, opacity: 1 - i * 0.12 }}
+                          className="h-full rounded-[9999px] transition-all duration-700 ease-out"
+                          style={{ width: `${pct}%`, background: step.color, boxShadow: `0 0 8px ${step.color}60` }}
                         />
-                      )}
+                      </div>
+                      <span className="text-[10px] font-mono font-semibold w-12 text-right tabular-nums" style={{ color: step.value ? step.color : isDark ? "#525252" : "#a3a3a3" }}>
+                        {step.value !== null ? step.value.toLocaleString() : "—"}
+                      </span>
                     </div>
-                    <span className={`text-[10px] font-mono font-medium w-16 text-right ${isDark ? "text-neutral-300" : "text-neutral-700"}`}>
-                      {step.value !== null ? step.value.toLocaleString() : "—"}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               {hasEventData && funnelViews > 0 && funnelPurchase > 0 && (
                 <p className={`text-[8px] font-mono uppercase text-right ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>
@@ -1400,24 +1456,36 @@ function AdminPage() {
             {/* ── TOP PRODUCTS ── */}
             {topProducts.length > 0 && (
               <div className="space-y-3">
-                <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Top Products by Revenue</p>
+                <p className={`text-[10px] font-mono font-semibold tracking-[0.15em] uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Top Products</p>
                 <div className={`border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"}`}>
                   <table className="w-full text-left">
                     <thead>
-                      <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${isDark ? "text-neutral-500 border-neutral-900 bg-neutral-950/50" : "text-neutral-500 border-[#D1D1D6] bg-[#f5f5f7]"}`}>
-                        <th className="px-5 py-3 font-semibold">Product Title</th>
-                        <th className="px-5 py-3 font-semibold text-right">Revenue</th>
-                        <th className="px-5 py-3 font-semibold text-right">Orders</th>
+                      <tr className={`text-[8px] font-mono font-semibold uppercase tracking-[0.14em] border-b ${isDark ? "text-neutral-600 border-white/[0.06] bg-white/[0.02]" : "text-neutral-400 border-black/[0.07] bg-neutral-50/80"}`}>
+                        <th className="px-5 py-3 w-8">#</th>
+                        <th className="px-5 py-3">Product</th>
+                        <th className="px-5 py-3 hidden md:table-cell">Share</th>
+                        <th className="px-5 py-3 text-right">Revenue</th>
+                        <th className="px-5 py-3 text-right">Orders</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {topProducts.map((p, i) => (
-                        <tr key={i} className={`border-b last:border-0 ${isDark ? "border-neutral-900 hover:bg-neutral-900/30" : "border-[#F2F2F7] hover:bg-neutral-50/50"}`}>
-                          <td className="px-5 py-3 text-[11px] font-medium uppercase truncate max-w-[180px]">{p.title}</td>
-                          <td className={`px-5 py-3 text-[11px] font-mono font-medium text-right ${isDark ? "text-white" : "text-black"}`}>{fmt$(p.revenue)}</td>
-                          <td className={`px-5 py-3 text-[11px] font-mono text-right ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>{p.units}</td>
-                        </tr>
-                      ))}
+                      {topProducts.map((p, i) => {
+                        const topRevenue = topProducts[0]?.revenue || 1;
+                        const share = Math.round((p.revenue / topRevenue) * 100);
+                        return (
+                          <tr key={i} className={`border-b last:border-0 transition-colors duration-150 ${isDark ? "border-white/[0.04] hover:bg-white/[0.02]" : "border-black/[0.05] hover:bg-neutral-50"}`}>
+                            <td className={`px-5 py-3.5 text-[9px] font-mono font-bold ${isDark ? "text-neutral-700" : "text-neutral-300"}`}>{i + 1}</td>
+                            <td className={`px-5 py-3.5 text-[11px] font-semibold truncate max-w-[180px] ${isDark ? "text-neutral-200" : "text-neutral-800"}`}>{p.title}</td>
+                            <td className="px-5 py-3.5 hidden md:table-cell w-32">
+                              <div className={`h-1 rounded-full overflow-hidden ${isDark ? "bg-neutral-900" : "bg-neutral-100"}`}>
+                                <div className="h-full rounded-full bg-cyan-500/70 transition-all duration-500" style={{ width: `${share}%` }} />
+                              </div>
+                            </td>
+                            <td className={`px-5 py-3.5 text-[11px] font-mono font-semibold text-right tabular-nums ${isDark ? "text-white" : "text-neutral-900"}`}>{fmt$(p.revenue)}</td>
+                            <td className={`px-5 py-3.5 text-[10px] font-mono text-right tabular-nums ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>{p.units}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -2095,49 +2163,72 @@ function AdminPage() {
 // SHARED STAT COMPONENTS
 // ────────────────────────────────────────────────────────────────────────────
 
+const ACCENT_MAP = {
+  green:   { dot: "#10b981", glow: "rgba(16,185,129,0.14)"  },
+  yellow:  { dot: "#f59e0b", glow: "rgba(245,158,11,0.12)"  },
+  red:     { dot: "#ef4444", glow: "rgba(239,68,68,0.12)"   },
+  cyan:    { dot: "#22d3ee", glow: "rgba(34,211,238,0.12)"  },
+  purple:  { dot: "#a78bfa", glow: "rgba(167,139,250,0.12)" },
+  neutral: { dot: "#737373", glow: "rgba(115,115,115,0.07)" },
+} as const;
+
 function Stat({ label, value, sub, isDark, led = "cyan" }: { label: string; value: string | number; sub: string; isDark: boolean; led?: "green" | "yellow" | "red" | "cyan" | "purple" | "neutral" }) {
+  const accent = ACCENT_MAP[led];
   return (
-    <div className={`p-4 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_12px_24px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-1`}>
-      <div className="flex items-center justify-between gap-2">
-        <p className={`text-[8px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{label}</p>
-        <LedPulse color={led} />
+    <div
+      className={`p-5 rounded-[20px] border relative overflow-hidden transition-all duration-300 ${
+        isDark
+          ? "border-white/[0.06] bg-neutral-950/50 hover:border-white/[0.10]"
+          : "bg-white border-black/[0.07] shadow-[0_4px_20px_rgba(0,0,0,0.06)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.09)]"
+      }`}
+      style={{ background: isDark ? `radial-gradient(circle at top right, ${accent.glow}, transparent 65%)` : undefined }}
+    >
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <p className={`text-[9px] font-mono font-semibold uppercase tracking-[0.14em] ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>{label}</p>
+        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 animate-pulse" style={{ background: accent.dot, boxShadow: `0 0 5px ${accent.dot}` }} />
       </div>
-      <p 
-        className="text-xl font-semibold tracking-tight"
-        style={{ textShadow: isDark ? "0 0 10px rgba(255,255,255,0.1)" : "0 0 8px rgba(0,0,0,0.03)" }}
-      >
+      <p className={`text-2xl font-bold tracking-tight ${isDark ? "text-white" : "text-neutral-950"}`} style={{ letterSpacing: "-0.03em", fontFeatureSettings: '"tnum"' }}>
         {value}
       </p>
-      <p className={`text-[8px] font-mono tracking-wider uppercase ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>{sub}</p>
+      <p className={`text-[9px] font-mono mt-2 ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>{sub}</p>
     </div>
   );
 }
 
 function StatWithDelta({ label, value, sub, delta, isDark }: { label: string; value: string | number; sub: string; delta: number | null; isDark: boolean }) {
-  const deltaColor = delta !== null && delta > 0 ? "green" as const : delta !== null && delta < 0 ? "red" as const : "neutral" as const;
+  const led = delta !== null && delta > 0 ? "green" as const : delta !== null && delta < 0 ? "red" as const : "neutral" as const;
+  const accent = ACCENT_MAP[led];
 
   return (
-    <div className={`p-4 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_12px_24px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-1`}>
-      <div className="flex items-center justify-between gap-2">
-        <p className={`text-[8px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{label}</p>
-        <LedPulse color={deltaColor} />
+    <div
+      className={`p-5 rounded-[20px] border relative overflow-hidden transition-all duration-300 ${
+        isDark
+          ? "border-white/[0.06] bg-neutral-950/50 hover:border-white/[0.10]"
+          : "bg-white border-black/[0.07] shadow-[0_4px_20px_rgba(0,0,0,0.06)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.09)]"
+      }`}
+      style={{ background: isDark ? `radial-gradient(circle at top right, ${accent.glow}, transparent 65%)` : undefined }}
+    >
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <p className={`text-[9px] font-mono font-semibold uppercase tracking-[0.14em] ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>{label}</p>
+        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 animate-pulse" style={{ background: accent.dot, boxShadow: `0 0 5px ${accent.dot}` }} />
       </div>
-      <div className="flex items-baseline gap-2 flex-wrap">
-        <p 
-          className="text-xl font-semibold tracking-tight"
-          style={{ textShadow: isDark ? "0 0 10px rgba(255,255,255,0.1)" : "0 0 8px rgba(0,0,0,0.03)" }}
-        >
+      <div className="flex items-end gap-2.5 flex-wrap">
+        <p className={`text-2xl font-bold tracking-tight ${isDark ? "text-white" : "text-neutral-950"}`} style={{ letterSpacing: "-0.03em", fontFeatureSettings: '"tnum"' }}>
           {value}
         </p>
         {delta !== null && (
-          <span className={`text-[8px] font-mono font-bold uppercase px-2 py-0.5 rounded-[9999px] ${
-            delta > 0 ? "text-emerald-500 bg-emerald-500/10" : delta < 0 ? "text-rose-500 bg-rose-500/10" : isDark ? "text-neutral-600" : "text-neutral-400"
+          <span className={`mb-0.5 text-[8px] font-mono font-bold uppercase px-2.5 py-1 rounded-[9999px] border ${
+            delta > 0
+              ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+              : delta < 0
+              ? "text-rose-400 bg-rose-500/10 border-rose-500/20"
+              : isDark ? "text-neutral-600 bg-neutral-900 border-neutral-800" : "text-neutral-400 bg-neutral-100 border-neutral-200"
           }`}>
-            {delta > 0 ? "↑" : delta < 0 ? "↓" : "—"}{Math.abs(delta)}%
+            {delta > 0 ? "↑" : delta < 0 ? "↓" : "—"} {Math.abs(delta)}%
           </span>
         )}
       </div>
-      <p className={`text-[8px] font-mono tracking-wider uppercase ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>{sub}</p>
+      <p className={`text-[9px] font-mono mt-2 ${isDark ? "text-neutral-600" : "text-neutral-400"}`}>{sub}</p>
     </div>
   );
 }
