@@ -1146,7 +1146,7 @@ function AdminPage() {
 
   return (
     <div 
-      className={`admin-page min-h-screen relative overflow-x-hidden ${isDark ? "bg-neutral-950 text-neutral-100 selection:bg-neutral-800" : "bg-[#f5f5f7] text-neutral-900 selection:bg-neutral-200"}`}
+      className={`admin-page min-h-screen relative ${isDark ? "bg-black text-neutral-100 selection:bg-neutral-800" : "bg-[#f5f5f7] text-neutral-900 selection:bg-neutral-200"}`}
       style={{
         fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "SF Pro", "SF Compact", "Helvetica Neue", Helvetica, Arial, sans-serif'
       }}
@@ -1237,18 +1237,13 @@ function AdminPage() {
         </div>
       </aside>
 
-      {/* ── NAV ── */}
-      <nav className={`md:hidden sticky top-0 z-50 backdrop-blur-xl border-b ${isDark ? "bg-neutral-950/90 border-white/[0.06]" : "bg-white/90 border-black/[0.07]"}`}>
-        {/* Brand + hamburger */}
-        <div className="relative flex items-center justify-center px-6 py-4">
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" style={{ boxShadow: "0 0 6px #10b981" }} />
-            <span className={`text-[10px] font-mono font-bold uppercase tracking-[0.22em] ${isDark ? "text-white" : "text-neutral-900"}`}>Admin</span>
-          </div>
+      {/* ── NAV (mobile only) ── */}
+      <nav className={`md:hidden sticky top-0 z-50 backdrop-blur-xl border-b ${isDark ? "bg-black/90 border-white/[0.06]" : "bg-white/90 border-black/[0.07]"}`}>
+        <div className="relative flex items-center justify-center px-6 py-3">
           <div className="absolute right-6">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className={`p-1.5 rounded-[9999px] transition-colors ${isDark ? "text-neutral-400 hover:text-white hover:bg-white/[0.06]" : "text-neutral-500 hover:text-black hover:bg-black/[0.06]"}`}
+              className={`p-1.5 transition-opacity ${isDark ? "text-white opacity-60 hover:opacity-100" : "text-black opacity-60 hover:opacity-100"}`}
             >
               <Menu size={16} />
             </button>
@@ -1256,66 +1251,37 @@ function AdminPage() {
         </div>
       </nav>
 
-      {/* ── MOBILE FULL-SCREEN NAV OVERLAY ── */}
+      {/* ── MOBILE FULL-SCREEN OVERLAY — shop-page identical ── */}
       {mobileMenuOpen && (
-        <div className={`md:hidden fixed inset-0 z-[100] flex flex-col font-mono animate-in fade-in duration-150 ${isDark ? "bg-neutral-950" : "bg-[#f5f5f7]"}`}>
+        <div
+          className={`md:hidden fixed inset-0 z-[100] font-mono overflow-x-hidden ${isDark ? "bg-black" : "bg-[#f5f5f7]"}`}
+        >
+          {/* X button — only non-nav element */}
+          <button
+            onClick={() => setMobileMenuOpen(false)}
+            className="absolute top-4 right-5 text-current opacity-40 hover:opacity-80 transition-opacity text-[11px] tracking-[0.02em]"
+          >
+            ✕
+          </button>
 
-          {/* Header */}
-          <div className={`flex items-center justify-between px-7 py-5 border-b ${isDark ? "border-white/[0.05]" : "border-black/[0.05]"}`}>
-            <div className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" style={{ boxShadow: "0 0 6px #10b981" }} />
-              <span className={`text-[10px] font-mono font-bold uppercase tracking-[0.22em] ${isDark ? "text-white" : "text-neutral-900"}`}>Admin</span>
-            </div>
-            <button
-              onClick={() => setMobileMenuOpen(false)}
-              className={`w-8 h-8 flex items-center justify-center rounded-full text-[14px] transition-all ${isDark ? "text-neutral-400 hover:text-white hover:bg-white/[0.06]" : "text-neutral-500 hover:text-black hover:bg-black/[0.06]"}`}
-            >
-              ✕
-            </button>
-          </div>
-
-          {/* Nav items — full-screen, shop-page style */}
-          <div className="flex-1 flex flex-col justify-center px-7">
-            {navSections.map((s, i) => (
+          {/* Section grid — shop-page style */}
+          <div className="grid grid-cols-2">
+            {navSections.map(s => (
               <button
                 key={s}
                 onClick={() => { setSection(s); setMobileMenuOpen(false); }}
-                className={`group w-full text-left py-6 transition-all duration-100 ${
-                  i < navSections.length - 1
-                    ? isDark ? "border-b border-white/[0.04]" : "border-b border-black/[0.04]"
-                    : ""
-                }`}
+                className="relative flex aspect-square items-center justify-center bg-transparent border-none outline-none focus:outline-none"
               >
-                <span className={`flex items-center justify-between font-mono uppercase ${
-                  section === s
-                    ? isDark ? "text-white" : "text-neutral-900"
-                    : isDark ? "text-neutral-600 group-hover:text-neutral-200" : "text-neutral-300 group-hover:text-neutral-800"
-                }`} style={{ fontSize: "clamp(24px, 6vw, 32px)", letterSpacing: "0.06em" }}>
+                <p className={`text-[11px] leading-tight tracking-[0.02em] text-current transition-opacity ${section === s ? "opacity-100" : "opacity-90 hover:opacity-60"}`}>
                   {s}
-                  {section === s && (
-                    <span className={`text-[8px] font-mono tracking-[0.2em] uppercase ${isDark ? "text-neutral-700" : "text-neutral-300"}`}>active</span>
-                  )}
-                </span>
+                </p>
               </button>
             ))}
-          </div>
-
-          {/* Footer */}
-          <div className={`px-7 py-6 border-t flex items-center justify-between ${isDark ? "border-white/[0.04]" : "border-black/[0.04]"}`}>
-            <p className={`text-[8px] font-mono uppercase tracking-[0.25em] ${isDark ? "text-neutral-700" : "text-neutral-300"}`}>
-              {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
-            </p>
-            <button
-              onClick={() => { handleSignOut(); setMobileMenuOpen(false); }}
-              className={`text-[8px] font-mono uppercase tracking-[0.15em] transition-opacity opacity-60 hover:opacity-100 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}
-            >
-              Sign Out
-            </button>
           </div>
         </div>
       )}
 
-      <main className="relative w-full px-6 py-8 space-y-8 z-10 md:ml-56 md:px-10 md:py-10">
+      <main className="relative w-full px-6 py-8 space-y-8 z-10 md:ml-56 md:w-[calc(100%-14rem)] md:px-10 md:py-10">
 
         {/* ════════════════════════════════════════════════════════════════
             OVERVIEW
