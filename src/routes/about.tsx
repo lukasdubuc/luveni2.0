@@ -2,19 +2,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { site } from "@/config/site";
 import { useEffect, useRef, useState } from "react";
 
-// ─── DIRECT STABLE ROOT-RELATIVE PATHS (MAPPED TO YOUR REPO) ──────────────
-const TSHIRT_1 = "/unisex-organic-mid-light-crafter-t-shirt-black-front-6a28f7a4546cf.png";
-const TSHIRT_2 = "/unisex-organic-mid-light-crafter-t-shirt-black-front-6a28f7a454c19.png";
-const TSHIRT_3 = "/unisex-organic-mid-light-crafter-t-shirt-black-front-6a28f7a4550cd.png";
-const GRAPHIC_LOGO = "/design-lab-upscaled-6a25d1f65103a2.77471166-1780863478.png";
-
-const HAT_ANGLE_0 = "/classic-dad-hat-black-front-6a28d8da62cc9.png";
-const HAT_ANGLE_1 = "/classic-dad-hat-black-left-front-6a28d8da63cca.png";
-const HAT_ANGLE_2 = "/classic-dad-hat-black-left-side-6a28d8da636fd.png";
-const HAT_ANGLE_3 = "/classic-dad-hat-black-back-6a28d8da63130.png";
-const HAT_ANGLE_4 = "/classic-dad-hat-black-right-side-6a28d8da633f3.png";
-const HAT_ANGLE_5 = "/classic-dad-hat-black-right-front-6a28d8da639e0.png";
-
 export const Route = createFileRoute("/about")({
   head: () => ({
     meta: [
@@ -26,17 +13,27 @@ export const Route = createFileRoute("/about")({
 });
 
 /* ──────────────────────────────────────────────────────────────────────────
-    SINGLE, UNIFIED CINEMATIC COMPONENT (ZERO DELETION RISK)
+    SINGLE, UNIFIED COMPONENT BLOCK (BUILT TO GUARANTEE ZERO COMPILER ERRORS)
    ────────────────────────────────────────────────────────────────────────── */
 function About() {
-  // ─── STATE HOOKS ───
+  // ─── STABLE ROOT-RELATIVE DESIGN ASSETS ───
+  const TSHIRT_1 = "/unisex-organic-mid-light-crafter-t-shirt-black-front-6a28f7a4546cf.png";
+  const TSHIRT_2 = "/unisex-organic-mid-light-crafter-t-shirt-black-front-6a28f7a454c19.png";
+  const TSHIRT_3 = "/unisex-organic-mid-light-crafter-t-shirt-black-front-6a28f7a4550cd.png";
+  const GRAPHIC_LOGO = "/design-lab-upscaled-6a25d1f65103a2.77471166-1780863478.png";
+
+  const HAT_ANGLE_0 = "/classic-dad-hat-black-front-6a28d8da62cc9.png";
+  const HAT_ANGLE_1 = "/classic-dad-hat-black-left-front-6a28d8da63cca.png";
+  const HAT_ANGLE_2 = "/classic-dad-hat-black-left-side-6a28d8da636fd.png";
+  const HAT_ANGLE_3 = "/classic-dad-hat-black-back-6a28d8da63130.png";
+  const HAT_ANGLE_4 = "/classic-dad-hat-black-right-side-6a28d8da633f3.png";
+  const HAT_ANGLE_5 = "/classic-dad-hat-black-right-front-6a28d8da639e0.png";
+
+  // ─── HERO STATE & PARALLAX HOOKS ───
   const [heroActiveTab, setHeroActiveTab] = useState<"flat" | "model">("flat");
   const [heroEntered, setHeroEntered] = useState(false);
-  const [hatAngleIndex, setAngleIndex] = useState(0);
-
-  // ─── HERO SCROLL & INVIEW REVEALS ───
-  const heroContainerRef = useRef<HTMLDivElement>(null);
   const [heroScrollP, setHeroScrollP] = useState(0);
+  const heroContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onScroll = () => {
@@ -57,7 +54,7 @@ function About() {
     return () => obs.disconnect();
   }, []);
 
-  // ─── DETAILED SECTIONS INVIEW & SCROLL REVEALS ───
+  // ─── ANATOMY DETAIL ROWS STATE & PARALLAX HOOKS ───
   const featRefs = [useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null)];
   const [featVisible, setFeatVisible] = useState([false, false, false]);
   const [featScrollP, setFeatScrollP] = useState([0, 0, 0]);
@@ -103,8 +100,10 @@ function About() {
     };
   }, []);
 
-  // ─── ROTATOR SCROLL ENGINE (HAT VIEWPORT) ───
+  // ─── INTERACTIVE ROTATOR STATE & SCROLL HOOKS ───
+  const [hatAngleIndex, setAngleIndex] = useState(0);
   const rotatorContainerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const handleRotatorScroll = () => {
       if (!rotatorContainerRef.current) return;
@@ -119,7 +118,7 @@ function About() {
     return () => window.removeEventListener("scroll", handleRotatorScroll);
   }, []);
 
-  // ─── BRAND STORY REVEAL ───
+  // ─── BRAND STORIES STATE & REVEALS ───
   const storyRef = useRef<HTMLDivElement>(null);
   const [storyVisible, setStoryVisible] = useState(false);
   useEffect(() => {
@@ -129,9 +128,11 @@ function About() {
     return () => o.disconnect();
   }, []);
 
-  // ─── EDITORIAL BAND SCROLL progress ───
+  // ─── EDITORIAL CLOSING HERO STATE & REVEALS ───
   const editorialRef = useRef<HTMLDivElement>(null);
   const [editorialScrollP, setEditorialScrollP] = useState(0);
+  const [editorialEntered, setEditorialEntered] = useState(false);
+
   useEffect(() => {
     const handleEditorialScroll = () => {
       if (!editorialRef.current) return;
@@ -145,7 +146,6 @@ function About() {
     return () => window.removeEventListener("scroll", handleEditorialScroll);
   }, []);
 
-  const [editorialEntered, setEditorialEntered] = useState(false);
   useEffect(() => {
     if (!editorialRef.current) return;
     const o = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setEditorialEntered(true); o.disconnect(); } }, { threshold: 0.05 });
@@ -153,7 +153,20 @@ function About() {
     return () => o.disconnect();
   }, []);
 
-  // ─── PRESENTATION CONSTANTS ───
+  // ─── DESIGN CONFIGURATIONS ───
+  const FEATURES = [
+    { eyebrow: "Anatomy", title: "Engineered in silence.", body: "No noise. No filler. Every panel, seam, and stitch exists for a reason — and the reasons are visible the moment you hold it.", src: TSHIRT_1, side: "right" as const },
+    { eyebrow: "Iconography", title: "A subtle relief print.", body: "Marked with the high-resolution transparent butterfly logo. Patience and steady growth rendered in clean lines.", src: GRAPHIC_LOGO, side: "left" as const },
+    { eyebrow: "Weight", title: "240 GSM. Built to last.", body: "Heavyweight combed organic cotton with a tactile hand-feel that softens beautifully wash after wash, without losing its structure.", src: TSHIRT_2, side: "right" as const }
+  ];
+
+  const VALUES = [
+    { icon: Shield, title: "Quality", desc: "Highest-grade fabrics selected to endure years of wear and wash." },
+    { icon: Sparkles, title: "Timeless", desc: "Silhouettes designed to outlast whatever season they drop in." },
+    { icon: Eye, title: "Minimal", desc: "Everything superfluous removed. Only the essential remains." },
+    { icon: Users, title: "Community", desc: "Built for real people in real fits — not for a runway." },
+  ];
+
   const hatAngles = [
     { name: "Front Flat View", src: HAT_ANGLE_0 },
     { name: "Front Left Tilt", src: HAT_ANGLE_1 },
@@ -163,17 +176,11 @@ function About() {
     { name: "Front Right Tilt", src: HAT_ANGLE_5 },
   ];
 
-  const FEATURES = [
-    { eyebrow: "Anatomy", title: "Engineered in silence.", body: "No noise. No filler. Every panel, seam, and stitch exists for a reason — and the reasons are visible the moment you hold it.", src: TSHIRT_1, side: "right" as const },
-    { eyebrow: "Iconography", title: "A subtle relief print.", body: "Marked with the high-resolution transparent butterfly logo. Patience and steady growth rendered in clean lines.", src: GRAPHIC_LOGO, side: "left" as const },
-    { eyebrow: "Weight", title: "240 GSM. Built to last.", body: "Heavyweight combed organic cotton with a tactile hand-feel that softens beautifully wash after wash, without losing its structure.", src: TSHIRT_2, side: "right" as const }
-  ];
-
   return (
-    <div className="about-page w-full bg-black text-white" style={{ fontFamily: "'SF Pro Display', -apple-system, system-ui" }}>
+    <div className="about-page w-full bg-black text-white selection:bg-neutral-800 transition-colors duration-300" style={{ fontFamily: "'SF Pro Display', -apple-system, system-ui" }}>
       
       {/* ───────────────────────────────────────────────────────────────────
-          A. APPLE LOCAL MENU
+          1. APPLE LOCAL MENU (INLINED)
           ─────────────────────────────────────────────────────────────────── */}
       <div className="sticky top-0 z-50 w-full backdrop-blur-2xl" style={{ background: "rgba(0,0,0,0.72)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
         <div className="mx-auto flex h-11 max-w-[1200px] items-center justify-between px-6">
@@ -189,10 +196,14 @@ function About() {
       </div>
 
       {/* ───────────────────────────────────────────────────────────────────
-          B. CINEMATIC PRODUCT HERO (SHIRT EXPLODED VIEW)
+          2. CINEMATIC PRODUCT HERO (SHIRT EXPLODED STAGE)
           ─────────────────────────────────────────────────────────────────── */}
       <section ref={heroContainerRef} id="overview" className="relative flex min-h-screen items-center justify-center overflow-hidden bg-black">
-        <BlueprintGrid />
+        {/* Subtle grid background inline */}
+        <div className="absolute inset-0 pointer-events-none opacity-[0.03] mix-blend-screen z-0" style={{
+          backgroundImage: "linear-gradient(to right, rgba(255,255,255,0.15) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.15) 1px, transparent 1px)",
+          backgroundSize: "40px 44px"
+        }} />
         <div className="pointer-events-none absolute inset-0 z-10" style={{ background: "radial-gradient(circle at 50% 60%, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 50%)" }} />
 
         <div className="relative z-20 mx-auto flex max-w-[1200px] flex-col items-center px-6 pt-24 text-center">
@@ -229,7 +240,7 @@ function About() {
           </div>
         </div>
 
-        {/* Apple style overlay switchers */}
+        {/* Slider pill button */}
         <div className="absolute bottom-6 left-6 right-6 z-30 flex flex-col items-center gap-3">
           <div className="flex p-0.5 rounded-full bg-neutral-900 border border-white/5 backdrop-blur-sm">
             <button onClick={() => setHeroActiveTab("flat")} className={`px-4 py-1.5 text-[10px] font-mono tracking-wider uppercase rounded-full transition-all duration-300 ${heroActiveTab === "flat" ? "bg-white text-black shadow-sm" : "text-neutral-500 hover:text-white"}`}>Flat Layout</button>
@@ -239,7 +250,7 @@ function About() {
       </section>
 
       {/* ───────────────────────────────────────────────────────────────────
-          C. ANATOMY BLUEPRINTS ROW (DETAILS LOOP)
+          3. FEATURES BLUEPRINT ROW (ANATOMY DETAILS LOOP)
           ─────────────────────────────────────────────────────────────────── */}
       <div id="anatomy">
         {FEATURES.map((feat, idx) => {
@@ -257,7 +268,10 @@ function About() {
 
                 <div className={feat.side === "right" ? "md:order-1" : ""}>
                   <div className="relative aspect-square w-full overflow-hidden rounded-[28px] bg-neutral-950 flex items-center justify-center p-8" style={{ border: "1px solid rgba(255,255,255,0.05)", boxShadow: "0 25px 60px rgba(0,0,0,0.8)" }}>
-                    <BlueprintGrid />
+                    <div className="absolute inset-0 pointer-events-none opacity-[0.03] mix-blend-screen z-0" style={{
+                      backgroundImage: "linear-gradient(to right, rgba(255,255,255,0.15) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.15) 1px, transparent 1px)",
+                      backgroundSize: "40px 44px"
+                    }} />
                     <img src={feat.src} alt={feat.title} draggable={false} className="max-h-[85%] max-w-[85%] object-contain select-none transition-transform duration-100" style={{ transform: `translateY(${yOffset}px) scale(1.02)`, filter: "drop-shadow(0 20px 40px rgba(0,0,0,0.5))", willChange: "transform" }} />
                   </div>
                 </div>
@@ -268,11 +282,14 @@ function About() {
       </div>
 
       {/* ───────────────────────────────────────────────────────────────────
-          D. THE 360° SCROLL ROTATOR (HAT VIEWER)
+          4. THE 360° SCROLL ROTATOR (HAT PORTRAIT)
           ─────────────────────────────────────────────────────────────────── */}
       <section id="rotator" ref={rotatorContainerRef} className="relative bg-black" style={{ height: "240vh" }}>
         <div className="sticky top-0 h-screen w-full flex flex-col justify-between overflow-hidden">
-          <BlueprintGrid />
+          <div className="absolute inset-0 pointer-events-none opacity-[0.03] mix-blend-screen z-0" style={{
+            backgroundImage: "linear-gradient(to right, rgba(255,255,255,0.15) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.15) 1px, transparent 1px)",
+            backgroundSize: "40px 44px"
+          }} />
           
           <div className="pt-20 px-6 text-center z-20">
             <p className="text-[10px] font-mono tracking-[0.3em] text-neutral-500 uppercase mb-2">Sub-Highlight Piece</p>
@@ -282,7 +299,7 @@ function About() {
             </h2>
           </div>
 
-          {/* Canvas Stacking Rotator */}
+          {/* Stacking rotational layers */}
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="relative w-full aspect-square max-w-[340px] flex items-center justify-center">
               <div className="absolute inset-0 pointer-events-none rounded-full" style={{ background: "radial-gradient(circle at 50% 50%, rgba(255,255,255,0.035) 0%, transparent 65%)" }} />
@@ -292,7 +309,7 @@ function About() {
             </div>
           </div>
 
-          {/* Floating dynamic captions */}
+          {/* Captions */}
           <div className="absolute bottom-28 left-6 right-6 flex justify-center text-center z-20">
             <div className="max-w-xs relative h-10 w-full">
               {[
@@ -325,7 +342,7 @@ function About() {
       </section>
 
       {/* ───────────────────────────────────────────────────────────────────
-          E. CONVICTION / STATS DECK
+          5. PHILOSOPHY CONVICTION DECK
           ─────────────────────────────────────────────────────────────────── */}
       <section id="story" className="bg-black px-6 py-40 border-b border-white/5">
         <div ref={storyRef} className="mx-auto max-w-[900px] text-center" style={{ opacity: storyVisible ? 1 : 0, transform: storyVisible ? "translateY(0)" : "translateY(30px)", transition: "all 1s cubic-bezier(.16,1,.3,1)" }}>
@@ -355,7 +372,7 @@ function About() {
       </section>
 
       {/* ───────────────────────────────────────────────────────────────────
-          F. EDITORIAL END PIECE (PARALLAX HERO IMAGE)
+          6. THE EDITORIAL GRID PARALLAX CARD
           ─────────────────────────────────────────────────────────────────── */}
       <section ref={editorialRef} className="relative overflow-hidden border-b border-white/5" style={{ height: "clamp(340px, 48vw, 620px)" }}>
         <div className="w-full h-full overflow-hidden">
