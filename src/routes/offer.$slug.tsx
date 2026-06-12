@@ -201,6 +201,15 @@ export function isColorOption(key: string): boolean {
   return /^(color|colour)$/i.test(key);
 }
 
+/** Proxy Printful CDN images through wsrv.nl to avoid CORS blocks. */
+function proxyImageUrl(url: string): string {
+  if (!url) return url;
+  if (url.includes("files.cdn.printful.com")) {
+    return `https://wsrv.nl/?url=${encodeURIComponent(url)}&n=-1`;
+  }
+  return url;
+}
+
 // ─── Main Page Component ──────────────────────────────────────────────────────
 
 function OfferSlugPage() {
@@ -247,7 +256,7 @@ function OfferSlugPage() {
         const link = document.createElement("link");
         link.rel = "preload";
         link.as = "image";
-        link.href = p.image_urls[0];
+        link.href = proxyImageUrl(p.image_urls[0]);
         document.head.appendChild(link);
       }
     });
@@ -327,12 +336,14 @@ function OfferSlugPage() {
     [product?.variants],
   );
 
-  // Gallery: skip image_urls[0] (always the logo/design mockup), show all others
+  // Gallery: skip image_urls[0] (always the logo/design mockup), show all others.
+  // Proxy each URL through wsrv.nl to eliminate Printful CDN CORS blocks.
   const galleryImages = useMemo(() => {
     if (!Array.isArray(product?.image_urls)) return [""];
     const all = product!.image_urls.filter(Boolean);
     const withoutLogo = all.length > 1 ? all.slice(1) : all;
-    return withoutLogo.length > 0 ? withoutLogo : [""];
+    const proxied = withoutLogo.map(proxyImageUrl);
+    return proxied.length > 0 ? proxied : [""];
   }, [product?.image_urls]);
 
   const optionKeys = useMemo(
@@ -437,11 +448,11 @@ function OfferSlugPage() {
         variantSku: variant?.sku,
         title: product.title,
         price_cents: selectedPrice ?? product.price_cents,
-        image_url: resolveVariantImage(
+        image_url: proxyImageUrl(resolveVariantImage(
           product.image_urls ?? [],
           selection[colorOptionKey ?? ""] ?? selection["color"] ?? selection["colour"],
           colorValues,
-        ),
+        )),
         metadata: {
           external_sku: variant?.external_sku,
           fulfillment_provider: variant?.fulfillment_provider || "printful",
@@ -614,7 +625,6 @@ function OfferSlugPage() {
 
               <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 {galleryImages[activeImageIndex] ? (
-                  // FIX: image is now clickable to open zoom — cursor: zoom-in signals this
                   <img
                     key={galleryImages[activeImageIndex]}
                     src={galleryImages[activeImageIndex]}
@@ -797,11 +807,11 @@ function OfferSlugPage() {
                                       variantSku: variant?.sku,
                                       title: product.title,
                                       price_cents: variant?.price_cents ?? selectedPrice ?? product.price_cents,
-                                      image_url: resolveVariantImage(
+                                      image_url: proxyImageUrl(resolveVariantImage(
                                         product.image_urls ?? [],
                                         updatedSelection[colorOptionKey ?? ""] ?? updatedSelection["color"] ?? updatedSelection["colour"],
                                         colorValues,
-                                      ),
+                                      )),
                                       metadata: {
                                         external_sku: variant?.external_sku,
                                         fulfillment_provider: variant?.fulfillment_provider || "printful",
@@ -830,8 +840,6 @@ function OfferSlugPage() {
                                     aria-pressed={selected}
                                     title={value}
                                     style={{
-                                      // FIX: replaced hardcoded #000/#fff boxShadow rings with
-                                      // CSS-var outline that adapts to light/dark mode correctly
                                       display: "inline-block",
                                       width: "24px", height: "24px",
                                       borderRadius: "50%",
@@ -915,11 +923,6 @@ function OfferSlugPage() {
         </div>
       </div>
 
-      {/* ── Image Zoom Lightbox ────────────────────────────────────────────────
-           FIX: clicking the product image opens a full-screen overlay.
-           Navigation arrows work inside zoom. Escape or clicking bg closes it.
-           Arrow keys are blocked from navigating products while zoom is open.
-      ── */}
       {zoomOpen && galleryImages[activeImageIndex] && (
         <div
           onClick={() => setZoomOpen(false)}
@@ -944,7 +947,6 @@ function OfferSlugPage() {
             }}
           />
 
-          {/* Close button */}
           <button
             onClick={(e) => { e.stopPropagation(); setZoomOpen(false); }}
             aria-label="Close zoom"
@@ -959,7 +961,6 @@ function OfferSlugPage() {
             ×
           </button>
 
-          {/* Prev image within zoom */}
           {activeImageIndex > 0 && (
             <button
               onClick={(e) => { e.stopPropagation(); setActiveImageIndex(i => i - 1); }}
@@ -973,7 +974,6 @@ function OfferSlugPage() {
             >‹</button>
           )}
 
-          {/* Next image within zoom */}
           {activeImageIndex < galleryImages.length - 1 && (
             <button
               onClick={(e) => { e.stopPropagation(); setActiveImageIndex(i => i + 1); }}
