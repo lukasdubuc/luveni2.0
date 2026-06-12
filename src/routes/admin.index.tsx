@@ -1747,25 +1747,25 @@ function AdminPage() {
                       </div>
                     )}
                     {/* ── Product Image with Apple-style drop shadow ── */}
-                    <div className="relative flex aspect-[4/5] items-center justify-center overflow-hidden p-4 bg-[#FAFAFA] rounded-t-[24px]">
-                      {p.image_urls && p.image_urls.length > 1 ? (
-                        <img
-                          src={p.image_urls[1]}
-                          alt={p.title}
-                          className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500 rounded-[16px]"
-                          style={{ filter: "drop-shadow(0 6px 18px rgba(0,0,0,0.13)) drop-shadow(0 2px 6px rgba(0,0,0,0.08))" }}
-                        />
-                      ) : p.image_urls && p.image_urls[0] ? (
-                        <img
-                          src={p.image_urls[0]}
-                          alt={p.title}
-                          className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500 rounded-[16px]"
-                          style={{ filter: "drop-shadow(0 6px 18px rgba(0,0,0,0.13)) drop-shadow(0 2px 6px rgba(0,0,0,0.08))" }}
-                        />
-                      ) : (
-                        <span className={`text-[8px] font-mono uppercase tracking-widest ${isDark ? "text-neutral-800" : "text-neutral-300"}`}>Empty visual</span>
-                      )}
-                    </div>
+ <div className="relative flex aspect-[4/5] items-center justify-center overflow-hidden p-4 bg-[#FAFAFA] rounded-t-[24px]">
+  {p.image_urls && p.image_urls.length > 1 ? (
+    <img
+      src={proxyImageUrl(p.image_urls[1])}
+      alt={p.title}
+      className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500 rounded-[16px]"
+      style={{ filter: "drop-shadow(0 6px 18px rgba(0,0,0,0.13)) drop-shadow(0 2px 6px rgba(0,0,0,0.08))" }}
+    />
+  ) : p.image_urls && p.image_urls[0] ? (
+    <img
+      src={proxyImageUrl(p.image_urls[0])}
+      alt={p.title}
+      className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500 rounded-[16px]"
+      style={{ filter: "drop-shadow(0 6px 18px rgba(0,0,0,0.13)) drop-shadow(0 2px 6px rgba(0,0,0,0.08))" }}
+    />
+  ) : (
+    <span className={`text-[8px] font-mono uppercase tracking-widest ${isDark ? "text-neutral-800" : "text-neutral-300"}`}>Empty visual</span>
+  )}
+</div>
                     <div className={`px-3.5 pb-3.5 pt-2 border-t ${isDark ? "bg-neutral-950/40 border-neutral-900/40" : "bg-white border-[#F2F2F7]"}`}>
                       <p className={`mb-0.5 text-[10px] uppercase tracking-wider truncate font-medium ${isDark ? "text-neutral-200" : "text-neutral-800"}`}>{p.title}</p>
                       <p className={`text-[10px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-555"}`}>
