@@ -26,6 +26,15 @@ export const Route = createFileRoute("/shop")({
   component: ShopPage,
 });
 
+/** Proxy Printful CDN images through wsrv.nl to avoid CORS blocks. */
+function proxyImageUrl(url: string): string {
+  if (!url) return url;
+  if (url.includes("files.cdn.printful.com")) {
+    return `https://wsrv.nl/?url=${encodeURIComponent(url)}&n=-1`;
+  }
+  return url;
+}
+
 function ShopPage() {
   const loader = Route.useLoaderData();
   const { products: clientProducts } = useProducts({ onlyPublished: true });
@@ -59,12 +68,14 @@ function ShopPage() {
 }
 
 const ProductCell = memo(({ product, index }: { product: Product; index: number }) => {
-  const imageUrl =
+  const rawImageUrl =
     Array.isArray(product.image_urls) && product.image_urls.length > 1
       ? product.image_urls[1]
       : Array.isArray(product.image_urls) && product.image_urls.length === 1
       ? product.image_urls[0]
       : null;
+
+  const imageUrl = rawImageUrl ? proxyImageUrl(rawImageUrl) : null;
 
   const hasDiscount =
     product.discounted_price_cents != null &&
