@@ -449,7 +449,14 @@ function AiAgentConsole({ isDark, onSimulatePacket }: { isDark: boolean; onSimul
     </div>
   );
 }
-
+/** Proxy Printful CDN images through wsrv.nl to avoid CORS blocks. */
+function proxyImageUrl(url: string): string {
+  if (!url) return url;
+  if (url.includes("files.cdn.printful.com")) {
+    return `https://wsrv.nl/?url=${encodeURIComponent(url)}&n=-1`;
+  }
+  return url;
+}
 // ────────────────────────────────────────────────────────────────────────────
 // MAIN ADMIN PAGE COMPONENT
 // ────────────────────────────────────────────────────────────────────────────
