@@ -49,8 +49,8 @@ function ShopPage() {
         </div>
       ) : (
         <div className="grid grid-cols-2 overflow-visible bg-inherit sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-          {products.map((product) => (
-            <ProductCell key={product.id} product={product} />
+          {products.map((product, index) => (
+            <ProductCell key={product.id} product={product} index={index} />
           ))}
         </div>
       )}
@@ -58,21 +58,23 @@ function ShopPage() {
   );
 }
 
-const ProductCell = memo(({ product }: { product: Product }) => {
-  // Skip index 0 — Printful always puts the logo/design mockup there.
-  // Fall back to index 0 only if there's a single image (no real photo yet).
+const ProductCell = memo(({ product, index }: { product: Product; index: number }) => {
   const imageUrl =
     Array.isArray(product.image_urls) && product.image_urls.length > 1
       ? product.image_urls[1]
       : Array.isArray(product.image_urls) && product.image_urls.length === 1
       ? product.image_urls[0]
       : null;
+
   const hasDiscount =
     product.discounted_price_cents != null &&
     product.discounted_price_cents < product.price_cents;
   const displayPrice = hasDiscount
     ? product.discounted_price_cents!
     : product.price_cents;
+
+  // First 6 products load eagerly and with high priority (above the fold)
+  const isAboveFold = index < 6;
 
   return (
     <Link
@@ -82,19 +84,19 @@ const ProductCell = memo(({ product }: { product: Product }) => {
       viewTransition
       onClick={() => trackEvent("product_click", { product_id: product.id })}
       className="group relative z-0 block border-none bg-transparent outline-none transition-transform duration-300 ease-in-out hover:z-10 hover:scale-105 hover:border-transparent focus:outline-none focus-visible:outline-none"
-      style={{ willChange: "transform" }}
     >
       <div className="relative flex aspect-square items-center justify-center overflow-hidden bg-transparent p-6 sm:p-8 md:p-10">
         {imageUrl ? (
           <img
             src={imageUrl}
             alt={product.title}
-            width={400}
-            height={400}
+            width={600}
+            height={600}
+            sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
             className="max-h-full max-w-full object-contain aspect-square"
-            loading="eager"
+            loading={isAboveFold ? "eager" : "lazy"}
             decoding="async"
-            style={{ willChange: "transform", backfaceVisibility: "hidden" }}
+            {...(isAboveFold ? { fetchPriority: "high" } : {})}
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center bg-transparent">
