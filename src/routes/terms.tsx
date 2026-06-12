@@ -77,7 +77,7 @@ function Terms() {
 
         <H>Contact</H>
         <p className="mt-3">
-          Questions? Email{" "}
+          Questions? Email{"luveni.apparel@gmail.com"}
           <a className="underline" href={`mailto:${site.supportEmail}`}>{site.supportEmail}</a>.
         </p>
       </article>
