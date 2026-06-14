@@ -1086,7 +1086,8 @@ function AdminPage() {
     .filter(o => orderStatusFilter === "all" ? true : o.status === orderStatusFilter)
     .filter(o =>
       o.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      o.name?.toLowerCase().includes(searchQuery.toLowerCase())
+      o.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      o.id.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
   const filteredLeads = activeLeads.filter(l =>
@@ -1298,7 +1299,7 @@ function AdminPage() {
           {/* X button — only non-nav element */}
           <button
             onClick={() => setMobileMenuOpen(false)}
-            className="absolute top-4 right-5 text-current opacity-40 hover:opacity-80 transition-opacity text-[11px] tracking-[0.02em]"
+            className="absolute top-4 right-5 text-current opacity-40 hover:opacity-85 transition-opacity text-[11px] tracking-[0.02em]"
           >
             ✕
           </button>
@@ -1595,7 +1596,7 @@ function AdminPage() {
                 <div className={`border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-955/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"}`}>
                   <table className="w-full text-left">
                     <thead>
-                      <tr className={`text-[8px] font-mono font-semibold uppercase tracking-[0.14em] border-b ${isDark ? "text-neutral-600 border-white/[0.06] bg-white/[0.02]" : "text-neutral-450 border-black/[0.07] bg-neutral-50/80"}`}>
+                      <tr className={`text-[8px] font-mono font-semibold uppercase tracking-[0.14em] border-b ${isDark ? "text-neutral-600 border-white/[0.06] bg-white/[0.02]" : "text-neutral-455 border-black/[0.07] bg-neutral-50/80"}`}>
                         <th className="px-5 py-3 w-8">#</th>
                         <th className="px-5 py-3">Product</th>
                         <th className="px-5 py-3 hidden md:table-cell">Share</th>
@@ -1675,7 +1676,7 @@ function AdminPage() {
                     {selectedIds.size === orderedProducts.length ? "Deselect All" : "Select All"}
                   </button>
                   <button onClick={() => bulkPublish(true)} disabled={isBulkActing}
-                    className="flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 bg-emerald-505/10 text-emerald-500 hover:bg-emerald-505/20 rounded-[9999px] transition-all">
+                    className="flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 bg-emerald-550/10 text-emerald-500 hover:bg-emerald-550/20 rounded-[9999px] transition-all">
                     <Eye size={10} /> Publish
                   </button>
                   <button onClick={() => bulkPublish(false)} disabled={isBulkActing}
@@ -1718,7 +1719,7 @@ function AdminPage() {
                     {productForm.is_published ? "Status: Deployed" : "Status: Draft"}
                   </button>
                   <div className="flex gap-2">
-                    <button onClick={resetProductForm} className={`text-[9px] font-mono uppercase px-3 py-2 ${isDark ? "text-neutral-500 hover:text-white" : "text-neutral-450 hover:text-black"}`}>Cancel</button>
+                    <button onClick={resetProductForm} className={`text-[9px] font-mono uppercase px-3 py-2 ${isDark ? "text-neutral-500 hover:text-white" : "text-neutral-455 hover:text-black"}`}>Cancel</button>
                     <button onClick={saveProduct} className={`text-[9px] font-mono font-bold uppercase px-6 py-2 transition-all rounded-[9999px] ${
                       isDark ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800 shadow-sm"
                     }`}>
@@ -1764,7 +1765,7 @@ function AdminPage() {
                       <div className="absolute top-2.5 left-2.5 z-10">
                         {isSelected
                           ? <CheckSquare size={13} className={isDark ? "text-white" : "text-black"} />
-                          : <Square size={13} className={isDark ? "text-neutral-650" : "text-neutral-400"} />
+                          : <Square size={13} className={isDark ? "text-neutral-655" : "text-neutral-400"} />
                         }
                       </div>
                     )}
@@ -1866,7 +1867,7 @@ function AdminPage() {
                   <span className={`text-[8px] font-mono px-2 py-0.5 rounded-[9999px] ${
                     orderStatusFilter === tab.key
                       ? isDark ? "bg-white text-black" : "bg-black text-white"
-                      : isDark ? "bg-neutral-900 text-neutral-500" : "bg-neutral-100 text-neutral-500"
+                      : isDark ? "bg-neutral-900 text-neutral-500" : "bg-neutral-101 text-neutral-500"
                   }`}>{tab.count}</span>
                 </button>
               ))}
@@ -1896,8 +1897,8 @@ function AdminPage() {
                       <td className="px-5 py-3.5 text-xs font-mono font-medium">{fmt$(o.amount_cents)}</td>
                       <td className="px-5 py-3.5">
                         <span className={`text-[8px] font-mono font-bold uppercase px-2.5 py-1 rounded-[9999px] flex items-center gap-1.5 w-fit ${
-                          o.status === "paid" ? "bg-emerald-505/10 text-emerald-500" :
-                          o.status === "pending" ? "bg-amber-505/10 text-amber-500" :
+                          o.status === "paid" ? "bg-emerald-550/10 text-emerald-500" :
+                          o.status === "pending" ? "bg-amber-550/10 text-amber-500" :
                           "bg-rose-505/10 text-rose-500"
                         }`}>
                           <LedPulse color={o.status === "paid" ? "green" : o.status === "pending" ? "yellow" : "red"} active={false} />
@@ -2044,7 +2045,7 @@ function AdminPage() {
                 {analyticsChartData.map((d, i) => (
                   <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group relative">
                     <div
-                      className={`w-full transition-all duration-300 rounded-[9999px] ${isDark ? "bg-neutral-800 group-hover:bg-neutral-550" : "bg-neutral-200 group-hover:bg-neutral-355"}`}
+                      className={`w-full transition-all duration-350 rounded-[9999px] ${isDark ? "bg-neutral-800 group-hover:bg-neutral-550" : "bg-neutral-200 group-hover:bg-neutral-355"}`}
                       style={{ height: `${(d.views / chartMax) * 100}%`, minHeight: d.views > 0 ? "3px" : "1px" }}
                     />
                     {d.views > 0 && (
@@ -2176,7 +2177,7 @@ function AdminPage() {
                           localStorage.setItem("theme", "dark");
                           saveSiteConfig({ ...siteContent, theme: "dark" });
                         }}
-                        className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all rounded-[9999px] ${isDark ? "bg-white text-black" : "text-neutral-555 hover:bg-neutral-100"}`}
+                        className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all rounded-[9999px] ${isDark ? "bg-white text-black" : "text-neutral-555 hover:bg-neutral-101"}`}
                       >
                         DARK
                       </button>
@@ -2254,7 +2255,7 @@ function AdminPage() {
                             <option value="admin">ADMIN</option>
                           </select>
                           <button onClick={() => handleRemoveAdminUser(u.id)}
-                            className={`${isDark ? "text-neutral-650 hover:text-rose-455" : "text-neutral-400 hover:text-rose-600"} transition-colors`}>
+                            className={`${isDark ? "text-neutral-655 hover:text-rose-455" : "text-neutral-400 hover:text-rose-600"} transition-colors`}>
                             <X size={11} />
                           </button>
                         </div>
@@ -2356,6 +2357,7 @@ function Stat({ label, value, sub, isDark, led = "cyan" }: { label: string; valu
   );
 }
 
+// StatWithDelta
 function StatWithDelta({ label, value, sub, delta, isDark }: { label: string; value: string | number; sub: string; delta: number | null; isDark: boolean }) {
   const led = delta !== null && delta > 0 ? "green" as const : delta !== null && delta < 0 ? "red" as const : "neutral" as const;
   const accent = ACCENT_MAP[led];
