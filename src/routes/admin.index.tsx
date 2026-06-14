@@ -660,6 +660,13 @@ function AdminPage() {
   const handleSyncPrintful = async () => {
     setIsSyncing(true);
     try {
+      // Create snapshot of current is_published status indexed by printful_id or id
+      const originalStatuses: Record<string, boolean> = {};
+      products.forEach(p => {
+        const key = p.printful_id || p.id;
+        originalStatuses[key] = p.is_published;
+      });
+
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       const res = await fetch("/api/printful-sync", {
@@ -675,6 +682,31 @@ function AdminPage() {
         toast.error(data.errors[0]);
         return;
       }
+
+      // Query database directly following successful sync, and revert any modified visibility states
+      const { data: freshlySynced } = await supabase
+        .from("products")
+        .select("id, printful_id, is_published");
+
+      if (freshlySynced) {
+        const restorePromises = freshlySynced
+          .filter(p => {
+            const key = p.printful_id || p.id;
+            return originalStatuses[key] !== undefined && p.is_published !== originalStatuses[key];
+          })
+          .map(p => {
+            const key = p.printful_id || p.id;
+            return supabase
+              .from("products")
+              .update({ is_published: originalStatuses[key] })
+              .eq("id", p.id);
+          });
+
+        if (restorePromises.length > 0) {
+          await Promise.all(restorePromises);
+        }
+      }
+
       toast.success(`Sync complete: ${data.synced}/${data.total} products processed.`);
       await fetchData();
     } catch (e: any) {
@@ -1346,7 +1378,7 @@ function AdminPage() {
                         : "bg-white text-black shadow-[0_2px_8px_rgba(0,0,0,0.12)]"
                       : isDark
                         ? "text-neutral-500 hover:text-neutral-200"
-                        : "text-neutral-500 hover:text-neutral-900"
+                        : "text-neutral-550 hover:text-neutral-900"
                   }`}
                 >
                   {r === "day" ? "Today" : r === "week" ? "Week" : r === "month" ? "Month" : "All"}
@@ -1563,7 +1595,7 @@ function AdminPage() {
                 <div className={`border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-950/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"}`}>
                   <table className="w-full text-left">
                     <thead>
-                      <tr className={`text-[8px] font-mono font-semibold uppercase tracking-[0.14em] border-b ${isDark ? "text-neutral-600 border-white/[0.06] bg-white/[0.02]" : "text-neutral-400 border-black/[0.07] bg-neutral-50/80"}`}>
+                      <tr className={`text-[8px] font-mono font-semibold uppercase tracking-[0.14em] border-b ${isDark ? "text-neutral-600 border-white/[0.06] bg-white/[0.02]" : "text-neutral-450 border-black/[0.07] bg-neutral-50/80"}`}>
                         <th className="px-5 py-3 w-8">#</th>
                         <th className="px-5 py-3">Product</th>
                         <th className="px-5 py-3 hidden md:table-cell">Share</th>
@@ -1732,7 +1764,7 @@ function AdminPage() {
                       <div className="absolute top-2.5 left-2.5 z-10">
                         {isSelected
                           ? <CheckSquare size={13} className={isDark ? "text-white" : "text-black"} />
-                          : <Square size={13} className={isDark ? "text-neutral-600" : "text-neutral-400"} />
+                          : <Square size={13} className={isDark ? "text-neutral-650" : "text-neutral-400"} />
                         }
                       </div>
                     )}
@@ -1860,7 +1892,7 @@ function AdminPage() {
                       onClick={() => setSelectedRow({ ...o, _type: "order" })}
                     >
                       <td className="px-5 py-3.5 text-xs font-semibold lowercase font-mono">{o.email}</td>
-                      <td className={`px-5 py-3.5 text-[10px] uppercase font-mono ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>{o.name || "—"}</td>
+                      <td className={`px-5 py-3.5 text-[10px] uppercase font-mono ${isDark ? "text-neutral-400" : "text-neutral-550"}`}>{o.name || "—"}</td>
                       <td className="px-5 py-3.5 text-xs font-mono font-medium">{fmt$(o.amount_cents)}</td>
                       <td className="px-5 py-3.5">
                         <span className={`text-[8px] font-mono font-bold uppercase px-2.5 py-1 rounded-[9999px] flex items-center gap-1.5 w-fit ${
@@ -2215,7 +2247,7 @@ function AdminPage() {
                           <select
                             value={u.role}
                             onChange={e => handleUpdateUserRole(u.id, e.target.value as any)}
-                            className={`text-[8px] font-mono font-semibold uppercase bg-transparent focus:outline-none focus:ring-1 border rounded-[9999px] px-3 py-0.5 ${isDark ? "text-neutral-400 border-neutral-800" : "text-neutral-550 border-[#D1D1D6] bg-white"}`}
+                            className={`text-[8px] font-mono font-semibold uppercase bg-transparent focus:outline-none focus:ring-1 border rounded-[9999px] px-3 py-0.5 ${isDark ? "text-neutral-400 border-neutral-850" : "text-neutral-550 border-[#D1D1D6] bg-white"}`}
                           >
                             <option value="viewer">VIEWER</option>
                             <option value="manager">MANAGER</option>
