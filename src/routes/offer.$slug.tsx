@@ -624,30 +624,51 @@ function OfferSlugPage() {
               </button>
 
               <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                {galleryImages[activeImageIndex] ? (
-                  <img
-                    key={galleryImages[activeImageIndex]}
-                    src={galleryImages[activeImageIndex]}
-                    alt={`${product.title} — image ${activeImageIndex + 1}`}
-                    loading="eager"
-                    onClick={() => setZoomOpen(true)}
-                    style={{
-                      maxWidth: "min(320px, 70vw)", maxHeight: "45vh",
-                      objectFit: "contain", display: "block",
-                      cursor: "zoom-in",
-                    }}
-                  />
-                ) : (
-                  <div style={{
-                    width: "min(320px, 70vw)", aspectRatio: "1",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    border: "1px solid var(--border)",
-                    fontSize: "9px", fontWeight: 500, letterSpacing: "0.3em",
-                    textTransform: "uppercase", opacity: 0.3,
-                  }}>
-                    IMAGE PENDING
-                  </div>
-                )}
+                <div style={{
+                  position: "relative",
+                  width: "min(320px, 70vw)",
+                  height: "min(320px, 45vh)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}>
+                  {galleryImages[0] !== "" ? (
+                    galleryImages.map((imgUrl, idx) => {
+                      const isActive = idx === activeImageIndex;
+                      return (
+                        <img
+                          key={imgUrl}
+                          src={imgUrl}
+                          alt={`${product.title} — image ${idx + 1}`}
+                          loading="eager"
+                          onClick={() => setZoomOpen(true)}
+                          style={{
+                            position: "absolute",
+                            maxWidth: "100%",
+                            maxHeight: "100%",
+                            objectFit: "contain",
+                            display: "block",
+                            cursor: "zoom-in",
+                            transition: "opacity 0.15s ease-in-out, visibility 0.15s",
+                            opacity: isActive ? 1 : 0,
+                            visibility: isActive ? "visible" : "hidden",
+                            pointerEvents: isActive ? "auto" : "none",
+                          }}
+                        />
+                      );
+                    })
+                  ) : (
+                    <div style={{
+                      width: "100%", height: "100%",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      border: "1px solid var(--border)",
+                      fontSize: "9px", fontWeight: 500, letterSpacing: "0.3em",
+                      textTransform: "uppercase", opacity: 0.3,
+                    }}>
+                      IMAGE PENDING
+                    </div>
+                  )}
+                </div>
               </div>
 
               <button className="pdp-img-nav-btn" onClick={goNextImage} disabled={activeImageIndex === galleryImages.length - 1} aria-label="Next image"
