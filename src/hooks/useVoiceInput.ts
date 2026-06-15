@@ -24,15 +24,27 @@ export function useVoiceInput({
   const recognitionRef = useRef<any>(null);
   const restartTimeoutRef = useRef<any>(null);
   const enabledRef = useRef(enabled);
+  const fatalErrorRef = useRef(false);
+
+  // Latest Ref Pattern: Keeps callbacks stable to prevent the microphone 
+  // from restarting and clicking when parent component state updates.
+  const onInterimRef = useRef(onInterim);
+  const onTranscriptRef = useRef(onTranscript);
+  const onStateChangeRef = useRef(onStateChange);
+  const cancelSpeechRef = useRef(cancelSpeech);
 
   useEffect(() => { enabledRef.current = enabled; }, [enabled]);
+  useEffect(() => { onInterimRef.current = onInterim; }, [onInterim]);
+  useEffect(() => { onTranscriptRef.current = onTranscript; }, [onTranscript]);
+  useEffect(() => { onStateChangeRef.current = onStateChange; }, [onStateChange]);
+  useEffect(() => { cancelSpeechRef.current = cancelSpeech; }, [cancelSpeech]);
 
   const startRecognition = useCallback(() => {
-    if (!enabledRef.current || recognitionRef.current) return;
+    if (!enabledRef.current || recognitionRef.current || fatalErrorRef.current) return;
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      onStateChange('error');
+      onStateChangeRef.current('error');
       return;
     }
 
@@ -42,11 +54,15 @@ export function useVoiceInput({
     rec.lang = 'en-US';
 
     rec.onstart = () => {
-      onStateChange('listening');
+      onStateChangeRef.current('listening');
     };
 
     rec.onresult = (event: any) => {
-      cancelSpeech(); 
+      // If the microphone has been disabled, discard trailing buffer chunks
+      // to prevent interrupting newly started assistant speech.
+      if (!enabledRef.current) return;
+
+      cancelSpeechRef.current(); 
 
       let interim = '';
       let final = '';
@@ -59,15 +75,18 @@ export function useVoiceInput({
         }
       }
 
-      onInterim(interim);
+      onInterimRef.current(interim);
 
       if (final.trim()) {
-        onTranscript(final.trim());
+        onTranscriptRef.current(final.trim());
       }
     };
 
     rec.onend = () => {
-      recognitionRef.current = null;
+      // Instance isolation: Only clear active references if they belong to this instance
+      if (recognitionRef.current === rec) {
+        recognitionRef.current = null;
+      }
       if (enabledRef.current) {
         restartTimeoutRef.current = setTimeout(() => {
           if (enabledRef.current && !recognitionRef.current) {
@@ -79,22 +98,31 @@ export function useVoiceInput({
 
     rec.onerror = (event: any) => {
         const err = event?.error;
+        
+        // Prevent infinite loops on fatal hardware/permission denials
+        if (err === 'not-allowed' || err === 'service-not-allowed' || err === 'language-not-supported') {
+          fatalErrorRef.current = true;
+          onStateChangeRef.current('error');
+          return;
+        }
+
         // 'aborted', 'no-speech', and 'network' are routine/recoverable
         if (err === 'no-speech' || err === 'network' || err === 'aborted') {
             return;
         }
         console.error("Speech recognition error", err);
-        onStateChange('error');
+        onStateChangeRef.current('error');
     };
 
     try { 
+      fatalErrorRef.current = false;
       rec.start(); 
       recognitionRef.current = rec; 
     } catch (e) { 
       console.error("Failed to start recognition", e);
       recognitionRef.current = null;
     }
-  }, [onInterim, onTranscript, onStateChange, cancelSpeech]);
+  }, []); // Intentionally empty: protected by refs to avoid engine restarts
 
   useEffect(() => {
     if (enabled) {
