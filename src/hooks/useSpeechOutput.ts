@@ -185,7 +185,6 @@ let voiceCache: SpeechSynthesisVoice | null | undefined = undefined;
 export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputOptions = {}) {
   const [currentSubtitle, setCurrentSubtitle] = useState("");
   const [isMobile, setIsMobile] = useState(false);
-  const speaking = useRef(false);
   const onStartRef = useRef(onStart);
   const onBoundaryRef = useRef(onBoundary);
   const onEndRef = useRef(onEnd);
@@ -195,8 +194,19 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   
   // Keep track of scheduled timeouts to allow clean cancellation
   const speechTimeoutRef = useRef<any>(null);
+  // Failsafe watchdog timer to prevent browser audio freezes
+  const failsafeTimeoutRef = useRef<any>(null);
   // Keep track of active session ids to drop stale async callbacks
   const activeSessionId = useRef<number>(0);
+
+  // Synchronous and stateful representation of active speech
+  const speaking = useRef(false);
+  const [isSpeakingState, setIsSpeakingState] = useState(false);
+
+  const setSpeaking = (val: boolean) => {
+    speaking.current = val;
+    setIsSpeakingState(val);
+  };
 
   useEffect(() => {
     onStartRef.current = onStart;
@@ -216,8 +226,70 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
   }, []);
 
+  // AUTOMATIC AUDIO & SPEECH PRIMING (Autoplay Bypass)
+  // Automatically primes the Web Audio & Speech engines on the page's very first interaction (click, tap, keyboard entry).
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+
+    let unlocked = false;
+
+    const unlock = () => {
+      if (unlocked) return;
+      try {
+        // 1. Prime SpeechSynthesis with a silent space
+        const silentUtt = new SpeechSynthesisUtterance(" ");
+        silentUtt.volume = 0;
+        window.speechSynthesis.speak(silentUtt);
+
+        // 2. Unlock Web Audio Context if present in window
+        const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtxClass) {
+          const dummyContext = new AudioCtxClass();
+          if (dummyContext.state === 'suspended') {
+            dummyContext.resume();
+          }
+        }
+
+        unlocked = true;
+
+        // Cleanup event listeners immediately upon first trigger
+        window.removeEventListener('click', unlock);
+        window.removeEventListener('touchstart', unlock);
+        window.removeEventListener('keydown', unlock);
+      } catch (e) {
+        console.warn("[Speech Engine] Failed to prime audio drivers:", e);
+      }
+    };
+
+    window.addEventListener('click', unlock, { passive: true });
+    window.addEventListener('touchstart', unlock, { passive: true });
+    window.addEventListener('keydown', unlock, { passive: true });
+
+    return () => {
+      window.removeEventListener('click', unlock);
+      window.removeEventListener('touchstart', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, []);
+
+  const clearWatchdog = () => {
+    if (failsafeTimeoutRef.current) {
+      clearTimeout(failsafeTimeoutRef.current);
+      failsafeTimeoutRef.current = null;
+    }
+  };
+
+  const startWatchdog = (index: number, callback: () => void) => {
+    clearWatchdog();
+    // 8-second watchdog: if an utterance is stuck, automatically bypasses to keep context running
+    failsafeTimeoutRef.current = setTimeout(() => {
+      console.warn(`[Speech Engine] Watchdog activated: chunk ${index} timed out.`);
+      callback();
+    }, 8000);
+  };
+
   const endSpeechCleanup = useCallback(() => {
-    speaking.current = false;
+    setSpeaking(false);
     setCurrentSubtitle("");
     if (onEndRef.current) {
       onEndRef.current();
@@ -230,6 +302,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       clearTimeout(speechTimeoutRef.current);
       speechTimeoutRef.current = null;
     }
+
+    clearWatchdog();
 
     // Invalidate the session ID so previous callback routines stop executing
     activeSessionId.current += 1;
@@ -259,34 +333,30 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       audioIntervalRef.current = null;
     }
 
-    speaking.current = false;
-    setCurrentSubtitle("");
-
-    // Only fire onEnd if we are stopping permanently (not transitioning to a new assistant phrase)
-    if (!isTransitioning && onEndRef.current) {
-      onEndRef.current();
+    // Only set speaking to false if we are NOT transitioning to a new speech session!
+    if (!isTransitioning) {
+      setSpeaking(false);
+      setCurrentSubtitle("");
+      if (onEndRef.current) {
+        onEndRef.current();
+      }
     }
   }, []);
 
   const doSpeakNative = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
-    cancel(true); // Signify that we are transitioning, keeping mic disabled
-
     const currentSession = activeSessionId.current;
 
     speechTimeoutRef.current = setTimeout(() => {
       if (currentSession !== activeSessionId.current) return;
-
-      speaking.current = true;
-      if (onStartRef.current) onStartRef.current();
 
       // Clean the incoming text of any markdown, links, or visual formatting artifacts
       const cleanText = sanitizeTextForSpeech(text);
       const chunks = chunkText(cleanText, 150);
       
       if (chunks.length === 0) {
-        speaking.current = false;
+        setSpeaking(false);
         setCurrentSubtitle("");
         if (onEndRef.current) onEndRef.current();
         return;
@@ -299,7 +369,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         if (!speaking.current) return;
         
         if (index >= chunks.length) {
-          speaking.current = false;
+          setSpeaking(false);
           setCurrentSubtitle("");
           if (onEndRef.current) onEndRef.current();
           return;
@@ -316,15 +386,25 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         utt.rate = isMobile ? 1.0 : 0.93;
         utt.pitch = isMobile ? 1.0 : 0.78;
         
-        // Match lang parameters to avoid mobile audio driver crashes
-        utt.lang = activeVoice ? activeVoice.lang : (isMobile ? 'en-AU' : 'en-GB');
-        if (activeVoice) utt.voice = activeVoice;
+        // Strict Voice-Language Binding: Avoids iOS driver crashes due to mismatched voice properties
+        if (activeVoice) {
+          utt.voice = activeVoice;
+          utt.lang = activeVoice.lang;
+        } else {
+          utt.lang = isMobile ? 'en-AU' : 'en-GB';
+        }
 
         globalActiveUtterances.push(utt);
 
         utt.onstart = () => {
           if (currentSession !== activeSessionId.current) return;
           setCurrentSubtitle(rawChunk);
+          
+          // Watchdog failsafe to recover when browsers silently freeze speech synthesis
+          startWatchdog(index, () => {
+            if (currentSession !== activeSessionId.current) return;
+            speakChunk(index + 1);
+          });
         };
 
         utt.onboundary = () => {
@@ -334,12 +414,14 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
         utt.onend = () => {
           if (currentSession !== activeSessionId.current) return;
+          clearWatchdog();
           speakChunk(index + 1);
         };
 
         utt.onerror = () => {
           if (currentSession !== activeSessionId.current) return;
-          speakChunk(index + 1); // Failsafe: fall through to next chunk if one errors out
+          clearWatchdog();
+          speakChunk(index + 1); // Failsafe fallback
         };
 
         window.speechSynthesis.speak(utt);
@@ -355,19 +437,14 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
       speakChunk(0);
     }, 250); 
-  }, [cancel, isMobile]);
+  }, [isMobile]);
 
   // ElevenLabs Engine (active if key is configured)
   const doSpeakElevenLabs = useCallback(async (text: string) => {
-    cancel(true); // Signify that we are transitioning, keeping mic disabled
-
     const currentSession = activeSessionId.current;
 
     speechTimeoutRef.current = setTimeout(async () => {
       if (currentSession !== activeSessionId.current) return;
-
-      speaking.current = true;
-      if (onStartRef.current) onStartRef.current();
 
       // Clean the incoming text of any markdown, links, or visual formatting artifacts
       const cleanText = sanitizeTextForSpeech(text);
@@ -412,7 +489,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
           if (currentSession !== activeSessionId.current) return;
 
           if (!speaking.current || currentIndex >= audioUrls.length) {
-            speaking.current = false;
+            setSpeaking(false);
             setCurrentSubtitle("");
             if (audioIntervalRef.current) {
               clearInterval(audioIntervalRef.current);
@@ -463,9 +540,19 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         }
       }
     }, 250);
-  }, [cancel, doSpeakNative]);
+  }, [doSpeakNative]);
 
   const speak = useCallback((text: string) => {
+    // Synchronously declare start of active speech immediately.
+    // This blocks speech recognition instantly on the main thread and closes the microphone 
+    // before the 250ms asynchronous setup delays execute, preventing feedback cut-offs.
+    const wasSpeaking = speaking.current;
+    cancel(true);
+    setSpeaking(true);
+    if (!wasSpeaking && onStartRef.current) {
+      onStartRef.current();
+    }
+
     if (ELEVENLABS_API_KEY) {
       doSpeakElevenLabs(text);
       return;
@@ -482,12 +569,12 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
 
     doSpeakNative(text, voice);
-  }, [doSpeakNative, doSpeakElevenLabs]);
+  }, [cancel, doSpeakNative, doSpeakElevenLabs]);
 
   return { 
     speak, 
     cancel: () => cancel(false), // External triggers are treated as manual cancels
-    isSpeaking: () => speaking.current,
+    isSpeaking: () => isSpeakingState, // Stateful return for seamless component synchronization
     currentSubtitle 
   };
 }
