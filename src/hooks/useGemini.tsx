@@ -84,7 +84,13 @@ export function useGemini(options: UseGeminiOptions = {}) {
         const error = e instanceof Error ? e : new Error(String(e));
         const errorMsg = details ? `${details}` : error.message;
         console.error("[Jarvis] Edge function response error:", errorMsg);
-        throw new Error(errorMsg);
+        
+        // Self-Healing fallback: Speak an apology and safely restore conversational flow 
+        // instead of throwing an unhandled exception that freezes the UI.
+        const fallbackMsg = "I apologize, sir, but I encountered a temporary connection issue. Could you repeat that?";
+        history.current.push({ role: "assistant", content: fallbackMsg });
+        onChunk?.(fallbackMsg);
+        return fallbackMsg;
       }
     },
     [],
