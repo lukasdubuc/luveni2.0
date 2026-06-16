@@ -294,7 +294,7 @@ async function buildRepoContext(owner: string, repo: string, branch = "main"): P
     const content = await readRepoFile(owner, repo, path, branch);
     if (!content.startsWith("Error:")) {
       fileSummaries.push(`--- FILE: ${path} ---
-${content.slice(0, 2000)}`); // Reduced slice to prevent timeout
+    ${content.slice(0, 2000)}`); // Reduced slice to prevent timeout
     }
   }
   const summaryLines = [
@@ -604,8 +604,6 @@ serve(async (req) => {
   const authError = await requireAdminCaller(req);
   if (authError) return authError;
 
-
-
   try {
     const { tool, args } = await req.json();
 
@@ -644,15 +642,15 @@ serve(async (req) => {
           const branch = preferred.default_branch || "main";
 
           githubCtx = `--- ACCESSIBLE GITHUB REPOSITORIES ---
-Your integrated GITHUB_TOKEN has access to the following repositories:
-${repoList}
+    Your integrated GITHUB_TOKEN has access to the following repositories:
+    ${repoList}
 
-Primary Default Repository:
-- Owner: ${owner}
-- Repo: ${repo}
-- Branch: ${branch}
+    Primary Default Repository:
+    - Owner: ${owner}
+    - Repo: ${repo}
+    - Branch: ${branch}
 
-When the user refers to "my repo", "the codebase", "the repository", or "the code", use the default repository ("${owner}/${repo}"). Avoid guessing other repositories or using web search to find them.`;
+    When the user refers to "my repo", "the codebase", "the repository", or "the code", use the default repository ("${owner}/${repo}"). Avoid guessing other repositories or using web search to find them.`;
 
           // Disabled compile-on-chat repository summaries to prevent token bloat, conversational 
           // prompt leaks, and mobile API latency. J.A.R.V.I.S. now uses his active GitHub tools 
@@ -679,43 +677,43 @@ When the user refers to "my repo", "the codebase", "the repository", or "the cod
       });
 
       const systemContent = `
-${JARVIS_SYSTEM_PROMPT}
+    ${JARVIS_SYSTEM_PROMPT}
 
-CURRENT DATE & TIME (Local timezone: ${userTimezone}):
-- Date: ${dateStr}
-- Time: ${timeStr}
+    CURRENT DATE & TIME (Local timezone: ${userTimezone}):
+    - Date: ${dateStr}
+    - Time: ${timeStr}
 
-LONG-TERM MEMORIES (last 20):
-${memories}
+    LONG-TERM MEMORIES (last 20):
+    ${memories}
 
-${storeCtx}
+    ${storeCtx}
 
-${githubCtx}
+    ${githubCtx}
 
-${repoSummary ? `--- REPOSITORY CONTEXT ---\n${repoSummary}` : ""}
+    ${repoSummary ? `--- REPOSITORY CONTEXT ---\n${repoSummary}` : ""}
 
-FORMATTING:
-- Voice-first assistant. Conversational, spoken-friendly English.
-- NEVER output markdown symbols, bold (**), bullet points (*), or hashtags (#).
-- Integrate search results into fluid prose.
-`.trim();
+    FORMATTING:
+    - Voice-first assistant. Conversational, spoken-friendly English.
+    - NEVER output markdown symbols, bold (**), bullet points (*), or hashtags (#).
+    - Integrate search results into fluid prose.
+    `.trim();
 
-      const reply = await runJarvisChat(systemContent, history || [], userText);
+          const reply = await runJarvisChat(systemContent, history || [], userText);
 
-      return new Response(JSON.stringify({ reply }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+          return new Response(JSON.stringify({ reply }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
 
-    return new Response(JSON.stringify({ error: `Unknown tool: ${tool}` }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 400,
+        return new Response(JSON.stringify({ error: `Unknown tool: ${tool}` }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
+        });
+      } catch (e: any) {
+        console.error("[Jarvis] Fatal error:", e.message);
+        return new Response(JSON.stringify({ error: e.message }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 500,
+        });
+      }
     });
-  } catch (e: any) {
-    console.error("[Jarvis] Fatal error:", e.message);
-    return new Response(JSON.stringify({ error: e.message }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
-    });
-  }
-});
