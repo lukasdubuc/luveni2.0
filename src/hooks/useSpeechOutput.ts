@@ -302,6 +302,17 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }, 8000);
   };
 
+  const endSpeechCleanup = useCallback(() => {
+    setSpeaking(false);
+    if (typeof window !== 'undefined') {
+      (window as any).__jarvisIsSpeaking = false;
+    }
+    setCurrentSubtitle("");
+    if (onEndRef.current) {
+      onEndRef.current();
+    }
+  }, []);
+
   const cancel = useCallback((isTransitioning = false) => {
     // Synchronously force-release the hardware microphone driver to prevent Safari audio freezes
     if (typeof window !== 'undefined' && (window as any).__jarvisStopMic) {
@@ -351,6 +362,9 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     // Only set speaking to false if we are NOT transitioning to a new speech session!
     if (!isTransitioning) {
       setSpeaking(false);
+      if (typeof window !== 'undefined') {
+        (window as any).__jarvisIsSpeaking = false;
+      }
       setCurrentSubtitle("");
       if (onEndRef.current) {
         onEndRef.current();
@@ -366,12 +380,21 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     speechTimeoutRef.current = setTimeout(() => {
       if (currentSession !== activeSessionId.current) return;
 
+      // Asynchronously invoke parent state changes inside the fired timeout.
+      // This prevents the parent's immediate render cycle from running cleanups 
+      // that clear the scheduled timeout before it has been executed.
+      setSpeaking(true);
+      if (onStartRef.current) onStartRef.current();
+
       // Clean the incoming text of any markdown, links, or visual formatting artifacts
       const cleanText = sanitizeTextForSpeech(text);
       const chunks = chunkText(cleanText, 150);
       
       if (chunks.length === 0) {
         setSpeaking(false);
+        if (typeof window !== 'undefined') {
+          (window as any).__jarvisIsSpeaking = false;
+        }
         setCurrentSubtitle("");
         if (onEndRef.current) {
           onEndRef.current();
@@ -387,6 +410,9 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         
         if (index >= chunks.length) {
           setSpeaking(false);
+          if (typeof window !== 'undefined') {
+            (window as any).__jarvisIsSpeaking = false;
+          }
           setCurrentSubtitle("");
           if (onEndRef.current) onEndRef.current();
           return;
@@ -403,13 +429,20 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         utt.rate = isMobile ? 1.0 : 0.93;
         utt.pitch = isMobile ? 1.0 : 0.78;
         
-        // Strict Voice-Language Binding: Avoids iOS driver crashes due to mismatched voice properties
-        if (activeVoice) {
-          utt.voice = activeVoice;
-          utt.lang = activeVoice.lang;
-        } else {
-          utt.lang = isMobile ? 'en-AU' : 'en-GB';
+        // Safe Voice assignment: avoid assigning voice objects on Safari to prevent
+        // stale reference blocks. Only set lang, which Safari uses to auto-select Siri.
+        const isSafari = typeof navigator !== 'undefined' && 
+          /safari/i.test(navigator.userAgent) && 
+          !/chrome/i.test(navigator.userAgent);
+
+        if (activeVoice && !isSafari) {
+          try {
+            utt.voice = activeVoice;
+          } catch (e) {
+            console.warn("[Speech Engine] Stale voice assignment skipped:", e);
+          }
         }
+        utt.lang = activeVoice ? activeVoice.lang : (isMobile ? 'en-AU' : 'en-GB');
 
         globalActiveUtterances.push(utt);
 
@@ -456,7 +489,13 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
           } catch (e) {}
         }
 
-        window.speechSynthesis.speak(utt);
+        try {
+          window.speechSynthesis.speak(utt);
+        } catch (e) {
+          console.error("[Speech Engine] Native speak exception caught:", e);
+          clearWatchdog();
+          speakChunk(index + 1);
+        }
       };
 
       // Query voices live immediately before starting audio playback to bypass empty-list startup bugs
@@ -477,6 +516,9 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
     speechTimeoutRef.current = setTimeout(async () => {
       if (currentSession !== activeSessionId.current) return;
+
+      setSpeaking(true);
+      if (onStartRef.current) onStartRef.current();
 
       // Clean the incoming text of any markdown, links, or visual formatting artifacts
       const cleanText = sanitizeTextForSpeech(text);
@@ -522,6 +564,9 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
           if (!speaking.current || currentIndex >= audioUrls.length) {
             setSpeaking(false);
+            if (typeof window !== 'undefined') {
+              (window as any).__jarvisIsSpeaking = false;
+            }
             setCurrentSubtitle("");
             if (audioIntervalRef.current) {
               clearInterval(audioIntervalRef.current);
@@ -582,14 +627,12 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   }, [doSpeakNative]);
 
   const speak = useCallback((text: string) => {
-    // Synchronously declare start of active speech immediately.
-    // This blocks speech recognition instantly on the main thread and closes the microphone 
-    // before the 250ms asynchronous setup delays execute, preventing feedback cut-offs.
-    const wasSpeaking = speaking.current;
     cancel(true);
-    setSpeaking(true);
-    if (!wasSpeaking && onStartRef.current) {
-      onStartRef.current();
+    
+    // Synchronously block the microphone at the hardware level before asynchronous timeouts execute.
+    // This removes the 250ms gap without triggering early parent render loops or cleanup effects.
+    if (typeof window !== 'undefined') {
+      (window as any).__jarvisIsSpeaking = true;
     }
 
     if (ELEVENLABS_API_KEY) {
@@ -597,7 +640,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       return;
     }
 
-    // Direct Web Speech Synthesis fallback (strictly optimized for premium local Apple Siri/Enhanced voices)
+    // Force a fresh check of current browser voices every time speech is triggered
     const immediateVoices = typeof window !== 'undefined' && window.speechSynthesis 
       ? window.speechSynthesis.getVoices() 
       : [];
