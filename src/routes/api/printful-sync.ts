@@ -444,11 +444,21 @@ export const Route = createFileRoute("/api/printful-sync")({
         }
 
         // ───────────────────────────────────────────────────────────
-        // 5. Response
+        // 5. Query Active Apliq Products from Database
+        // ───────────────────────────────────────────────────────────
+        const { data: activeApliqProducts } = await supabaseAdmin
+          .from("products")
+          .not("apliq_id", "is", null);
+
+        const apliqCount = activeApliqProducts?.length || 0;
+
+        // ───────────────────────────────────────────────────────────
+        // 6. Response
         // ───────────────────────────────────────────────────────────
         return new Response(
           JSON.stringify({
             synced,
+            apliqSynced: apliqCount,
             total: result.length,
             tombstoned,
             errors: [...errors, ...tombstoneErrors],
