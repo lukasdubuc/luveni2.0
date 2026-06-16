@@ -302,15 +302,16 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }, 8000);
   };
 
-  const endSpeechCleanup = useCallback(() => {
-    setSpeaking(false);
-    setCurrentSubtitle("");
-    if (onEndRef.current) {
-      onEndRef.current();
-    }
-  }, []);
-
   const cancel = useCallback((isTransitioning = false) => {
+    // Synchronously force-release the hardware microphone driver to prevent Safari audio freezes
+    if (typeof window !== 'undefined' && (window as any).__jarvisStopMic) {
+      try {
+        (window as any).__jarvisStopMic();
+      } catch (e) {
+        console.warn("[Speech Engine] Failed to force-release microphone driver:", e);
+      }
+    }
+
     // Clear any pending speak delays immediately
     if (speechTimeoutRef.current) {
       clearTimeout(speechTimeoutRef.current);
@@ -448,6 +449,13 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
           speakChunk(index + 1);
         });
 
+        // Force-resume the native synthesis queue to bypass Chrome and Safari silent queue freezes
+        if (typeof window !== 'undefined' && window.speechSynthesis) {
+          try {
+            window.speechSynthesis.resume();
+          } catch (e) {}
+        }
+
         window.speechSynthesis.speak(utt);
       };
 
@@ -460,7 +468,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       }
 
       speakChunk(0);
-    }, 250); 
+    }, 450); // Generous delay to let the browser fully deactivate recording mode and engage playback mode
   }, [isMobile]);
 
   // ElevenLabs Engine (active if key is configured)
