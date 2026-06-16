@@ -637,7 +637,7 @@ function AdminPage() {
   const fetchData = async () => {
     try {
       const [productsRes, ordersRes, leadsRes, siteRes, eventsRes, usersRes] = await Promise.all([
-        supabase.from("products").select("*"),
+        supabase.from("products").select("*").order("display_order", { ascending: true }),
         supabase.from("orders").select("*"),
         supabase.from("leads").select("*"),
         supabase.from("site_config").select("*").eq("id", "main").maybeSingle(),
@@ -661,11 +661,10 @@ function AdminPage() {
   const handleSyncProducts = async () => {
     setIsSyncing(true);
     try {
-      // Create snapshot of current is_published status indexed by printful_id, apliq_id or id
+      // 1. Create snapshot of current is_published status indexed strictly by database UUID (id)
       const originalStatuses: Record<string, boolean> = {};
       products.forEach(p => {
-        const key = p.printful_id || p.apliq_id || p.id;
-        originalStatuses[key] = p.is_published;
+        originalStatuses[p.id] = p.is_published;
       });
 
       const { data: sessionData } = await supabase.auth.getSession();
@@ -684,22 +683,21 @@ function AdminPage() {
         return;
       }
 
-      // Query database directly following successful sync, and revert any modified visibility states
+      // 2. Query database directly following successful sync, selecting the UUID and published fields
       const { data: freshlySynced } = await supabase
         .from("products")
-        .select("id, printful_id, apliq_id, is_published");
+        .select("id, is_published");
 
       if (freshlySynced) {
         const restorePromises = freshlySynced
           .filter(p => {
-            const key = p.printful_id || p.apliq_id || p.id;
-            return originalStatuses[key] !== undefined && p.is_published !== originalStatuses[key];
+            // Restore only if the product existed before the sync and its status was modified
+            return originalStatuses[p.id] !== undefined && p.is_published !== originalStatuses[p.id];
           })
           .map(p => {
-            const key = p.printful_id || p.apliq_id || p.id;
             return supabase
               .from("products")
-              .update({ is_published: originalStatuses[key] })
+              .update({ is_published: originalStatuses[p.id] })
               .eq("id", p.id);
           });
 
@@ -709,7 +707,7 @@ function AdminPage() {
       }
 
       const apliqMsg = data.apliqSynced ? ` Verified ${data.apliqSynced} Apliq product(s) via database webhook.` : "";
-      toast.success(`Sync complete: ${data.synced}/${data.total} Printful product(s) processed.${apliqMsg}`);
+      toast.success(`Sync complete: ${data.synced || 0}/${data.total || 0} Printful product(s) processed.${apliqMsg}`);
       await fetchData();
     } catch (e: any) {
       toast.error(`Sync error: ${e?.message || "Unknown error"}`);
@@ -1427,7 +1425,7 @@ function AdminPage() {
                   {revenueDelta !== null && (
                     <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[9999px] text-[9px] font-mono font-bold uppercase tracking-wider ${
                       revenueDelta > 0
-                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                        ? "bg-emerald-555/10 text-emerald-400 border border-emerald-555/20"
                         : revenueDelta < 0
                         ? "bg-rose-505/10 text-rose-400 border border-rose-505/20"
                         : isDark ? "bg-neutral-800 text-neutral-400 border border-neutral-700" : "bg-neutral-101 text-neutral-500 border border-neutral-200"
@@ -1662,7 +1660,7 @@ function AdminPage() {
                 </button>
                 <button onClick={() => setProductFormOpen(!productFormOpen)}
                   className={`text-[9px] font-mono font-bold uppercase px-5 py-2 transition-all rounded-[9999px] ${
-                    isDark ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800 shadow-sm"
+                    isDark ? "bg-white text-black hover:bg-neutral-202" : "bg-black text-white hover:bg-neutral-800 shadow-sm"
                   }`}>
                   {productFormOpen ? "Close Form" : "New Product"}
                 </button>
@@ -1678,7 +1676,7 @@ function AdminPage() {
                     {selectedIds.size === orderedProducts.length ? "Deselect All" : "Select All"}
                   </button>
                   <button onClick={() => bulkPublish(true)} disabled={isBulkActing}
-                    className="flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 bg-emerald-550/10 text-emerald-500 hover:bg-emerald-555/20 rounded-[9999px] transition-all">
+                    className="flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 bg-emerald-555/10 text-emerald-500 hover:bg-emerald-555/20 rounded-[9999px] transition-all">
                     <Eye size={10} /> Publish
                   </button>
                   <button onClick={() => bulkPublish(false)} disabled={isBulkActing}
@@ -2425,7 +2423,7 @@ function AdminPage() {
                           <p className={`text-xs font-semibold truncate ${isDark ? "text-white" : "text-black"}`}>
                             {displayTitle}
                           </p>
-                          <p className={`text-[10px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-450"}`}>
+                          <p className={`text-[10px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>
                             Qty: {item.quantity || 1} {displayPrice ? `· ${fmt$(displayPrice)}` : ""}
                           </p>
                         </div>
