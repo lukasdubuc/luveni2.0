@@ -13,6 +13,21 @@ interface UseVoiceInputOptions {
   cancelSpeech: () => void;
 }
 
+function detectMobileDevice() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  return (
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+}
+
+// Unified browser Safari detection for continuous-listening bug workaround
+function isSafariBrowser() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent.toLowerCase();
+  return ua.includes('safari') && !ua.includes('chrome') && !ua.includes('chromium');
+}
+
 export function useVoiceInput({ 
   onInterim,
   onTranscript, 
@@ -48,8 +63,13 @@ export function useVoiceInput({
       return;
     }
 
+    const isSafari = isSafariBrowser();
     const rec = new SpeechRecognition();
-    rec.continuous = true;
+
+    // Unified Safari Workaround: If continuous is true on macOS/iOS Safari, the engine freezes 
+    // silently after the first result. We run single-shot on Safari and let our robust onend 
+    // recovery loop instantly restart the mic, keeping continuous listening highly stable.
+    rec.continuous = !isSafari; 
     rec.interimResults = true; 
     rec.lang = 'en-US';
 
