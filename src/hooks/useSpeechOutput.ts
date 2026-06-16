@@ -225,7 +225,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   }, []);
 
   // AUTOMATIC AUDIO & SPEECH PRIMING (Autoplay Bypass)
-  // Automatically primes the Web Audio, Speech synthesis, and HTML5 Audio engines on the page's very first interaction.
+  // Automatically primes the Web Audio and HTML5 Audio engines on the page's very first interaction.
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -234,27 +234,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     const unlock = () => {
       if (unlocked) return;
       try {
-        // 1. Prime SpeechSynthesis with a quiet, real word ("ready").
-        // Mobile browsers (specifically iOS Safari) reject volume=0 or empty-string utterances,
-        // failing to wake up the physical hardware node. A low-volume, actual word forces it to wake.
-        if (window.speechSynthesis) {
-          const silentUtt = new SpeechSynthesisUtterance("ready");
-          silentUtt.volume = 0.05; // extremely quiet but present
-          silentUtt.rate = 1.0;
-          
-          const immediateVoices = window.speechSynthesis.getVoices();
-          const voice = findBestVoice(immediateVoices);
-          if (voice) {
-            silentUtt.voice = voice;
-            silentUtt.lang = voice.lang;
-          } else {
-            silentUtt.lang = 'en-GB';
-          }
-          
-          window.speechSynthesis.speak(silentUtt);
-        }
-
-        // 2. Unlock HTML5 Audio context for iOS Safari asynchronous playback (ElevenLabs)
+        // 1. Unlock HTML5 Audio context for iOS Safari asynchronous playback (ElevenLabs)
         const audio = new Audio();
         audio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA"; // short silent base64 wave
         audio.play().then(() => {
@@ -264,7 +244,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         });
         unlockedAudioRef.current = audio;
 
-        // 3. Unlock Web Audio Context if present in window
+        // 2. Unlock Web Audio Context if present in window
         const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioCtxClass) {
           const dummyContext = new AudioCtxClass();
@@ -508,7 +488,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       }
 
       speakChunk(0);
-    }, 450); // Generous delay to let the browser fully deactivate recording mode and engage playback mode
+    }, 250); // Standard fast 250ms delay for ultra-responsive voice feedback
   }, [isMobile]);
 
   // ElevenLabs Engine (active if key is configured)
