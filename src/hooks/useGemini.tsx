@@ -86,7 +86,7 @@ export function useGemini(options: UseGeminiOptions = {}) {
         console.error("[Jarvis] Edge function response error:", errorMsg);
         
         // Self-Healing fallback: Speak an apology and safely restore conversational flow 
-        // instead of throwing an unhandled exception that freezes the UI.
+        // instead of throwing an unhandled exception that freezes the UI on desktop/mobile.
         const fallbackMsg = "I apologize, sir, but I encountered a temporary connection issue. Could you repeat that?";
         history.current.push({ role: "assistant", content: fallbackMsg });
         onChunk?.(fallbackMsg);
