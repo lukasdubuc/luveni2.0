@@ -30,11 +30,11 @@ import { Route as AdminLeadsRouteImport } from "./routes/admin.leads"
 import { Route as AdminJarvisRouteImport } from "./routes/admin.jarvis"
 import { Route as ApiPublicStripeWebhookRouteImport } from "./routes/api/public/stripe-webhook"
 
-// Webhook / API Route Imports
-import { Route as ProductAddOrUpdateWebhookUrlRouteImport } from "./routes/productAddOrUpdate-webhook-url"
-import { Route as ProductSearchWebhookUrlRouteImport } from "./routes/productSearch-webhook-url"
-import { Route as FulfillmentWebhookUrlRouteImport } from "./routes/fulfillment-webhook-url"
-import { Route as ShipmentCompleteRouteImport } from "./routes/shipmentComplete"
+// Webhook / API Route Imports (Nested inside /api)
+import { Route as ApiProductAddOrUpdateWebhookUrlRouteImport } from "./routes/api/productAddOrUpdate-webhook-url"
+import { Route as ApiProductSearchWebhookUrlRouteImport } from "./routes/api/productSearch-webhook-url"
+import { Route as ApiFulfillmentWebhookUrlRouteImport } from "./routes/api/fulfillment-webhook-url"
+import { Route as ApiShipmentCompleteRouteImport } from "./routes/api/shipmentComplete"
 
 const ThankYouRoute = ThankYouRouteImport.update({
   id: "/thank-you",
@@ -137,25 +137,25 @@ const ApiPublicStripeWebhookRoute = ApiPublicStripeWebhookRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 
-// Webhook Route Updates
-const ProductAddOrUpdateWebhookUrlRoute = ProductAddOrUpdateWebhookUrlRouteImport.update({
-  id: "/productAddOrUpdate-webhook-url",
-  path: "/productAddOrUpdate-webhook-url",
+// Webhook Route Updates (Nested inside /api)
+const ApiProductAddOrUpdateWebhookUrlRoute = ApiProductAddOrUpdateWebhookUrlRouteImport.update({
+  id: "/api/productAddOrUpdate-webhook-url",
+  path: "/api/productAddOrUpdate-webhook-url",
   getParentRoute: () => rootRouteImport,
 } as any)
-const ProductSearchWebhookUrlRoute = ProductSearchWebhookUrlRouteImport.update({
-  id: "/productSearch-webhook-url",
-  path: "/productSearch-webhook-url",
+const ApiProductSearchWebhookUrlRoute = ApiProductSearchWebhookUrlRouteImport.update({
+  id: "/api/productSearch-webhook-url",
+  path: "/api/productSearch-webhook-url",
   getParentRoute: () => rootRouteImport,
 } as any)
-const FulfillmentWebhookUrlRoute = FulfillmentWebhookUrlRouteImport.update({
-  id: "/fulfillment-webhook-url",
-  path: "/fulfillment-webhook-url",
+const ApiFulfillmentWebhookUrlRoute = ApiFulfillmentWebhookUrlRouteImport.update({
+  id: "/api/fulfillment-webhook-url",
+  path: "/api/fulfillment-webhook-url",
   getParentRoute: () => rootRouteImport,
 } as any)
-const ShipmentCompleteRoute = ShipmentCompleteRouteImport.update({
-  id: "/shipmentComplete",
-  path: "/shipmentComplete",
+const ApiShipmentCompleteRoute = ApiShipmentCompleteRouteImport.update({
+  id: "/api/shipmentComplete",
+  path: "/api/shipmentComplete",
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -180,10 +180,10 @@ export interface FileRoutesByFullPath {
   "/offer/$slug": typeof OfferSlugRoute
   "/admin/": typeof AdminIndexRoute
   "/api/public/stripe-webhook": typeof ApiPublicStripeWebhookRoute
-  "/productAddOrUpdate-webhook-url": typeof ProductAddOrUpdateWebhookUrlRoute
-  "/productSearch-webhook-url": typeof ProductSearchWebhookUrlRoute
-  "/fulfillment-webhook-url": typeof FulfillmentWebhookUrlRoute
-  "/shipmentComplete": typeof ShipmentCompleteRoute
+  "/api/productAddOrUpdate-webhook-url": typeof ApiProductAddOrUpdateWebhookUrlRoute
+  "/api/productSearch-webhook-url": typeof ApiProductSearchWebhookUrlRoute
+  "/api/fulfillment-webhook-url": typeof ApiFulfillmentWebhookUrlRoute
+  "/api/shipmentComplete": typeof ApiShipmentCompleteRoute
 }
 export interface FileRoutesByTo {
   "/": typeof IndexRoute
@@ -206,10 +206,10 @@ export interface FileRoutesByTo {
   "/offer/$slug": typeof OfferSlugRoute
   "/admin": typeof AdminIndexRoute
   "/api/public/stripe-webhook": typeof ApiPublicStripeWebhookRoute
-  "/productAddOrUpdate-webhook-url": typeof ProductAddOrUpdateWebhookUrlRoute
-  "/productSearch-webhook-url": typeof ProductSearchWebhookUrlRoute
-  "/fulfillment-webhook-url": typeof FulfillmentWebhookUrlRoute
-  "/shipmentComplete": typeof ShipmentCompleteRoute
+  "/api/productAddOrUpdate-webhook-url": typeof ApiProductAddOrUpdateWebhookUrlRoute
+  "/api/productSearch-webhook-url": typeof ApiProductSearchWebhookUrlRoute
+  "/api/fulfillment-webhook-url": typeof ApiFulfillmentWebhookUrlRoute
+  "/api/shipmentComplete": typeof ApiShipmentCompleteRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -233,10 +233,10 @@ export interface FileRoutesById {
   "/offer/$slug": typeof OfferSlugRoute
   "/admin/": typeof AdminIndexRoute
   "/api/public/stripe-webhook": typeof ApiPublicStripeWebhookRoute
-  "/productAddOrUpdate-webhook-url": typeof ProductAddOrUpdateWebhookUrlRoute
-  "/productSearch-webhook-url": typeof ProductSearchWebhookUrlRoute
-  "/fulfillment-webhook-url": typeof FulfillmentWebhookUrlRoute
-  "/shipmentComplete": typeof ShipmentCompleteRoute
+  "/api/productAddOrUpdate-webhook-url": typeof ApiProductAddOrUpdateWebhookUrlRoute
+  "/api/productSearch-webhook-url": typeof ApiProductSearchWebhookUrlRoute
+  "/api/fulfillment-webhook-url": typeof ApiFulfillmentWebhookUrlRoute
+  "/api/shipmentComplete": typeof ApiShipmentCompleteRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -261,10 +261,10 @@ export interface FileRouteTypes {
     | "/offer/$slug"
     | "/admin/"
     | "/api/public/stripe-webhook"
-    | "/productAddOrUpdate-webhook-url"
-    | "/productSearch-webhook-url"
-    | "/fulfillment-webhook-url"
-    | "/shipmentComplete"
+    | "/api/productAddOrUpdate-webhook-url"
+    | "/api/productSearch-webhook-url"
+    | "/api/fulfillment-webhook-url"
+    | "/api/shipmentComplete"
   fileRoutesByTo: FileRoutesByTo
   to:
     | "/"
@@ -287,10 +287,10 @@ export interface FileRouteTypes {
     | "/offer/$slug"
     | "/admin"
     | "/api/public/stripe-webhook"
-    | "/productAddOrUpdate-webhook-url"
-    | "/productSearch-webhook-url"
-    | "/fulfillment-webhook-url"
-    | "/shipmentComplete"
+    | "/api/productAddOrUpdate-webhook-url"
+    | "/api/productSearch-webhook-url"
+    | "/api/fulfillment-webhook-url"
+    | "/api/shipmentComplete"
   id:
     | "__root__"
     | "/"
@@ -313,10 +313,10 @@ export interface FileRouteTypes {
     | "/offer/$slug"
     | "/admin/"
     | "/api/public/stripe-webhook"
-    | "/productAddOrUpdate-webhook-url"
-    | "/productSearch-webhook-url"
-    | "/fulfillment-webhook-url"
-    | "/shipmentComplete"
+    | "/api/productAddOrUpdate-webhook-url"
+    | "/api/productSearch-webhook-url"
+    | "/api/fulfillment-webhook-url"
+    | "/api/shipmentComplete"
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -340,10 +340,10 @@ export interface RootRouteChildren {
   OfferSlugRoute: typeof OfferSlugRoute
   AdminIndexRoute: typeof AdminIndexRoute
   ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
-  ProductAddOrUpdateWebhookUrlRoute: typeof ProductAddOrUpdateWebhookUrlRoute
-  ProductSearchWebhookUrlRoute: typeof ProductSearchWebhookUrlRoute
-  FulfillmentWebhookUrlRoute: typeof FulfillmentWebhookUrlRoute
-  ShipmentCompleteRoute: typeof ShipmentCompleteRoute
+  ApiProductAddOrUpdateWebhookUrlRoute: typeof ApiProductAddOrUpdateWebhookUrlRoute
+  ApiProductSearchWebhookUrlRoute: typeof ApiProductSearchWebhookUrlRoute
+  ApiFulfillmentWebhookUrlRoute: typeof ApiFulfillmentWebhookUrlRoute
+  ApiShipmentCompleteRoute: typeof ApiShipmentCompleteRoute
 }
 
 declare module "@tanstack/react-router" {
@@ -488,32 +488,32 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof ApiPublicStripeWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
-    "/productAddOrUpdate-webhook-url": {
-      id: "/productAddOrUpdate-webhook-url"
-      path: "/productAddOrUpdate-webhook-url"
-      fullPath: "/productAddOrUpdate-webhook-url"
-      preLoaderRoute: typeof ProductAddOrUpdateWebhookUrlRouteImport
+    "/api/productAddOrUpdate-webhook-url": {
+      id: "/api/productAddOrUpdate-webhook-url"
+      path: "/api/productAddOrUpdate-webhook-url"
+      fullPath: "/api/productAddOrUpdate-webhook-url"
+      preLoaderRoute: typeof ApiProductAddOrUpdateWebhookUrlRouteImport
       parentRoute: typeof rootRouteImport
     }
-    "/productSearch-webhook-url": {
-      id: "/productSearch-webhook-url"
-      path: "/productSearch-webhook-url"
-      fullPath: "/productSearch-webhook-url"
-      preLoaderRoute: typeof ProductSearchWebhookUrlRouteImport
+    "/api/productSearch-webhook-url": {
+      id: "/api/productSearch-webhook-url"
+      path: "/api/productSearch-webhook-url"
+      fullPath: "/api/productSearch-webhook-url"
+      preLoaderRoute: typeof ApiProductSearchWebhookUrlRouteImport
       parentRoute: typeof rootRouteImport
     }
-    "/fulfillment-webhook-url": {
-      id: "/fulfillment-webhook-url"
-      path: "/fulfillment-webhook-url"
-      fullPath: "/fulfillment-webhook-url"
-      preLoaderRoute: typeof FulfillmentWebhookUrlRouteImport
+    "/api/fulfillment-webhook-url": {
+      id: "/api/fulfillment-webhook-url"
+      path: "/api/fulfillment-webhook-url"
+      fullPath: "/api/fulfillment-webhook-url"
+      preLoaderRoute: typeof ApiFulfillmentWebhookUrlRouteImport
       parentRoute: typeof rootRouteImport
     }
-    "/shipmentComplete": {
-      id: "/shipmentComplete"
-      path: "/shipmentComplete"
-      fullPath: "/shipmentComplete"
-      preLoaderRoute: typeof ShipmentCompleteRouteImport
+    "/api/shipmentComplete": {
+      id: "/api/shipmentComplete"
+      path: "/api/shipmentComplete"
+      fullPath: "/api/shipmentComplete"
+      preLoaderRoute: typeof ApiShipmentCompleteRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -540,10 +540,10 @@ const rootRouteChildren: RootRouteChildren = {
   OfferSlugRoute: OfferSlugRoute,
   AdminIndexRoute: AdminIndexRoute,
   ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
-  ProductAddOrUpdateWebhookUrlRoute: ProductAddOrUpdateWebhookUrlRoute,
-  ProductSearchWebhookUrlRoute: ProductSearchWebhookUrlRoute,
-  FulfillmentWebhookUrlRoute: FulfillmentWebhookUrlRoute,
-  ShipmentCompleteRoute: ShipmentCompleteRoute,
+  ApiProductAddOrUpdateWebhookUrlRoute: ApiProductAddOrUpdateWebhookUrlRoute,
+  ApiProductSearchWebhookUrlRoute: ApiProductSearchWebhookUrlRoute,
+  ApiFulfillmentWebhookUrlRoute: ApiFulfillmentWebhookUrlRoute,
+  ApiShipmentCompleteRoute: ApiShipmentCompleteRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
