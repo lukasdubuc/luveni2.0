@@ -698,22 +698,22 @@ serve(async (req) => {
     - Integrate search results into fluid prose.
     `.trim();
 
-          const reply = await runJarvisChat(systemContent, history || [], userText);
+      const reply = await runJarvisChat(systemContent, history || [], userText);
 
-          return new Response(JSON.stringify({ reply }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
+      return new Response(JSON.stringify({ reply }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-        return new Response(JSON.stringify({ error: `Unknown tool: ${tool}` }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 400,
-        });
-      } catch (e: any) {
-        console.error("[Jarvis] Fatal error:", e.message);
-        return new Response(JSON.stringify({ error: e.message }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 500,
-        });
-      }
+    return new Response(JSON.stringify({ error: `Unknown tool: ${tool}` }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 400,
     });
+  } catch (e: any) {
+    console.error("[Jarvis] Fatal error:", e.message);
+    return new Response(JSON.stringify({ error: e.message }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
+    });
+  }
+});
