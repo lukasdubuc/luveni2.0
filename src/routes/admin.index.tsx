@@ -371,7 +371,7 @@ function AiAgentConsole({ isDark, onSimulatePacket }: { isDark: boolean; onSimul
   return (
     <div 
       className={`p-6 border relative overflow-hidden transition-all duration-300 ${
-        isDark ? "bg-neutral-955/45 border-neutral-800/80" : "bg-white border-[#D1D1D6] shadow-[0_24px_48px_rgba(0,0,0,0.03)] hover:shadow-[0_24px_48px_rgba(0,0,0,0.06)]"
+        isDark ? "bg-neutral-955/45 border-neutral-850" : "bg-white border-[#D1D1D6] shadow-[0_24px_48px_rgba(0,0,0,0.03)] hover:shadow-[0_24px_48px_rgba(0,0,0,0.06)]"
       }`}
       style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? "#333338" : "#D1D1D6" }}
     >
@@ -1428,7 +1428,7 @@ function AdminPage() {
                         ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
                         : revenueDelta < 0
                         ? "bg-rose-505/10 text-rose-400 border border-rose-505/20"
-                        : isDark ? "bg-neutral-800 text-neutral-400 border border-neutral-700" : "bg-neutral-100 text-neutral-500 border border-neutral-200"
+                        : isDark ? "bg-neutral-800 text-neutral-400 border border-neutral-700" : "bg-neutral-101 text-neutral-500 border border-neutral-200"
                     }`}>
                       {revenueDelta > 0 ? <TrendingUp size={10} /> : revenueDelta < 0 ? <TrendingDown size={10} /> : <Minus size={10} />}
                       {revenueDelta > 0 ? "+" : ""}{revenueDelta}% vs prior {revenueRange}
@@ -2166,7 +2166,7 @@ function AdminPage() {
                           document.documentElement.classList.remove("dark");
                           saveSiteConfig({ ...siteContent, theme: "light" });
                         }}
-                        className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all rounded-[9999px] ${!isDark ? "bg-black text-white" : "text-neutral-400 hover:bg-neutral-900"}`}
+                        className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all rounded-[9999px] ${!isDark ? "bg-black text-white" : "text-neutral-405 hover:bg-neutral-900"}`}
                       >
                         LIGHT
                       </button>
@@ -2439,7 +2439,7 @@ function AdminPage() {
                 {cleanFields.map((field) => (
                   <div key={field.label} className={`flex justify-between py-1.5 border-b last:border-0 gap-4 ${isDark ? "border-neutral-900" : "border-[#F2F2F7]"}`}>
                     <span className={`text-[8px] font-mono font-semibold uppercase flex-shrink-0 ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{field.label}</span>
-                    <span className={`text-[10px] font-mono font-medium text-right truncate max-w-[250px] ${isDark ? "text-neutral-300" : "text-neutral-800"}`}>
+                    <span className={`text-[10px] font-mono font-medium text-right truncate max-w-[250px] ${isDark ? "text-neutral-303" : "text-neutral-808"}`}>
                       {field.value}
                     </span>
                   </div>
@@ -2564,52 +2564,3 @@ function Input({ label, value, onChange, type = "text", isDark }: { label: strin
     </div>
   );
 }
-```
-
-***
-
-### 🛠️ Architecture Checklist for the Checkout Wiring:
-To ensure pending orders always contain the correct cart contents in production, make sure that the database write operation (typically situated in your backend checkout session route, Stripe initiation API, or client checkout function) adheres to these standards:
-
-1. **Populate `product_id` for Single-item flows**: 
-   When the user initiates a checkout from a PDP (Product Detail Page), the SQL/Supabase `.insert()` statement creating the pending order must pass the product's UUID directly into the `product_id` column:
-   ```js
-   const { data, error } = await supabase
-     .from('orders')
-     .insert([
-       {
-         email: userEmail,
-         name: customerName,
-         amount_cents: productPrice,
-         status: 'pending',
-         product_id: targetProductId, // 👈 Must not be null
-         metadata: {
-           items: [{ productId: targetProductId, title: productTitle, price_cents: productPrice, quantity: 1 }]
-         }
-       }
-     ]);
-   ```
-
-2. **Populate `metadata.items` for Cart-based flows**:
-   When checking out from a multi-item cart, construct a structured JSON array representing the cart state, and write it into the order's `metadata` column:
-   ```js
-   const cartPayload = cartItems.map(item => ({
-     productId: item.id,
-     title: item.title,
-     price_cents: item.price_cents,
-     image_url: item.image_url,
-     quantity: item.quantity
-   }));
-
-   const { data, error } = await supabase
-     .from('orders')
-     .insert([
-       {
-         email: userEmail,
-         amount_cents: cartTotal,
-         status: 'pending',
-         metadata: {
-           items: cartPayload // 👈 Populating this ensures multi-item tracking
-         }
-       }
-     ]);
