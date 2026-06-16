@@ -71,25 +71,53 @@ function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | n
 
   const preferredPool = gbVoices.length > 0 ? gbVoices : candidatePool;
 
-  // 1. Prioritize downloaded high-quality "Siri" voices first (they sound incredibly human-like)
-  const siriMatch = preferredPool.find(v => v.name.toLowerCase().includes('siri'));
-  if (siriMatch) return siriMatch;
+  if (isMobile) {
+    // Look for high-quality English (Australian or British) voices on mobile
+    const englishVoices = preferredPool.filter(v => {
+      const lang = v.lang.toLowerCase().replace('_', '-');
+      return lang.startsWith('en-au') || lang.startsWith('en-gb');
+    });
 
-  // 2. Prioritize downloaded high-quality "Enhanced" or "Natural" accessibility models
-  const premiumKeywords = ['enhanced', 'natural', 'premium'];
-  for (const keyword of premiumKeywords) {
-    const match = preferredPool.find(v => v.name.toLowerCase().includes(keyword));
+    if (englishVoices.length > 0) {
+      // 1. Strictly prioritize downloaded high-quality 'premium' or 'enhanced' voices first
+      const qualityKeywords = ['premium', 'enhanced', 'natural', 'siri'];
+      for (const keyword of qualityKeywords) {
+        const match = englishVoices.find(v => v.name.toLowerCase().includes(keyword));
+        if (match) return match;
+      }
+
+      // 2. Fallback to male voices
+      const maleKeywords = ['ryan', 'george', 'thomas', 'guy', 'daniel', 'arthur', 'oliver', 'harry', 'male'];
+      for (const keyword of maleKeywords) {
+        const match = englishVoices.find(v => v.name.toLowerCase().includes(keyword));
+        if (match) return match;
+      }
+
+      return englishVoices[0];
+    }
+  }
+
+  // Standard Desktop / Fallback (British English)
+  if (gbVoices.length === 0) {
+    return preferredPool.find(v => v.lang.toLowerCase().startsWith('en-au')) ?? 
+           preferredPool.find(v => v.lang.toLowerCase().startsWith('en')) ?? 
+           null;
+  }
+
+  // Prioritize high-quality voices on desktop
+  const premiumDesktop = ['natural', 'premium', 'enhanced', 'siri'];
+  for (const keyword of premiumDesktop) {
+    const match = gbVoices.find(v => v.name.toLowerCase().includes(keyword));
     if (match) return match;
   }
 
-  // 3. Fallback to British / Male names
   const maleKeywords = ['ryan', 'george', 'thomas', 'guy', 'daniel', 'arthur', 'oliver', 'harry', 'male'];
   for (const keyword of maleKeywords) {
-    const match = preferredPool.find(v => v.name.toLowerCase().includes(keyword));
+    const match = gbVoices.find(v => v.name.toLowerCase().includes(keyword));
     if (match) return match;
   }
 
-  return preferredPool[0];
+  return gbVoices[0];
 }
 
 function loadVoices(): Promise<SpeechSynthesisVoice[]> {
