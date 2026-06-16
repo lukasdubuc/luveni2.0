@@ -10,6 +10,20 @@ interface UseSpeechOutputOptions {
   onEnd?: () => void;
 }
 
+const BRITISH_VOICES = [
+  'Microsoft Ryan Online (Natural) - English (United Kingdom)',
+  'Microsoft Sonia Online (Natural) - English (United Kingdom)',
+  'Microsoft Thomas Online (Natural) - English (United Kingdom)',
+  'Google UK English Male',
+  'Google UK English Female',
+  'Daniel',
+  'Hazel',
+  'Siri',
+  'Microsoft Susan',
+  'Microsoft George',
+  'Microsoft Ryan',
+];
+
 function detectMobileDevice() {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
   return (
@@ -26,34 +40,40 @@ const ELEVENLABS_API_KEY =
   (typeof process !== 'undefined' && (process.env?.VITE_ELEVENLABS_API_KEY || process.env?.ELEVENLABS_API_KEY)) || 
   '';
 
-// Upgraded matching engine: prioritizes premium Siri and Enhanced system voices on Apple devices
+// Upgraded matching engine: prioritizes premium downloaded Siri and Enhanced system voices on Apple devices
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   const isMobile = detectMobileDevice();
   
-  // Look for British English first, then fallback to general English
+  // Look for British English (en-GB) voices
   const gbVoices = voices.filter(v => {
     const lang = v.lang.toLowerCase().replace('_', '-');
     return lang.startsWith('en-gb');
   });
 
+  // Look for general English (en) voices
   const anyEnVoices = voices.filter(v => {
     const lang = v.lang.toLowerCase().replace('_', '-');
     return lang.startsWith('en');
   });
 
+  // Prioritize en-GB (British) first, then fall back to general English
   const candidatePool = gbVoices.length > 0 ? gbVoices : anyEnVoices;
   if (candidatePool.length === 0) {
     return voices[0] || null;
   }
 
-  // 1. Prioritize Siri and Enhanced quality system voices (crucial for macOS/iOS Safari)
-  const premiumKeywords = ['natural', 'siri', 'enhanced', 'premium'];
+  // 1. Prioritize downloaded high-quality "Siri" voices first (they sound incredibly human-like)
+  const siriMatch = candidatePool.find(v => v.name.toLowerCase().includes('siri'));
+  if (siriMatch) return siriMatch;
+
+  // 2. Prioritize downloaded high-quality "Enhanced" or "Natural" accessibility models
+  const premiumKeywords = ['enhanced', 'natural', 'premium'];
   for (const keyword of premiumKeywords) {
     const match = candidatePool.find(v => v.name.toLowerCase().includes(keyword));
     if (match) return match;
   }
 
-  // 2. Fallback to British / Male names
+  // 3. Fallback to British / Male names
   const maleKeywords = ['ryan', 'george', 'thomas', 'guy', 'daniel', 'arthur', 'oliver', 'harry', 'male'];
   for (const keyword of maleKeywords) {
     const match = candidatePool.find(v => v.name.toLowerCase().includes(keyword));
@@ -195,25 +215,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
   }, []);
 
-  // DYNAMICALLY LOAD PUTER.JS FOR FREE NEURAL SPEECH
-  // Generates free, unlimited OpenAI neural voices directly on the client without API keys.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if ((window as any).puter) return;
-
-    const script = document.createElement('script');
-    script.src = "https://js.puter.com/v2/";
-    script.async = true;
-    script.onload = () => {
-      console.log("[Speech Engine] Puter.js loaded.");
-    };
-    script.onerror = () => {
-      console.warn("[Speech Engine] Failed to load Puter.js.");
-    };
-    document.head.appendChild(script);
-  }, []);
-
   // AUTOMATIC AUDIO & SPEECH PRIMING (Autoplay Bypass)
+  // Automatically primes the Web Audio, Speech synthesis, and HTML5 Audio engines on the page's very first interaction.
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -223,9 +226,11 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       if (unlocked) return;
       try {
         // 1. Prime SpeechSynthesis with a quiet, real word ("ready").
+        // Mobile browsers (specifically iOS Safari) reject volume=0 or empty-string utterances,
+        // failing to wake up the physical hardware node. A low-volume, actual word forces it to wake.
         if (window.speechSynthesis) {
           const silentUtt = new SpeechSynthesisUtterance("ready");
-          silentUtt.volume = 0.05; 
+          silentUtt.volume = 0.05; // extremely quiet but present
           silentUtt.rate = 1.0;
           
           const immediateVoices = window.speechSynthesis.getVoices();
@@ -458,92 +463,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }, 250); 
   }, [isMobile]);
 
-  // Free Puter.js Neural Voice Engine (Keyless OpenAI TTS Fallback)
-  const doSpeakPuter = useCallback(async (text: string) => {
-    const currentSession = activeSessionId.current;
-
-    speechTimeoutRef.current = setTimeout(async () => {
-      if (currentSession !== activeSessionId.current) return;
-
-      const cleanText = sanitizeTextForSpeech(text);
-      const chunks = chunkText(cleanText, 250); // Generates ultra-smooth audio segments
-
-      try {
-        if (!(window as any).puter) throw new Error("Puter.js not loaded.");
-
-        const audioPromises = chunks.map(async (chunk) => {
-          // Access Puter's serverless OpenAI neural driver for free, human-like voice synthesis
-          const audio = await (window as any).puter.ai.txt2speech(chunk, {
-            provider: 'openai',
-            voice: 'onyx', // Deep, highly professional British/natural masculine tone
-            model: 'gpt-4o-mini-tts'
-          });
-          return audio;
-        });
-
-        const audios = await Promise.all(audioPromises);
-
-        if (currentSession !== activeSessionId.current) {
-          return;
-        }
-
-        let currentIndex = 0;
-
-        const playNext = () => {
-          if (currentSession !== activeSessionId.current) return;
-
-          if (!speaking.current || currentIndex >= audios.length) {
-            setSpeaking(false);
-            setCurrentSubtitle("");
-            if (audioIntervalRef.current) {
-              clearInterval(audioIntervalRef.current);
-              audioIntervalRef.current = null;
-            }
-            if (onEndRef.current) onEndRef.current();
-            return;
-          }
-
-          const rawChunk = chunks[currentIndex];
-          setCurrentSubtitle(rawChunk);
-
-          const audio = audios[currentIndex];
-          activeAudiosRef.current.push(audio);
-
-          if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
-          audioIntervalRef.current = setInterval(() => {
-            if (currentSession !== activeSessionId.current) return;
-            if (onBoundaryRef.current && speaking.current) {
-              onBoundaryRef.current(0.3 + Math.random() * 0.55);
-            }
-          }, 80);
-
-          audio.onended = () => {
-            currentIndex++;
-            playNext();
-          };
-
-          audio.onerror = () => {
-            currentIndex++;
-            playNext();
-          };
-
-          audio.play().catch((err: any) => {
-            console.warn("[Speech Engine] Puter playback issue, fallback to system:", err);
-            doSpeakNative(text, voiceCache || null);
-          });
-        };
-
-        playNext();
-
-      } catch (error) {
-        console.warn('[Speech Engine] Puter.js failed, falling back to local TTS:', error);
-        if (currentSession === activeSessionId.current) {
-          doSpeakNative(text, voiceCache || null);
-        }
-      }
-    }, 250);
-  }, [doSpeakNative]);
-
   // ElevenLabs Engine (active if key is configured)
   const doSpeakElevenLabs = useCallback(async (text: string) => {
     const currentSession = activeSessionId.current;
@@ -648,16 +567,11 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       } catch (error) {
         console.warn('[Speech Engine] ElevenLabs failed, falling back:', error);
         if (currentSession === activeSessionId.current) {
-          // If ElevenLabs fails or limits expire, fall back to Puter's free neural voice first!
-          if ((window as any).puter) {
-            doSpeakPuter(text);
-          } else {
-            doSpeakNative(text, voiceCache || null);
-          }
+          doSpeakNative(text, voiceCache || null);
         }
       }
     }, 250);
-  }, [doSpeakNative, doSpeakPuter]);
+  }, [doSpeakNative]);
 
   const speak = useCallback((text: string) => {
     // Synchronously declare start of active speech immediately.
@@ -675,12 +589,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       return;
     }
 
-    // Try Puter's hyper-realistic, keyless OpenAI neural voice first!
-    if ((window as any).puter) {
-      doSpeakPuter(text);
-      return;
-    }
-
     // Direct Web Speech Synthesis fallback (strictly optimized for premium local Apple Siri/Enhanced voices)
     const immediateVoices = typeof window !== 'undefined' && window.speechSynthesis 
       ? window.speechSynthesis.getVoices() 
@@ -692,7 +600,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
 
     doSpeakNative(text, voice);
-  }, [cancel, doSpeakNative, doSpeakElevenLabs, doSpeakPuter]);
+  }, [cancel, doSpeakNative, doSpeakElevenLabs]);
 
   return { 
     speak, 
