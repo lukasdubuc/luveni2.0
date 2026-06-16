@@ -148,6 +148,21 @@ export function useVoiceInput({
     }
   }, []); // Intentionally empty: protected by refs to avoid engine restarts
 
+  // Expose a synchronous global hardware release hook so useSpeechOutput can force-kill 
+  // the microphone driver synchronously before playback begins. This resolves the WebKit audio collision.
+  if (typeof window !== 'undefined') {
+    (window as any).__jarvisStopMic = () => {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (e) {}
+        recognitionRef.current = null;
+      }
+      if (restartTimeoutRef.current) {
+        clearTimeout(restartTimeoutRef.current);
+        restartTimeoutRef.current = null;
+      }
+    };
+  }
+
   useEffect(() => {
     if (enabled) {
       if (!recognitionRef.current) {
