@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 
-export const Route = createFileRoute("/productAddOrUpdate-webhook-url")({
+export const Route = createFileRoute("/api/productAddOrUpdate-webhook-url")({
   server: {
     handlers: {
       POST: async ({ request }) => {

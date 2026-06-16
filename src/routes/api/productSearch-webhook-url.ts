@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 
-export const Route = createFileRoute("/productSearch-webhook-url")({
+export const Route = createFileRoute("/api/productSearch-webhook-url")({
   server: {
     handlers: {
       GET: async ({ request }) => {
