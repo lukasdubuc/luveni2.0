@@ -8,6 +8,7 @@ export const Route = createFileRoute("/api/shipment-complete")({
         try {
           const SUPABASE_URL = process.env.SUPABASE_URL;
           const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
+          if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
             return new Response(JSON.stringify({ error: "Server misconfigured" }), {
               status: 500,
               headers: { "Content-Type": "application/json" },
