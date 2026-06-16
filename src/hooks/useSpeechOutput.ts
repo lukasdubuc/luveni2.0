@@ -44,43 +44,52 @@ const ELEVENLABS_API_KEY =
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   const isMobile = detectMobileDevice();
   
-  // Look for British English (en-GB) voices
-  const gbVoices = voices.filter(v => {
+  // Detect if we are running on an Apple device (macOS / iOS)
+  const isAppleDevice = typeof navigator !== 'undefined' && 
+    /mac|iphone|ipad|ipod/i.test(navigator.platform || navigator.userAgent);
+
+  // Filter candidate pool. Skip Google online voices on macOS/iOS to prevent the 
+  // known Chrome WebKit bug where online/asynchronous voices fail to fire events.
+  const candidatePool = voices.filter(v => {
+    const lang = v.lang.toLowerCase().replace('_', '-');
+    const isEn = lang.startsWith('en');
+    if (isAppleDevice && v.name.toLowerCase().includes('google')) {
+      return false; // Skip Google cloud voices on Apple platforms to avoid event locks
+    }
+    return isEn;
+  });
+
+  if (candidatePool.length === 0) {
+    return voices.find(v => v.lang.toLowerCase().startsWith('en')) || voices[0] || null;
+  }
+
+  // Prioritize British English (en-GB) candidates if available in the filtered pool
+  const gbVoices = candidatePool.filter(v => {
     const lang = v.lang.toLowerCase().replace('_', '-');
     return lang.startsWith('en-gb');
   });
 
-  // Look for general English (en) voices
-  const anyEnVoices = voices.filter(v => {
-    const lang = v.lang.toLowerCase().replace('_', '-');
-    return lang.startsWith('en');
-  });
-
-  // Prioritize en-GB (British) first, then fall back to general English
-  const candidatePool = gbVoices.length > 0 ? gbVoices : anyEnVoices;
-  if (candidatePool.length === 0) {
-    return voices[0] || null;
-  }
+  const preferredPool = gbVoices.length > 0 ? gbVoices : candidatePool;
 
   // 1. Prioritize downloaded high-quality "Siri" voices first (they sound incredibly human-like)
-  const siriMatch = candidatePool.find(v => v.name.toLowerCase().includes('siri'));
+  const siriMatch = preferredPool.find(v => v.name.toLowerCase().includes('siri'));
   if (siriMatch) return siriMatch;
 
   // 2. Prioritize downloaded high-quality "Enhanced" or "Natural" accessibility models
   const premiumKeywords = ['enhanced', 'natural', 'premium'];
   for (const keyword of premiumKeywords) {
-    const match = candidatePool.find(v => v.name.toLowerCase().includes(keyword));
+    const match = preferredPool.find(v => v.name.toLowerCase().includes(keyword));
     if (match) return match;
   }
 
   // 3. Fallback to British / Male names
   const maleKeywords = ['ryan', 'george', 'thomas', 'guy', 'daniel', 'arthur', 'oliver', 'harry', 'male'];
   for (const keyword of maleKeywords) {
-    const match = candidatePool.find(v => v.name.toLowerCase().includes(keyword));
+    const match = preferredPool.find(v => v.name.toLowerCase().includes(keyword));
     if (match) return match;
   }
 
-  return candidatePool[0];
+  return preferredPool[0];
 }
 
 function loadVoices(): Promise<SpeechSynthesisVoice[]> {
@@ -302,17 +311,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }, 8000);
   };
 
-  const endSpeechCleanup = useCallback(() => {
-    setSpeaking(false);
-    if (typeof window !== 'undefined') {
-      (window as any).__jarvisIsSpeaking = false;
-    }
-    setCurrentSubtitle("");
-    if (onEndRef.current) {
-      onEndRef.current();
-    }
-  }, []);
-
   const cancel = useCallback((isTransitioning = false) => {
     // Synchronously force-release the hardware microphone driver to prevent Safari audio freezes
     if (typeof window !== 'undefined' && (window as any).__jarvisStopMic) {
@@ -429,8 +427,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         utt.rate = isMobile ? 1.0 : 0.93;
         utt.pitch = isMobile ? 1.0 : 0.78;
         
-        // Safe Voice assignment: avoid assigning voice objects on Safari to prevent
-        // stale reference blocks. Only set lang, which Safari uses to auto-select Siri.
+        // Safe Voice assignment: avoid assigning voice objects on Safari/mobile 
+        // to prevent stale reference blocks. Only set lang, which Safari uses to auto-select Siri.
         const isSafari = typeof navigator !== 'undefined' && 
           /safari/i.test(navigator.userAgent) && 
           !/chrome/i.test(navigator.userAgent);
