@@ -8,7 +8,6 @@ export const Route = createFileRoute("/api/fulfillment-webhook-url")({
         try {
           const SUPABASE_URL = process.env.SUPABASE_URL;
           const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
-          if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
             return new Response(JSON.stringify({ error: "Server misconfigured" }), {
               status: 500,
               headers: { "Content-Type": "application/json" },
@@ -25,14 +24,12 @@ export const Route = createFileRoute("/api/fulfillment-webhook-url")({
           const trackingNumbers = Array.isArray(fulfillment.tracking_numbers) ? fulfillment.tracking_numbers : [];
           const trackingNumber = trackingNumbers[0] || "";
 
-          if (!apliiqOrderId) {
             return new Response(JSON.stringify({ error: "Missing order_id" }), {
               status: 400,
               headers: { "Content-Type": "application/json" },
             });
           }
 
-          // Query the orders ledger matching the ID directly or via vendor references
           const { data: matchedOrder, error: searchError } = await supabaseAdmin
             .from("orders")
             .select("*")
@@ -79,7 +76,7 @@ export const Route = createFileRoute("/api/fulfillment-webhook-url")({
             status: 200,
             headers: { "Content-Type": "application/json" },
           });
-        } catch (err: any) {
+        } catch (err) {
           console.error("APLIQQ FULFILLMENT WEBHOOK EXCEPTION:", err);
           return new Response(JSON.stringify({ error: err.message || "Unknown error" }), {
             status: 500,

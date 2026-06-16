@@ -1,14 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 
-export const Route = createFileRoute("/api/shipmentComplete")({
+export const Route = createFileRoute("/api/shipment-complete")({
   server: {
     handlers: {
       POST: async ({ request }) => {
         try {
           const SUPABASE_URL = process.env.SUPABASE_URL;
           const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
-          if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
             return new Response(JSON.stringify({ error: "Server misconfigured" }), {
               status: 500,
               headers: { "Content-Type": "application/json" },
@@ -55,7 +54,7 @@ export const Route = createFileRoute("/api/shipmentComplete")({
             status: 200,
             headers: { "Content-Type": "application/json" },
           });
-        } catch (err: any) {
+        } catch (err) {
           console.error("APLIQQ SHIPMENT COMPLETE WEBHOOK EXCEPTION:", err);
           return new Response(JSON.stringify({ error: err.message || "Unknown error" }), {
             status: 500,

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 
-export const Route = createFileRoute("/api/productSearch-webhook-url")({
+export const Route = createFileRoute("/api/product-search-webhook-url")({
   server: {
     handlers: {
       GET: async ({ request }) => {
@@ -11,7 +11,6 @@ export const Route = createFileRoute("/api/productSearch-webhook-url")({
 
           const SUPABASE_URL = process.env.SUPABASE_URL;
           const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
-          if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
             return new Response(JSON.stringify({ error: "Server misconfigured" }), {
               status: 500,
               headers: { "Content-Type": "application/json" },
@@ -20,7 +19,6 @@ export const Route = createFileRoute("/api/productSearch-webhook-url")({
 
           const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-          // Search inside your products database by title similarity or exact matching apliq ID
           const { data, error } = await supabaseAdmin
             .from("products")
             .select("*")
@@ -34,7 +32,6 @@ export const Route = createFileRoute("/api/productSearch-webhook-url")({
             });
           }
 
-          // Return database products formatted into the specific JSON format Apliq's platform queries
           const formatted = (data || []).map(p => ({
             id: p.apliq_id || p.id,
             title: p.title,
@@ -42,7 +39,7 @@ export const Route = createFileRoute("/api/productSearch-webhook-url")({
             price: p.price_cents / 100,
             sku: p.variants?.[0]?.sku || "",
             image_url: p.image_urls?.[0] || "",
-            variants: (p.variants || []).map((v: any) => ({
+            variants: (p.variants || []).map(v => ({
               id: v.external_sku || v.sku,
               sku: v.sku,
               price: v.price_cents / 100,
@@ -54,7 +51,7 @@ export const Route = createFileRoute("/api/productSearch-webhook-url")({
             status: 200,
             headers: { "Content-Type": "application/json" },
           });
-        } catch (err: any) {
+        } catch (err) {
           console.error("APLIQ SEARCH PROCESS EXCEPTION:", err);
           return new Response(JSON.stringify({ error: err.message || "Unknown error" }), {
             status: 500,
