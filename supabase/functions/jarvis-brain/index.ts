@@ -500,16 +500,28 @@ async function runJarvisChat(
     throw new Error("No response received from the language model.");
   }
   
-  // Handle modern Mistral tool execution
+  // Handle modern Mistral tool execution (including parallel tool calls)
   if (firstMessage.tool_calls && firstMessage.tool_calls.length > 0) {
-    const toolCall = firstMessage.tool_calls[0];
-    let toolArgs = {};
-    try {
-      toolArgs = JSON.parse(toolCall.function.arguments || "{}");
-    } catch {
-      toolArgs = {};
+    const toolResponses: any[] = [];
+    
+    for (const toolCall of firstMessage.tool_calls) {
+      let toolArgs = {};
+      try {
+        toolArgs = JSON.parse(toolCall.function.arguments || "{}");
+      } catch {
+        toolArgs = {};
+      }
+      
+      const toolOutput = await executeTool(toolCall.function.name, toolArgs, webSearchState);
+      
+      toolResponses.push({
+        role: "tool",
+        tool_call_id: toolCall.id,
+        name: toolCall.function.name,
+        content: toolOutput,
+      });
     }
-    const toolOutput = await executeTool(toolCall.function.name, toolArgs, webSearchState);
+
     const followupMessages = [
       ...messages,
       {
@@ -517,13 +529,9 @@ async function runJarvisChat(
         content: firstMessage.content || "",
         tool_calls: firstMessage.tool_calls,
       },
-      {
-        role: "tool",
-        tool_call_id: toolCall.id,
-        name: toolCall.function.name,
-        content: toolOutput,
-      },
+      ...toolResponses, // Append ALL responses synchronously to satisfy Mistral message order validation
     ];
+    
     const finalResponse = await callModel(followupMessages, false);
     const finalMessage = finalResponse.choices?.[0]?.message;
     if (!finalMessage || !finalMessage.content) {
