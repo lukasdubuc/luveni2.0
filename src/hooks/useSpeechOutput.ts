@@ -34,10 +34,10 @@ function detectMobileDevice() {
 
 const globalActiveUtterances: SpeechSynthesisUtterance[] = [];
 
-// Do not fallback to GOOGLE_API_KEY as Google API keys are invalid for ElevenLabs
+// Vite client-side security bridge: Support both VITE_ and standard env prefixes
 const ELEVENLABS_API_KEY = 
-  (typeof import.meta !== 'undefined' && import.meta.env?.ELEVENLABS_API_KEY) || 
-  (typeof process !== 'undefined' && process.env?.ELEVENLABS_API_KEY) || 
+  (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_ELEVENLABS_API_KEY || import.meta.env?.ELEVENLABS_API_KEY)) || 
+  (typeof process !== 'undefined' && (process.env?.VITE_ELEVENLABS_API_KEY || process.env?.ELEVENLABS_API_KEY)) || 
   '';
 
 // Upgraded matching engine: scans dynamically for downloaded "Enhanced" or "Premium" accessibility voices
@@ -236,9 +236,22 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     const unlock = () => {
       if (unlocked) return;
       try {
-        // 1. Prime SpeechSynthesis with a silent space
-        const silentUtt = new SpeechSynthesisUtterance(" ");
-        silentUtt.volume = 0;
+        // 1. Prime SpeechSynthesis with a quiet, real word ("ready").
+        // Mobile browsers (specifically iOS Safari) reject volume=0 or empty-string utterances,
+        // failing to wake up the physical hardware node. A low-volume, actual word forces it to wake.
+        const silentUtt = new SpeechSynthesisUtterance("ready");
+        silentUtt.volume = 0.05; // extremely quiet but present
+        silentUtt.rate = 1.0;
+        
+        const immediateVoices = window.speechSynthesis.getVoices();
+        const voice = findBestVoice(immediateVoices);
+        if (voice) {
+          silentUtt.voice = voice;
+          silentUtt.lang = voice.lang;
+        } else {
+          silentUtt.lang = 'en-GB';
+        }
+        
         window.speechSynthesis.speak(silentUtt);
 
         // 2. Unlock Web Audio Context if present in window
@@ -451,6 +464,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       const chunks = chunkText(cleanText, 150);
 
       try {
+        // You can replace this ID with any voice ID from your ElevenLabs Voice Lab (such as George, Brian, or a custom JARVIS model)
         const VOICE_ID = 'pNInz6obpgDQGcFbJwr1';
 
         const audioPromises = chunks.map(async (chunk) => {
