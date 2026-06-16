@@ -455,13 +455,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
           const rawChunk = chunks[currentIndex];
           setCurrentSubtitle(rawChunk);
 
-          // Workaround for Safari Mobile: reuse the audio context unlocked inside the user click gesture
-          const audio = unlockedAudioRef.current || new Audio();
-          if (!unlockedAudioRef.current) {
-            unlockedAudioRef.current = audio;
-          }
-
-          audio.src = audioUrls[currentIndex];
+          const audio = new Audio(audioUrls[currentIndex]);
           activeAudiosRef.current.push(audio);
 
           if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
@@ -496,7 +490,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         doSpeakNative(text, voiceCache || null);
       }
     }, 250);
-  }, [doSpeakNative]);
+  }, [cancel, doSpeakNative]);
 
   const speak = useCallback((text: string) => {
     if (ELEVENLABS_API_KEY) {
