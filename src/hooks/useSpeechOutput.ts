@@ -304,11 +304,12 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
   const startWatchdog = (index: number, callback: () => void) => {
     clearWatchdog();
-    // 8-second watchdog: if an utterance is stuck, automatically bypasses to keep context running
+    // 15 seconds for first chunk to allow cold-start voice loading; 10 seconds for subsequent chunks
+    const delay = index === 0 ? 15000 : 10000;
     failsafeTimeoutRef.current = setTimeout(() => {
       console.warn(`[Speech Engine] Watchdog activated: chunk ${index} timed out.`);
       callback();
-    }, 8000);
+    }, delay);
   };
 
   const cancel = useCallback((isTransitioning = false) => {
@@ -472,8 +473,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
           speakChunk(index + 1); // Failsafe fallback
         };
 
-        // Watchdog Activation: Start the 8-second watchdog synchronously BEFORE sending
-        // the utterance to standard browser synthesis. This prevents iOS Safari from hanging
+        // Watchdog Activation: Start the watchdog synchronously BEFORE sending
+        // the utterance to standard browser synthesis. This prevents Safari from hanging
         // if it silently discards the speech request without dispatching native events.
         startWatchdog(index, () => {
           if (currentSession !== activeSessionId.current) return;
@@ -483,7 +484,9 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         // Force-resume the native synthesis queue to bypass Chrome and Safari silent queue freezes
         if (typeof window !== 'undefined' && window.speechSynthesis) {
           try {
-            window.speechSynthesis.resume();
+            if (window.speechSynthesis.paused) {
+              window.speechSynthesis.resume();
+            }
           } catch (e) {}
         }
 
@@ -654,7 +657,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   return { 
     speak, 
     cancel: () => cancel(false), // External triggers are treated as manual cancels
-    isSpeaking: () => isSpeakingState, // Stateful return for seamless component synchronization
+    isSpeaking: () => speaking.current, // Synchronous ref return for seamless real-time interruption gating
     currentSubtitle 
   };
 }
