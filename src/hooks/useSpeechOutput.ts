@@ -36,8 +36,8 @@ const globalActiveUtterances: SpeechSynthesisUtterance[] = [];
 
 // Vite client-side security bridge: Support both VITE_ and standard env prefixes
 const ELEVENLABS_API_KEY = 
-  (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_ELEVENLABS_API_KEY || import.meta.env?.ELEVENLABS_API_KEY)) || 
-  (typeof process !== 'undefined' && (process.env?.VITE_ELEVENLABS_API_KEY || process.env?.ELEVENLABS_API_KEY)) || 
+  (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_ELEVENLABS_API_KEY || import.meta.env?.ELEVENLABS_API_KEY || import.meta.env?.GOOGLE_API_KEY)) || 
+  (typeof process !== 'undefined' && (process.env?.VITE_ELEVENLABS_API_KEY || process.env?.ELEVENLABS_API_KEY || process.env?.GOOGLE_API_KEY)) || 
   '';
 
 // Upgraded matching engine: prioritizes premium downloaded Siri and Enhanced system voices on Apple devices
