@@ -40,7 +40,7 @@ const ELEVENLABS_API_KEY =
   (typeof process !== 'undefined' && (process.env?.VITE_ELEVENLABS_API_KEY || process.env?.ELEVENLABS_API_KEY || process.env?.GOOGLE_API_KEY)) || 
   '';
 
-// Upgraded matching engine: prioritizes premium downloaded Siri and Enhanced system voices on Apple devices
+// Upgraded matching engine: prioritizes premium Siri and Enhanced system voices on Apple devices
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   const isMobile = detectMobileDevice();
   
@@ -216,6 +216,9 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const activeAudiosRef = useRef<HTMLAudioElement[]>([]);
   const audioIntervalRef = useRef<any>(null);
 
+  // Shared unlocked Audio context for iOS Safari async playback
+  const unlockedAudioRef = useRef<HTMLAudioElement | null>(null);
+
   useEffect(() => {
     onStartRef.current = onStart;
     onBoundaryRef.current = onBoundary;
@@ -232,6 +235,57 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         voiceCache = findBestVoice(v);
       });
     }
+  }, []);
+
+  // AUTOMATIC AUDIO PRIMING (Autoplay Bypass for iOS Safari)
+  // Unlocks the HTML5 Audio Context inside the user gesture loop.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    let unlocked = false;
+
+    const unlock = () => {
+      if (unlocked) return;
+      try {
+        // 1. Unlock HTML5 Audio context for iOS Safari asynchronous playback (ElevenLabs)
+        const audio = new Audio();
+        audio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA"; // short silent base64 wave
+        audio.play().then(() => {
+          audio.pause();
+        }).catch((e) => {
+          console.warn("[Speech Engine] Audio gesture unlock failed:", e);
+        });
+        unlockedAudioRef.current = audio;
+
+        // 2. Unlock Web Audio Context if present in window
+        const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtxClass) {
+          const dummyContext = new AudioCtxClass();
+          if (dummyContext.state === 'suspended') {
+            dummyContext.resume();
+          }
+        }
+
+        unlocked = true;
+
+        // Cleanup event listeners immediately upon first trigger
+        window.removeEventListener('click', unlock);
+        window.removeEventListener('touchstart', unlock);
+        window.removeEventListener('keydown', unlock);
+      } catch (e) {
+        console.warn("[Speech Engine] Failed to prime audio drivers:", e);
+      }
+    };
+
+    window.addEventListener('click', unlock, { passive: true });
+    window.addEventListener('touchstart', unlock, { passive: true });
+    window.addEventListener('keydown', unlock, { passive: true });
+
+    return () => {
+      window.removeEventListener('click', unlock);
+      window.removeEventListener('touchstart', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
   }, []);
 
   const endSpeechCleanup = useCallback(() => {
@@ -401,7 +455,13 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
           const rawChunk = chunks[currentIndex];
           setCurrentSubtitle(rawChunk);
 
-          const audio = new Audio(audioUrls[currentIndex]);
+          // Workaround for Safari Mobile: reuse the audio context unlocked inside the user click gesture
+          const audio = unlockedAudioRef.current || new Audio();
+          if (!unlockedAudioRef.current) {
+            unlockedAudioRef.current = audio;
+          }
+
+          audio.src = audioUrls[currentIndex];
           activeAudiosRef.current.push(audio);
 
           if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
@@ -436,7 +496,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         doSpeakNative(text, voiceCache || null);
       }
     }, 250);
-  }, [cancel, doSpeakNative]);
+  }, [doSpeakNative]);
 
   const speak = useCallback((text: string) => {
     if (ELEVENLABS_API_KEY) {
