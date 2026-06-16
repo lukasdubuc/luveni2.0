@@ -40,61 +40,41 @@ const ELEVENLABS_API_KEY =
   (typeof process !== 'undefined' && (process.env?.VITE_ELEVENLABS_API_KEY || process.env?.ELEVENLABS_API_KEY)) || 
   '';
 
-// Upgraded matching engine: scans dynamically for downloaded "Enhanced" or "Premium" accessibility voices
+// Upgraded matching engine: prioritizes premium Siri and Enhanced system voices on Apple devices
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   const isMobile = detectMobileDevice();
-  if (isMobile) {
-    // Look for high-quality English (Australian or British) voices on mobile
-    const englishVoices = voices.filter(v => {
-      const lang = v.lang.toLowerCase().replace('_', '-');
-      return lang.startsWith('en-au') || lang.startsWith('en-gb');
-    });
-
-    if (englishVoices.length > 0) {
-      // 1. Strictly prioritize downloaded high-quality 'premium' or 'enhanced' voices first
-      const qualityKeywords = ['premium', 'enhanced', 'natural', 'siri'];
-      for (const keyword of qualityKeywords) {
-        const match = englishVoices.find(v => v.name.toLowerCase().includes(keyword));
-        if (match) return match;
-      }
-
-      // 2. Fallback to male voices
-      const maleKeywords = ['ryan', 'george', 'thomas', 'guy', 'daniel', 'arthur', 'oliver', 'harry', 'male'];
-      for (const keyword of maleKeywords) {
-        const match = englishVoices.find(v => v.name.toLowerCase().includes(keyword));
-        if (match) return match;
-      }
-
-      return englishVoices[0];
-    }
-  }
-
-  // Standard Desktop / Fallback (British English)
+  
+  // Look for British English first, then fallback to general English
   const gbVoices = voices.filter(v => {
     const lang = v.lang.toLowerCase().replace('_', '-');
     return lang.startsWith('en-gb');
   });
 
-  if (gbVoices.length === 0) {
-    return voices.find(v => v.lang.toLowerCase().startsWith('en-au')) ?? 
-           voices.find(v => v.lang.toLowerCase().startsWith('en')) ?? 
-           null;
+  const anyEnVoices = voices.filter(v => {
+    const lang = v.lang.toLowerCase().replace('_', '-');
+    return lang.startsWith('en');
+  });
+
+  const candidatePool = gbVoices.length > 0 ? gbVoices : anyEnVoices;
+  if (candidatePool.length === 0) {
+    return voices[0] || null;
   }
 
-  // Prioritize high-quality voices on desktop
-  const premiumDesktop = ['natural', 'premium', 'enhanced'];
-  for (const keyword of premiumDesktop) {
-    const match = gbVoices.find(v => v.name.toLowerCase().includes(keyword));
+  // 1. Prioritize Siri and Enhanced quality system voices (crucial for macOS/iOS)
+  const premiumKeywords = ['natural', 'siri', 'enhanced', 'premium'];
+  for (const keyword of premiumKeywords) {
+    const match = candidatePool.find(v => v.name.toLowerCase().includes(keyword));
     if (match) return match;
   }
 
+  // 2. Fallback to British / Male names
   const maleKeywords = ['ryan', 'george', 'thomas', 'guy', 'daniel', 'arthur', 'oliver', 'harry', 'male'];
   for (const keyword of maleKeywords) {
-    const match = gbVoices.find(v => v.name.toLowerCase().includes(keyword));
+    const match = candidatePool.find(v => v.name.toLowerCase().includes(keyword));
     if (match) return match;
   }
 
-  return gbVoices[0];
+  return candidatePool[0];
 }
 
 function loadVoices(): Promise<SpeechSynthesisVoice[]> {
@@ -199,6 +179,9 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   // Keep track of active session ids to drop stale async callbacks
   const activeSessionId = useRef<number>(0);
 
+  // Shared unlocked Audio context for iOS Safari async playback
+  const unlockedAudioRef = useRef<HTMLAudioElement | null>(null);
+
   // Synchronous and stateful representation of active speech
   const speaking = useRef(false);
   const [isSpeakingState, setIsSpeakingState] = useState(false);
@@ -227,9 +210,9 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   }, []);
 
   // AUTOMATIC AUDIO & SPEECH PRIMING (Autoplay Bypass)
-  // Automatically primes the Web Audio & Speech engines on the page's very first interaction (click, tap, keyboard entry).
+  // Automatically primes the Web Audio, Speech synthesis, and HTML5 Audio engines on the page's very first interaction.
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    if (typeof window === 'undefined') return;
 
     let unlocked = false;
 
@@ -239,22 +222,34 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         // 1. Prime SpeechSynthesis with a quiet, real word ("ready").
         // Mobile browsers (specifically iOS Safari) reject volume=0 or empty-string utterances,
         // failing to wake up the physical hardware node. A low-volume, actual word forces it to wake.
-        const silentUtt = new SpeechSynthesisUtterance("ready");
-        silentUtt.volume = 0.05; // extremely quiet but present
-        silentUtt.rate = 1.0;
-        
-        const immediateVoices = window.speechSynthesis.getVoices();
-        const voice = findBestVoice(immediateVoices);
-        if (voice) {
-          silentUtt.voice = voice;
-          silentUtt.lang = voice.lang;
-        } else {
-          silentUtt.lang = 'en-GB';
+        if (window.speechSynthesis) {
+          const silentUtt = new SpeechSynthesisUtterance("ready");
+          silentUtt.volume = 0.05; // extremely quiet but present
+          silentUtt.rate = 1.0;
+          
+          const immediateVoices = window.speechSynthesis.getVoices();
+          const voice = findBestVoice(immediateVoices);
+          if (voice) {
+            silentUtt.voice = voice;
+            silentUtt.lang = voice.lang;
+          } else {
+            silentUtt.lang = 'en-GB';
+          }
+          
+          window.speechSynthesis.speak(silentUtt);
         }
-        
-        window.speechSynthesis.speak(silentUtt);
 
-        // 2. Unlock Web Audio Context if present in window
+        // 2. Unlock HTML5 Audio context for iOS Safari asynchronous playback (ElevenLabs)
+        const audio = new Audio();
+        audio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA"; // short silent base64 wave
+        audio.play().then(() => {
+          audio.pause();
+        }).catch((e) => {
+          console.warn("[Speech Engine] Audio gesture unlock failed:", e);
+        });
+        unlockedAudioRef.current = audio;
+
+        // 3. Unlock Web Audio Context if present in window
         const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioCtxClass) {
           const dummyContext = new AudioCtxClass();
@@ -371,7 +366,9 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       if (chunks.length === 0) {
         setSpeaking(false);
         setCurrentSubtitle("");
-        if (onEndRef.current) onEndRef.current();
+        if (onEndRef.current) {
+          onEndRef.current();
+        }
         return;
       }
 
@@ -413,7 +410,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
           if (currentSession !== activeSessionId.current) return;
           setCurrentSubtitle(rawChunk);
           
-          // Watchdog failsafe to recover when browsers silently freeze speech synthesis
+          // Reinforce active watchdog on actual successful speech startup
           startWatchdog(index, () => {
             if (currentSession !== activeSessionId.current) return;
             speakChunk(index + 1);
@@ -436,6 +433,14 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
           clearWatchdog();
           speakChunk(index + 1); // Failsafe fallback
         };
+
+        // Watchdog Activation: Start the 8-second watchdog synchronously BEFORE sending
+        // the utterance to standard browser synthesis. This prevents iOS Safari from hanging
+        // if it silently discards the speech request without dispatching native events.
+        startWatchdog(index, () => {
+          if (currentSession !== activeSessionId.current) return;
+          speakChunk(index + 1);
+        });
 
         window.speechSynthesis.speak(utt);
       };
@@ -464,7 +469,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       const chunks = chunkText(cleanText, 150);
 
       try {
-        // You can replace this ID with any voice ID from your ElevenLabs Voice Lab (such as George, Brian, or a custom JARVIS model)
         const VOICE_ID = 'pNInz6obpgDQGcFbJwr1';
 
         const audioPromises = chunks.map(async (chunk) => {
@@ -516,7 +520,13 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
           const rawChunk = chunks[currentIndex];
           setCurrentSubtitle(rawChunk);
 
-          const audio = new Audio(audioUrls[currentIndex]);
+          // Workaround for Safari Mobile: reuse the audio context unlocked inside the user click gesture
+          const audio = unlockedAudioRef.current || new Audio();
+          if (!unlockedAudioRef.current) {
+            unlockedAudioRef.current = audio;
+          }
+
+          audio.src = audioUrls[currentIndex];
           activeAudiosRef.current.push(audio);
 
           if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
@@ -539,7 +549,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
             playNext();
           };
 
-          audio.play().catch(() => {
+          audio.play().catch((err) => {
+            console.warn("[Speech Engine] Playback failed, bypassing chunk:", err);
             currentIndex++;
             playNext();
           });
