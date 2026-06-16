@@ -38,8 +38,13 @@ export function useVoiceInput({
 }: UseVoiceInputOptions) {
   const recognitionRef = useRef<any>(null);
   const restartTimeoutRef = useRef<any>(null);
-  const enabledRef = useRef(enabled);
   const fatalErrorRef = useRef(false);
+
+  // Synchronously update the ref during the render pass!
+  // This guarantees that the very instant the parent component re-renders with enabled=false,
+  // the ref is updated synchronously, blocking any trailing microtask onresult events from executing cancelSpeech!
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
 
   // Latest Ref Pattern: Keeps callbacks stable to prevent the microphone 
   // from restarting and clicking when parent component state updates.
@@ -48,11 +53,10 @@ export function useVoiceInput({
   const onStateChangeRef = useRef(onStateChange);
   const cancelSpeechRef = useRef(cancelSpeech);
 
-  useEffect(() => { enabledRef.current = enabled; }, [enabled]);
-  useEffect(() => { onInterimRef.current = onInterim; }, [onInterim]);
-  useEffect(() => { onTranscriptRef.current = onTranscript; }, [onTranscript]);
-  useEffect(() => { onStateChangeRef.current = onStateChange; }, [onStateChange]);
-  useEffect(() => { cancelSpeechRef.current = cancelSpeech; }, [cancelSpeech]);
+  onInterimRef.current = onInterim;
+  onTranscriptRef.current = onTranscript;
+  onStateChangeRef.current = onStateChange;
+  cancelSpeechRef.current = cancelSpeech;
 
   const startRecognition = useCallback(() => {
     if (!enabledRef.current || recognitionRef.current || fatalErrorRef.current) return;
