@@ -387,7 +387,7 @@ function AiAgentConsole({ isDark, onSimulatePacket }: { isDark: boolean; onSimul
             <LedPulse color="purple" />
             <span>Jarvis Cognitive Engine Diagnostics</span>
           </h3>
-          <p className={`text-[10px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-450"}`}>
+          <p className={`text-[10px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>
             ACTIVE REASONING: <span className="text-purple-400 font-bold">{activeTask}</span>
           </p>
         </div>
@@ -1232,7 +1232,7 @@ function AdminPage() {
                       ? "bg-white/[0.09] text-white"
                       : "bg-black/[0.07] text-black"
                     : isDark
-                      ? "text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.04]"
+                      ? "text-neutral-500 hover:text-neutral-202"
                       : "text-neutral-400 hover:text-neutral-900 hover:bg-black/[0.04]"
                 }`}
               >
@@ -1367,7 +1367,7 @@ function AdminPage() {
             </div>
 
             {/* Period Selector */}
-            <div className={`inline-flex items-center gap-0.5 p-1 rounded-[9999px] ${isDark ? "bg-neutral-900/60" : "bg-neutral-100/80"}`}>
+            <div className={`inline-flex items-center gap-0.5 p-1 rounded-[9999px] ${isDark ? "bg-neutral-900/60" : "bg-neutral-101"}`}>
               {(["day", "week", "month", "all"] as const).map(r => (
                 <button
                   key={r}
@@ -1596,7 +1596,7 @@ function AdminPage() {
                 <div className={`border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-955/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"}`}>
                   <table className="w-full text-left">
                     <thead>
-                      <tr className={`text-[8px] font-mono font-semibold uppercase tracking-[0.14em] border-b ${isDark ? "text-neutral-600 border-white/[0.06] bg-white/[0.02]" : "text-neutral-455 border-black/[0.07] bg-neutral-50/80"}`}>
+                      <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${isDark ? "text-neutral-500 border-neutral-900 bg-neutral-955/50" : "text-neutral-500 border-[#D1D1D6] bg-[#f5f5f7]"}`}>
                         <th className="px-5 py-3 w-8">#</th>
                         <th className="px-5 py-3">Product</th>
                         <th className="px-5 py-3 hidden md:table-cell">Share</th>
@@ -1676,11 +1676,11 @@ function AdminPage() {
                     {selectedIds.size === orderedProducts.length ? "Deselect All" : "Select All"}
                   </button>
                   <button onClick={() => bulkPublish(true)} disabled={isBulkActing}
-                    className="flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 bg-emerald-550/10 text-emerald-500 hover:bg-emerald-550/20 rounded-[9999px] transition-all">
+                    className="flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 bg-emerald-550/10 text-emerald-500 hover:bg-emerald-555/20 rounded-[9999px] transition-all">
                     <Eye size={10} /> Publish
                   </button>
                   <button onClick={() => bulkPublish(false)} disabled={isBulkActing}
-                    className={`flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 rounded-[9999px] transition-all ${isDark ? "bg-neutral-900 text-neutral-400 hover:bg-neutral-800" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"}`}>
+                    className={`flex items-center gap-1 text-[9px] font-mono font-semibold uppercase px-3 py-1.5 rounded-[9999px] transition-all ${isDark ? "bg-neutral-900 text-neutral-400 hover:bg-neutral-800" : "bg-neutral-101 text-neutral-202"}`}>
                     <EyeOff size={10} /> Unpublish
                   </button>
                   <button onClick={bulkDelete} disabled={isBulkActing}
@@ -1932,7 +1932,7 @@ function AdminPage() {
 
               <input type="text" placeholder="FILTER LEADS…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                 className={`text-[9px] font-mono border rounded-[9999px] px-4 py-2 w-48 bg-transparent focus:outline-none focus:ring-1 ${
-                  isDark ? "border-neutral-850 text-white focus:border-white focus:ring-white/20" : "border-[#D1D1D6] text-black focus:border-black focus:ring-black/10 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
+                  isDark ? "border-neutral-850 text-white focus:border-white focus:ring-white/25" : "border-[#D1D1D6] text-black focus:border-black focus:ring-black/10 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
                 }`} />
             </div>
             <div className={`overflow-x-auto border rounded-[24px] overflow-hidden ${isDark ? "border-neutral-900" : "border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} bg-white dark:bg-transparent`}>
@@ -2045,7 +2045,7 @@ function AdminPage() {
                 {analyticsChartData.map((d, i) => (
                   <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group relative">
                     <div
-                      className={`w-full transition-all duration-350 rounded-[9999px] ${isDark ? "bg-neutral-800 group-hover:bg-neutral-550" : "bg-neutral-202 group-hover:bg-neutral-355"}`}
+                      className={`w-full transition-all duration-350 rounded-[9999px] ${isDark ? "bg-neutral-800 group-hover:bg-neutral-550" : "bg-neutral-200 group-hover:bg-neutral-355"}`}
                       style={{ height: `${(d.views / chartMax) * 100}%`, minHeight: d.views > 0 ? "3px" : "1px" }}
                     />
                     {d.views > 0 && (
@@ -2220,7 +2220,7 @@ function AdminPage() {
                       onClick={handleAddAdminUser}
                       disabled={isAddingUser || !newUserEmail.trim()}
                       className={`text-[9px] font-mono font-bold uppercase px-4 py-1.5 rounded-[9999px] transition-all ${
-                        isDark ? "bg-white text-black hover:bg-neutral-200 disabled:opacity-30" : "bg-black text-white hover:bg-neutral-800 disabled:opacity-30 shadow-sm"
+                        isDark ? "bg-white text-black hover:bg-neutral-202 disabled:opacity-30" : "bg-black text-white hover:bg-neutral-800 disabled:opacity-30 shadow-sm"
                       }`}
                     >
                       {isAddingUser ? "Deploying" : "Deploy"}
@@ -2321,11 +2321,12 @@ function AdminPage() {
               if (pid && extractedItems.some(x => x.productId === pid)) {
                 return;
               }
+              const dbProduct = pid ? products.find(p => p.id === pid) : null;
               extractedItems.push({
                 productId: pid,
-                title: item.title || item.name || "Unnamed Product",
-                price_cents: item.price_cents || item.price,
-                image_url: item.image_url || item.image,
+                title: dbProduct?.title || item.title || item.name || "Unnamed Product",
+                price_cents: item.price_cents || item.price || dbProduct?.price_cents,
+                image_url: dbProduct?.image_urls?.[0] || item.image_url || item.image,
                 quantity: item.quantity || 1,
               });
             });
@@ -2339,24 +2340,44 @@ function AdminPage() {
             if (pid && extractedItems.some(x => x.productId === pid)) {
               return;
             }
+            const dbProduct = pid ? products.find(p => p.id === pid) : null;
             extractedItems.push({
               productId: pid,
-              title: item.title || item.name || "Unnamed Product",
-              price_cents: item.price_cents || item.price,
-              image_url: item.image_url || item.image,
+              title: dbProduct?.title || item.title || item.name || "Unnamed Product",
+              price_cents: item.price_cents || item.price || dbProduct?.price_cents,
+              image_url: dbProduct?.image_urls?.[0] || item.image_url || item.image,
               quantity: item.quantity || 1,
             });
           });
         }
 
+        // Curate clean receipt details
+        const cleanFields = [
+          { label: "Receipt Reference", value: selectedRow.id },
+          { label: "Billing Customer", value: selectedRow.name || "Guest Checkout" },
+          { label: "Billing Email", value: selectedRow.email },
+          { label: "Transaction Date", value: fmtDate(selectedRow.created_at) },
+          { label: "Total Charged", value: fmt$(selectedRow.amount_cents) },
+          { label: "Payment Gateway", value: selectedRow.provider ? String(selectedRow.provider).toUpperCase() : "STRIPE" },
+        ];
+
+        if (selectedRow.provider_ref) {
+          cleanFields.push({ label: "Gateway Reference", value: selectedRow.provider_ref });
+        }
+
+        // Filter out catalog keys and only show custom checkout variables
+        const hasMetadataNotes = selectedRow.metadata && 
+          typeof selectedRow.metadata === "object" && 
+          Object.keys(selectedRow.metadata).filter(k => k !== "items" && k !== "cart").length > 0;
+
         return (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 animate-in fade-in duration-355">
             <div className="absolute inset-0 backdrop-blur-md bg-black/60 dark:bg-black/80" onClick={() => setSelectedRow(null)} />
             <div className={`relative w-full max-w-lg p-8 border rounded-[24px] overflow-hidden space-y-6 max-h-[85vh] overflow-y-auto ${
-              isDark ? "bg-neutral-950 border-neutral-850" : "bg-white border-[#D1D1D6] shadow-[0_32px_64px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.08)]"
+              isDark ? "bg-neutral-955 border-neutral-850" : "bg-white border-[#D1D1D6] shadow-[0_32px_64px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.08)]"
             }`}>
               <div className={`flex items-center justify-between border-b pb-3 dark:border-neutral-900 border-[#D1D1D6]`}>
-                <h3 className={`text-xs font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-300" : "text-neutral-800"}`}>System Ledger Metadata</h3>
+                <h3 className={`text-xs font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-300" : "text-neutral-800"}`}>Transaction Receipt</h3>
                 <button onClick={() => setSelectedRow(null)} className={`${isDark ? "text-neutral-500 hover:text-white" : "text-neutral-400 hover:text-black"}`}><X size={14} /></button>
               </div>
 
@@ -2367,7 +2388,6 @@ function AdminPage() {
                 </h4>
                 <div className="space-y-2">
                   {extractedItems.map((item, idx) => {
-                    // cross-reference with latest fetched catalog item to ensure up-to-date graphics/title
                     const dbProduct = products.find(p => p.id === item.productId);
                     const displayTitle = dbProduct?.title || item.title;
                     const displayImage = dbProduct?.image_urls?.[0] || item.image_url;
@@ -2408,25 +2428,42 @@ function AdminPage() {
                     <p className={`text-[10px] font-mono uppercase tracking-wider text-center py-4 border border-dashed rounded-[16px] ${
                       isDark ? "border-neutral-800 text-neutral-600" : "border-[#E5E5EA] text-neutral-400"
                     }`}>
-                      No direct product associations found
+                      No product details recorded in database
                     </p>
                   )}
                 </div>
               </div>
 
-              {/* ── Raw Key-Value Ledger Metadata ── */}
+              {/* Curated Business Invoice Details */}
               <div className="space-y-2">
-                {Object.entries(selectedRow).map(([k, v]) => (
-                  k !== "_type" && (
-                    <div key={k} className={`flex justify-between py-1.5 border-b last:border-0 gap-4 ${isDark ? "border-neutral-900" : "border-[#F2F2F7]"}`}>
-                      <span className={`text-[8px] font-mono font-semibold uppercase flex-shrink-0 ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{k}</span>
-                      <span className={`text-[10px] font-mono font-medium text-right ${typeof v === "object" && v !== null ? "break-all whitespace-pre-wrap max-w-[250px]" : "truncate"}`}>
-                        {typeof v === "object" && v !== null ? JSON.stringify(v) : String(v)}
-                      </span>
-                    </div>
-                  )
+                {cleanFields.map((field) => (
+                  <div key={field.label} className={`flex justify-between py-1.5 border-b last:border-0 gap-4 ${isDark ? "border-neutral-900" : "border-[#F2F2F7]"}`}>
+                    <span className={`text-[8px] font-mono font-semibold uppercase flex-shrink-0 ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{field.label}</span>
+                    <span className={`text-[10px] font-mono font-medium text-right truncate max-w-[250px] ${isDark ? "text-neutral-300" : "text-neutral-800"}`}>
+                      {field.value}
+                    </span>
+                  </div>
                 ))}
+
+                {hasMetadataNotes && (
+                  <div className={`flex justify-between py-1.5 border-b last:border-0 gap-4 ${isDark ? "border-neutral-900" : "border-[#F2F2F7]"}`}>
+                    <span className={`text-[8px] font-mono font-semibold uppercase flex-shrink-0 ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Transaction Notes</span>
+                    <span className="text-[10px] font-mono font-medium text-right break-all whitespace-pre-wrap max-w-[250px]">
+                      {JSON.stringify(
+                        Object.keys(selectedRow.metadata)
+                          .filter(k => k !== "items" && k !== "cart")
+                          .reduce((obj: any, key) => {
+                            obj[key] = selectedRow.metadata[key];
+                            return obj;
+                          }, {}),
+                        null,
+                        2
+                      )}
+                    </span>
+                  </div>
+                )}
               </div>
+
               {selectedRow._type === "order" && (
                 <button onClick={() => handleArchiveOrder(selectedRow.id)}
                   className={`w-full py-2.5 rounded-[9999px] text-[9px] font-mono font-bold uppercase tracking-wide transition-all ${isDark ? "bg-rose-505/10 text-rose-455 hover:bg-rose-505/20" : "bg-rose-50 text-rose-655 hover:bg-rose-100"}`}>
@@ -2527,3 +2564,52 @@ function Input({ label, value, onChange, type = "text", isDark }: { label: strin
     </div>
   );
 }
+```
+
+***
+
+### 🛠️ Architecture Checklist for the Checkout Wiring:
+To ensure pending orders always contain the correct cart contents in production, make sure that the database write operation (typically situated in your backend checkout session route, Stripe initiation API, or client checkout function) adheres to these standards:
+
+1. **Populate `product_id` for Single-item flows**: 
+   When the user initiates a checkout from a PDP (Product Detail Page), the SQL/Supabase `.insert()` statement creating the pending order must pass the product's UUID directly into the `product_id` column:
+   ```js
+   const { data, error } = await supabase
+     .from('orders')
+     .insert([
+       {
+         email: userEmail,
+         name: customerName,
+         amount_cents: productPrice,
+         status: 'pending',
+         product_id: targetProductId, // 👈 Must not be null
+         metadata: {
+           items: [{ productId: targetProductId, title: productTitle, price_cents: productPrice, quantity: 1 }]
+         }
+       }
+     ]);
+   ```
+
+2. **Populate `metadata.items` for Cart-based flows**:
+   When checking out from a multi-item cart, construct a structured JSON array representing the cart state, and write it into the order's `metadata` column:
+   ```js
+   const cartPayload = cartItems.map(item => ({
+     productId: item.id,
+     title: item.title,
+     price_cents: item.price_cents,
+     image_url: item.image_url,
+     quantity: item.quantity
+   }));
+
+   const { data, error } = await supabase
+     .from('orders')
+     .insert([
+       {
+         email: userEmail,
+         amount_cents: cartTotal,
+         status: 'pending',
+         metadata: {
+           items: cartPayload // 👈 Populating this ensures multi-item tracking
+         }
+       }
+     ]);
