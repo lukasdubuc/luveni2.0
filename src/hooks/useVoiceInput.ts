@@ -82,8 +82,11 @@ export function useVoiceInput({
     };
 
     rec.onresult = (event: any) => {
-      // If the microphone has been disabled, discard trailing buffer chunks
-      // to prevent interrupting newly started assistant speech.
+      // If J.A.R.V.I.S. is speaking or preparing to speak, completely ignore any trailing buffers 
+      // or speech input to prevent voice feedback, trailing overlaps, and immediate cutoffs.
+      if (typeof window !== 'undefined' && (window as any).__jarvisIsSpeaking) {
+        return;
+      }
       if (!enabledRef.current) return;
 
       cancelSpeechRef.current(); 
