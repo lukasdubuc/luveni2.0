@@ -180,31 +180,13 @@ let voiceCache: SpeechSynthesisVoice | null | undefined = undefined;
 export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputOptions = {}) {
   const [currentSubtitle, setCurrentSubtitle] = useState("");
   const [isMobile, setIsMobile] = useState(false);
+  const speaking = useRef(false);
   const onStartRef = useRef(onStart);
   const onBoundaryRef = useRef(onBoundary);
   const onEndRef = useRef(onEnd);
 
   const activeAudiosRef = useRef<HTMLAudioElement[]>([]);
   const audioIntervalRef = useRef<any>(null);
-  
-  // Keep track of scheduled timeouts to allow clean cancellation
-  const speechTimeoutRef = useRef<any>(null);
-  // Failsafe watchdog timer to prevent browser audio freezes
-  const failsafeTimeoutRef = useRef<any>(null);
-  // Keep track of active session ids to drop stale async callbacks
-  const activeSessionId = useRef<number>(0);
-
-  // Shared unlocked Audio context for iOS Safari async playback
-  const unlockedAudioRef = useRef<HTMLAudioElement | null>(null);
-
-  // Synchronous and stateful representation of active speech
-  const speaking = useRef(false);
-  const [isSpeakingState, setIsSpeakingState] = useState(false);
-
-  const setSpeaking = (val: boolean) => {
-    speaking.current = val;
-    setIsSpeakingState(val);
-  };
 
   useEffect(() => {
     onStartRef.current = onStart;
@@ -224,108 +206,19 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
   }, []);
 
-  // AUTOMATIC AUDIO & SPEECH PRIMING (Autoplay Bypass)
-  // Automatically primes the Web Audio and HTML5 Audio engines on the page's very first interaction.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    let unlocked = false;
-
-    const unlock = () => {
-      if (unlocked) return;
-      try {
-        // 1. Unlock HTML5 Audio context for iOS Safari asynchronous playback (ElevenLabs)
-        const audio = new Audio();
-        audio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA"; // short silent base64 wave
-        audio.play().then(() => {
-          audio.pause();
-        }).catch((e) => {
-          console.warn("[Speech Engine] Audio gesture unlock failed:", e);
-        });
-        unlockedAudioRef.current = audio;
-
-        // 2. Unlock Web Audio Context if present in window
-        const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioCtxClass) {
-          const dummyContext = new AudioCtxClass();
-          if (dummyContext.state === 'suspended') {
-            dummyContext.resume();
-          }
-        }
-
-        unlocked = true;
-
-        // Cleanup event listeners immediately upon first trigger
-        window.removeEventListener('click', unlock);
-        window.removeEventListener('touchstart', unlock);
-        window.removeEventListener('keydown', unlock);
-      } catch (e) {
-        console.warn("[Speech Engine] Failed to prime audio drivers:", e);
-      }
-    };
-
-    window.addEventListener('click', unlock, { passive: true });
-    window.addEventListener('touchstart', unlock, { passive: true });
-    window.addEventListener('keydown', unlock, { passive: true });
-
-    return () => {
-      window.removeEventListener('click', unlock);
-      window.removeEventListener('touchstart', unlock);
-      window.removeEventListener('keydown', unlock);
-    };
+  const endSpeechCleanup = useCallback(() => {
+    speaking.current = false;
+    setCurrentSubtitle("");
+    if (onEndRef.current) {
+      onEndRef.current();
+    }
   }, []);
 
-  const clearWatchdog = () => {
-    if (failsafeTimeoutRef.current) {
-      clearTimeout(failsafeTimeoutRef.current);
-      failsafeTimeoutRef.current = null;
-    }
-  };
-
-  const startWatchdog = (index: number, callback: () => void) => {
-    clearWatchdog();
-    // 15 seconds for first chunk to allow cold-start voice loading; 10 seconds for subsequent chunks
-    const delay = index === 0 ? 15000 : 10000;
-    failsafeTimeoutRef.current = setTimeout(() => {
-      console.warn(`[Speech Engine] Watchdog activated: chunk ${index} timed out.`);
-      callback();
-    }, delay);
-  };
-
-  const cancel = useCallback((isTransitioning = false) => {
-    // Synchronously force-release the hardware microphone driver to prevent Safari audio freezes
-    if (typeof window !== 'undefined' && (window as any).__jarvisStopMic) {
-      try {
-        (window as any).__jarvisStopMic();
-      } catch (e) {
-        console.warn("[Speech Engine] Failed to force-release microphone driver:", e);
-      }
-    }
-
-    // Clear any pending speak delays immediately
-    if (speechTimeoutRef.current) {
-      clearTimeout(speechTimeoutRef.current);
-      speechTimeoutRef.current = null;
-    }
-
-    clearWatchdog();
-
-    // Invalidate the session ID so previous callback routines stop executing
-    activeSessionId.current += 1;
-
-    // Disconnect event handlers from previous utterances before canceling.
-    // This blocks the browser's native cancel events from firing stale onerror/onend calls.
-    globalActiveUtterances.forEach(utt => {
-      utt.onstart = null;
-      utt.onend = null;
-      utt.onerror = null;
-      utt.onboundary = null;
-    });
-    globalActiveUtterances.length = 0;
-
+  const cancel = useCallback(() => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
+    globalActiveUtterances.length = 0;
 
     activeAudiosRef.current.forEach(audio => {
       audio.pause();
@@ -338,31 +231,24 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       audioIntervalRef.current = null;
     }
 
-    // Only set speaking to false if we are NOT transitioning to a new speech session!
-    if (!isTransitioning) {
-      setSpeaking(false);
-      if (typeof window !== 'undefined') {
-        (window as any).__jarvisIsSpeaking = false;
-      }
-      setCurrentSubtitle("");
-      if (onEndRef.current) {
-        onEndRef.current();
-      }
-    }
-  }, []);
+    endSpeechCleanup();
+  }, [endSpeechCleanup]);
 
   const doSpeakNative = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
-    const currentSession = activeSessionId.current;
+    cancel();
 
-    speechTimeoutRef.current = setTimeout(() => {
-      if (currentSession !== activeSessionId.current) return;
+    // Query voices live immediately before starting audio playback to bypass empty-list startup bugs
+    let activeVoice = voice;
+    if (!activeVoice) {
+      const liveVoices = window.speechSynthesis.getVoices();
+      activeVoice = findBestVoice(liveVoices);
+      if (activeVoice) voiceCache = activeVoice;
+    }
 
-      // Asynchronously invoke parent state changes inside the fired timeout.
-      // This prevents the parent's immediate render cycle from running cleanups 
-      // that clear the scheduled timeout before it has been executed.
-      setSpeaking(true);
+    setTimeout(() => {
+      speaking.current = true;
       if (onStartRef.current) onStartRef.current();
 
       // Clean the incoming text of any markdown, links, or visual formatting artifacts
@@ -370,30 +256,17 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       const chunks = chunkText(cleanText, 150);
       
       if (chunks.length === 0) {
-        setSpeaking(false);
-        if (typeof window !== 'undefined') {
-          (window as any).__jarvisIsSpeaking = false;
-        }
-        setCurrentSubtitle("");
-        if (onEndRef.current) {
-          onEndRef.current();
-        }
+        endSpeechCleanup();
         return;
       }
 
       globalActiveUtterances.length = 0;
 
       const speakChunk = (index: number) => {
-        if (currentSession !== activeSessionId.current) return;
         if (!speaking.current) return;
         
         if (index >= chunks.length) {
-          setSpeaking(false);
-          if (typeof window !== 'undefined') {
-            (window as any).__jarvisIsSpeaking = false;
-          }
-          setCurrentSubtitle("");
-          if (onEndRef.current) onEndRef.current();
+          endSpeechCleanup();
           return;
         }
 
@@ -408,97 +281,48 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         utt.rate = isMobile ? 1.0 : 0.93;
         utt.pitch = isMobile ? 1.0 : 0.78;
         
-        // Safe Voice assignment: avoid assigning voice objects on Safari/mobile 
-        // to prevent stale reference blocks. Only set lang, which Safari uses to auto-select Siri.
+        // Workaround Safari Voice Crash: Skip assigning the Voice Object reference on Safari/mobile 
+        // to prevent stale reference crashes. Only set lang, which Safari uses to auto-select Siri.
         const isSafari = typeof navigator !== 'undefined' && 
           /safari/i.test(navigator.userAgent) && 
           !/chrome/i.test(navigator.userAgent);
 
         if (activeVoice && !isSafari) {
-          try {
-            utt.voice = activeVoice;
-          } catch (e) {
-            console.warn("[Speech Engine] Stale voice assignment skipped:", e);
-          }
+          utt.voice = activeVoice;
         }
         utt.lang = activeVoice ? activeVoice.lang : (isMobile ? 'en-AU' : 'en-GB');
 
         globalActiveUtterances.push(utt);
 
         utt.onstart = () => {
-          if (currentSession !== activeSessionId.current) return;
           setCurrentSubtitle(rawChunk);
-          
-          // Reinforce active watchdog on actual successful speech startup
-          startWatchdog(index, () => {
-            if (currentSession !== activeSessionId.current) return;
-            speakChunk(index + 1);
-          });
         };
 
         utt.onboundary = () => {
-          if (currentSession !== activeSessionId.current) return;
           if (onBoundaryRef.current) onBoundaryRef.current(0.3 + Math.random() * 0.55);
         };
 
         utt.onend = () => {
-          if (currentSession !== activeSessionId.current) return;
-          clearWatchdog();
           speakChunk(index + 1);
         };
 
         utt.onerror = () => {
-          if (currentSession !== activeSessionId.current) return;
-          clearWatchdog();
           speakChunk(index + 1); // Failsafe fallback
         };
 
-        // Watchdog Activation: Start the watchdog synchronously BEFORE sending
-        // the utterance to standard browser synthesis. This prevents Safari from hanging
-        // if it silently discards the speech request without dispatching native events.
-        startWatchdog(index, () => {
-          if (currentSession !== activeSessionId.current) return;
-          speakChunk(index + 1);
-        });
-
-        // Force-resume the native synthesis queue to bypass Chrome and Safari silent queue freezes
-        if (typeof window !== 'undefined' && window.speechSynthesis) {
-          try {
-            if (window.speechSynthesis.paused) {
-              window.speechSynthesis.resume();
-            }
-          } catch (e) {}
-        }
-
-        try {
-          window.speechSynthesis.speak(utt);
-        } catch (e) {
-          console.error("[Speech Engine] Native speak exception caught:", e);
-          clearWatchdog();
-          speakChunk(index + 1);
-        }
+        window.speechSynthesis.speak(utt);
       };
 
-      // Query voices live immediately before starting audio playback to bypass empty-list startup bugs
-      let activeVoice = voice;
-      if (!activeVoice) {
-        const liveVoices = window.speechSynthesis.getVoices();
-        activeVoice = findBestVoice(liveVoices);
-        if (activeVoice) voiceCache = activeVoice;
-      }
-
       speakChunk(0);
-    }, 250); // Standard fast 250ms delay for ultra-responsive voice feedback
-  }, [isMobile]);
+    }, 250); 
+  }, [cancel, isMobile, endSpeechCleanup]);
 
   // ElevenLabs Engine (active if key is configured)
   const doSpeakElevenLabs = useCallback(async (text: string) => {
-    const currentSession = activeSessionId.current;
+    cancel();
 
-    speechTimeoutRef.current = setTimeout(async () => {
-      if (currentSession !== activeSessionId.current) return;
-
-      setSpeaking(true);
+    setTimeout(async () => {
+      speaking.current = true;
       if (onStartRef.current) onStartRef.current();
 
       // Clean the incoming text of any markdown, links, or visual formatting artifacts
@@ -532,22 +356,11 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
         const audioUrls = await Promise.all(audioPromises);
 
-        // Verify the session has not changed during the network delay
-        if (currentSession !== activeSessionId.current) {
-          audioUrls.forEach(url => URL.revokeObjectURL(url));
-          return;
-        }
-
         let currentIndex = 0;
 
         const playNext = () => {
-          if (currentSession !== activeSessionId.current) return;
-
           if (!speaking.current || currentIndex >= audioUrls.length) {
-            setSpeaking(false);
-            if (typeof window !== 'undefined') {
-              (window as any).__jarvisIsSpeaking = false;
-            }
+            speaking.current = false;
             setCurrentSubtitle("");
             if (audioIntervalRef.current) {
               clearInterval(audioIntervalRef.current);
@@ -560,18 +373,11 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
           const rawChunk = chunks[currentIndex];
           setCurrentSubtitle(rawChunk);
 
-          // Workaround for Safari Mobile: reuse the audio context unlocked inside the user click gesture
-          const audio = unlockedAudioRef.current || new Audio();
-          if (!unlockedAudioRef.current) {
-            unlockedAudioRef.current = audio;
-          }
-
-          audio.src = audioUrls[currentIndex];
+          const audio = new Audio(audioUrls[currentIndex]);
           activeAudiosRef.current.push(audio);
 
           if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
           audioIntervalRef.current = setInterval(() => {
-            if (currentSession !== activeSessionId.current) return;
             if (onBoundaryRef.current && speaking.current) {
               onBoundaryRef.current(0.3 + Math.random() * 0.55);
             }
@@ -589,8 +395,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
             playNext();
           };
 
-          audio.play().catch((err) => {
-            console.warn("[Speech Engine] Playback failed, bypassing chunk:", err);
+          audio.play().catch(() => {
             currentIndex++;
             playNext();
           });
@@ -600,22 +405,12 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
       } catch (error) {
         console.warn('[Speech Engine] ElevenLabs failed, falling back:', error);
-        if (currentSession === activeSessionId.current) {
-          doSpeakNative(text, voiceCache || null);
-        }
+        doSpeakNative(text, voiceCache || null);
       }
     }, 250);
-  }, [doSpeakNative]);
+  }, [cancel, doSpeakNative]);
 
   const speak = useCallback((text: string) => {
-    cancel(true);
-    
-    // Synchronously block the microphone at the hardware level before asynchronous timeouts execute.
-    // This removes the 250ms gap without triggering early parent render loops or cleanup effects.
-    if (typeof window !== 'undefined') {
-      (window as any).__jarvisIsSpeaking = true;
-    }
-
     if (ELEVENLABS_API_KEY) {
       doSpeakElevenLabs(text);
       return;
@@ -632,11 +427,11 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
 
     doSpeakNative(text, voice);
-  }, [cancel, doSpeakNative, doSpeakElevenLabs]);
+  }, [doSpeakNative, doSpeakElevenLabs]);
 
   return { 
     speak, 
-    cancel: () => cancel(false), // External triggers are treated as manual cancels
+    cancel, 
     isSpeaking: () => speaking.current, // Synchronous ref return for seamless real-time interruption gating
     currentSubtitle 
   };
