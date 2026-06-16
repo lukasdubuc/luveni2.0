@@ -371,7 +371,7 @@ function AiAgentConsole({ isDark, onSimulatePacket }: { isDark: boolean; onSimul
   return (
     <div 
       className={`p-6 border relative overflow-hidden transition-all duration-300 ${
-        isDark ? "bg-neutral-950/45 border-neutral-800/80" : "bg-white border-[#D1D1D6] shadow-[0_24px_48px_rgba(0,0,0,0.03)] hover:shadow-[0_24px_48px_rgba(0,0,0,0.06)]"
+        isDark ? "bg-neutral-955/45 border-neutral-800/80" : "bg-white border-[#D1D1D6] shadow-[0_24px_48px_rgba(0,0,0,0.03)] hover:shadow-[0_24px_48px_rgba(0,0,0,0.06)]"
       }`}
       style={{ borderRadius: "24px", overflow: "hidden", borderColor: isDark ? "#333338" : "#D1D1D6" }}
     >
@@ -387,7 +387,7 @@ function AiAgentConsole({ isDark, onSimulatePacket }: { isDark: boolean; onSimul
             <LedPulse color="purple" />
             <span>Jarvis Cognitive Engine Diagnostics</span>
           </h3>
-          <p className={`text-[10px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>
+          <p className={`text-[10px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-450"}`}>
             ACTIVE REASONING: <span className="text-purple-400 font-bold">{activeTask}</span>
           </p>
         </div>
@@ -1270,7 +1270,7 @@ function AdminPage() {
           </button>
           <button
             onClick={handleSignOut}
-            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[10px] text-[10px] font-mono font-semibold uppercase tracking-wider transition-all ${isDark ? "text-neutral-600 hover:text-rose-400 hover:bg-rose-500/[0.07]" : "text-neutral-400 hover:text-rose-600 hover:bg-rose-50"}`}
+            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[10px] text-[10px] font-mono font-semibold uppercase tracking-wider transition-all ${isDark ? "text-neutral-600 hover:text-rose-400 hover:bg-rose-505/[0.07]" : "text-neutral-400 hover:text-rose-600 hover:bg-rose-50"}`}
           >
             <span className="text-[12px]">↑</span> Sign Out
           </button>
@@ -1378,7 +1378,7 @@ function AdminPage() {
                         ? "bg-white text-black shadow-[0_2px_6px_rgba(0,0,0,0.3)]"
                         : "bg-white text-black shadow-[0_2px_8px_rgba(0,0,0,0.12)]"
                       : isDark
-                        ? "text-neutral-500 hover:text-neutral-200"
+                        ? "text-neutral-500 hover:text-neutral-202"
                         : "text-neutral-555 hover:text-neutral-900"
                   }`}
                 >
@@ -1427,7 +1427,7 @@ function AdminPage() {
                       revenueDelta > 0
                         ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
                         : revenueDelta < 0
-                        ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                        ? "bg-rose-505/10 text-rose-400 border border-rose-505/20"
                         : isDark ? "bg-neutral-800 text-neutral-400 border border-neutral-700" : "bg-neutral-100 text-neutral-500 border border-neutral-200"
                     }`}>
                       {revenueDelta > 0 ? <TrendingUp size={10} /> : revenueDelta < 0 ? <TrendingDown size={10} /> : <Minus size={10} />}
@@ -1508,7 +1508,7 @@ function AdminPage() {
                     ))}
                     <div className={`pt-2 border-t ${isDark ? "border-white/[0.05]" : "border-black/[0.05]"} flex items-center justify-between`}>
                       <span className={`text-[9px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Published</span>
-                      <span className={`text-[18px] font-bold tabular-nums ${isDark ? "text-neutral-300" : "text-neutral-707"}`} style={{ letterSpacing: "-0.03em" }}>{products.filter(p => p.is_published).length}</span>
+                      <span className={`text-[18px] font-bold tabular-nums ${isDark ? "text-neutral-303" : "text-neutral-707"}`} style={{ letterSpacing: "-0.03em" }}>{products.filter(p => p.is_published).length}</span>
                     </div>
                   </div>
                 </div>
@@ -1714,7 +1714,7 @@ function AdminPage() {
                 <div className="flex items-center justify-between">
                   <button onClick={() => setProductForm(f => ({ ...f, is_published: !f.is_published }))}
                     className={`text-[9px] font-mono font-semibold uppercase px-4 py-1.5 rounded-[9999px] border transition-all ${
-                      productForm.is_published ? "bg-emerald-550/10 text-emerald-500 border-emerald-550/20" : "bg-rose-505/10 text-rose-500 border-rose-505/20"
+                      productForm.is_published ? "bg-emerald-555/10 text-emerald-500 border-emerald-555/20" : "bg-rose-505/10 text-rose-500 border-rose-505/20"
                     }`}>
                     {productForm.is_published ? "Status: Deployed" : "Status: Draft"}
                   </button>
@@ -1897,8 +1897,8 @@ function AdminPage() {
                       <td className="px-5 py-3.5 text-xs font-mono font-medium">{fmt$(o.amount_cents)}</td>
                       <td className="px-5 py-3.5">
                         <span className={`text-[8px] font-mono font-bold uppercase px-2.5 py-1 rounded-[9999px] flex items-center gap-1.5 w-fit ${
-                          o.status === "paid" ? "bg-emerald-550/10 text-emerald-500" :
-                          o.status === "pending" ? "bg-amber-550/10 text-amber-500" :
+                          o.status === "paid" ? "bg-emerald-555/10 text-emerald-500" :
+                          o.status === "pending" ? "bg-amber-555/10 text-amber-500" :
                           "bg-rose-505/10 text-rose-500"
                         }`}>
                           <LedPulse color={o.status === "paid" ? "green" : o.status === "pending" ? "yellow" : "red"} active={false} />
@@ -1932,7 +1932,7 @@ function AdminPage() {
 
               <input type="text" placeholder="FILTER LEADS…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                 className={`text-[9px] font-mono border rounded-[9999px] px-4 py-2 w-48 bg-transparent focus:outline-none focus:ring-1 ${
-                  isDark ? "border-neutral-800 text-white focus:border-white focus:ring-white/20" : "border-[#D1D1D6] text-black focus:border-black focus:ring-black/10 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
+                  isDark ? "border-neutral-850 text-white focus:border-white focus:ring-white/20" : "border-[#D1D1D6] text-black focus:border-black focus:ring-black/10 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
                 }`} />
             </div>
             <div className={`overflow-x-auto border rounded-[24px] overflow-hidden ${isDark ? "border-neutral-900" : "border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} bg-white dark:bg-transparent`}>
@@ -2045,7 +2045,7 @@ function AdminPage() {
                 {analyticsChartData.map((d, i) => (
                   <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group relative">
                     <div
-                      className={`w-full transition-all duration-350 rounded-[9999px] ${isDark ? "bg-neutral-800 group-hover:bg-neutral-550" : "bg-neutral-200 group-hover:bg-neutral-355"}`}
+                      className={`w-full transition-all duration-350 rounded-[9999px] ${isDark ? "bg-neutral-800 group-hover:bg-neutral-550" : "bg-neutral-202 group-hover:bg-neutral-355"}`}
                       style={{ height: `${(d.views / chartMax) * 100}%`, minHeight: d.views > 0 ? "3px" : "1px" }}
                     />
                     {d.views > 0 && (
@@ -2234,7 +2234,7 @@ function AdminPage() {
                       { role: "admin", desc: "Root execution permissions on settings" },
                     ].map(r => (
                       <div key={r.role} className={`p-3 border rounded-[16px] ${isDark ? "border-neutral-900 bg-neutral-955/10" : "border-[#D1D1D6] bg-neutral-50"}`}>
-                        <p className={`text-[8px] font-mono font-bold uppercase ${isDark ? "text-neutral-300" : "text-neutral-800"}`}>{r.role}</p>
+                        <p className={`text-[8px] font-mono font-bold uppercase ${isDark ? "text-neutral-303" : "text-neutral-808"}`}>{r.role}</p>
                         <p className={`text-[8px] font-mono mt-1 leading-relaxed ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{r.desc}</p>
                       </div>
                     ))}
@@ -2286,37 +2286,157 @@ function AdminPage() {
       </main>
 
       {/* ── ORDER DETAIL MODAL ── */}
-      {selectedRow && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 animate-in fade-in duration-355">
-          <div className="absolute inset-0 backdrop-blur-md bg-black/60 dark:bg-black/80" onClick={() => setSelectedRow(null)} />
-          <div className={`relative w-full max-w-lg p-8 border rounded-[24px] overflow-hidden space-y-6 max-h-[85vh] overflow-y-auto ${
-            isDark ? "bg-neutral-950 border-neutral-850" : "bg-white border-[#D1D1D6] shadow-[0_32px_64px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.08)]"
-          }`}>
-            <div className={`flex items-center justify-between border-b pb-3 dark:border-neutral-900 border-[#D1D1D6]`}>
-              <h3 className={`text-xs font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-300" : "text-neutral-800"}`}>System Ledger Metadata</h3>
-              <button onClick={() => setSelectedRow(null)} className={`${isDark ? "text-neutral-500 hover:text-white" : "text-neutral-400 hover:text-black"}`}><X size={14} /></button>
+      {selectedRow && (() => {
+        // Extract purchased or attempted items dynamically
+        const extractedItems: Array<{ productId?: string; title: string; price_cents?: number; image_url?: string; quantity?: number }> = [];
+
+        // 1. Resolve from direct column field `product_id` if populated (single item checkouts)
+        if (selectedRow.product_id) {
+          const matchedProd = products.find(p => p.id === selectedRow.product_id);
+          if (matchedProd) {
+            extractedItems.push({
+              productId: matchedProd.id,
+              title: matchedProd.title,
+              price_cents: matchedProd.price_cents,
+              image_url: matchedProd.image_urls?.[0],
+              quantity: 1,
+            });
+          } else {
+            extractedItems.push({
+              productId: selectedRow.product_id,
+              title: `Product ID: ${selectedRow.product_id}`,
+              quantity: 1,
+            });
+          }
+        }
+
+        // 2. Resolve from order `metadata` if it stores custom `items` or `cart` collections (multi-item checkouts)
+        const metadata = selectedRow.metadata;
+        if (metadata) {
+          const itemsList = metadata.items || metadata.cart || (Array.isArray(metadata) ? metadata : null);
+          if (Array.isArray(itemsList)) {
+            itemsList.forEach((item: any) => {
+              const pid = item.productId || item.id || item.product_id;
+              // Avoid duplicates if already populated by direct column
+              if (pid && extractedItems.some(x => x.productId === pid)) {
+                return;
+              }
+              extractedItems.push({
+                productId: pid,
+                title: item.title || item.name || "Unnamed Product",
+                price_cents: item.price_cents || item.price,
+                image_url: item.image_url || item.image,
+                quantity: item.quantity || 1,
+              });
+            });
+          }
+        }
+
+        // 3. Resolve from an attached `items` array directly if present on the root
+        if (Array.isArray((selectedRow as any).items)) {
+          (selectedRow as any).items.forEach((item: any) => {
+            const pid = item.productId || item.id || item.product_id;
+            if (pid && extractedItems.some(x => x.productId === pid)) {
+              return;
+            }
+            extractedItems.push({
+              productId: pid,
+              title: item.title || item.name || "Unnamed Product",
+              price_cents: item.price_cents || item.price,
+              image_url: item.image_url || item.image,
+              quantity: item.quantity || 1,
+            });
+          });
+        }
+
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 animate-in fade-in duration-355">
+            <div className="absolute inset-0 backdrop-blur-md bg-black/60 dark:bg-black/80" onClick={() => setSelectedRow(null)} />
+            <div className={`relative w-full max-w-lg p-8 border rounded-[24px] overflow-hidden space-y-6 max-h-[85vh] overflow-y-auto ${
+              isDark ? "bg-neutral-950 border-neutral-850" : "bg-white border-[#D1D1D6] shadow-[0_32px_64px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.08)]"
+            }`}>
+              <div className={`flex items-center justify-between border-b pb-3 dark:border-neutral-900 border-[#D1D1D6]`}>
+                <h3 className={`text-xs font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-300" : "text-neutral-800"}`}>System Ledger Metadata</h3>
+                <button onClick={() => setSelectedRow(null)} className={`${isDark ? "text-neutral-500 hover:text-white" : "text-neutral-400 hover:text-black"}`}><X size={14} /></button>
+              </div>
+
+              {/* ── Products List ── */}
+              <div className="space-y-3">
+                <h4 className={`text-[10px] font-mono font-bold uppercase tracking-wider ${isDark ? "text-neutral-400" : "text-neutral-500"}`}>
+                  Items In Order / Attempt
+                </h4>
+                <div className="space-y-2">
+                  {extractedItems.map((item, idx) => {
+                    // cross-reference with latest fetched catalog item to ensure up-to-date graphics/title
+                    const dbProduct = products.find(p => p.id === item.productId);
+                    const displayTitle = dbProduct?.title || item.title;
+                    const displayImage = dbProduct?.image_urls?.[0] || item.image_url;
+                    const displayPrice = item.price_cents ?? dbProduct?.price_cents;
+
+                    return (
+                      <div 
+                        key={idx} 
+                        className={`flex items-center gap-4 p-3 border rounded-[16px] ${
+                          isDark ? "bg-neutral-900/45 border-neutral-850" : "bg-neutral-50 border-[#E5E5EA]"
+                        }`}
+                      >
+                        <div className={`w-12 h-12 rounded-[12px] overflow-hidden flex-shrink-0 flex items-center justify-center bg-[#FAFAFA] border ${
+                          isDark ? "border-neutral-850" : "border-[#E5E5EA]"
+                        }`}>
+                          {displayImage ? (
+                            <img 
+                              src={proxyImageUrl(displayImage)} 
+                              alt={displayTitle} 
+                              className="max-w-full max-h-full object-contain p-1"
+                            />
+                          ) : (
+                            <span className="text-[8px] font-mono uppercase tracking-widest text-neutral-400">N/A</span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs font-semibold truncate ${isDark ? "text-white" : "text-black"}`}>
+                            {displayTitle}
+                          </p>
+                          <p className={`text-[10px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-450"}`}>
+                            Qty: {item.quantity || 1} {displayPrice ? `· ${fmt$(displayPrice)}` : ""}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {extractedItems.length === 0 && (
+                    <p className={`text-[10px] font-mono uppercase tracking-wider text-center py-4 border border-dashed rounded-[16px] ${
+                      isDark ? "border-neutral-800 text-neutral-600" : "border-[#E5E5EA] text-neutral-400"
+                    }`}>
+                      No direct product associations found
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* ── Raw Key-Value Ledger Metadata ── */}
+              <div className="space-y-2">
+                {Object.entries(selectedRow).map(([k, v]) => (
+                  k !== "_type" && (
+                    <div key={k} className={`flex justify-between py-1.5 border-b last:border-0 gap-4 ${isDark ? "border-neutral-900" : "border-[#F2F2F7]"}`}>
+                      <span className={`text-[8px] font-mono font-semibold uppercase flex-shrink-0 ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{k}</span>
+                      <span className={`text-[10px] font-mono font-medium text-right ${typeof v === "object" && v !== null ? "break-all whitespace-pre-wrap max-w-[250px]" : "truncate"}`}>
+                        {typeof v === "object" && v !== null ? JSON.stringify(v) : String(v)}
+                      </span>
+                    </div>
+                  )
+                ))}
+              </div>
+              {selectedRow._type === "order" && (
+                <button onClick={() => handleArchiveOrder(selectedRow.id)}
+                  className={`w-full py-2.5 rounded-[9999px] text-[9px] font-mono font-bold uppercase tracking-wide transition-all ${isDark ? "bg-rose-505/10 text-rose-455 hover:bg-rose-505/20" : "bg-rose-50 text-rose-655 hover:bg-rose-100"}`}>
+                  Archive Order Record
+                </button>
+              )}
             </div>
-            <div className="space-y-2">
-              {Object.entries(selectedRow).map(([k, v]) => (
-                k !== "_type" && (
-                  <div key={k} className={`flex justify-between py-1.5 border-b last:border-0 gap-4 ${isDark ? "border-neutral-900" : "border-[#F2F2F7]"}`}>
-                    <span className={`text-[8px] font-mono font-semibold uppercase flex-shrink-0 ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>{k}</span>
-                    <span className={`text-[10px] font-mono font-medium text-right ${typeof v === "object" && v !== null ? "break-all whitespace-pre-wrap max-w-[250px]" : "truncate"}`}>
-                      {typeof v === "object" && v !== null ? JSON.stringify(v) : String(v)}
-                    </span>
-                  </div>
-                )
-              ))}
-            </div>
-            {selectedRow._type === "order" && (
-              <button onClick={() => handleArchiveOrder(selectedRow.id)}
-                className={`w-full py-2.5 rounded-[9999px] text-[9px] font-mono font-bold uppercase tracking-wide transition-all ${isDark ? "bg-rose-505/10 text-rose-455 hover:bg-rose-505/20" : "bg-rose-50 text-rose-655 hover:bg-rose-100"}`}>
-                Archive Order Record
-              </button>
-            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
