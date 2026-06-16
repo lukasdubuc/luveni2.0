@@ -33,6 +33,7 @@ type Product = {
   is_published: boolean;
   description?: string;
   printful_id?: string | null;
+  apliq_id?: string | null;
   display_order?: number;
 };
 
@@ -657,13 +658,13 @@ function AdminPage() {
     }
   };
 
-  const handleSyncPrintful = async () => {
+  const handleSyncProducts = async () => {
     setIsSyncing(true);
     try {
-      // Create snapshot of current is_published status indexed by printful_id or id
+      // Create snapshot of current is_published status indexed by printful_id, apliq_id or id
       const originalStatuses: Record<string, boolean> = {};
       products.forEach(p => {
-        const key = p.printful_id || p.id;
+        const key = p.printful_id || p.apliq_id || p.id;
         originalStatuses[key] = p.is_published;
       });
 
@@ -686,16 +687,16 @@ function AdminPage() {
       // Query database directly following successful sync, and revert any modified visibility states
       const { data: freshlySynced } = await supabase
         .from("products")
-        .select("id, printful_id, is_published");
+        .select("id, printful_id, apliq_id, is_published");
 
       if (freshlySynced) {
         const restorePromises = freshlySynced
           .filter(p => {
-            const key = p.printful_id || p.id;
+            const key = p.printful_id || p.apliq_id || p.id;
             return originalStatuses[key] !== undefined && p.is_published !== originalStatuses[key];
           })
           .map(p => {
-            const key = p.printful_id || p.id;
+            const key = p.printful_id || p.apliq_id || p.id;
             return supabase
               .from("products")
               .update({ is_published: originalStatuses[key] })
@@ -707,7 +708,8 @@ function AdminPage() {
         }
       }
 
-      toast.success(`Sync complete: ${data.synced}/${data.total} products processed.`);
+      const apliqMsg = data.apliqSynced ? ` Verified ${data.apliqSynced} Apliq product(s) via database webhook.` : "";
+      toast.success(`Sync complete: ${data.synced}/${data.total} Printful product(s) processed.${apliqMsg}`);
       await fetchData();
     } catch (e: any) {
       toast.error(`Sync error: ${e?.message || "Unknown error"}`);
@@ -1508,7 +1510,7 @@ function AdminPage() {
                     ))}
                     <div className={`pt-2 border-t ${isDark ? "border-white/[0.05]" : "border-black/[0.05]"} flex items-center justify-between`}>
                       <span className={`text-[9px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>Published</span>
-                      <span className={`text-[18px] font-bold tabular-nums ${isDark ? "text-neutral-303" : "text-neutral-707"}`} style={{ letterSpacing: "-0.03em" }}>{products.filter(p => p.is_published).length}</span>
+                      <span className={`text-[18px] font-bold tabular-nums ${isDark ? "text-white" : "text-neutral-900"}`} style={{ letterSpacing: "-0.03em" }}>{products.filter(p => p.is_published).length}</span>
                     </div>
                   </div>
                 </div>
@@ -1651,12 +1653,12 @@ function AdminPage() {
                   }`}>
                   {selectMode ? "Cancel" : "Select"}
                 </button>
-                <button onClick={handleSyncPrintful} disabled={isSyncing}
+                <button onClick={handleSyncProducts} disabled={isSyncing}
                   className={`flex items-center gap-1.5 text-[9px] font-mono font-semibold uppercase px-4 py-2 border transition-all rounded-[9999px] ${
                     isDark ? "border-neutral-800 text-neutral-355 hover:bg-neutral-900/40" : "border-[#D1D1D6] text-neutral-705 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)] hover:bg-neutral-50"
                   }`}>
                   <RefreshCw size={11} className={isSyncing ? "animate-spin" : ""} />
-                  {isSyncing ? "Syncing" : "Sync Printful"}
+                  {isSyncing ? "Syncing" : "Sync Products"}
                 </button>
                 <button onClick={() => setProductFormOpen(!productFormOpen)}
                   className={`text-[9px] font-mono font-bold uppercase px-5 py-2 transition-all rounded-[9999px] ${
@@ -1721,7 +1723,7 @@ function AdminPage() {
                   <div className="flex gap-2">
                     <button onClick={resetProductForm} className={`text-[9px] font-mono uppercase px-3 py-2 ${isDark ? "text-neutral-500 hover:text-white" : "text-neutral-455 hover:text-black"}`}>Cancel</button>
                     <button onClick={saveProduct} className={`text-[9px] font-mono font-bold uppercase px-6 py-2 transition-all rounded-[9999px] ${
-                      isDark ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800 shadow-sm"
+                      isDark ? "bg-white text-black hover:bg-neutral-202" : "bg-black text-white hover:bg-neutral-800 shadow-sm"
                     }`}>
                       {productForm.editingId ? "Save Engine" : "Build Hook"}
                     </button>
@@ -1740,6 +1742,7 @@ function AdminPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-5">
               {orderedProducts.map(p => {
                 const isPrintful = !!p.printful_id;
+                const isApliq = !!p.apliq_id;
                 const isSelected = selectedIds.has(p.id);
                 const isDragging = draggedId === p.id;
                 const isDragTarget = dragOverId === p.id;
@@ -1779,6 +1782,11 @@ function AdminPage() {
                         <Lock size={6} /> PF
                       </div>
                     )}
+                    {isApliq && (
+                      <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-0.5 px-1.5 py-0.5 rounded-[9999px] bg-purple-500/10 text-purple-400 text-[7px] font-mono font-bold uppercase border border-purple-500/10">
+                        <Lock size={6} /> AQ
+                      </div>
+                    )}
                     {/* ── Product Image with Apple-style drop shadow ── */}
  <div className="relative flex aspect-[4/5] items-center justify-center overflow-hidden p-4 bg-[#FAFAFA] rounded-t-[24px]">
   {p.image_urls && p.image_urls.length > 1 ? (
@@ -1796,7 +1804,7 @@ function AdminPage() {
       style={{ filter: "drop-shadow(0 6px 18px rgba(0,0,0,0.13)) drop-shadow(0 2px 6px rgba(0,0,0,0.08))" }}
     />
   ) : (
-    <span className={`text-[8px] font-mono uppercase tracking-widest ${isDark ? "text-neutral-800" : "text-neutral-300"}`}>Empty visual</span>
+    <span className={`text-[8px] font-mono uppercase tracking-widest ${isDark ? "text-neutral-800" : "text-neutral-303"}`}>Empty visual</span>
   )}
 </div>
                     <div className={`px-3.5 pb-3.5 pt-2 border-t ${isDark ? "bg-neutral-955/40 border-neutral-900/40" : "bg-white border-[#F2F2F7]"}`}>
@@ -1808,8 +1816,8 @@ function AdminPage() {
                         <div className="flex items-center justify-end gap-2.5 mt-2 pt-2 border-t border-neutral-200/20 dark:border-neutral-900/40">
                           <button onClick={e => { e.stopPropagation(); togglePublished(p.id, p.is_published); }}
                             className={`w-1.5 h-1.5 rounded-full transition-all ${p.is_published ? "bg-emerald-500" : "bg-rose-500"}`} />
-                          {isPrintful ? (
-                            <span className={`${isDark ? "text-neutral-800" : "text-neutral-305"} cursor-not-allowed`} title="Printful products are synced from supplier hub">
+                          {isPrintful || isApliq ? (
+                            <span className={`${isDark ? "text-neutral-800" : "text-neutral-305"} cursor-not-allowed`} title={`${isPrintful ? "Printful" : "Apliq"} products are synced from supplier hub`}>
                               <Edit3 size={11} />
                             </span>
                           ) : (
@@ -1939,7 +1947,7 @@ function AdminPage() {
               <table className="w-full text-left">
                 <thead>
                   <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${
-                    isDark ? "text-neutral-500 border-neutral-900 bg-neutral-955/50" : "text-neutral-500 border-[#D1D1D6] bg-[#f5f5f7]"
+                    isDark ? "text-neutral-555 border-neutral-900 bg-neutral-955/50" : "text-neutral-555 border-[#D1D1D6] bg-[#f5f5f7]"
                   }`}>
                     <th className="px-5 py-3 font-semibold">Capture email</th>
                     <th className="px-5 py-3 font-semibold">Registered</th>
@@ -2377,7 +2385,7 @@ function AdminPage() {
               isDark ? "bg-neutral-955 border-neutral-850" : "bg-white border-[#D1D1D6] shadow-[0_32px_64px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.08)]"
             }`}>
               <div className={`flex items-center justify-between border-b pb-3 dark:border-neutral-900 border-[#D1D1D6]`}>
-                <h3 className={`text-xs font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-300" : "text-neutral-800"}`}>Transaction Receipt</h3>
+                <h3 className={`text-xs font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-303" : "text-neutral-808"}`}>Transaction Receipt</h3>
                 <button onClick={() => setSelectedRow(null)} className={`${isDark ? "text-neutral-500 hover:text-white" : "text-neutral-400 hover:text-black"}`}><X size={14} /></button>
               </div>
 
@@ -2564,3 +2572,702 @@ function Input({ label, value, onChange, type = "text", isDark }: { label: strin
     </div>
   );
 }
+```
+
+---
+
+### File 2: Updated `/api/printful-sync` Route
+
+This complete file contains the live API catalog pull for Printful combined with a passive verification check for active Apliq items in the store database.
+
+```typescript
+import { createFileRoute } from "@tanstack/react-router";
+import { createClient } from "@supabase/supabase-js";
+
+export const Route = createFileRoute("/api/printful-sync")({
+  server: {
+    handlers: {
+      POST: async ({ request }) => {
+        // ───────────────────────────────────────────────────────────
+        // 0. Require an authenticated admin caller
+        // ───────────────────────────────────────────────────────────
+        const authHeader = request.headers.get("authorization");
+        if (!authHeader?.startsWith("Bearer ")) {
+          return new Response(JSON.stringify({ error: "Unauthorized" }), {
+            status: 401,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
+        const SUPABASE_URL = process.env.SUPABASE_URL;
+        const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY;
+        if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+          return new Response(JSON.stringify({ error: "Server misconfigured" }), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
+        const token = authHeader.slice("Bearer ".length);
+        const userClient = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+          global: { headers: { Authorization: `Bearer ${token}` } },
+          auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+        });
+
+        const { data: claimsData, error: claimsErr } = await userClient.auth.getClaims(token);
+        const userId = claimsData?.claims?.sub;
+        if (claimsErr || !userId) {
+          return new Response(JSON.stringify({ error: "Unauthorized" }), {
+            status: 401,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
+        const { data: isAdmin, error: roleErr } = await userClient.rpc("has_role", {
+          _user_id: userId,
+          _role: "admin",
+        });
+        if (roleErr || !isAdmin) {
+          return new Response(JSON.stringify({ error: "Forbidden" }), {
+            status: 403,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
+        const { supabaseAdmin } = await import(
+          "@/integrations/supabase/client.server"
+        );
+
+        // ───────────────────────────────────────────────────────────
+        // 1. Validate API Key
+        // ───────────────────────────────────────────────────────────
+        const apiKey = process.env.PRINTFUL_API_KEY;
+
+        if (!apiKey) {
+          return new Response(
+            JSON.stringify({
+              error: "Missing PRINTFUL_API_KEY env var",
+            }),
+            {
+              status: 500,
+              headers: {
+                "Content-Type": "application/json",
+              },
+            }
+          );
+        }
+
+        // ───────────────────────────────────────────────────────────
+        // 2. Fetch Product List
+        // ───────────────────────────────────────────────────────────
+        const listRes = await fetch(
+          "https://api.printful.com/sync/products",
+          {
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+            },
+          }
+        );
+
+        if (!listRes.ok) {
+          return new Response(
+            JSON.stringify({
+              error: `Printful list error: ${listRes.status} ${listRes.statusText}`,
+            }),
+            {
+              status: 502,
+              headers: {
+                "Content-Type": "application/json",
+              },
+            }
+          );
+        }
+
+        const { result } = (await listRes.json()) as {
+          result: any[];
+        };
+
+        console.log(
+          "PRINTFUL PRODUCTS:",
+          result?.length
+        );
+
+        console.log(
+          "FIRST PRODUCT:",
+          result?.[0]
+        );
+
+        if (!result || result.length === 0) {
+          return new Response(
+            JSON.stringify({
+              synced: 0,
+              message:
+                "No products found in Printful store",
+            }),
+            {
+              status: 200,
+              headers: {
+                "Content-Type": "application/json",
+              },
+            }
+          );
+        }
+
+        // ───────────────────────────────────────────────────────────
+        // 3. Sync Products
+        // ───────────────────────────────────────────────────────────
+        let synced = 0;
+
+        const errors: string[] = [];
+
+        for (const item of result) {
+          try {
+            // ─────────────────────────────────────────────
+            // Fetch Product Detail
+            // ─────────────────────────────────────────────
+            const detailRes = await fetch(
+              `https://api.printful.com/sync/products/${item.id}`,
+              {
+                headers: {
+                  Authorization: `Bearer ${apiKey}`,
+                },
+              }
+            );
+
+            if (!detailRes.ok) {
+              errors.push(
+                `Product ${item.id}: Printful detail error ${detailRes.status}`
+              );
+
+              continue;
+            }
+
+            const { result: detail } =
+              (await detailRes.json()) as {
+                result: any;
+              };
+
+            const syncProduct =
+              detail.sync_product ?? {};
+
+            const syncVariants: any[] =
+              detail.sync_variants ?? [];
+
+            // ─────────────────────────────────────────────
+            // Product Name
+            // ─────────────────────────────────────────────
+            const productName =
+              syncProduct.name ??
+              item.name ??
+              `product-${item.id}`;
+
+            // ─────────────────────────────────────────────
+            // Slug
+            // ─────────────────────────────────────────────
+            const slug = productName
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, "-")
+              .replace(/^-|-$/g, "");
+
+            // ─────────────────────────────────────────────
+            // Prices
+            // ─────────────────────────────────────────────
+            const validPrices = syncVariants
+              .map((v: any) =>
+                Math.round(
+                  parseFloat(
+                    v.retail_price ?? "0"
+                  ) * 100
+                )
+              )
+              .filter(
+                (p: number) =>
+                  Number.isFinite(p) && p > 0
+              );
+
+            const priceCents =
+              validPrices.length > 0
+                ? Math.min(...validPrices)
+                : 0;
+
+            // ─────────────────────────────────────────────
+            // Images
+            // ─────────────────────────────────────────────
+            const imageUrls: string[] = Array.from(
+              new Set(
+                syncVariants
+                  .flatMap(
+                    (v: any) => v.files || []
+                  )
+                  .map(
+                    (f: any) =>
+                      f.preview_url ||
+                      f.thumbnail_url ||
+                      f.url
+                  )
+                  .filter(Boolean)
+              )
+            );
+
+            if (
+              imageUrls.length === 0 &&
+              syncProduct.thumbnail_url
+            ) {
+              imageUrls.push(
+                syncProduct.thumbnail_url
+              );
+            }
+
+            if (
+              imageUrls.length === 0 &&
+              item.thumbnail_url
+            ) {
+              imageUrls.push(item.thumbnail_url);
+            }
+
+            // ─────────────────────────────────────────────
+            // Variants
+            // ─────────────────────────────────────────────
+            const variants = syncVariants.map(
+              (v: any) => {
+                const parts = (v.name ?? "")
+                  .split("/")
+                  .map((p: string) =>
+                    p.trim()
+                  );
+
+                const attributes: Record<
+                  string,
+                  string
+                > = {};
+
+                parts.forEach(
+                  (
+                    part: string,
+                    i: number
+                  ) => {
+                    if (i === 0) {
+                      attributes["size"] =
+                        part;
+                    } else if (i === 1) {
+                      attributes["color"] =
+                        part;
+                    } else {
+                      attributes[
+                        `option_${i}`
+                      ] = part;
+                    }
+                  }
+                );
+
+                return {
+                  sku:
+                    v.sku ??
+                    String(v.id),
+
+                  price_cents: Math.round(
+                    parseFloat(
+                      v.retail_price ?? "0"
+                    ) * 100
+                  ),
+
+                  external_sku: String(v.id),
+
+                  fulfillment_provider:
+                    "printful",
+
+                  attributes,
+
+                  stock: 999,
+                };
+              }
+            );
+
+            // ─────────────────────────────────────────────
+            // Debug Logs
+            // ─────────────────────────────────────────────
+            console.log(
+              "UPSERTING PRODUCT:",
+              {
+                id: item.id,
+                title: productName,
+                slug,
+                priceCents,
+                imageCount:
+                  imageUrls.length,
+              }
+            );
+
+            // ─────────────────────────────────────────────
+            // Upsert Product
+            // ─────────────────────────────────────────────
+            const {
+              error: upsertError,
+            } = await supabaseAdmin
+              .from("products")
+              .upsert(
+                {
+                  title: productName,
+
+                  slug,
+
+                  description:
+                    syncProduct.external_name ??
+                    productName,
+
+                  price_cents:
+                    priceCents,
+
+                  image_urls:
+                    imageUrls,
+
+                  is_archived: false,
+
+                  // AUTO PUBLISH
+                  is_published: true,
+
+                  printful_id: String(
+                    item.id
+                  ),
+
+                  variants:
+                    variants.length > 0
+                      ? variants
+                      : null,
+
+                  updated_at:
+                    new Date().toISOString(),
+                },
+                {
+                  onConflict:
+                    "printful_id",
+
+                  ignoreDuplicates:
+                    false,
+                }
+              );
+
+            if (upsertError) {
+              console.error(
+                "UPSERT ERROR:",
+                upsertError
+              );
+
+              errors.push(
+                `Product ${item.id} (${productName}): ${upsertError.message}`
+              );
+
+              continue;
+            }
+
+            synced++;
+          } catch (e: any) {
+            console.error(
+              `SYNC ERROR PRODUCT ${item.id}:`,
+              e
+            );
+
+            errors.push(
+              `Product ${item.id}: ${
+                e.message ??
+                "unknown error"
+              }`
+            );
+          }
+        }
+
+        // ───────────────────────────────────────────────────────────
+        // 4. Tombstone products no longer in Printful
+        //    Any product in Supabase with a printful_id that did NOT
+        //    appear in the live Printful catalog gets unpublished and
+        //    archived automatically. This covers:
+        //      • Products deleted from Printful
+        //      • Products moved to draft in Printful
+        //      • Products removed from the store
+        // ───────────────────────────────────────────────────────────
+        const livePrintfulIds = result.map((item: any) => String(item.id));
+
+        const { data: existingProducts, error: fetchErr } = await supabaseAdmin
+          .from("products")
+          .select("id, printful_id, title")
+          .not("printful_id", "is", null);
+
+        let tombstoned = 0;
+        const tombstoneErrors: string[] = [];
+
+        if (!fetchErr && existingProducts) {
+          const stale = existingProducts.filter(
+            (p: any) => !livePrintfulIds.includes(p.printful_id)
+          );
+
+          for (const p of stale) {
+            const { error: archiveErr } = await supabaseAdmin
+              .from("products")
+              .update({
+                is_published: false,
+                is_archived: true,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", p.id);
+
+            if (archiveErr) {
+              tombstoneErrors.push(
+                `Tombstone ${p.printful_id} (${p.title}): ${archiveErr.message}`
+              );
+            } else {
+              tombstoned++;
+              console.log(
+                `TOMBSTONED: ${p.title} (printful_id: ${p.printful_id})`
+              );
+            }
+          }
+        } else if (fetchErr) {
+          console.error("TOMBSTONE FETCH ERROR:", fetchErr);
+          tombstoneErrors.push(`Tombstone fetch failed: ${fetchErr.message}`);
+        }
+
+        // ───────────────────────────────────────────────────────────
+        // 5. Query Active Apliq Products from Database
+        // ───────────────────────────────────────────────────────────
+        const { data: activeApliqProducts } = await supabaseAdmin
+          .from("products")
+          .not("apliq_id", "is", null);
+
+        const apliqCount = activeApliqProducts?.length || 0;
+
+        // ───────────────────────────────────────────────────────────
+        // 6. Response
+        // ───────────────────────────────────────────────────────────
+        return new Response(
+          JSON.stringify({
+            synced,
+            apliqSynced: apliqCount,
+            total: result.length,
+            tombstoned,
+            errors: [...errors, ...tombstoneErrors],
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+          }
+        );
+      },
+    },
+  },
+});
+```
+
+---
+
+### File 3: Custom Add/Update Product Webhook (`/productAddOrUpdate-webhook-url`)
+
+Create a new file in your routing system at `src/routes/productAddOrUpdate-webhook-url.tsx` (or your project's server routes path) to serve as your "Add product to store URL".
+
+```typescript
+import { createFileRoute } from "@tanstack/react-router";
+import { createClient } from "@supabase/supabase-js";
+
+export const Route = createFileRoute("/productAddOrUpdate-webhook-url")({
+  server: {
+    handlers: {
+      POST: async ({ request }) => {
+        try {
+          const SUPABASE_URL = process.env.SUPABASE_URL;
+          const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
+          if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+            return new Response(JSON.stringify({ error: "Server misconfigured" }), {
+              status: 500,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+
+          const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+          const body = await request.json();
+
+          // Safely map Apliq product payload structures
+          const apliqId = String(body.id || body.product_id || body.productId || body.design_id || "");
+          if (!apliqId) {
+            return new Response(JSON.stringify({ error: "Missing product identifier (id)" }), {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+
+          const productName = body.name || body.title || `apliq-product-${apliqId}`;
+          const description = body.description || body.external_name || productName;
+          const slug = productName
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-|-$/g, "");
+
+          // Resolve primary pricing indicators
+          let priceCents = 0;
+          if (body.price_cents !== undefined) {
+            priceCents = parseInt(body.price_cents);
+          } else if (body.price !== undefined) {
+            priceCents = Math.round(parseFloat(body.price) * 100);
+          } else if (body.retail_price !== undefined) {
+            priceCents = Math.round(parseFloat(body.retail_price) * 100);
+          }
+
+          // Resolve image sets safely
+          let imageUrls: string[] = [];
+          if (Array.isArray(body.image_urls)) {
+            imageUrls = body.image_urls;
+          } else if (Array.isArray(body.images)) {
+            imageUrls = body.images.map((img: any) => typeof img === "string" ? img : img.url || img.src || img.preview_url).filter(Boolean);
+          } else if (body.image_url) {
+            imageUrls = [body.image_url];
+          } else if (body.thumbnail_url) {
+            imageUrls = [body.thumbnail_url];
+          }
+
+          // Build item variants collection
+          let variants: any[] = [];
+          if (Array.isArray(body.variants)) {
+            variants = body.variants.map((v: any) => ({
+              sku: v.sku || String(v.id || ""),
+              price_cents: v.price_cents !== undefined ? parseInt(v.price_cents) : (v.price !== undefined ? Math.round(parseFloat(v.price) * 100) : priceCents),
+              external_sku: String(v.id || v.sku || ""),
+              fulfillment_provider: "apliq",
+              attributes: v.attributes || { size: v.size || "OS", color: v.color || "Default" },
+              stock: v.stock !== undefined ? v.stock : 999,
+            }));
+          } else if (body.sku) {
+            variants = [{
+              sku: body.sku,
+              price_cents: priceCents,
+              external_sku: body.sku,
+              fulfillment_provider: "apliq",
+              attributes: { size: "OS", color: "Default" },
+              stock: 999,
+            }];
+          }
+
+          // Fallback valuation from lowest variant price
+          if (priceCents === 0 && variants.length > 0) {
+            const prices = variants.map(v => v.price_cents).filter(p => p > 0);
+            if (prices.length > 0) {
+              priceCents = Math.min(...prices);
+            }
+          }
+
+          const { error: upsertError } = await supabaseAdmin
+            .from("products")
+            .upsert({
+              title: productName,
+              slug,
+              description,
+              price_cents: priceCents,
+              image_urls: imageUrls,
+              is_archived: false,
+              is_published: true,
+              apliq_id: apliqId,
+              variants: variants.length > 0 ? variants : null,
+              updated_at: new Date().toISOString(),
+            }, {
+              onConflict: "apliq_id",
+              ignoreDuplicates: false,
+            });
+
+          if (upsertError) {
+            console.error("APLIQ WEBHOOK UPSERT ERROR:", upsertError);
+            return new Response(JSON.stringify({ error: upsertError.message }), {
+              status: 500,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+
+          return new Response(JSON.stringify({ success: true, apliq_id: apliqId }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        } catch (err: any) {
+          console.error("APLIQ PRODUCT WEBHOOK EXCEPTION:", err);
+          return new Response(JSON.stringify({ error: err.message || "Unknown error" }), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      }
+    }
+  }
+});
+```
+
+---
+
+### File 4: Custom Search Webhook (`/productSearch-webhook-url`)
+
+Create a new file in your routing system at `src/routes/productSearch-webhook-url.tsx` (or your project's server routes path) to serve as your "Product Search URL".
+
+```typescript
+import { createFileRoute } from "@tanstack/react-router";
+import { createClient } from "@supabase/supabase-js";
+
+export const Route = createFileRoute("/productSearch-webhook-url")({
+  server: {
+    handlers: {
+      GET: async ({ request }) => {
+        try {
+          const url = new URL(request.url);
+          const search = url.searchParams.get("search") || "";
+
+          const SUPABASE_URL = process.env.SUPABASE_URL;
+          const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
+          if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+            return new Response(JSON.stringify({ error: "Server misconfigured" }), {
+              status: 500,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+
+          const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+          const { data, error } = await supabaseAdmin
+            .from("products")
+            .select("*")
+            .or(`title.ilike.%${search}%,apliq_id.eq.${search}`);
+
+          if (error) {
+            console.error("APLIQ DATABASE SEARCH ERROR:", error);
+            return new Response(JSON.stringify({ error: error.message }), {
+              status: 500,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+
+          // Return directory listing in structured model matching Apliq custom store expectation
+          const formatted = (data || []).map(p => ({
+            id: p.apliq_id || p.id,
+            title: p.title,
+            name: p.title,
+            price: p.price_cents / 100,
+            sku: p.variants?.[0]?.sku || "",
+            image_url: p.image_urls?.[0] || "",
+            variants: (p.variants || []).map((v: any) => ({
+              id: v.external_sku || v.sku,
+              sku: v.sku,
+              price: v.price_cents / 100,
+              title: Object.values(v.attributes || {}).join(" / "),
+            }))
+          }));
+
+          return new Response(JSON.stringify(formatted), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        } catch (err: any) {
+          console.error("APLIQ SEARCH PROCESS EXCEPTION:", err);
+          return new Response(JSON.stringify({ error: err.message || "Unknown error" }), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      }
+    }
+  }
+});
