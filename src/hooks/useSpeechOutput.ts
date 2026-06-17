@@ -214,7 +214,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const cancel = useCallback((isTransitioning = false) => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       try {
-        // Essential Mac browser fix: resume speech thread before canceling to unlock stale queues
         window.speechSynthesis.resume();
         window.speechSynthesis.cancel();
       } catch (e) {
@@ -257,7 +256,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
 
     setTimeout(() => {
-      // Begin the session, but only set speaking state inside the actual browser execution hooks below
+      // Begin the session
       speaking.current = true;
 
       const cleanText = sanitizeTextForSpeech(text);
@@ -301,8 +300,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         // macOS Safeguard: If browser silences/queues speech due to gesture policy,
         // cancel the lock after 1.5 seconds so J.A.R.V.I.S. never freezes the UI.
         const failsafeTimeout = setTimeout(() => {
-          if (speaking.current && !window.speechSynthesis.speaking) {
-            console.warn("[Speech Output] Mac browser locked the speech queue. Releasing interface block.");
+          if (speaking.current) {
+            console.warn("[Speech Output] Mac browser locked or delayed speech. Releasing interface block.");
             endSpeechCleanup();
           }
         }, 1500);
