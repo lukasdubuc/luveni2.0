@@ -39,15 +39,20 @@ const ELEVENLABS_API_KEY =
   (typeof process !== 'undefined' && (process.env?.VITE_ELEVENLABS_API_KEY || process.env?.ELEVENLABS_API_KEY || process.env?.GOOGLE_API_KEY)) || 
   '';
 
+// Prioritizes offline/local system voices to prevent silent cloud failures in Chrome/Safari on macOS
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   const isMobile = detectMobileDevice();
   const isAppleDevice = typeof navigator !== 'undefined' && /mac|iphone|ipad|ipod/i.test(navigator.platform || navigator.userAgent);
 
-  const candidatePool = voices.filter(v => {
+  // Filter for localService first (offline-safe, zero network latency)
+  const localVoices = voices.filter(v => v.localService === true);
+  const activePool = localVoices.length > 0 ? localVoices : voices;
+
+  const candidatePool = activePool.filter(v => {
     const lang = v.lang.toLowerCase().replace('_', '-');
     const isEn = lang.startsWith('en');
     if (isAppleDevice && v.name.toLowerCase().includes('google')) {
-      return false;
+      return false; // Skip remote cloud voices on Apple platforms
     }
     return isEn;
   });
@@ -243,13 +248,24 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
   }, [endSpeechCleanup]);
 
-  // Synchronously speak a silent workspace to whitelist and unlock macOS audio context
+  // Synchronously speak an audible offline boot-up confirmation to completely authorize audio playback
   const unlock = useCallback(() => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       try {
-        const silentUtt = new SpeechSynthesisUtterance(" ");
-        silentUtt.volume = 0;
-        window.speechSynthesis.speak(silentUtt);
+        window.speechSynthesis.resume();
+        window.speechSynthesis.cancel();
+        
+        const bootUtt = new SpeechSynthesisUtterance("Online, sir.");
+        bootUtt.volume = 0.8;
+        
+        const immediateVoices = window.speechSynthesis.getVoices();
+        const voice = findBestVoice(immediateVoices);
+        if (voice) {
+          bootUtt.voice = voice;
+        }
+        bootUtt.lang = voice ? voice.lang : 'en-GB';
+        
+        window.speechSynthesis.speak(bootUtt);
       } catch (e) {
         console.warn("[Speech Output] Gesture unlock block handled safely:", e);
       }
@@ -259,7 +275,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const doSpeakNative = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
-    cancel(true); // Stop active utterances safely
+    cancel(true); // Transition safely without premature mic activations
 
     let activeVoice = voice;
     if (!activeVoice) {
