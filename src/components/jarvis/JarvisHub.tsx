@@ -278,9 +278,10 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       if (ctx.state === 'suspended') {
         await ctx.resume();
       }
-      unlockAudio(); // Permanently unlock macOS speech engine synchronously
       setIsReady(true);
       setIsLive(true);
+      // Synchronously unlock and play J.A.R.V.I.S.'s online chime
+      unlockAudio(); 
     } catch (e) { 
       console.error("[Jarvis] Audio context resume failed.", e); 
       setIsReady(true);
