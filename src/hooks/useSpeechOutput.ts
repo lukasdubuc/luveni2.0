@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────
 //  J.A.R.V.I.S — Luveni GM | hooks/useSpeechOutput.ts
-//  PATCHED: voice loading race, key detection, volume guard
+//  PATCHED: voice loading race, key detection, volume guard, premium voice scoring
 //  All original lines preserved — additions only
 // ─────────────────────────────────────────────────────────────
 
@@ -87,7 +87,7 @@ function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | n
   // those exact names, so it fell through to englishVoices[0] — whatever
   // low-quality voice happened to be listed first. Scoring lets a good
   // voice win on ANY platform's naming scheme, not just the one we tested on.
-  const knownGoodNames = ['daniel', 'reed', 'arthur', 'gordon', 'george', 'thomas', 'ryan', 'oliver', 'harry', 'eddy', 'rocko', 'guy', 'liam'];
+  const knownGoodNames = ['daniel', 'reed', 'arthur', 'gordon', 'george', 'thomas', 'ryan', 'oliver', 'harry', 'eddy', 'rocko', 'guy', 'liam', 'sonia', 'serena', 'libby', 'kate', 'samantha'];
   const knownBadNames = ['flo', 'fred', 'albert', 'bad news', 'bahh', 'bells', 'boing', 'bubbles', 'cellos', 'good news', 'jester', 'organ', 'superstar', 'trinoids', 'whisper', 'zarvox'];
 
   const scoreVoice = (v: SpeechSynthesisVoice): number => {
@@ -95,26 +95,39 @@ function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | n
     const lang = v.lang.toLowerCase().replace('_', '-');
     let score = 0;
 
-    if (knownBadNames.some(bad => name.includes(bad))) return -100; // novelty/joke voices, never use
+    if (knownBadNames.some(bad => name.includes(bad))) return -1000; // novelty/joke voices, never use
 
-    if (lang.startsWith('en-gb')) score += 30;
-    else if (lang.startsWith('en-au')) score += 15;
-    else if (lang.startsWith('en-us')) score += 10;
-    else if (lang.startsWith('en')) score += 5;
+    // Target British/UK English first as default for Jarvis
+    if (lang.startsWith('en-gb')) score += 100;
+    else if (lang.startsWith('en-au')) score += 50;
+    else if (lang.startsWith('en-us')) score += 30;
+    else if (lang.startsWith('en')) score += 10;
 
-    // Quality/engine signals across platforms (Edge "Online (Natural)",
-    // Chrome "Neural", iOS premium voices, etc.)
-    if (/natural/.test(name)) score += 25;
-    if (/neural/.test(name)) score += 25;
-    if (/online/.test(name)) score += 10;
-    if (/premium|enhanced|wavenet/.test(name)) score += 20;
-    if (v.localService) score += 8; // on-device voices tend to be reliable + low latency
+    // Quality signals: Neural, Natural, Siri, Premium, and Enhanced voices sound miles ahead of standard offline engines
+    if (/natural/.test(name)) score += 500;
+    if (/neural/.test(name)) score += 500;
+    if (/premium|enhanced|wavenet/.test(name)) score += 400;
+    if (/siri/.test(name)) score += 300;
+    if (/online/.test(name)) score += 200;
 
-    if (knownGoodNames.some(good => name.includes(good))) score += 40;
+    // Specific good voice names
+    if (knownGoodNames.some(good => name.includes(good))) {
+      score += 50;
+    }
 
-    // Mild signal toward male-leaning default names when nothing else distinguishes them
-    if (/male/.test(name)) score += 5;
-    if (/female/.test(name)) score -= 2;
+    // Reject or heavily penalize non-premium local (offline) system voices which sound extremely robotic
+    if (v.localService) {
+      if (/premium|enhanced|siri/.test(name)) {
+        score += 100;
+      } else {
+        score -= 100; // Penalize standard/basic offline system voices
+      }
+    }
+
+    // Jarvis feel: Mild bias towards British/male/neutral sounding voices
+    if (lang.startsWith('en-gb') && (/male|ryan|george|thomas|daniel|oliver/.test(name))) {
+      score += 80;
+    }
 
     return score;
   };
@@ -301,6 +314,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       // ── Utterance 2: greeting — queued behind trustUtt ─────────────────────
       const greetUtt = new SpeechSynthesisUtterance('Online, sir.');
       greetUtt.volume = 1;
+      greetUtt.pitch = 1.0;
+      greetUtt.rate = 1.0;
       greetUtt.lang = 'en-GB';
       const immediateVoices = window.speechSynthesis.getVoices();
       if (immediateVoices.length > 0) {
@@ -370,8 +385,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         const utt = new SpeechSynthesisUtterance(rawChunk);
         
         utt.volume = 1;                                   // FIX 3: always explicit — some browsers default to 0
-        utt.rate = isMobile ? 1.0 : 0.93;
-        utt.pitch = isMobile ? 1.0 : 0.78;
+        utt.rate = isMobile ? 1.0 : 0.95;                 // Smooth, natural speech rate
+        utt.pitch = 1.0;                                  // FIX: normalized pitch to resolve robotic distortion
         utt.lang = activeVoice?.lang ?? 'en-GB';          // FIX 3: always set lang even without a voice object
 
         // Always assign the voice object on every browser/platform.
