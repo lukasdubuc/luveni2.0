@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────
 //  J.A.R.V.I.S — Luveni GM | hooks/useSpeechOutput.ts
-//  PATCHED: voice loading race, key detection, volume guard, premium voice scoring
+//  PATCHED: voice loading race, key detection, volume guard, persistent safari audio pipeline
 //  All original lines preserved — additions only
 // ─────────────────────────────────────────────────────────────
 
@@ -97,7 +97,7 @@ function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | n
 
     if (knownBadNames.some(bad => name.includes(bad))) return -1000; // novelty/joke voices, never use
 
-    // Target British/UK English first as default for Jarvis
+    // Prioritize UK/British English for Jarvis, followed by other dialects
     if (lang.startsWith('en-gb')) score += 100;
     else if (lang.startsWith('en-au')) score += 50;
     else if (lang.startsWith('en-us')) score += 30;
@@ -219,6 +219,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
   const activeAudiosRef = useRef<HTMLAudioElement[]>([]);
   const audioIntervalRef = useRef<any>(null);
+  const globalAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     onStartRef.current = onStart;
@@ -273,6 +274,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       try {
         audio.pause();
         audio.currentTime = 0;
+        audio.src = '';
       } catch (e) {}
     });
     activeAudiosRef.current = [];
@@ -290,44 +292,37 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
   }, [endSpeechCleanup]);
 
-  // Synchronously register gesture trust with a near-silent utterance, then queue greeting.
-  // TWO-UTTERANCE strategy:
-  //   1. A silent '.' at rate=10 fires and finishes instantly — this is what registers
-  //      the gesture trust with the browser's speech synthesis engine, even if voices
-  //      aren't loaded yet.  lang='en-US' (Samantha) is always available with no loading.
-  //   2. The greeting queues behind it — by the time it fires, voices are loaded.
+  // Synchronously register gesture trust with a near-silent utterance.
+  // Updated: Removed the audible "Online, sir" native fallback vocalization.
+  // We keep a silent dummy speech and prime the persistent HTML5 Audio pipeline 
+  // under the user gesture window so Safari permits clean future ElevenLabs playbacks.
   const unlock = useCallback(() => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    try {
-      window.speechSynthesis.cancel();
+    if (typeof window === 'undefined') return;
+    
+    // 1. Prime SpeechSynthesis silently
+    if (window.speechSynthesis) {
+      try {
+        window.speechSynthesis.cancel();
 
-      // ── Utterance 1: silent gesture-registration ping ──────────────────────
-      // Must use en-US: Samantha is a local system voice, zero loading latency.
-      // Chrome's en-GB default is Google UK English Male (network voice) which
-      // can silently fail if not yet cached — that's what caused the original silence.
-      const trustUtt = new SpeechSynthesisUtterance('.');
-      trustUtt.volume = 0.01;
-      trustUtt.rate = 10;
-      trustUtt.lang = 'en-US';
-      window.speechSynthesis.speak(trustUtt);
-
-      // ── Utterance 2: greeting — queued behind trustUtt ─────────────────────
-      const greetUtt = new SpeechSynthesisUtterance('Online, sir.');
-      greetUtt.volume = 1;
-      greetUtt.pitch = 1.0;
-      greetUtt.rate = 1.0;
-      greetUtt.lang = 'en-GB';
-      const immediateVoices = window.speechSynthesis.getVoices();
-      if (immediateVoices.length > 0) {
-        const voice = findBestVoice(immediateVoices);
-        if (voice) { greetUtt.voice = voice; greetUtt.lang = voice.lang; }
-      } else {
-        // Voices not loaded yet — fall back to en-US so a local voice is used
-        greetUtt.lang = 'en-US';
+        const trustUtt = new SpeechSynthesisUtterance(' ');
+        trustUtt.volume = 0.01;
+        trustUtt.rate = 10;
+        trustUtt.lang = 'en-US';
+        window.speechSynthesis.speak(trustUtt);
+      } catch (e) {
+        console.warn('[Speech Output] SpeechSynthesis gesture unlock failed:', e);
       }
-      window.speechSynthesis.speak(greetUtt);
+    }
+
+    // 2. Prime the HTML5 Audio pipeline silently under the trusted user gesture
+    try {
+      if (!globalAudioRef.current) {
+        globalAudioRef.current = new Audio();
+      }
+      globalAudioRef.current.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==';
+      globalAudioRef.current.play().catch(() => {});
     } catch (e) {
-      console.warn('[Speech Output] Gesture unlock block handled safely:', e);
+      console.warn('[Speech Output] HTML5 Audio gesture unlock failed:', e);
     }
   }, []);
 
@@ -441,13 +436,18 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
       try {
         const VOICE_ID = 'pNInz6obpgDQGcFbJwr1';
+        const activeKey = resolveElevenLabsKey() || ELEVENLABS_API_KEY;
+
+        if (!activeKey) {
+          throw new Error('ElevenLabs API key is missing or unresolved.');
+        }
 
         const audioPromises = chunks.map(async (chunk) => {
           const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'xi-api-key': ELEVENLABS_API_KEY,
+              'xi-api-key': activeKey,
             },
             body: JSON.stringify({
               text: chunk,
@@ -483,8 +483,14 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
           const rawChunk = chunks[currentIndex];
           setCurrentSubtitle(rawChunk);
 
-          const audio = new Audio(audioUrls[currentIndex]);
-          activeAudiosRef.current.push(audio);
+          // Reuse the pre-unlocked global audio element to circumvent Safari's async restrictions
+          if (!globalAudioRef.current) {
+            globalAudioRef.current = new Audio();
+          }
+          const audio = globalAudioRef.current;
+          audio.src = audioUrls[currentIndex];
+
+          activeAudiosRef.current = [audio];
 
           if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
           audioIntervalRef.current = setInterval(() => {
@@ -505,7 +511,9 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
             playNext();
           };
 
-          audio.play().catch(() => {
+          audio.play().catch((err) => {
+            console.warn('[Speech Output] HTML5 audio playback error:', err);
+            URL.revokeObjectURL(audioUrls[currentIndex]);
             currentIndex++;
             playNext();
           });
@@ -528,7 +536,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   // Original called getVoices() synchronously which almost always returns []
   // before the voiceschanged event has fired.
   const speak = useCallback(async (text: string) => {
-    if (ELEVENLABS_API_KEY) {
+    const activeKey = resolveElevenLabsKey() || ELEVENLABS_API_KEY;
+    if (activeKey) {
       doSpeakElevenLabs(text);
       return;
     }
