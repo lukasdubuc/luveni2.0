@@ -212,7 +212,7 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     setOrbState(newState);
   }, []);
   
-  const { speak, cancel, currentSubtitle } = useSpeechOutput({
+  const { speak, cancel, unlock: unlockAudio, currentSubtitle } = useSpeechOutput({
     onStart: () => changeOrbState('speaking'),
     onEnd: () => {
       if (orbStateRef.current === 'speaking' || orbStateRef.current === 'thinking') {
@@ -278,6 +278,7 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       if (ctx.state === 'suspended') {
         await ctx.resume();
       }
+      unlockAudio(); // Permanently unlock macOS speech engine synchronously
       setIsReady(true);
       setIsLive(true);
     } catch (e) { 
@@ -285,11 +286,11 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       setIsReady(true);
       setIsLive(true);
     }
-  }, [isReady]);
+  }, [isReady, unlockAudio]);
 
   useEffect(() => { 
     if (autoStart && !isMobile) {
-      // Handled securely by autoStart triggers
+      // Direct call omitted to respect browser strict security policies.
     }
   }, [autoStart, isMobile]);
 
@@ -299,6 +300,7 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       initializeJarvis();
       return;
     }
+    unlockAudio(); // Lock release on click
     setIsTextInputActive(false);
   };
 
@@ -308,6 +310,7 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       initializeJarvis();
       return;
     }
+    unlockAudio(); // Lock release on click
     if (orbState !== 'thinking' && orbState !== 'speaking') {
       setIsTextInputActive(true);
     }
@@ -326,6 +329,7 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     setIsTextInputActive(false);
     setTextInputValue('');
     if (query) {
+      unlockAudio(); // Lock release on keyboard enter gesture
       handleFinalTranscript(query);
     }
   };
@@ -347,18 +351,17 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
 
   const shadowColor = STATE_COLOR[orbState].replace('rgba(', '').replace(/,[^,]+\)$/, '');
 
-  // ─── STRENGTHENED RENDERING PIPELINE ───
   let displayText = '';
   if (orbState === 'thinking') {
     displayText = "Thinking...";
   } else if (orbState === 'speaking') {
-    displayText = currentSubtitle || lastAiResponse; // Show current spoken word chunks or fall back to full reply
+    displayText = currentSubtitle || lastAiResponse;
   } else if (orbState === 'error') {
     displayText = "Microphone error. Ensure permissions are allowed or open this page directly in a new browser tab.";
   } else if (interimTranscript) {
     displayText = interimTranscript;
   } else if (lastAiResponse) {
-    displayText = lastAiResponse; // Ensure J.A.R.V.I.S.'s text reply always persists on screen when idle
+    displayText = lastAiResponse;
   } else if (userQuery) {
     displayText = userQuery;
   } else if (isLive) {
