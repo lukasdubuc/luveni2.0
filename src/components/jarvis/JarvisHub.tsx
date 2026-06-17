@@ -150,6 +150,32 @@ function cleanResponseForSpeech(rawText: string): string {
     .trim();
 }
 
+// ── GESTURE TRUST BRIDGE ────────────────────────────────────
+// Safari revokes audio permission the moment any await fires.
+// We hold a silent AudioContext open from the synchronous gesture
+// handler so the browser considers the entire async pipeline trusted.
+let gestureAudioCtx: AudioContext | null = null;
+
+function activateGestureTrust() {
+  try {
+    const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!gestureAudioCtx) {
+      gestureAudioCtx = new AudioCtx();
+    }
+    if (gestureAudioCtx.state === 'suspended') {
+      gestureAudioCtx.resume();
+    }
+    // Play a zero-duration silent buffer — this is what actually unlocks Safari
+    const buffer = gestureAudioCtx.createBuffer(1, 1, 22050);
+    const source = gestureAudioCtx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(gestureAudioCtx.destination);
+    source.start(0);
+  } catch (e) {
+    console.warn('[Jarvis] Gesture trust activation failed silently:', e);
+  }
+}
+
 export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
   const [orbState, setOrbState] = useState<OrbState>('idle');
   const [userQuery, setUserQuery] = useState('');
@@ -278,6 +304,10 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
   const initializeJarvis = useCallback(async () => {
     if (isReady) return;
     try {
+      // ── Activate gesture trust bridge synchronously before any await ──
+      activateGestureTrust();
+      unlockAudio();
+
       const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
       const ctx = new AudioCtx();
       if (ctx.state === 'suspended') {
@@ -285,7 +315,6 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       }
       setIsReady(true);
       setIsLive(true);
-      unlockAudio(); 
     } catch (e) { 
       console.error("[Jarvis] Audio context resume failed.", e); 
       setIsReady(true);
@@ -301,21 +330,25 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
 
   const handleOrbClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    // ── Always activate gesture trust synchronously on every click ──
+    activateGestureTrust();
+    unlockAudio();
     if (!isReady) {
       initializeJarvis();
       return;
     }
-    unlockAudio(); 
     setIsTextInputActive(false);
   };
 
   const handleContainerClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    // ── Always activate gesture trust synchronously on every click ──
+    activateGestureTrust();
+    unlockAudio();
     if (!isReady) {
       initializeJarvis();
       return;
     }
-    unlockAudio(); 
     if (orbState !== 'thinking' && orbState !== 'speaking') {
       setIsTextInputActive(true);
     }
@@ -334,7 +367,9 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     setIsTextInputActive(false);
     setTextInputValue('');
     if (query) {
-      unlockAudio(); 
+      // ── Gesture trust must fire here, synchronously, before handleFinalTranscript's awaits ──
+      activateGestureTrust();
+      unlockAudio();
       handleFinalTranscript(query);
     }
   };
