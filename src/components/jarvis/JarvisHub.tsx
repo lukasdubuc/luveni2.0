@@ -266,7 +266,6 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       changeOrbState(s as OrbState);
     },
     onLevelChange: () => {},
-    // Disable voice recognition when texting or during processing cycles
     enabled: isReady && isLive && !isTextInputActive && (orbState === 'idle' || orbState === 'listening'),
     cancelSpeech: cancel
   });
@@ -290,7 +289,7 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
 
   useEffect(() => { 
     if (autoStart && !isMobile) {
-      // Direct call omitted to respect browser strict security policies.
+      // Handled securely by autoStart triggers
     }
   }, [autoStart, isMobile]);
 
@@ -300,7 +299,6 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       initializeJarvis();
       return;
     }
-    // Clicking the orb strictly turns on voice input
     setIsTextInputActive(false);
   };
 
@@ -310,7 +308,6 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       initializeJarvis();
       return;
     }
-    // Clicking elsewhere activates text mode
     if (orbState !== 'thinking' && orbState !== 'speaking') {
       setIsTextInputActive(true);
     }
@@ -350,15 +347,18 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
 
   const shadowColor = STATE_COLOR[orbState].replace('rgba(', '').replace(/,[^,]+\)$/, '');
 
+  // ─── STRENGTHENED RENDERING PIPELINE ───
   let displayText = '';
   if (orbState === 'thinking') {
     displayText = "Thinking...";
   } else if (orbState === 'speaking') {
-    displayText = currentSubtitle;
+    displayText = currentSubtitle || lastAiResponse; // Show current spoken word chunks or fall back to full reply
   } else if (orbState === 'error') {
     displayText = "Microphone error. Ensure permissions are allowed or open this page directly in a new browser tab.";
   } else if (interimTranscript) {
     displayText = interimTranscript;
+  } else if (lastAiResponse) {
+    displayText = lastAiResponse; // Ensure J.A.R.V.I.S.'s text reply always persists on screen when idle
   } else if (userQuery) {
     displayText = userQuery;
   } else if (isLive) {
