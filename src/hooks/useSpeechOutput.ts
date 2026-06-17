@@ -256,7 +256,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     speakChunk(0);
   }, [cancel, isMobile, endSpeechCleanup]);
 
-  // Routes through dedicated jarvis-tts edge function — key lives in Supabase secrets.
   const doSpeakElevenLabs = useCallback(async (text: string) => {
     cancel(true);
     speaking.current = true;
@@ -268,8 +267,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       const audioUrls: string[] = [];
 
       for (const chunk of chunks) {
-        const { data, error } = await supabase.functions.invoke('jarvis-tts', {
-          body: { text: chunk },
+        const { data, error } = await supabase.functions.invoke('jarvis-brain', {
+          body: { tool: 'tts', args: { text: chunk } },
         });
         if (error) throw error;
         const buffer = Uint8Array.from(atob(data.audio), c => c.charCodeAt(0));
