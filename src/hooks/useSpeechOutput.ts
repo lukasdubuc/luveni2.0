@@ -211,7 +211,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
   }, []);
 
-  const cancel = useCallback(() => {
+  const cancel = useCallback((isTransitioning = false) => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       try {
         window.speechSynthesis.cancel();
@@ -234,13 +234,20 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       audioIntervalRef.current = null;
     }
 
-    endSpeechCleanup();
+    // CRITICAL: If we are actively transitioning to a new speech turn, do not trigger
+    // the parent's onEnd callback (which prematurely turns the mic back on).
+    if (isTransitioning) {
+      speaking.current = false;
+      setCurrentSubtitle("");
+    } else {
+      endSpeechCleanup();
+    }
   }, [endSpeechCleanup]);
 
   const doSpeakNative = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
-    cancel();
+    cancel(true); // Indicate that we are transitioning to a new speech response
 
     let activeVoice = voice;
     if (!activeVoice) {
@@ -308,7 +315,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         };
 
         try {
-          // Safeguard native browser queue from throwing synchronously
           window.speechSynthesis.speak(utt);
         } catch (e) {
           console.warn("[Speech Output] Synchronous native speak failed. Proceeding with fallback chain:", e);
@@ -321,7 +327,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   }, [cancel, isMobile, endSpeechCleanup]);
 
   const doSpeakElevenLabs = useCallback(async (text: string) => {
-    cancel();
+    cancel(true); // Indicate that we are transitioning
 
     setTimeout(async () => {
       speaking.current = true;
