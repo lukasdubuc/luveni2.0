@@ -13,12 +13,6 @@ interface UseVoiceInputOptions {
   cancelSpeech: () => void;
 }
 
-function isSafariBrowser() {
-  if (typeof navigator === 'undefined') return false;
-  const ua = navigator.userAgent.toLowerCase();
-  return ua.includes('safari') && !ua.includes('chrome') && !ua.includes('chromium');
-}
-
 export function useVoiceInput({ 
   onInterim,
   onTranscript, 
@@ -31,7 +25,6 @@ export function useVoiceInput({
   const restartTimeoutRef = useRef<any>(null);
   const shouldRestartRef = useRef(enabled);
   
-  // Isolate parent callbacks in a persistent render-synced reference
   const callbacksRef = useRef({
     onInterim,
     onTranscript,
@@ -53,7 +46,6 @@ export function useVoiceInput({
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
 
-  // startRecognition has zero external react state dependencies
   const startRecognition = useCallback(() => {
     if (!enabledRef.current || recognitionRef.current) return;
 
@@ -63,10 +55,12 @@ export function useVoiceInput({
       return;
     }
 
-    const isSafari = isSafariBrowser();
     const rec = new SpeechRecognition();
 
-    rec.continuous = !isSafari;
+    // ─── INSTANT-COMPILE LATENCY RESOLUTION ───
+    // Setting continuous to false on all browsers forces the speech engine to emit
+    // finalized isFinal chunks instantly instead of waiting for long silence gaps.
+    rec.continuous = false; 
     rec.interimResults = true; 
     rec.lang = 'en-US';
 
@@ -77,9 +71,6 @@ export function useVoiceInput({
     rec.onresult = (event: any) => {
       if (!enabledRef.current) return;
 
-      // ─── SELF-INTERRUPTION FILTER ───
-      // If the browser's speech synthesis is actively speaking, ignore the audio input.
-      // This prevents J.A.R.V.I.S.'s own voice from triggering cancelSpeech and clearing his subtitles.
       const isSpeakingNative = typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking;
       if (isSpeakingNative) {
         return;
@@ -114,7 +105,7 @@ export function useVoiceInput({
           if (enabledRef.current && !recognitionRef.current && shouldRestartRef.current) {
             startRecognition();
           }
-        }, 300);
+        }, 150); // Shorter restart delay for snappier conversation transitions
       }
     };
 
