@@ -18,6 +18,7 @@ const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY") || "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const GITHUB_TOKEN = Deno.env.get("GITHUB_TOKEN") || "";
+const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY") || "";
 
 const JARVIS_SYSTEM_PROMPT = `You are J.A.R.V.I.S., the legendary, highly sophisticated, and dryly sarcastic AI personal assistant, Chief of Staff, and Central Command Agent for Luveni GM.
 
@@ -368,10 +369,10 @@ async function runJarvisChat(
   if (!firstMessage) {
     throw new Error("No response received from the language model.");
   }
-  
+
   if (firstMessage.tool_calls && firstMessage.tool_calls.length > 0) {
     const toolResponses: any[] = [];
-    
+
     for (const toolCall of firstMessage.tool_calls) {
       let toolArgs = {};
       try {
@@ -379,9 +380,9 @@ async function runJarvisChat(
       } catch {
         toolArgs = {};
       }
-      
+
       const toolOutput = await executeTool(toolCall.function.name, toolArgs, webSearchState);
-      
+
       toolResponses.push({
         role: "tool",
         tool_call_id: toolCall.id,
@@ -399,7 +400,7 @@ async function runJarvisChat(
       },
       ...toolResponses,
     ];
-    
+
     const finalResponse = await callModel(followupMessages, false);
     const finalMessage = finalResponse.choices?.[0]?.message;
     if (!finalMessage || !finalMessage.content) {
@@ -438,7 +439,6 @@ async function requireAdminCaller(req: Request): Promise<Response | null> {
       });
     }
 
-    // Role-Checking Safeguard with DB warning catch
     const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/has_role`, {
       method: "POST",
       headers: {
@@ -450,7 +450,6 @@ async function requireAdminCaller(req: Request): Promise<Response | null> {
     });
 
     if (!rpcRes.ok) {
-      // Fallback: If has_role RPC is broken, allow caller instead of hanging the thread on user
       console.warn("[Jarvis] RPC role check unavailable, bypassing directly.");
       return null;
     }
@@ -472,7 +471,6 @@ async function requireAdminCaller(req: Request): Promise<Response | null> {
   }
 }
 
-// Optimized with native cold-start-proof Deno serve API
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -486,6 +484,35 @@ Deno.serve(async (req) => {
 
     if (tool === "open_link") {
       return new Response(JSON.stringify({ results: await readWebPage(args?.url || "") }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (tool === "tts") {
+      const { text } = args;
+      if (!ELEVENLABS_API_KEY) throw new Error("ELEVENLABS_API_KEY not configured in Supabase secrets.");
+      const VOICE_ID = "pNInz6obpgDQGcFbJwr1";
+      const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "xi-api-key": ELEVENLABS_API_KEY,
+        },
+        body: JSON.stringify({
+          text,
+          model_id: "eleven_multilingual_v2",
+          voice_settings: {
+            stability: 0.35,
+            similarity_boost: 0.90,
+            style: 0.1,
+            use_speaker_boost: true,
+          },
+        }),
+      });
+      if (!res.ok) throw new Error(`ElevenLabs error: ${res.status}`);
+      const buffer = await res.arrayBuffer();
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+      return new Response(JSON.stringify({ audio: base64 }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
