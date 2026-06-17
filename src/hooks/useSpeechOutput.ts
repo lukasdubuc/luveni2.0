@@ -1,7 +1,3 @@
-// ─────────────────────────────────────────────────────────────
-//  J.A.R.V.I.S — Luveni GM | hooks/useSpeechOutput.ts
-// ─────────────────────────────────────────────────────────────
-
 import { useState, useCallback, useEffect, useRef } from 'react';
 
 interface UseSpeechOutputOptions {
@@ -439,7 +435,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         doSpeakNative(text, voiceCache || null);
       }
     }, 250);
-  }, [doSpeakNative]);
+  }, [cancel, doSpeakNative]); // Fixed ESLint stale warning by adding clean cancel dependency
 
   const speak = useCallback((text: string) => {
     if (ELEVENLABS_API_KEY) {
