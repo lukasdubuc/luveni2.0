@@ -31,9 +31,10 @@ export function useVoiceInput({
   const recognitionRef = useRef<any>(null);
   const restartTimeoutRef = useRef<any>(null);
   
+  // Track if we should permit automatic restarts
+  const shouldRestartRef = useRef(enabled);
+  
   // Synchronously update the ref during the render pass!
-  // This guarantees that the very instant the parent component re-renders with enabled=false,
-  // the ref is updated synchronously, blocking any trailing microtask onresult events from executing cancelSpeech!
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
 
@@ -49,9 +50,6 @@ export function useVoiceInput({
     const isSafari = isSafariBrowser();
     const rec = new SpeechRecognition();
 
-    // Unified Safari Workaround: If continuous is true on macOS/iOS Safari, the engine freezes 
-    // silently after the first result. We run single-shot on Safari and let our robust onend 
-    // recovery loop instantly restart the mic, keeping continuous listening highly stable.
     rec.continuous = !isSafari;
     rec.interimResults = true; 
     rec.lang = 'en-US';
@@ -86,21 +84,34 @@ export function useVoiceInput({
 
     rec.onend = () => {
       recognitionRef.current = null;
-      if (enabledRef.current) {
+      
+      // Only schedule a restart if enabled is still true and no hard errors occurred
+      if (enabledRef.current && shouldRestartRef.current) {
+        if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
         restartTimeoutRef.current = setTimeout(() => {
-          if (enabledRef.current && !recognitionRef.current) {
+          if (enabledRef.current && !recognitionRef.current && shouldRestartRef.current) {
             startRecognition();
           }
-        }, 100);
+        }, 300); // Relaxed timeout to prevent race conditions on slower devices
       }
     };
 
     rec.onerror = (event: any) => {
         const err = event?.error;
+        
+        // Handle hard browser blocks (no permission, lack of user gesture, blockages)
+        if (err === 'not-allowed' || err === 'service-not-allowed' || err === 'language-not-supported') {
+            console.warn("[Voice Input] Speech recognition stopped due to browser constraints:", err);
+            shouldRestartRef.current = false; // Block the recovery loop immediately
+            onStateChange('error');
+            return;
+        }
+
         // 'aborted', 'no-speech', and 'network' are routine/recoverable
         if (err === 'no-speech' || err === 'network' || err === 'aborted') {
             return;
         }
+        
         console.error("Speech recognition error", err);
         onStateChange('error');
     };
@@ -116,10 +127,12 @@ export function useVoiceInput({
 
   useEffect(() => {
     if (enabled) {
+      shouldRestartRef.current = true;
       if (!recognitionRef.current) {
         startRecognition();
       }
     } else {
+      shouldRestartRef.current = false;
       if (recognitionRef.current) {
         try { recognitionRef.current.stop(); } catch (e) {}
         recognitionRef.current = null;
@@ -128,6 +141,7 @@ export function useVoiceInput({
     }
 
     return () => {
+      shouldRestartRef.current = false;
       if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
       if (recognitionRef.current) {
         try { recognitionRef.current.stop(); } catch (e) {}
