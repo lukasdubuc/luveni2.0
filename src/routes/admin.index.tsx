@@ -202,16 +202,30 @@ const TelemetryCanvas = ({ events, isDark, canvasRefExternal }: { events: PageEv
       { name: "PAID", x: 440, y: 70 },
     ];
 
+    let lastWidth = canvas.clientWidth;
+
     const resize = () => {
-      const dpr = window.devicePixelRatio || 1;
       const rect = canvas.getBoundingClientRect();
+      
+      // Ignore mobile scroll height shifts (address bar changes)
+      if (rect.width === lastWidth && canvas.width > 0) return;
+      lastWidth = rect.width;
+
+      const dpr = window.devicePixelRatio || 1;
       canvas.width = rect.width * dpr;
       canvas.height = rect.height * dpr;
       ctx.scale(dpr, dpr);
     };
 
     resize();
-    window.addEventListener("resize", resize);
+    
+    let resizeTimeout: any;
+    const handleResize = () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(resize, 150);
+    };
+
+    window.addEventListener("resize", handleResize);
 
     const render = () => {
       const width = canvas.width / (window.devicePixelRatio || 1);
@@ -316,7 +330,7 @@ const TelemetryCanvas = ({ events, isDark, canvasRefExternal }: { events: PageEv
 
     return () => {
       cancelAnimationFrame(animationId);
-      window.removeEventListener("resize", resize);
+      window.removeEventListener("resize", handleResize);
     };
   }, [isDark]);
 
@@ -601,7 +615,7 @@ function AdminPage() {
       .channel("admin_realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (p) => {
         if (p.eventType === "INSERT") setActiveOrders(prev => upsertById(prev, p.new as Order));
-        else if (p.eventType === "UPDATE") setActiveOrders(prev => upsertById(prev, p.new as Order));
+        else if (p.eventType === "UPDATE") setActiveOrders(prev => db => upsertById(prev, p.new as Order));
         else if (p.eventType === "DELETE") setActiveOrders(prev => removeById(prev, (p.old as any).id));
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, (p) => {
@@ -661,7 +675,6 @@ function AdminPage() {
   const handleSyncProducts = async () => {
     setIsSyncing(true);
     try {
-      // 1. Create snapshot of current is_published status indexed strictly by database UUID (id)
       const originalStatuses: Record<string, boolean> = {};
       products.forEach(p => {
         originalStatuses[p.id] = p.is_published;
@@ -683,7 +696,6 @@ function AdminPage() {
         return;
       }
 
-      // 2. Query database directly following successful sync, selecting the UUID and published fields
       const { data: freshlySynced } = await supabase
         .from("products")
         .select("id, is_published");
@@ -691,7 +703,6 @@ function AdminPage() {
       if (freshlySynced) {
         const restorePromises = freshlySynced
           .filter(p => {
-            // Restore only if the product existed before the sync and its status was modified
             return originalStatuses[p.id] !== undefined && p.is_published !== originalStatuses[p.id];
           })
           .map(p => {
@@ -967,17 +978,8 @@ function AdminPage() {
     }
   };
 
-  const handleOpenJarvis = async () => {
-    try {
-      if (
-        document.documentElement.requestFullscreen &&
-        !document.fullscreenElement
-      ) {
-        await document.documentElement.requestFullscreen();
-      }
-    } catch (e) {
-      // Fullscreen denied or unavailable — proceed anyway
-    }
+  const handleOpenJarvis = () => {
+    // Completely removed the unhandled fullscreen request behavior for safe mobile navigation transitions
     navigate({ to: "/admin/jarvis" });
   };
 
@@ -1610,7 +1612,7 @@ function AdminPage() {
                         const share = Math.round((p.revenue / topRevenue) * 100);
                         return (
                           <tr key={i} className={`border-b last:border-0 transition-colors duration-150 ${isDark ? "border-white/[0.04] hover:bg-white/[0.02]" : "border-black/[0.05] hover:bg-neutral-50"}`}>
-                            <td className={`px-5 py-3.5 text-[9px] font-mono font-bold ${isDark ? "text-neutral-700" : "text-neutral-300"}`}>{i + 1}</td>
+                            <td className={`px-5 py-3.5 text-[9px] font-mono font-bold ${isDark ? "text-neutral-700" : "text-neutral-303"}`}>{i + 1}</td>
                             <td className={`px-5 py-3.5 text-[11px] font-semibold truncate max-w-[180px] ${isDark ? "text-neutral-202" : "text-neutral-800"}`}>{p.title}</td>
                             <td className="px-5 py-3.5 hidden md:table-cell w-32">
                               <div className={`h-1 rounded-full overflow-hidden ${isDark ? "bg-neutral-900" : "bg-neutral-101"}`}>
@@ -1917,7 +1919,7 @@ function AdminPage() {
                 </tbody>
               </table>
               {filteredOrders.length === 0 && (
-                <p className={`text-center py-10 text-[9px] font-mono uppercase tracking-widest ${isDark ? "text-neutral-750" : "text-neutral-300"}`}>
+                <p className={`text-center py-10 text-[9px] font-mono uppercase tracking-widest ${isDark ? "text-neutral-750" : "text-neutral-303"}`}>
                   Registry empty
                 </p>
               )}
@@ -2086,7 +2088,7 @@ function AdminPage() {
               <div className="space-y-3">
                 <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Node Access Directory</p>
                 {topPaths.length === 0 ? (
-                  <p className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-700" : "text-neutral-300"}`}>Empty logs</p>
+                  <p className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-700" : "text-neutral-303"}`}>Empty logs</p>
                 ) : (
                   <div className={`p-4 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-955/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-2.5`}>
                     {topPaths.map(([path, count]) => (
