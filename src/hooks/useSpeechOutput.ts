@@ -35,10 +35,11 @@ function detectMobileDevice() {
 const globalActiveUtterances: SpeechSynthesisUtterance[] = [];
 
 const ELEVENLABS_API_KEY = 
-  (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_ELEVENLABS_API_KEY || import.meta.env?.ELEVENLABS_API_KEY || import.meta.env?.GOOGLE_API_KEY)) || 
-  (typeof process !== 'undefined' && (process.env?.VITE_ELEVENLABS_API_KEY || process.env?.ELEVENLABS_API_KEY || process.env?.GOOGLE_API_KEY)) || 
+  (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_ELEVENLABS_API_KEY || import.meta.env?.ELEVENLABS_API_KEY)) || 
+  (typeof process !== 'undefined' && (process.env?.VITE_ELEVENLABS_API_KEY || process.env?.ELEVENLABS_API_KEY)) || 
   '';
 
+// Targets local, pre-installed macOS system voices (Siri, Samantha, Alex, Daniel)
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   const isAppleDevice = typeof navigator !== 'undefined' && /mac|iphone|ipad|ipod/i.test(navigator.platform || navigator.userAgent);
 
@@ -57,18 +58,18 @@ function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | n
     return null;
   }
 
-  // Prioritize high-quality neural system voices
-  const premiumKeywords = ['siri', 'samantha', 'daniel', 'natural', 'enhanced', 'premium'];
+  // 1. Strictly prioritize Apple's high-quality local system voices (Siri, Samantha, Daniel, Alex)
+  const premiumKeywords = ['siri', 'samantha', 'daniel', 'alex', 'premium', 'natural', 'enhanced'];
   for (const keyword of premiumKeywords) {
     const match = candidatePool.find(v => v.name.toLowerCase().includes(keyword));
     if (match) return match;
   }
 
-  // Fallback to British English (en-GB) candidates if available
+  // 2. Fallback to British English (en-GB) candidates if available
   const gbVoices = candidatePool.filter(v => v.lang.toLowerCase().replace('_', '-').startsWith('en-gb'));
   if (gbVoices.length > 0) return gbVoices[0];
 
-  // Fallback to local US English (en-US) candidates pre-installed on US Macs
+  // 3. Fallback to local US English (en-US) candidates pre-installed on US Macs
   const usVoices = candidatePool.filter(v => v.lang.toLowerCase().replace('_', '-').startsWith('en-us'));
   if (usVoices.length > 0) return usVoices[0];
 
@@ -184,12 +185,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const cancel = useCallback((isTransitioning = false) => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       try {
-        // Chromium macOS safeguard: Only execute native cancel if the queue is actively speaking.
-        // Calling cancel on an empty/idle queue permanently deadlocks Chrome's audio context thread.
-        if (speaking.current || globalActiveUtterances.length > 0) {
-          window.speechSynthesis.resume();
-          window.speechSynthesis.cancel();
-        }
+        window.speechSynthesis.resume();
+        window.speechSynthesis.cancel();
       } catch (e) {
         console.warn("[Speech Output] Cancel error handled safely:", e);
       }
@@ -217,25 +214,35 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
   }, [endSpeechCleanup]);
 
-  // Synchronously speak J.A.R.V.I.S.'s online chime using the pre-installed local Siri voice
+  // Synchronously speak J.A.R.V.I.S.'s online chime using a verified pre-installed local system voice
   const unlock = useCallback(() => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       try {
-        if (speaking.current || globalActiveUtterances.length > 0) {
-          window.speechSynthesis.cancel();
-        }
+        window.speechSynthesis.cancel();
         
         const bootUtt = new SpeechSynthesisUtterance("Online, sir.");
         bootUtt.volume = 0.8;
         
         const immediateVoices = window.speechSynthesis.getVoices();
         const voice = findBestVoice(immediateVoices);
+        
         if (voice) {
           bootUtt.voice = voice;
+          bootUtt.lang = voice.lang;
+          window.speechSynthesis.speak(bootUtt);
+        } else {
+          // If browser is still loading its asynchronous voices changed events, 
+          // delay boot-up utterance 200ms to guarantee binding to Samantha/Alex/Siri
+          setTimeout(() => {
+            const recheckedVoices = window.speechSynthesis.getVoices();
+            const recheckedVoice = findBestVoice(recheckedVoices);
+            if (recheckedVoice) {
+              bootUtt.voice = recheckedVoice;
+              bootUtt.lang = recheckedVoice.lang;
+              window.speechSynthesis.speak(bootUtt);
+            }
+          }, 200);
         }
-        bootUtt.lang = voice ? voice.lang : (typeof navigator !== 'undefined' ? navigator.language : 'en-US');
-        
-        window.speechSynthesis.speak(bootUtt);
       } catch (e) {
         console.warn("[Speech Output] Gesture unlock block handled safely:", e);
       }
@@ -247,93 +254,95 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
     cancel(true); // Stop active utterances securely without triggering premature onEnd mic openings
 
-    let activeVoice = voice;
-    if (!activeVoice) {
-      const liveVoices = window.speechSynthesis.getVoices();
-      activeVoice = findBestVoice(liveVoices);
-      if (activeVoice) voiceCache = activeVoice;
-    }
+    const speakWithActiveVoice = (retryCount = 0) => {
+      let activeVoice = voice || voiceCache;
+      if (!activeVoice) {
+        const liveVoices = window.speechSynthesis.getVoices();
+        activeVoice = findBestVoice(liveVoices);
+        if (activeVoice) voiceCache = activeVoice;
+      }
 
-    setTimeout(() => {
-      speaking.current = true;
-
-      const cleanText = sanitizeTextForSpeech(text);
-      const chunks = chunkText(cleanText, 150);
-      
-      if (chunks.length === 0) {
-        endSpeechCleanup();
+      // If browser voice cache is still populating asynchronously, wait up to 1 second
+      // to avoid Chrome mapping to the broken default Google Cloud voice.
+      if (!activeVoice && retryCount < 10) {
+        setTimeout(() => speakWithActiveVoice(retryCount + 1), 100);
         return;
       }
 
-      globalActiveUtterances.length = 0;
+      setTimeout(() => {
+        speaking.current = true;
+        if (onStartRef.current) onStartRef.current();
 
-      const speakChunk = (index: number) => {
-        if (!speaking.current) return;
+        const cleanText = sanitizeTextForSpeech(text);
+        const chunks = chunkText(cleanText, 150);
         
-        if (index >= chunks.length) {
+        if (chunks.length === 0) {
           endSpeechCleanup();
           return;
         }
 
-        const rawChunk = chunks[index].trim();
-        if (!rawChunk) {
-          speakChunk(index + 1);
-          return;
-        }
+        globalActiveUtterances.length = 0;
 
-        const utt = new SpeechSynthesisUtterance(rawChunk);
-        
-        utt.rate = isMobile ? 1.0 : 0.93;
-        utt.pitch = isMobile ? 1.0 : 0.78;
-        
-        const isSafari = typeof navigator !== 'undefined' && /safari/i.test(navigator.userAgent) && !/chrome/i.test(navigator.userAgent);
-
-        if (activeVoice && !isSafari) {
-          utt.voice = activeVoice;
-        }
-        
-        utt.lang = activeVoice ? activeVoice.lang : (typeof navigator !== 'undefined' ? navigator.language : 'en-US');
-
-        globalActiveUtterances.push(utt);
-
-        const failsafeTimeout = setTimeout(() => {
-          if (speaking.current) {
-            console.warn("[Speech Output] Mac browser locked or delayed speech. Releasing interface block.");
+        const speakChunk = (index: number) => {
+          if (!speaking.current) return;
+          
+          if (index >= chunks.length) {
             endSpeechCleanup();
+            return;
           }
-        }, 1500);
 
-        utt.onstart = () => {
-          clearTimeout(failsafeTimeout);
-          setCurrentSubtitle(rawChunk);
-          if (onStartRef.current) onStartRef.current();
+          const rawChunk = chunks[index].trim();
+          if (!rawChunk) {
+            speakChunk(index + 1);
+            return;
+          }
+
+          const utt = new SpeechSynthesisUtterance(rawChunk);
+          utt.rate = isMobile ? 1.0 : 0.93;
+          utt.pitch = isMobile ? 1.0 : 0.78;
+          
+          const isSafari = typeof navigator !== 'undefined' && /safari/i.test(navigator.userAgent) && !/chrome/i.test(navigator.userAgent);
+
+          // Strictly bind utterance voice and lang to your local offline Samantha/Siri/Daniel
+          if (activeVoice) {
+            utt.voice = activeVoice;
+            utt.lang = activeVoice.lang;
+          } else {
+            utt.lang = typeof navigator !== 'undefined' ? navigator.language : 'en-US';
+          }
+
+          globalActiveUtterances.push(utt);
+
+          utt.onstart = () => {
+            setCurrentSubtitle(rawChunk);
+          };
+
+          utt.onboundary = () => {
+            if (onBoundaryRef.current) onBoundaryRef.current(0.3 + Math.random() * 0.55);
+          };
+
+          utt.onend = () => {
+            speakChunk(index + 1);
+          };
+
+          utt.onerror = (e) => {
+            console.warn("[Speech Output] Utterance error event handled safely:", e);
+            speakChunk(index + 1);
+          };
+
+          try {
+            window.speechSynthesis.speak(utt);
+          } catch (e) {
+            console.warn("[Speech Output] Synchronous speak error handled safely:", e);
+            speakChunk(index + 1);
+          }
         };
 
-        utt.onboundary = () => {
-          if (onBoundaryRef.current) onBoundaryRef.current(0.3 + Math.random() * 0.55);
-        };
+        speakChunk(0);
+      }, 250);
+    };
 
-        utt.onend = () => {
-          clearTimeout(failsafeTimeout);
-          speakChunk(index + 1);
-        };
-
-        utt.onerror = () => {
-          clearTimeout(failsafeTimeout);
-          speakChunk(index + 1);
-        };
-
-        try {
-          window.speechSynthesis.speak(utt);
-        } catch (e) {
-          clearTimeout(failsafeTimeout);
-          console.warn("[Speech Output] Synchronous speak error handled safely:", e);
-          speakChunk(index + 1);
-        }
-      };
-
-      speakChunk(0);
-    }, 250); 
+    speakWithActiveVoice();
   }, [cancel, isMobile, endSpeechCleanup]);
 
   const doSpeakElevenLabs = useCallback(async (text: string) => {
