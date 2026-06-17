@@ -34,9 +34,11 @@ export function useGemini(options: UseGeminiOptions = {}) {
       const { googleToken, storeSnapshot } = optionsRef.current;
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
+      console.log("[useGemini] Chat Turn Requested:", { userText, timezone });
       history.current.push({ role: "user", content: userText });
 
       try {
+        console.log("[useGemini] Executing Edge Function request...");
         const { data, error } = await supabase.functions.invoke<{ reply?: string }>(
           "jarvis-brain",
           {
@@ -53,7 +55,12 @@ export function useGemini(options: UseGeminiOptions = {}) {
           },
         );
 
-        if (error) throw error;
+        if (error) {
+          console.error("[useGemini] Edge Function returned an explicit error object:", error);
+          throw error;
+        }
+
+        console.log("[useGemini] Edge Function returned successfully:", data);
 
         const reply = data?.reply || "No response received.";
         history.current.push({ role: "assistant", content: reply });
@@ -83,10 +90,8 @@ export function useGemini(options: UseGeminiOptions = {}) {
 
         const error = e instanceof Error ? e : new Error(String(e));
         const errorMsg = details ? `${details}` : error.message;
-        console.error("[Jarvis] Edge function response error:", errorMsg);
+        console.error("[useGemini] Conversation execution failed:", errorMsg);
         
-        // Self-Healing fallback: Speak an apology and safely restore conversational flow 
-        // instead of throwing an unhandled exception that freezes the UI on desktop/mobile.
         const fallbackMsg = "I apologize, sir, but I encountered a temporary connection issue. Could you repeat that?";
         history.current.push({ role: "assistant", content: fallbackMsg });
         onChunk?.(fallbackMsg);
@@ -97,6 +102,7 @@ export function useGemini(options: UseGeminiOptions = {}) {
   );
 
   const reset = useCallback(() => {
+    console.log("[useGemini] History state reset.");
     history.current = [];
   }, []);
 
