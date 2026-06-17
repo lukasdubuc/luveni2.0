@@ -29,31 +29,41 @@ export function useVoiceInput({
 }: UseVoiceInputOptions) {
   const recognitionRef = useRef<any>(null);
   const restartTimeoutRef = useRef<any>(null);
-  
-  // Track consecutive errors to prevent CPU-thrashing loop
-  const consecutiveErrorsRef = useRef(0);
-  const MAX_CONSECUTIVE_ERRORS = 3;
-  
-  // Track if we should permit automatic restarts
   const shouldRestartRef = useRef(enabled);
   
-  // Synchronously update the ref during the render pass
+  // 1. Sync parent callbacks to a stable ref. 
+  // This guarantees that re-renders never tear down the SpeechRecognition instance.
+  const callbacksRef = useRef({
+    onInterim,
+    onTranscript,
+    onStateChange,
+    onLevelChange,
+    cancelSpeech
+  });
+
+  // Keep references current on every render without triggering dependency effects
+  useEffect(() => {
+    callbacksRef.current = {
+      onInterim,
+      onTranscript,
+      onStateChange,
+      onLevelChange,
+      cancelSpeech
+    };
+  });
+
+  // Synchronously update the enabled ref
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
 
+  // 2. startRecognition now has ZERO dependencies.
+  // It is created exactly once and retains a completely stable reference.
   const startRecognition = useCallback(() => {
     if (!enabledRef.current || recognitionRef.current) return;
 
-    // Halt immediately if we have thrashed the error limit
-    if (consecutiveErrorsRef.current >= MAX_CONSECUTIVE_ERRORS) {
-      console.warn("[Voice Input] Restart prevented. Exceeded error threshold.");
-      onStateChange('error');
-      return;
-    }
-
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      onStateChange('error');
+      callbacksRef.current.onStateChange('error');
       return;
     }
 
@@ -65,15 +75,13 @@ export function useVoiceInput({
     rec.lang = 'en-US';
 
     rec.onstart = () => {
-      onStateChange('listening');
-      consecutiveErrorsRef.current = 0; // Reset consecutive errors on successful start
+      callbacksRef.current.onStateChange('listening');
     };
 
     rec.onresult = (event: any) => {
       if (!enabledRef.current) return;
 
-      cancelSpeech(); 
-      consecutiveErrorsRef.current = 0; // Reset error threshold on successful speech capture
+      callbacksRef.current.cancelSpeech(); 
 
       let interim = '';
       let final = '';
@@ -86,18 +94,17 @@ export function useVoiceInput({
         }
       }
 
-      onInterim(interim);
+      callbacksRef.current.onInterim(interim);
 
       if (final.trim()) {
-        onTranscript(final.trim());
+        callbacksRef.current.onTranscript(final.trim());
       }
     };
 
     rec.onend = () => {
       recognitionRef.current = null;
       
-      // Only schedule a restart if mic is enabled and no crash limit is reached
-      if (enabledRef.current && shouldRestartRef.current && consecutiveErrorsRef.current < MAX_CONSECUTIVE_ERRORS) {
+      if (enabledRef.current && shouldRestartRef.current) {
         if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
         restartTimeoutRef.current = setTimeout(() => {
           if (enabledRef.current && !recognitionRef.current && shouldRestartRef.current) {
@@ -109,28 +116,19 @@ export function useVoiceInput({
 
     rec.onerror = (event: any) => {
         const err = event?.error;
-        consecutiveErrorsRef.current += 1;
-        
-        // Prevent infinite thrashing if permission is blocked or gesture is missing
-        if (consecutiveErrorsRef.current >= MAX_CONSECUTIVE_ERRORS) {
-          console.warn("[Voice Input] UI safeguard: Halting restart loop to prevent main thread lockup.");
-          shouldRestartRef.current = false;
-          onStateChange('error');
-          return;
-        }
+        console.warn("[Voice Input] Speech recognition error encountered:", err);
 
         if (err === 'not-allowed' || err === 'service-not-allowed' || err === 'language-not-supported') {
-            shouldRestartRef.current = false; // Block loops for unrecoverable errors
-            onStateChange('error');
+            shouldRestartRef.current = false;
+            callbacksRef.current.onStateChange('error');
             return;
         }
 
-        // Recoverable speech pauses
         if (err === 'no-speech' || err === 'network' || err === 'aborted') {
             return;
         }
         
-        onStateChange('error');
+        callbacksRef.current.onStateChange('error');
     };
 
     try { 
@@ -140,18 +138,17 @@ export function useVoiceInput({
       console.error("Failed to start recognition", e);
       recognitionRef.current = null;
     }
-  }, [onInterim, onTranscript, onStateChange, cancelSpeech]);
+  }, []); // Zero dependencies. Never re-creates.
 
+  // 3. The main lifecycle effect now only triggers on enabled changes.
   useEffect(() => {
     if (enabled) {
       shouldRestartRef.current = true;
-      consecutiveErrorsRef.current = 0; // Clear errors on manual re-enable
       if (!recognitionRef.current) {
         startRecognition();
       }
     } else {
       shouldRestartRef.current = false;
-      consecutiveErrorsRef.current = 0;
       if (recognitionRef.current) {
         try { recognitionRef.current.stop(); } catch (e) {}
         recognitionRef.current = null;
@@ -167,7 +164,7 @@ export function useVoiceInput({
         recognitionRef.current = null;
       }
     };
-  }, [enabled, startRecognition]);
+  }, [enabled, startRecognition]); // Clean execution window bound strictly to enabled state transitions
 
   return null;
 }
