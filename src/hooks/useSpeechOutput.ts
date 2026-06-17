@@ -1,3 +1,7 @@
+// ─────────────────────────────────────────────────────────────
+//  J.A.R.V.I.S — Luveni GM | hooks/useSpeechOutput.ts
+// ─────────────────────────────────────────────────────────────
+
 import { useState, useCallback, useEffect, useRef } from 'react';
 
 interface UseSpeechOutputOptions {
@@ -243,7 +247,13 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
   const cancel = useCallback(() => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
+      // Chrome/Safari Engine Fix: Resume speech queue before canceling to unlock any silent locks
+      try {
+        window.speechSynthesis.resume();
+        window.speechSynthesis.cancel();
+      } catch (e) {
+        console.warn("[Speech Output] Cancel error handled safely:", e);
+      }
     }
     globalActiveUtterances.length = 0;
 
@@ -435,7 +445,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         doSpeakNative(text, voiceCache || null);
       }
     }, 250);
-  }, [cancel, doSpeakNative]); // Fixed ESLint stale warning by adding clean cancel dependency
+  }, [cancel, doSpeakNative]);
 
   const speak = useCallback((text: string) => {
     if (ELEVENLABS_API_KEY) {
