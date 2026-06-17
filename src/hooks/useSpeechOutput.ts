@@ -207,7 +207,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     } catch (e) {}
   }, []);
 
-  // Native TTS fallback — no setTimeout so speak() stays inside the gesture frame on desktop.
   const doSpeakNative = useCallback(async (text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     cancel(true);
@@ -257,8 +256,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     speakChunk(0);
   }, [cancel, isMobile, endSpeechCleanup]);
 
-  // ElevenLabs via Supabase Edge Function — key never touches the frontend.
-  // Uses eleven_multilingual_v2 (highest quality) routed through jarvis-brain.
+  // Routes through dedicated jarvis-tts edge function — key lives in Supabase secrets.
   const doSpeakElevenLabs = useCallback(async (text: string) => {
     cancel(true);
     speaking.current = true;
@@ -270,8 +268,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       const audioUrls: string[] = [];
 
       for (const chunk of chunks) {
-        const { data, error } = await supabase.functions.invoke('jarvis-brain', {
-          body: { tool: 'tts', args: { text: chunk } },
+        const { data, error } = await supabase.functions.invoke('jarvis-tts', {
+          body: { text: chunk },
         });
         if (error) throw error;
         const buffer = Uint8Array.from(atob(data.audio), c => c.charCodeAt(0));
@@ -318,7 +316,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
   }, [cancel, doSpeakNative]);
 
-  // Primes Audio element synchronously under the user-gesture frame before any await.
   const speak = useCallback(async (text: string) => {
     if (typeof window !== 'undefined') {
       try {
@@ -327,7 +324,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         globalAudioRef.current.play().catch(() => {});
       } catch (e) {}
     }
-
     doSpeakElevenLabs(text);
   }, [doSpeakElevenLabs]);
 
