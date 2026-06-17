@@ -1,7 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //  J.A.R.V.I.S — Luveni GM | hooks/useSpeechOutput.ts
-//  PATCHED: voice loading race, key detection, volume guard, persistent safari audio pipeline
-//  All original lines preserved — additions only
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useCallback, useEffect, useRef } from 'react';
@@ -13,20 +11,6 @@ interface UseSpeechOutputOptions {
   onEnd?: () => void;
 }
 
-const BRITISH_VOICES = [
-  'Microsoft Ryan Online (Natural) - English (United Kingdom)',
-  'Microsoft Sonia Online (Natural) - English (United Kingdom)',
-  'Microsoft Thomas Online (Natural) - English (United Kingdom)',
-  'Google UK English Male',
-  'Google UK English Female',
-  'Daniel',
-  'Hazel',
-  'Siri',
-  'Microsoft Susan',
-  'Microsoft George',
-  'Microsoft Ryan',
-];
-
 function detectMobileDevice() {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
   return (
@@ -35,58 +19,78 @@ function detectMobileDevice() {
   );
 }
 
+function isAppleDevice() {
+  if (typeof navigator === 'undefined') return false;
+  return /mac|iphone|ipad|ipod/i.test(navigator.platform || navigator.userAgent);
+}
+
 const globalActiveUtterances: SpeechSynthesisUtterance[] = [];
 
-function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+function findBestAppleVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   if (!voices.length) return null;
 
-  const isAppleDevice = typeof navigator !== 'undefined' && /mac|iphone|ipad|ipod/i.test(navigator.platform || navigator.userAgent);
+  const englishVoices = voices.filter(v =>
+    v.lang.toLowerCase().replace('_', '-').startsWith('en')
+  );
+  if (!englishVoices.length) return voices[0];
 
-  const englishVoices = voices.filter(v => {
-    const lang = v.lang.toLowerCase().replace('_', '-');
-    if (isAppleDevice && v.name.toLowerCase().includes('google')) return false;
-    return lang.startsWith('en');
-  });
+  // Explicit priority list for Apple devices — best quality first
+  const priority = [
+    'daniel (enhanced)',
+    'daniel',
+    'siri',
+    'samantha (enhanced)',
+    'karen (enhanced)',
+    'kate (enhanced)',
+    'oliver (enhanced)',
+    'arthur (enhanced)',
+    'rishi (enhanced)',
+    'moira (enhanced)',
+    'tessa (enhanced)',
+    'samantha',
+    'karen',
+  ];
 
-  if (englishVoices.length === 0) {
-    return voices[0] || null;
+  for (const target of priority) {
+    const match = englishVoices.find(v => v.name.toLowerCase().includes(target));
+    if (match) return match;
   }
 
-  const knownGoodNames = ['daniel', 'reed', 'arthur', 'gordon', 'george', 'thomas', 'ryan', 'oliver', 'harry', 'eddy', 'rocko', 'guy', 'liam', 'sonia', 'serena', 'libby', 'kate', 'samantha'];
+  // Fall back to any enhanced/premium English voice
+  const enhanced = englishVoices.find(v => /enhanced|premium/.test(v.name.toLowerCase()));
+  if (enhanced) return enhanced;
+
+  return englishVoices[0];
+}
+
+function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+  if (isAppleDevice()) return findBestAppleVoice(voices);
+
+  if (!voices.length) return null;
+
   const knownBadNames = ['flo', 'fred', 'albert', 'bad news', 'bahh', 'bells', 'boing', 'bubbles', 'cellos', 'good news', 'jester', 'organ', 'superstar', 'trinoids', 'whisper', 'zarvox'];
+
+  const englishVoices = voices.filter(v =>
+    v.lang.toLowerCase().replace('_', '-').startsWith('en') &&
+    !knownBadNames.some(bad => v.name.toLowerCase().includes(bad))
+  );
+
+  if (!englishVoices.length) return voices[0];
 
   const scoreVoice = (v: SpeechSynthesisVoice): number => {
     const name = v.name.toLowerCase();
     const lang = v.lang.toLowerCase().replace('_', '-');
     let score = 0;
-
-    if (knownBadNames.some(bad => name.includes(bad))) return -1000;
-
     if (lang.startsWith('en-gb')) score += 100;
     else if (lang.startsWith('en-au')) score += 50;
     else if (lang.startsWith('en-us')) score += 30;
-    else if (lang.startsWith('en')) score += 10;
-
-    if (/natural/.test(name)) score += 500;
-    if (/neural/.test(name)) score += 500;
+    if (/natural|neural/.test(name)) score += 500;
     if (/premium|enhanced|wavenet/.test(name)) score += 400;
-    if (/siri/.test(name)) score += 300;
     if (/online/.test(name)) score += 200;
-
-    if (knownGoodNames.some(good => name.includes(good))) score += 50;
-
-    if (v.localService) {
-      if (/premium|enhanced|siri/.test(name)) score += 100;
-      else score -= 100;
-    }
-
-    if (lang.startsWith('en-gb') && (/male|ryan|george|thomas|daniel|oliver/.test(name))) score += 80;
-
     return score;
   };
 
-  const ranked = [...englishVoices].sort((a, b) => scoreVoice(b) - scoreVoice(a));
-  return ranked[0] || englishVoices[0];
+  return [...englishVoices].sort((a, b) => scoreVoice(b) - scoreVoice(a))[0];
 }
 
 function loadVoices(): Promise<SpeechSynthesisVoice[]> {
@@ -261,6 +265,9 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     speaking.current = true;
     if (onStartRef.current) onStartRef.current();
 
+    // Pre-load voices so fallback is instant if needed
+    const voicesPromise = loadVoices();
+
     const chunks = chunkText(sanitizeTextForSpeech(text), 150);
 
     try {
@@ -270,7 +277,11 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         const { data, error } = await supabase.functions.invoke('jarvis-brain', {
           body: { tool: 'tts', args: { text: chunk } },
         });
+
+        // Treat both network errors and API-level errors (quota, key missing) as failures
         if (error) throw error;
+        if (!data || !data.audio) throw new Error(data?.error ?? 'No audio returned');
+
         const buffer = Uint8Array.from(atob(data.audio), c => c.charCodeAt(0));
         const blob = new Blob([buffer], { type: 'audio/mpeg' });
         audioUrls.push(URL.createObjectURL(blob));
@@ -306,9 +317,11 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
       playNext();
 
-    } catch (error) {
-      console.warn('[Speech Engine] ElevenLabs via Supabase failed, falling back:', error);
-      const voices = await loadVoices();
+    } catch (err) {
+      console.warn('[Speech Engine] ElevenLabs failed, falling back to native:', err);
+      // Reset speaking state so doSpeakNative can set it up cleanly
+      speaking.current = false;
+      const voices = await voicesPromise;
       const fallbackVoice = voiceCache ?? findBestVoice(voices);
       if (fallbackVoice) voiceCache = fallbackVoice;
       doSpeakNative(text, fallbackVoice || null);
@@ -316,12 +329,20 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   }, [cancel, doSpeakNative]);
 
   const speak = useCallback(async (text: string) => {
+    // Unlock audio context synchronously under user gesture before any awaits
     if (typeof window !== 'undefined') {
       try {
         if (!globalAudioRef.current) globalAudioRef.current = new Audio();
         globalAudioRef.current.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==';
         globalAudioRef.current.play().catch(() => {});
       } catch (e) {}
+      if (window.speechSynthesis) {
+        try {
+          const primer = new SpeechSynthesisUtterance(' ');
+          primer.volume = 0; primer.rate = 10;
+          window.speechSynthesis.speak(primer);
+        } catch (e) {}
+      }
     }
     doSpeakElevenLabs(text);
   }, [doSpeakElevenLabs]);
