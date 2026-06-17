@@ -150,11 +150,21 @@ function cleanResponseForSpeech(rawText: string): string {
     .trim();
 }
 
-// ── GESTURE TRUST BRIDGE ────────────────────────────────────
-// Safari revokes audio permission the moment any await fires.
-// We hold a silent AudioContext open from the synchronous gesture
-// handler so the browser considers the entire async pipeline trusted.
+// ── GESTURE TRUST BRIDGE ──────────────────────────────────── 
+// Safari/Chrome revoke audio permission the moment any await fires.
+// We hold a silent AudioContext open AND prime a real <audio> element
+// from the synchronous gesture handler so BOTH browser permission tracks
+// (Web Audio API "audiocontext" AND HTMLMediaElement "mediaelement") are
+// unlocked. These are tracked SEPARATELY by the browser — unlocking the
+// AudioContext does NOT unlock <audio>.play(), which is what
+// useSpeechOutput.ts's ElevenLabs/fallback playback actually uses. That
+// gap was silently blocking all ElevenLabs audio on desktop Chrome with
+// zero console errors (the .catch() inside playNext() swallowed it).
 let gestureAudioCtx: AudioContext | null = null;
+let gestureAudioEl: HTMLAudioElement | null = null;
+
+const SILENT_WAV =
+  'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
 
 function activateGestureTrust() {
   try {
@@ -165,17 +175,31 @@ function activateGestureTrust() {
     if (gestureAudioCtx.state === 'suspended') {
       gestureAudioCtx.resume();
     }
-    // Play a zero-duration silent buffer — this is what actually unlocks Safari
+    // Play a zero-duration silent buffer — unlocks the AudioContext track.
     const buffer = gestureAudioCtx.createBuffer(1, 1, 22050);
     const source = gestureAudioCtx.createBufferSource();
     source.buffer = buffer;
     source.connect(gestureAudioCtx.destination);
     source.start(0);
+
+    // ── NEW: unlock the separate <audio> element track ──────────────
+    // This is what ElevenLabs/fallback playback in useSpeechOutput.ts
+    // actually uses (new Audio(blobUrl); audio.play()). Reusing ONE
+    // element and just calling play()+pause() on every gesture keeps
+    // that element's playback authorization "warm" so later play()
+    // calls succeed even after the async fetch() delay.
+    if (!gestureAudioEl) {
+      gestureAudioEl = new Audio(SILENT_WAV);
+      gestureAudioEl.volume = 0;
+    }
+    gestureAudioEl.currentTime = 0;
+    gestureAudioEl.play().catch((e) => {
+      console.warn('[Jarvis] <audio> element gesture unlock failed:', e);
+    });
   } catch (e) {
     console.warn('[Jarvis] Gesture trust activation failed silently:', e);
   }
 }
-
 export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
   const [orbState, setOrbState] = useState<OrbState>('idle');
   const [userQuery, setUserQuery] = useState('');
