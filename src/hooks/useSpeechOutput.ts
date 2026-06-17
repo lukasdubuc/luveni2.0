@@ -272,27 +272,42 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
   }, [endSpeechCleanup]);
 
-  // Synchronously play a brief boot chime via Siri/Samantha system voice
+  // Synchronously register gesture trust with a near-silent utterance, then queue greeting.
+  // TWO-UTTERANCE strategy:
+  //   1. A silent '.' at rate=10 fires and finishes instantly — this is what registers
+  //      the gesture trust with the browser's speech synthesis engine, even if voices
+  //      aren't loaded yet.  lang='en-US' (Samantha) is always available with no loading.
+  //   2. The greeting queues behind it — by the time it fires, voices are loaded.
   const unlock = useCallback(() => {
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      try {
-        window.speechSynthesis.cancel();
-        
-        const bootUtt = new SpeechSynthesisUtterance("Online, sir.");
-        bootUtt.volume = 1; // FIX 3: explicit volume
-        bootUtt.lang = 'en-GB'; // FIX 3: explicit lang prevents silence
-        
-        const immediateVoices = window.speechSynthesis.getVoices();
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    try {
+      window.speechSynthesis.cancel();
+
+      // ── Utterance 1: silent gesture-registration ping ──────────────────────
+      // Must use en-US: Samantha is a local system voice, zero loading latency.
+      // Chrome's en-GB default is Google UK English Male (network voice) which
+      // can silently fail if not yet cached — that's what caused the original silence.
+      const trustUtt = new SpeechSynthesisUtterance('.');
+      trustUtt.volume = 0.01;
+      trustUtt.rate = 10;
+      trustUtt.lang = 'en-US';
+      window.speechSynthesis.speak(trustUtt);
+
+      // ── Utterance 2: greeting — queued behind trustUtt ─────────────────────
+      const greetUtt = new SpeechSynthesisUtterance('Online, sir.');
+      greetUtt.volume = 1;
+      greetUtt.lang = 'en-GB';
+      const immediateVoices = window.speechSynthesis.getVoices();
+      if (immediateVoices.length > 0) {
         const voice = findBestVoice(immediateVoices);
-        if (voice) {
-          bootUtt.voice = voice;
-          bootUtt.lang = voice.lang;
-        }
-        
-        window.speechSynthesis.speak(bootUtt);
-      } catch (e) {
-        console.warn("[Speech Output] Gesture unlock block handled safely:", e);
+        if (voice) { greetUtt.voice = voice; greetUtt.lang = voice.lang; }
+      } else {
+        // Voices not loaded yet — fall back to en-US so a local voice is used
+        greetUtt.lang = 'en-US';
       }
+      window.speechSynthesis.speak(greetUtt);
+    } catch (e) {
+      console.warn('[Speech Output] Gesture unlock block handled safely:', e);
     }
   }, []);
 
@@ -354,9 +369,12 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         utt.pitch = isMobile ? 1.0 : 0.78;
         utt.lang = activeVoice?.lang ?? 'en-GB';          // FIX 3: always set lang even without a voice object
 
-        const isSafari = typeof navigator !== 'undefined' && /safari/i.test(navigator.userAgent) && !/chrome/i.test(navigator.userAgent);
-
-        if (activeVoice && !isSafari) {
+        // Always assign the voice object on every browser/platform.
+        // The previous isSafari guard prevented voice assignment on Safari/iPhone,
+        // causing the utterance to fire with no voice — silence on all Apple devices.
+        // Web Speech API voice assignment works correctly on Safari when voices are
+        // loaded first (which loadVoices() above guarantees).
+        if (activeVoice) {
           utt.voice = activeVoice;
         }
 
