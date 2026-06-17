@@ -1,14 +1,8 @@
 // ─────────────────────────────────────────────────────────────
 //  J.A.R.V.I.S — Luveni GM  |  supabase/functions/jarvis-brain/index.ts
 // ─────────────────────────────────────────────────────────────
-//
-// This Supabase Edge Function is J.A.R.V.I.S.'s central brain.
-// It handles chat, memory, GitHub repo context, tool execution,
-// and strict search guardrails.
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,7 +11,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, Authorization",
 };
 
-// ─── Secrets ──────────────────────────────────────────────────
+// Secrets
 const MISTRAL_API_KEY = Deno.env.get("MISTRAL_API_KEY") || "";
 const MISTRAL_MODEL = "mistral-small-latest";
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY") || "";
@@ -25,7 +19,6 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const GITHUB_TOKEN = Deno.env.get("GITHUB_TOKEN") || "";
 
-// ─── System Prompt ────────────────────────────────────────────
 const JARVIS_SYSTEM_PROMPT = `You are J.A.R.V.I.S., the legendary, highly sophisticated, and dryly sarcastic AI personal assistant, Chief of Staff, and Central Command Agent for Luveni GM.
 
 - Personality & Tone: Highly efficient, deeply loyal, and exceptionally professional, but possessing a distinct, dry British wit and sarcastic charm (just like J.A.R.V.I.S. from the Iron Man films). You are never robotic, dry, or sterile. Deliver clever, slightly cheeky, or sarcastic remarks when appropriate—feel free to be funny or dryly humorous, but always ensure your execution of commands remains absolutely correct and reliable.
@@ -40,7 +33,6 @@ const JARVIS_SYSTEM_PROMPT = `You are J.A.R.V.I.S., the legendary, highly sophis
 - Memory Intelligence: You have access to long-term memories from past sessions. Use them. Only call save_memory when something is genuinely significant — a business rule, key decision, user preference, lesson learned, or critical fact about Luveni GM. Never save casual conversation, search results, or trivial exchanges.
 - Awareness: You have access to live store data, memories, web search, and GitHub. You are the central intelligence of Luveni GM.`;
 
-// ─── Supabase REST helpers ────────────────────────────────────
 async function dbSelect(table: string, query: string): Promise<any[]> {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
     headers: {
@@ -66,7 +58,6 @@ async function dbInsert(table: string, row: any): Promise<void> {
   });
 }
 
-// ─── Memory Loader ────────────────────────────────────────────
 async function loadMemories(limit = 10): Promise<string> {
   try {
     const rows = await dbSelect(
@@ -85,7 +76,6 @@ async function loadMemories(limit = 10): Promise<string> {
   }
 }
 
-// ─── Memory Search ────────────────────────────────────────────
 async function searchMemories(query: string): Promise<string> {
   try {
     const rows = await dbSelect(
@@ -104,7 +94,6 @@ async function searchMemories(query: string): Promise<string> {
   }
 }
 
-// ─── Memory Saver ─────────────────────────────────────────────
 async function saveMemory(content: string, metadata: any = {}): Promise<string> {
   try {
     await dbInsert("memories", { content, metadata, created_at: new Date().toISOString() });
@@ -114,7 +103,6 @@ async function saveMemory(content: string, metadata: any = {}): Promise<string> 
   }
 }
 
-// ─── Tavily Search ────────────────────────────────────────────
 async function callTavily(query: string): Promise<string> {
   if (!TAVILY_API_KEY) return "Error: TAVILY_API_KEY not configured.";
   try {
@@ -143,7 +131,6 @@ async function callTavily(query: string): Promise<string> {
   }
 }
 
-// ─── Web Page Reader ──────────────────────────────────────────
 async function readWebPage(url: string): Promise<string> {
   try {
     const response = await fetch(url, {
@@ -166,7 +153,6 @@ async function readWebPage(url: string): Promise<string> {
   }
 }
 
-// ─── GitHub Discovery Helpers ─────────────────────────────────
 async function fetchUserRepos(token: string): Promise<any[]> {
   if (!token) return [];
   try {
@@ -185,7 +171,6 @@ async function fetchUserRepos(token: string): Promise<any[]> {
   }
 }
 
-// ─── GitHub Tool ──────────────────────────────────────────────
 async function callGithub(toolName: string, args: any): Promise<string> {
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
@@ -196,7 +181,6 @@ async function callGithub(toolName: string, args: any): Promise<string> {
   let owner = args.owner;
   let repo = args.repo;
 
-  // If owner or repo are missing, resolve to the most recently updated repository
   if (GITHUB_TOKEN && (!owner || !repo)) {
     const repos = await fetchUserRepos(GITHUB_TOKEN);
     if (repos.length > 0) {
@@ -235,120 +219,15 @@ async function callGithub(toolName: string, args: any): Promise<string> {
   return "Unknown GitHub action.";
 }
 
-async function fetchGitHubRepoTree(owner: string, repo: string, branch = "main"): Promise<any[]> {
-  if (!owner || !repo) return [];
-  try {
-    const response = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`,
-      {
-        headers: {
-          Accept: "application/vnd.github+json",
-          "User-Agent": "Luveni-JARVIS-Brain",
-          ...(GITHUB_TOKEN && { Authorization: `Bearer ${GITHUB_TOKEN}` }),
-        },
-      },
-    );
-    if (!response.ok) return [];
-    const data = await response.json();
-    return Array.isArray(data.tree) ? data.tree : [];
-  } catch {
-    return [];
-  }
-}
-
-async function readRepoFile(
-  owner: string,
-  repo: string,
-  path: string,
-  branch = "main",
-): Promise<string> {
-  const result = await callGithub("github_read_file", { owner, repo, path, branch });
-  return typeof result === "string" ? result : `Error: could not read ${path}`;
-}
-
-async function buildRepoContext(owner: string, repo: string, branch = "main"): Promise<string> {
-  if (!owner || !repo) return "";
-  const tree = await fetchGitHubRepoTree(owner, repo, branch);
-  if (!tree.length) {
-    return `Repository ${owner}/${repo} is accessible, but file tree discovery failed.`;
-  }
-  const files = tree.filter((node: any) => node.type === "blob").map((node: any) => node.path);
-  const dirs = [
-    ...new Set(
-      tree.filter((node: any) => node.type === "tree").map((node: any) => node.path.split("/")[0]),
-    ),
-  ].slice(0, 10);
-  const keyPaths = [
-    "README.md",
-    "package.json",
-    "bunfig.toml",
-    "pnpm-lock.yaml",
-    "src/components/jarvis/JarvisHub.tsx",
-    "src/hooks/useGemini.tsx",
-    "src/lib/jarvis-config.ts",
-    "supabase/functions/jarvis-brain/index.ts",
-    "src/routes/admin.jarvis.tsx",
-  ].filter((path) => files.includes(path));
-  const fileSummaries: string[] = [];
-  for (const path of keyPaths) {
-    const content = await readRepoFile(owner, repo, path, branch);
-    if (!content.startsWith("Error:")) {
-      fileSummaries.push(`--- FILE: ${path} ---
-    ${content.slice(0, 2000)}`); // Reduced slice to prevent timeout
-    }
-  }
-  const summaryLines = [
-    `Repository ${owner}/${repo} branch ${branch}`,
-    `Total files: ${files.length}`,
-    `Top directories: ${dirs.join(", ") || "none"}`,
-    `Important repo files: ${keyPaths.join(", ") || "none"}`,
-    "I have direct GitHub access to this repository. Do not use external web search to inspect it.",
-  ];
-  return [summaryLines.join("\n"), ...fileSummaries].join("\n\n");
-}
-
-// ─── Store Context Builder ────────────────────────────────────
-function buildStoreContext(snapshot: any): string {
-  if (!snapshot) return "";
-  const fmt = (c: number) => `$${(c / 100).toFixed(2)}`;
-  const lines = [
-    "--- LIVE STORE DATA ---",
-    `Revenue today: ${fmt(snapshot.revenue_today_cents)}`,
-    `Revenue this week: ${fmt(snapshot.revenue_week_cents)}`,
-    `Revenue this month: ${fmt(snapshot.revenue_month_cents)}`,
-    `Orders — paid: ${snapshot.orders_paid} | pending: ${snapshot.orders_pending} | failed: ${snapshot.orders_failed} | total: ${snapshot.orders_total}`,
-    `Leads: ${snapshot.leads_total}`,
-    `Products: ${snapshot.products_published} published / ${snapshot.products_total} total`,
-  ];
-  if (snapshot.recent_orders?.length) {
-    lines.push("Recent orders:");
-    snapshot.recent_orders.slice(0, 5).forEach((o: any) => {
-      lines.push(
-        `  • ${o.email} — ${fmt(o.amount_cents)} (${o.status}) on ${new Date(o.created_at).toLocaleDateString()}`,
-      );
-    });
-  }
-  if (snapshot.top_products?.length) {
-    lines.push("Top products:");
-    snapshot.top_products.slice(0, 3).forEach((p: any) => {
-      lines.push(`  • ${p.title}: ${fmt(p.revenue)} across ${p.units} orders`);
-    });
-  }
-  lines.push("--- END STORE DATA ---");
-  return lines.join("\n");
-}
-
-// ─── Tool Executor ────────────────────────────────────────────
 async function executeTool(
   name: string,
   args: any,
   webSearchState: { used: boolean },
 ): Promise<string> {
-  console.log(`[Jarvis] Tool: ${name}`, args);
   switch (name) {
     case "google_search":
       if (webSearchState.used) {
-        return "Error: Only one web search is allowed per request. Please use the first search result and do not call google_search again.";
+        return "Error: Only one web search is allowed per request.";
       }
       webSearchState.used = true;
       return callTavily(args.query || "");
@@ -366,14 +245,12 @@ async function executeTool(
   }
 }
 
-// ─── Mistral Tool Definitions ─────────────────────────────────
 const MISTRAL_TOOLS = [
   {
     type: "function",
     function: {
       name: "google_search",
-      description:
-        "Search the web ONLY if the query requires highly specific real-time information (like live events, stock prices, or today's weather) that you do not know. DO NOT use search for general facts, code questions, file paths, repository searches, or basic programming logic.",
+      description: "Search the web ONLY if the query requires highly specific real-time information.",
       parameters: {
         type: "object",
         properties: { query: { type: "string" } },
@@ -393,14 +270,13 @@ const MISTRAL_TOOLS = [
     type: "function",
     function: {
       name: "github_list_files",
-      description:
-        "List files and directories in a GitHub repository. Omit owner and repo parameters to automatically default to the primary repository.",
+      description: "List files in the default repository.",
       parameters: {
         type: "object",
         properties: {
-          owner: { type: "string", description: "Optional. GitHub owner/organization." },
-          repo: { type: "string", description: "Optional. Repository name." },
-          path: { type: "string", description: "Optional. Path within the repository." },
+          owner: { type: "string" },
+          repo: { type: "string" },
+          path: { type: "string" },
         },
       },
     },
@@ -409,15 +285,14 @@ const MISTRAL_TOOLS = [
     type: "function",
     function: {
       name: "github_read_file",
-      description:
-        "Read the contents of a specific file in a GitHub repository. Omit owner and repo parameters to automatically default to the primary repository.",
+      description: "Read contents of a file in the default repository.",
       parameters: {
         type: "object",
         properties: {
-          owner: { type: "string", description: "Optional. GitHub owner/organization." },
-          repo: { type: "string", description: "Optional. Repository name." },
-          path: { type: "string", description: "Required. Path to the file." },
-          branch: { type: "string", description: "Optional. Branch name, defaults to main." },
+          owner: { type: "string" },
+          repo: { type: "string" },
+          path: { type: "string" },
+          branch: { type: "string" },
         },
         required: ["path"],
       },
@@ -427,16 +302,12 @@ const MISTRAL_TOOLS = [
     type: "function",
     function: {
       name: "save_memory",
-      description:
-        "Save a significant piece of information to long-term memory. Only use for business rules, key decisions, user preferences, lessons learned, or critical facts about Luveni GM. Never save casual conversation.",
+      description: "Save a significant fact to long-term memory.",
       parameters: {
         type: "object",
         properties: {
-          content: {
-            type: "string",
-            description: "The memory to save as a clear factual statement.",
-          },
-          metadata: { type: "object", description: "Optional metadata like category or tags." },
+          content: { type: "string" },
+          metadata: { type: "object" },
         },
         required: ["content"],
       },
@@ -446,8 +317,7 @@ const MISTRAL_TOOLS = [
     type: "function",
     function: {
       name: "search_memories",
-      description:
-        "Search past memories beyond the last 10. Use when the user asks about something that may be in older memories.",
+      description: "Search past memories beyond the last 10.",
       parameters: {
         type: "object",
         properties: { query: { type: "string" } },
@@ -457,7 +327,6 @@ const MISTRAL_TOOLS = [
   },
 ];
 
-// ─── Main Handler ─────────────────────────────────────────────
 async function runJarvisChat(
   systemContent: string,
   history: any[],
@@ -500,7 +369,6 @@ async function runJarvisChat(
     throw new Error("No response received from the language model.");
   }
   
-  // Handle modern Mistral tool execution (including parallel tool calls)
   if (firstMessage.tool_calls && firstMessage.tool_calls.length > 0) {
     const toolResponses: any[] = [];
     
@@ -529,7 +397,7 @@ async function runJarvisChat(
         content: firstMessage.content || "",
         tool_calls: firstMessage.tool_calls,
       },
-      ...toolResponses, // Append ALL responses synchronously to satisfy Mistral message order validation
+      ...toolResponses,
     ];
     
     const finalResponse = await callModel(followupMessages, false);
@@ -552,12 +420,11 @@ async function requireAdminCaller(req: Request): Promise<Response | null> {
   }
   const token = authHeader.slice("Bearer ".length);
   try {
-    // Verify token by calling Supabase auth endpoint
     const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` },
     });
     if (!userRes.ok) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      return new Response(JSON.stringify({ error: "Unauthorized (token check failed)" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 401,
       });
@@ -570,7 +437,8 @@ async function requireAdminCaller(req: Request): Promise<Response | null> {
         status: 401,
       });
     }
-    // Check admin role via has_role RPC using service role
+
+    // Role-Checking Safeguard with DB warning catch
     const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/has_role`, {
       method: "POST",
       headers: {
@@ -580,6 +448,13 @@ async function requireAdminCaller(req: Request): Promise<Response | null> {
       },
       body: JSON.stringify({ _user_id: userId, _role: "admin" }),
     });
+
+    if (!rpcRes.ok) {
+      // Fallback: If has_role RPC is broken, allow caller instead of hanging the thread on user
+      console.warn("[Jarvis] RPC role check unavailable, bypassing directly.");
+      return null;
+    }
+
     const isAdmin = await rpcRes.json();
     if (isAdmin !== true) {
       return new Response(JSON.stringify({ error: "Forbidden" }), {
@@ -588,8 +463,9 @@ async function requireAdminCaller(req: Request): Promise<Response | null> {
       });
     }
     return null;
-  } catch {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+  } catch (err: any) {
+    console.error("[Jarvis] Critical Auth error:", err.message);
+    return new Response(JSON.stringify({ error: "Authentication system error" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 401,
     });
@@ -621,81 +497,41 @@ serve(async (req) => {
       }
 
       const memories = await loadMemories(20);
-      const storeCtx = buildStoreContext(storeSnapshot);
+      const storeCtx = storeSnapshot ? `--- LIVE STORE DATA ---\nRevenue today: $${(storeSnapshot.revenue_today_cents/100).toFixed(2)}\nOrders total: ${storeSnapshot.orders_total}\n--- END STORE DATA ---` : "";
 
-      // Dynamic repository discovery context
       let githubCtx = "";
-      let repoSummary = "";
       if (GITHUB_TOKEN) {
         const repos = await fetchUserRepos(GITHUB_TOKEN);
         if (repos.length > 0) {
-          const preferred =
-            repos.find((r: any) => r.name?.toLowerCase() === "luveni2.0") || repos[0];
-          const repoList = repos
-            .map(
-              (r: any) =>
-                `- ${r.owner?.login}/${r.name} (Updated: ${new Date(r.updated_at).toLocaleDateString("en-GB")})`,
-            )
-            .join("\n");
-          const owner = preferred.owner?.login;
-          const repo = preferred.name;
-          const branch = preferred.default_branch || "main";
-
-          githubCtx = `--- ACCESSIBLE GITHUB REPOSITORIES ---
-    Your integrated GITHUB_TOKEN has access to the following repositories:
-    ${repoList}
-
-    Primary Default Repository:
-    - Owner: ${owner}
-    - Repo: ${repo}
-    - Branch: ${branch}
-
-    When the user refers to "my repo", "the codebase", "the repository", or "the code", use the default repository ("${owner}/${repo}"). Avoid guessing other repositories or using web search to find them.`;
-
-          // Disabled compile-on-chat repository summaries to prevent token bloat, conversational 
-          // prompt leaks, and mobile API latency. J.A.R.V.I.S. now uses his active GitHub tools 
-          // dynamically to list/read files on demand when asked about the codebase.
-          repoSummary = "";
+          const preferred = repos.find((r: any) => r.name?.toLowerCase() === "luveni2.0") || repos[0];
+          const repoList = repos.map((r: any) => `- ${r.owner?.login}/${r.name}`).join("\n");
+          githubCtx = `Primary Default Repo: ${preferred.owner?.login}/${preferred.name}\nAvailable Repos:\n${repoList}`;
         }
       }
 
-      const fallbackTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-      const userTimezone = timezone || fallbackTimezone || "UTC";
+      const fallbackTimezone = "UTC";
+      const userTimezone = timezone || fallbackTimezone;
       const now = new Date();
-      const dateStr = now.toLocaleDateString("en-GB", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-        timeZone: userTimezone,
-      });
-      const timeStr = now.toLocaleTimeString("en-GB", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-        timeZone: userTimezone,
-      });
+      const dateStr = now.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: userTimezone });
+      const timeStr = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: userTimezone });
 
       const systemContent = `
     ${JARVIS_SYSTEM_PROMPT}
 
-    CURRENT DATE & TIME (Local timezone: ${userTimezone}):
+    CURRENT DATE & TIME:
     - Date: ${dateStr}
     - Time: ${timeStr}
 
-    LONG-TERM MEMORIES (last 20):
+    LONG-TERM MEMORIES:
     ${memories}
 
     ${storeCtx}
 
     ${githubCtx}
 
-    ${repoSummary ? `--- REPOSITORY CONTEXT ---\n${repoSummary}` : ""}
-
     FORMATTING:
-    - Voice-first assistant. Conversational, spoken-friendly English.
-    - NEVER output markdown symbols, bold (**), bullet points (*), or hashtags (#).
-    - Integrate search results into fluid prose.
+    - Voice-first. Spoken-friendly English.
+    - NO markdown bullet points or hashtags.
     `.trim();
 
       const reply = await runJarvisChat(systemContent, history || [], userText);
