@@ -19,6 +19,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const GITHUB_TOKEN = Deno.env.get("GITHUB_TOKEN") || "";
 const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY") || "";
+const ELEVENLABS_VOICE_ID = "pNInz6obpgDQGcFbJwr1";
 
 const JARVIS_SYSTEM_PROMPT = `You are J.A.R.V.I.S., the legendary, highly sophisticated, and dryly sarcastic AI personal assistant, Chief of Staff, and Central Command Agent for Luveni GM.
 
@@ -208,9 +209,7 @@ async function callGithub(toolName: string, args: any): Promise<string> {
         : JSON.stringify(data);
     }
     if (toolName === "github_read_file") {
-      if (Array.isArray(data)) {
-        return "Error: Path points to a directory, not a file.";
-      }
+      if (Array.isArray(data)) return "Error: Path points to a directory, not a file.";
       if (!data.content) return "Error: File content empty.";
       return atob(data.content.replace(/\s/g, ""));
     }
@@ -227,9 +226,7 @@ async function executeTool(
 ): Promise<string> {
   switch (name) {
     case "google_search":
-      if (webSearchState.used) {
-        return "Error: Only one web search is allowed per request.";
-      }
+      if (webSearchState.used) return "Error: Only one web search is allowed per request.";
       webSearchState.used = true;
       return callTavily(args.query || "");
     case "open_link":
@@ -339,6 +336,7 @@ async function runJarvisChat(
     { role: "user", content: userText },
   ];
   const webSearchState = { used: false };
+
   async function callModel(msgs: any[], useTools = true): Promise<any> {
     const body: any = {
       model: MISTRAL_MODEL,
@@ -346,9 +344,7 @@ async function runJarvisChat(
       temperature: 0.25,
       max_tokens: 1200,
       top_p: 0.95,
-      ...(useTools
-        ? { tools: MISTRAL_TOOLS, tool_choice: "auto" }
-        : {}),
+      ...(useTools ? { tools: MISTRAL_TOOLS, tool_choice: "auto" } : {}),
     };
     const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
       method: "POST",
@@ -364,25 +360,18 @@ async function runJarvisChat(
     }
     return await response.json();
   }
+
   const firstResponse = await callModel(messages, true);
   const firstMessage = firstResponse.choices?.[0]?.message;
-  if (!firstMessage) {
-    throw new Error("No response received from the language model.");
-  }
+  if (!firstMessage) throw new Error("No response received from the language model.");
 
   if (firstMessage.tool_calls && firstMessage.tool_calls.length > 0) {
     const toolResponses: any[] = [];
 
     for (const toolCall of firstMessage.tool_calls) {
       let toolArgs = {};
-      try {
-        toolArgs = JSON.parse(toolCall.function.arguments || "{}");
-      } catch {
-        toolArgs = {};
-      }
-
+      try { toolArgs = JSON.parse(toolCall.function.arguments || "{}"); } catch { toolArgs = {}; }
       const toolOutput = await executeTool(toolCall.function.name, toolArgs, webSearchState);
-
       toolResponses.push({
         role: "tool",
         tool_call_id: toolCall.id,
@@ -393,21 +382,16 @@ async function runJarvisChat(
 
     const followupMessages = [
       ...messages,
-      {
-        role: "assistant",
-        content: firstMessage.content || "",
-        tool_calls: firstMessage.tool_calls,
-      },
+      { role: "assistant", content: firstMessage.content || "", tool_calls: firstMessage.tool_calls },
       ...toolResponses,
     ];
 
     const finalResponse = await callModel(followupMessages, false);
     const finalMessage = finalResponse.choices?.[0]?.message;
-    if (!finalMessage || !finalMessage.content) {
-      throw new Error("No final response received after tool execution.");
-    }
+    if (!finalMessage || !finalMessage.content) throw new Error("No final response received after tool execution.");
     return finalMessage.content;
   }
+
   return firstMessage.content || "";
 }
 
@@ -489,10 +473,20 @@ Deno.serve(async (req) => {
     }
 
     if (tool === "tts") {
-      const { text } = args;
-      if (!ELEVENLABS_API_KEY) throw new Error("ELEVENLABS_API_KEY not configured in Supabase secrets.");
-      const VOICE_ID = "pNInz6obpgDQGcFbJwr1";
-      const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
+      const text = args?.text;
+      if (!text || typeof text !== "string") {
+        return new Response(JSON.stringify({ error: "args.text is required" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
+        });
+      }
+      if (!ELEVENLABS_API_KEY) {
+        return new Response(JSON.stringify({ error: "ELEVENLABS_API_KEY not set in Supabase secrets" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 500,
+        });
+      }
+      const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -509,7 +503,13 @@ Deno.serve(async (req) => {
           },
         }),
       });
-      if (!res.ok) throw new Error(`ElevenLabs error: ${res.status}`);
+      if (!res.ok) {
+        const errText = await res.text();
+        return new Response(JSON.stringify({ error: `ElevenLabs ${res.status}: ${errText}` }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 500,
+        });
+      }
       const buffer = await res.arrayBuffer();
       const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
       return new Response(JSON.stringify({ audio: base64 }), {
@@ -520,12 +520,12 @@ Deno.serve(async (req) => {
     if (tool === "chat") {
       const { userText, history, storeSnapshot, timezone } = args;
 
-      if (!MISTRAL_API_KEY) {
-        throw new Error("MISTRAL_API_KEY is not configured in Supabase secrets.");
-      }
+      if (!MISTRAL_API_KEY) throw new Error("MISTRAL_API_KEY is not configured in Supabase secrets.");
 
       const memories = await loadMemories(20);
-      const storeCtx = storeSnapshot ? `--- LIVE STORE DATA ---\nRevenue today: $${(storeSnapshot.revenue_today_cents/100).toFixed(2)}\nOrders total: ${storeSnapshot.orders_total}\n--- END STORE DATA ---` : "";
+      const storeCtx = storeSnapshot
+        ? `--- LIVE STORE DATA ---\nRevenue today: $${(storeSnapshot.revenue_today_cents / 100).toFixed(2)}\nOrders total: ${storeSnapshot.orders_total}\n--- END STORE DATA ---`
+        : "";
 
       let githubCtx = "";
       if (GITHUB_TOKEN) {
@@ -537,8 +537,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      const fallbackTimezone = "UTC";
-      const userTimezone = timezone || fallbackTimezone;
+      const userTimezone = timezone || "UTC";
       const now = new Date();
       const dateStr = now.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: userTimezone });
       const timeStr = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: userTimezone });
