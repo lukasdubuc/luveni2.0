@@ -214,8 +214,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const cancel = useCallback(() => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       try {
-        // Unlock speech engine before cancel
-        window.speechSynthesis.resume();
         window.speechSynthesis.cancel();
       } catch (e) {
         console.warn("[Speech Output] Cancel error handled safely:", e);
@@ -224,8 +222,10 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     globalActiveUtterances.length = 0;
 
     activeAudiosRef.current.forEach(audio => {
-      audio.pause();
-      audio.currentTime = 0;
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+      } catch (e) {}
     });
     activeAudiosRef.current = [];
 
@@ -307,7 +307,13 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
           speakChunk(index + 1);
         };
 
-        window.speechSynthesis.speak(utt);
+        try {
+          // Safeguard native browser queue from throwing synchronously
+          window.speechSynthesis.speak(utt);
+        } catch (e) {
+          console.warn("[Speech Output] Synchronous native speak failed. Proceeding with fallback chain:", e);
+          speakChunk(index + 1);
+        }
       };
 
       speakChunk(0);
