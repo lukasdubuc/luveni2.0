@@ -39,27 +39,24 @@ const ELEVENLABS_API_KEY =
   (typeof process !== 'undefined' && (process.env?.VITE_ELEVENLABS_API_KEY || process.env?.ELEVENLABS_API_KEY || process.env?.GOOGLE_API_KEY)) || 
   '';
 
-// Upgraded matching engine: Targets Apple's ultra-realistic Siri, Samantha, and Daniel system voices
+// Targets local, pre-installed macOS system voices (Siri, Samantha, Daniel)
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   const isAppleDevice = typeof navigator !== 'undefined' && /mac|iphone|ipad|ipod/i.test(navigator.platform || navigator.userAgent);
 
-  // Filter pool: Keep English voices, and filter out remote Google/Microsoft cloud voices 
-  // on Apple platforms to prevent silent Chrome hangs.
   const candidatePool = voices.filter(v => {
-    const lang = v.lang.toLowerCase().replace('_', '-');
-    const isEn = lang.startsWith('en');
-    const isRemoteCloud = v.name.toLowerCase().includes('google') || v.name.toLowerCase().includes('microsoft');
-    if (isAppleDevice && isRemoteCloud) {
-      return false; // Skip remote cloud voices to protect the thread
+    const isLocal = v.localService === true || v.name.toLowerCase().includes('siri') || v.name.toLowerCase().includes('daniel') || v.name.toLowerCase().includes('samantha');
+    const isEn = v.lang.toLowerCase().startsWith('en');
+    if (isAppleDevice && v.name.toLowerCase().includes('google')) {
+      return false; // Skip remote cloud voices on Apple platforms
     }
-    return isEn;
+    return isEn && isLocal;
   });
 
   if (candidatePool.length === 0) {
-    return voices.find(v => v.lang.toLowerCase().startsWith('en')) || voices[0] || null;
+    return null;
   }
 
-  // 1. Strictly prioritize J.A.R.V.I.S.'s high-quality premium system voices (Siri, Samantha, Enhanced, Daniel)
+  // 1. Prioritize local J.A.R.V.I.S. system voices (Siri, Samantha, Daniel Enhanced)
   const premiumKeywords = ['siri', 'enhanced', 'samantha', 'daniel', 'premium', 'natural'];
   for (const keyword of premiumKeywords) {
     const match = candidatePool.find(v => v.name.toLowerCase().includes(keyword));
@@ -70,7 +67,7 @@ function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | n
   const gbVoices = candidatePool.filter(v => v.lang.toLowerCase().replace('_', '-').startsWith('en-gb'));
   if (gbVoices.length > 0) return gbVoices[0];
 
-  // 3. Fallback to local US English (en-US) candidates
+  // 3. Fallback to local US English (en-US) candidates pre-installed on US Macs
   const usVoices = candidatePool.filter(v => v.lang.toLowerCase().replace('_', '-').startsWith('en-us'));
   if (usVoices.length > 0) return usVoices[0];
 
@@ -186,8 +183,12 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const cancel = useCallback((isTransitioning = false) => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       try {
-        window.speechSynthesis.resume();
-        window.speechSynthesis.cancel();
+        // Chromium macOS safeguard: Only execute native cancel if the queue is actively speaking.
+        // Calling cancel on an empty/idle queue permanently deadlocks Chrome's audio context thread.
+        if (window.speechSynthesis.speaking) {
+          window.speechSynthesis.resume();
+          window.speechSynthesis.cancel();
+        }
       } catch (e) {
         console.warn("[Speech Output] Cancel error handled safely:", e);
       }
@@ -219,8 +220,10 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const unlock = useCallback(() => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       try {
-        window.speechSynthesis.resume();
-        window.speechSynthesis.cancel();
+        if (window.speechSynthesis.speaking) {
+          window.speechSynthesis.resume();
+          window.speechSynthesis.cancel();
+        }
         
         const bootUtt = new SpeechSynthesisUtterance("Online, sir.");
         bootUtt.volume = 0.8;
@@ -242,7 +245,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const doSpeakNative = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
-    cancel(true); // Stop active utterances securely without triggering premature onEnd mic openings
+    cancel(true); // Transition safely without triggering premature onEnd mic openings
 
     let activeVoice = voice;
     if (!activeVoice) {
