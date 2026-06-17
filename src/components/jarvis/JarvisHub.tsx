@@ -235,6 +235,11 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       const reply = await ask(text);
       if (!reply) throw new Error("No response received");
       setLastAiResponse(reply);
+      
+      // CRITICAL SPEED FIX: Transition to 'speaking' immediately upon data resolution
+      // so your text reply displays with 0 milliseconds of delay.
+      changeOrbState('speaking');
+
       const cleanReply = cleanResponseForSpeech(reply);
       speak(cleanReply);
     } catch (err) {
@@ -280,7 +285,6 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       }
       setIsReady(true);
       setIsLive(true);
-      // Synchronously unlock and play J.A.R.V.I.S.'s online chime
       unlockAudio(); 
     } catch (e) { 
       console.error("[Jarvis] Audio context resume failed.", e); 
@@ -301,7 +305,7 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       initializeJarvis();
       return;
     }
-    unlockAudio(); // Lock release on click
+    unlockAudio(); 
     setIsTextInputActive(false);
   };
 
@@ -311,7 +315,7 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       initializeJarvis();
       return;
     }
-    unlockAudio(); // Lock release on click
+    unlockAudio(); 
     if (orbState !== 'thinking' && orbState !== 'speaking') {
       setIsTextInputActive(true);
     }
@@ -330,7 +334,7 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     setIsTextInputActive(false);
     setTextInputValue('');
     if (query) {
-      unlockAudio(); // Lock release on keyboard enter gesture
+      unlockAudio(); 
       handleFinalTranscript(query);
     }
   };
