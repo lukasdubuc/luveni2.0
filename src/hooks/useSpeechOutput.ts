@@ -39,24 +39,27 @@ const ELEVENLABS_API_KEY =
   (typeof process !== 'undefined' && (process.env?.VITE_ELEVENLABS_API_KEY || process.env?.ELEVENLABS_API_KEY || process.env?.GOOGLE_API_KEY)) || 
   '';
 
-// Targets local, pre-installed macOS system voices (Siri, Samantha, Daniel)
+// Upgraded matching engine: Targets Apple's ultra-realistic Siri, Samantha, and Daniel system voices
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   const isAppleDevice = typeof navigator !== 'undefined' && /mac|iphone|ipad|ipod/i.test(navigator.platform || navigator.userAgent);
 
+  // Filter pool: Keep English voices, and strictly filter out remote Google/Microsoft cloud voices 
+  // on Apple platforms to prevent silent browser hangs.
   const candidatePool = voices.filter(v => {
-    const isLocal = v.localService === true || v.name.toLowerCase().includes('siri') || v.name.toLowerCase().includes('daniel') || v.name.toLowerCase().includes('samantha');
-    const isEn = v.lang.toLowerCase().startsWith('en');
-    if (isAppleDevice && v.name.toLowerCase().includes('google')) {
-      return false; // Skip remote cloud voices on Apple platforms
+    const lang = v.lang.toLowerCase().replace('_', '-');
+    const isEn = lang.startsWith('en');
+    const isRemoteCloud = v.name.toLowerCase().includes('google') || v.name.toLowerCase().includes('microsoft');
+    if (isAppleDevice && isRemoteCloud) {
+      return false; // Skip remote cloud voices on Apple platforms to avoid event locks
     }
-    return isEn && isLocal;
+    return isEn;
   });
 
   if (candidatePool.length === 0) {
-    return null;
+    return voices.find(v => v.lang.toLowerCase().startsWith('en')) || voices[0] || null;
   }
 
-  // 1. Prioritize local J.A.R.V.I.S. system voices (Siri, Samantha, Daniel Enhanced)
+  // 1. Strictly prioritize J.A.R.V.I.S.'s high-quality premium system voices (Siri, Samantha, Daniel)
   const premiumKeywords = ['siri', 'enhanced', 'samantha', 'daniel', 'premium', 'natural'];
   for (const keyword of premiumKeywords) {
     const match = candidatePool.find(v => v.name.toLowerCase().includes(keyword));
@@ -180,15 +183,10 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
   }, []);
 
-  const cancel = useCallback((isTransitioning = false) => {
+  const cancel = useCallback(() => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       try {
-        // Chromium macOS safeguard: Only execute native cancel if the queue is actively speaking.
-        // Calling cancel on an empty/idle queue permanently deadlocks Chrome's audio context thread.
-        if (window.speechSynthesis.speaking) {
-          window.speechSynthesis.resume();
-          window.speechSynthesis.cancel();
-        }
+        window.speechSynthesis.cancel();
       } catch (e) {
         console.warn("[Speech Output] Cancel error handled safely:", e);
       }
@@ -208,22 +206,14 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       audioIntervalRef.current = null;
     }
 
-    if (isTransitioning) {
-      speaking.current = false;
-      setCurrentSubtitle("");
-    } else {
-      endSpeechCleanup();
-    }
+    endSpeechCleanup();
   }, [endSpeechCleanup]);
 
-  // Synchronously speak J.A.R.V.I.S.'s online chime using the pre-installed local Siri voice
+  // Synchronously speak J.A.R.V.I.S.'s online chime using your pre-installed Siri/Samantha system voice
   const unlock = useCallback(() => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       try {
-        if (window.speechSynthesis.speaking) {
-          window.speechSynthesis.resume();
-          window.speechSynthesis.cancel();
-        }
+        window.speechSynthesis.cancel();
         
         const bootUtt = new SpeechSynthesisUtterance("Online, sir.");
         bootUtt.volume = 0.8;
@@ -245,7 +235,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const doSpeakNative = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
-    cancel(true); // Transition safely without triggering premature onEnd mic openings
+    cancel(); // Revert back to the highly stable, baseline cancel triggers
 
     let activeVoice = voice;
     if (!activeVoice) {
@@ -256,6 +246,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
     setTimeout(() => {
       speaking.current = true;
+      if (onStartRef.current) onStartRef.current();
 
       const cleanText = sanitizeTextForSpeech(text);
       const chunks = chunkText(cleanText, 150);
@@ -296,17 +287,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
         globalActiveUtterances.push(utt);
 
-        const failsafeTimeout = setTimeout(() => {
-          if (speaking.current) {
-            console.warn("[Speech Output] Mac browser locked or delayed speech. Releasing interface block.");
-            endSpeechCleanup();
-          }
-        }, 1500);
-
         utt.onstart = () => {
-          clearTimeout(failsafeTimeout);
           setCurrentSubtitle(rawChunk);
-          if (onStartRef.current) onStartRef.current();
         };
 
         utt.onboundary = () => {
@@ -314,19 +296,16 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         };
 
         utt.onend = () => {
-          clearTimeout(failsafeTimeout);
           speakChunk(index + 1);
         };
 
         utt.onerror = () => {
-          clearTimeout(failsafeTimeout);
           speakChunk(index + 1);
         };
 
         try {
           window.speechSynthesis.speak(utt);
         } catch (e) {
-          clearTimeout(failsafeTimeout);
           console.warn("[Speech Output] Synchronous speak error handled safely:", e);
           speakChunk(index + 1);
         }
@@ -337,7 +316,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   }, [cancel, isMobile, endSpeechCleanup]);
 
   const doSpeakElevenLabs = useCallback(async (text: string) => {
-    cancel(true);
+    cancel();
 
     setTimeout(async () => {
       speaking.current = true;
