@@ -13,7 +13,6 @@ interface UseVoiceInputOptions {
   cancelSpeech: () => void;
 }
 
-// Unified browser Safari detection for continuous-listening bug workaround
 function isSafariBrowser() {
   if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent.toLowerCase();
@@ -31,15 +30,26 @@ export function useVoiceInput({
   const recognitionRef = useRef<any>(null);
   const restartTimeoutRef = useRef<any>(null);
   
+  // Track consecutive errors to prevent CPU-thrashing loop
+  const consecutiveErrorsRef = useRef(0);
+  const MAX_CONSECUTIVE_ERRORS = 3;
+  
   // Track if we should permit automatic restarts
   const shouldRestartRef = useRef(enabled);
   
-  // Synchronously update the ref during the render pass!
+  // Synchronously update the ref during the render pass
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
 
   const startRecognition = useCallback(() => {
     if (!enabledRef.current || recognitionRef.current) return;
+
+    // Halt immediately if we have thrashed the error limit
+    if (consecutiveErrorsRef.current >= MAX_CONSECUTIVE_ERRORS) {
+      console.warn("[Voice Input] Restart prevented. Exceeded error threshold.");
+      onStateChange('error');
+      return;
+    }
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -56,13 +66,14 @@ export function useVoiceInput({
 
     rec.onstart = () => {
       onStateChange('listening');
+      consecutiveErrorsRef.current = 0; // Reset consecutive errors on successful start
     };
 
     rec.onresult = (event: any) => {
-      // Synchronously discard trailing audio buffers if voice input was disabled
       if (!enabledRef.current) return;
 
       cancelSpeech(); 
+      consecutiveErrorsRef.current = 0; // Reset error threshold on successful speech capture
 
       let interim = '';
       let final = '';
@@ -85,34 +96,40 @@ export function useVoiceInput({
     rec.onend = () => {
       recognitionRef.current = null;
       
-      // Only schedule a restart if enabled is still true and no hard errors occurred
-      if (enabledRef.current && shouldRestartRef.current) {
+      // Only schedule a restart if mic is enabled and no crash limit is reached
+      if (enabledRef.current && shouldRestartRef.current && consecutiveErrorsRef.current < MAX_CONSECUTIVE_ERRORS) {
         if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
         restartTimeoutRef.current = setTimeout(() => {
           if (enabledRef.current && !recognitionRef.current && shouldRestartRef.current) {
             startRecognition();
           }
-        }, 300); // Relaxed timeout to prevent race conditions on slower devices
+        }, 300);
       }
     };
 
     rec.onerror = (event: any) => {
         const err = event?.error;
+        consecutiveErrorsRef.current += 1;
         
-        // Handle hard browser blocks (no permission, lack of user gesture, blockages)
+        // Prevent infinite thrashing if permission is blocked or gesture is missing
+        if (consecutiveErrorsRef.current >= MAX_CONSECUTIVE_ERRORS) {
+          console.warn("[Voice Input] UI safeguard: Halting restart loop to prevent main thread lockup.");
+          shouldRestartRef.current = false;
+          onStateChange('error');
+          return;
+        }
+
         if (err === 'not-allowed' || err === 'service-not-allowed' || err === 'language-not-supported') {
-            console.warn("[Voice Input] Speech recognition stopped due to browser constraints:", err);
-            shouldRestartRef.current = false; // Block the recovery loop immediately
+            shouldRestartRef.current = false; // Block loops for unrecoverable errors
             onStateChange('error');
             return;
         }
 
-        // 'aborted', 'no-speech', and 'network' are routine/recoverable
+        // Recoverable speech pauses
         if (err === 'no-speech' || err === 'network' || err === 'aborted') {
             return;
         }
         
-        console.error("Speech recognition error", err);
         onStateChange('error');
     };
 
@@ -128,11 +145,13 @@ export function useVoiceInput({
   useEffect(() => {
     if (enabled) {
       shouldRestartRef.current = true;
+      consecutiveErrorsRef.current = 0; // Clear errors on manual re-enable
       if (!recognitionRef.current) {
         startRecognition();
       }
     } else {
       shouldRestartRef.current = false;
+      consecutiveErrorsRef.current = 0;
       if (recognitionRef.current) {
         try { recognitionRef.current.stop(); } catch (e) {}
         recognitionRef.current = null;
