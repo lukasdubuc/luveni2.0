@@ -65,69 +65,66 @@ function resolveElevenLabsKey(): string {
 const ELEVENLABS_API_KEY = resolveElevenLabsKey();
 
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
-  const isMobile = detectMobileDevice();
+  if (!voices.length) return null;
+
   const isAppleDevice = typeof navigator !== 'undefined' && /mac|iphone|ipad|ipod/i.test(navigator.platform || navigator.userAgent);
 
-  const candidatePool = voices.filter(v => {
+  // ── PRIORITY ORDER (confirmed available on Mac + iPhone) ──
+  // 1. Daniel (English (United Kingdom)) — highest quality British male on Apple
+  // 2. Reed (English (United Kingdom))   — second best British male on Apple
+  // 3. Arthur                            — good British male
+  // 4. Any other en-GB male name
+  // 5. Any en-GB voice
+  // 6. Any en-AU voice
+  // 7. Any English voice
+  // 8. First available voice
+
+  const englishVoices = voices.filter(v => {
     const lang = v.lang.toLowerCase().replace('_', '-');
-    const isEn = lang.startsWith('en');
-    if (isAppleDevice && v.name.toLowerCase().includes('google')) {
-      return false; // Skip Google cloud voices on Apple platforms
-    }
-    return isEn;
+    // Skip Google cloud voices on Apple — they stall or fail silently
+    if (isAppleDevice && v.name.toLowerCase().includes('google')) return false;
+    return lang.startsWith('en');
   });
 
-  if (candidatePool.length === 0) {
-    return voices.find(v => v.lang.toLowerCase().startsWith('en')) || voices[0] || null;
+  if (englishVoices.length === 0) {
+    return voices[0] || null;
   }
 
-  const gbVoices = candidatePool.filter(v => {
-    const lang = v.lang.toLowerCase().replace('_', '-');
-    return lang.startsWith('en-gb');
-  });
+  const gbVoices = englishVoices.filter(v =>
+    v.lang.toLowerCase().replace('_', '-').startsWith('en-gb')
+  );
 
-  const preferredPool = gbVoices.length > 0 ? gbVoices : candidatePool;
+  // Exact name matches first — most reliable on Apple platforms
+  const exactPriority = [
+    'Daniel (English (United Kingdom))',
+    'Reed (English (United Kingdom))',
+    'Arthur',
+    'Gordon',
+    'Eddy (English (United Kingdom))',
+    'Rocko (English (United Kingdom))',
+  ];
 
-  if (isMobile) {
-    const englishVoices = preferredPool.filter(v => {
-      const lang = v.lang.toLowerCase().replace('_', '-');
-      return lang.startsWith('en-au') || lang.startsWith('en-gb');
-    });
-
-    if (englishVoices.length > 0) {
-      const qualityKeywords = ['premium', 'enhanced', 'natural', 'siri'];
-      for (const keyword of qualityKeywords) {
-        const match = englishVoices.find(v => v.name.toLowerCase().includes(keyword));
-        if (match) return match;
-      }
-
-      const maleKeywords = ['ryan', 'george', 'thomas', 'guy', 'daniel', 'arthur', 'oliver', 'harry', 'male'];
-      for (const keyword of maleKeywords) {
-        const match = englishVoices.find(v => v.name.toLowerCase().includes(keyword));
-        if (match) return match;
-      }
-
-      return englishVoices[0];
-    }
+  for (const name of exactPriority) {
+    const match = voices.find(v => v.name === name);
+    if (match) return match;
   }
 
-  if (gbVoices.length === 0) {
-    return preferredPool.find(v => v.lang.toLowerCase().startsWith('en-au')) ?? preferredPool.find(v => v.lang.toLowerCase().startsWith('en')) ?? null;
-  }
-
-  const premiumDesktop = ['natural', 'premium', 'enhanced', 'siri'];
-  for (const keyword of premiumDesktop) {
+  // Fuzzy male keyword search within en-GB
+  const malePriorityKeywords = ['daniel', 'reed', 'arthur', 'gordon', 'george', 'thomas', 'ryan', 'oliver', 'harry', 'eddy', 'rocko', 'grandpa'];
+  for (const keyword of malePriorityKeywords) {
     const match = gbVoices.find(v => v.name.toLowerCase().includes(keyword));
     if (match) return match;
   }
 
-  const maleKeywords = ['ryan', 'george', 'thomas', 'guy', 'daniel', 'arthur', 'oliver', 'harry', 'male'];
-  for (const keyword of maleKeywords) {
-    const match = gbVoices.find(v => v.name.toLowerCase().includes(keyword));
-    if (match) return match;
-  }
+  // Any en-GB voice
+  if (gbVoices.length > 0) return gbVoices[0];
 
-  return gbVoices[0];
+  // en-AU fallback
+  const auVoice = englishVoices.find(v => v.lang.toLowerCase().replace('_', '-').startsWith('en-au'));
+  if (auVoice) return auVoice;
+
+  // Any English voice
+  return englishVoices[0];
 }
 
 // ── FIX 2: loadVoices with hard retry ───────────────────────
