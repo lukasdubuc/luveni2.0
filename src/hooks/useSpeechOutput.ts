@@ -214,6 +214,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const cancel = useCallback((isTransitioning = false) => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       try {
+        // Essential Mac browser fix: resume speech thread before canceling to unlock stale queues
+        window.speechSynthesis.resume();
         window.speechSynthesis.cancel();
       } catch (e) {
         console.warn("[Speech Output] Cancel error handled safely:", e);
@@ -234,8 +236,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       audioIntervalRef.current = null;
     }
 
-    // CRITICAL: If we are actively transitioning to a new speech turn, do not trigger
-    // the parent's onEnd callback (which prematurely turns the mic back on).
     if (isTransitioning) {
       speaking.current = false;
       setCurrentSubtitle("");
@@ -247,7 +247,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const doSpeakNative = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
-    cancel(true); // Indicate that we are transitioning to a new speech response
+    cancel(true); // Stop any active utterances securely without triggering premature onEnd mic openings
 
     let activeVoice = voice;
     if (!activeVoice) {
@@ -257,8 +257,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
 
     setTimeout(() => {
+      // Begin the session, but only set speaking state inside the actual browser execution hooks below
       speaking.current = true;
-      if (onStartRef.current) onStartRef.current();
 
       const cleanText = sanitizeTextForSpeech(text);
       const chunks = chunkText(cleanText, 150);
@@ -298,8 +298,19 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
         globalActiveUtterances.push(utt);
 
+        // macOS Safeguard: If browser silences/queues speech due to gesture policy,
+        // cancel the lock after 1.5 seconds so J.A.R.V.I.S. never freezes the UI.
+        const failsafeTimeout = setTimeout(() => {
+          if (speaking.current && !window.speechSynthesis.speaking) {
+            console.warn("[Speech Output] Mac browser locked the speech queue. Releasing interface block.");
+            endSpeechCleanup();
+          }
+        }, 1500);
+
         utt.onstart = () => {
+          clearTimeout(failsafeTimeout);
           setCurrentSubtitle(rawChunk);
+          if (onStartRef.current) onStartRef.current();
         };
 
         utt.onboundary = () => {
@@ -307,17 +318,20 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         };
 
         utt.onend = () => {
+          clearTimeout(failsafeTimeout);
           speakChunk(index + 1);
         };
 
         utt.onerror = () => {
+          clearTimeout(failsafeTimeout);
           speakChunk(index + 1);
         };
 
         try {
           window.speechSynthesis.speak(utt);
         } catch (e) {
-          console.warn("[Speech Output] Synchronous native speak failed. Proceeding with fallback chain:", e);
+          clearTimeout(failsafeTimeout);
+          console.warn("[Speech Output] Synchronous speak error handled safely:", e);
           speakChunk(index + 1);
         }
       };
@@ -327,7 +341,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   }, [cancel, isMobile, endSpeechCleanup]);
 
   const doSpeakElevenLabs = useCallback(async (text: string) => {
-    cancel(true); // Indicate that we are transitioning
+    cancel(true);
 
     setTimeout(async () => {
       speaking.current = true;
