@@ -39,20 +39,18 @@ const ELEVENLABS_API_KEY =
   (typeof process !== 'undefined' && (process.env?.VITE_ELEVENLABS_API_KEY || process.env?.ELEVENLABS_API_KEY || process.env?.GOOGLE_API_KEY)) || 
   '';
 
-// Prioritizes offline/local system voices to prevent silent cloud failures in Chrome/Safari on macOS
+// Upgraded matching engine: Targets Apple's ultra-realistic Siri, Samantha, and Daniel system voices
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
-  const isMobile = detectMobileDevice();
   const isAppleDevice = typeof navigator !== 'undefined' && /mac|iphone|ipad|ipod/i.test(navigator.platform || navigator.userAgent);
 
-  // Filter for localService first (offline-safe, zero network latency)
-  const localVoices = voices.filter(v => v.localService === true);
-  const activePool = localVoices.length > 0 ? localVoices : voices;
-
-  const candidatePool = activePool.filter(v => {
+  // Filter pool: Keep English voices, and filter out remote Google/Microsoft cloud voices 
+  // on Apple platforms to prevent silent Chrome hangs.
+  const candidatePool = voices.filter(v => {
     const lang = v.lang.toLowerCase().replace('_', '-');
     const isEn = lang.startsWith('en');
-    if (isAppleDevice && v.name.toLowerCase().includes('google')) {
-      return false; // Skip remote cloud voices on Apple platforms
+    const isRemoteCloud = v.name.toLowerCase().includes('google') || v.name.toLowerCase().includes('microsoft');
+    if (isAppleDevice && isRemoteCloud) {
+      return false; // Skip remote cloud voices to protect the thread
     }
     return isEn;
   });
@@ -61,53 +59,22 @@ function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | n
     return voices.find(v => v.lang.toLowerCase().startsWith('en')) || voices[0] || null;
   }
 
-  const gbVoices = candidatePool.filter(v => {
-    const lang = v.lang.toLowerCase().replace('_', '-');
-    return lang.startsWith('en-gb');
-  });
-
-  const preferredPool = gbVoices.length > 0 ? gbVoices : candidatePool;
-
-  if (isMobile) {
-    const englishVoices = preferredPool.filter(v => {
-      const lang = v.lang.toLowerCase().replace('_', '-');
-      return lang.startsWith('en-au') || lang.startsWith('en-gb');
-    });
-
-    if (englishVoices.length > 0) {
-      const qualityKeywords = ['premium', 'enhanced', 'natural', 'siri'];
-      for (const keyword of qualityKeywords) {
-        const match = englishVoices.find(v => v.name.toLowerCase().includes(keyword));
-        if (match) return match;
-      }
-
-      const maleKeywords = ['ryan', 'george', 'thomas', 'guy', 'daniel', 'arthur', 'oliver', 'harry', 'male'];
-      for (const keyword of maleKeywords) {
-        const match = englishVoices.find(v => v.name.toLowerCase().includes(keyword));
-        if (match) return match;
-      }
-
-      return englishVoices[0];
-    }
-  }
-
-  if (gbVoices.length === 0) {
-    return preferredPool.find(v => v.lang.toLowerCase().startsWith('en-au')) ?? preferredPool.find(v => v.lang.toLowerCase().startsWith('en')) ?? null;
-  }
-
-  const premiumDesktop = ['natural', 'premium', 'enhanced', 'siri'];
-  for (const keyword of premiumDesktop) {
-    const match = gbVoices.find(v => v.name.toLowerCase().includes(keyword));
+  // 1. Strictly prioritize J.A.R.V.I.S.'s high-quality premium system voices (Siri, Samantha, Enhanced, Daniel)
+  const premiumKeywords = ['siri', 'enhanced', 'samantha', 'daniel', 'premium', 'natural'];
+  for (const keyword of premiumKeywords) {
+    const match = candidatePool.find(v => v.name.toLowerCase().includes(keyword));
     if (match) return match;
   }
 
-  const maleKeywords = ['ryan', 'george', 'thomas', 'guy', 'daniel', 'arthur', 'oliver', 'harry', 'male'];
-  for (const keyword of maleKeywords) {
-    const match = gbVoices.find(v => v.name.toLowerCase().includes(keyword));
-    if (match) return match;
-  }
+  // 2. Fallback to British English (en-GB) candidates if available
+  const gbVoices = candidatePool.filter(v => v.lang.toLowerCase().replace('_', '-').startsWith('en-gb'));
+  if (gbVoices.length > 0) return gbVoices[0];
 
-  return gbVoices[0];
+  // 3. Fallback to local US English (en-US) candidates
+  const usVoices = candidatePool.filter(v => v.lang.toLowerCase().replace('_', '-').startsWith('en-us'));
+  if (usVoices.length > 0) return usVoices[0];
+
+  return candidatePool[0];
 }
 
 function loadVoices(): Promise<SpeechSynthesisVoice[]> {
@@ -248,7 +215,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
   }, [endSpeechCleanup]);
 
-  // Synchronously speak an audible offline boot-up confirmation to completely authorize audio playback
+  // Synchronously speak J.A.R.V.I.S.'s online chime using the pre-installed local Siri voice
   const unlock = useCallback(() => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       try {
@@ -263,7 +230,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         if (voice) {
           bootUtt.voice = voice;
         }
-        bootUtt.lang = voice ? voice.lang : 'en-GB';
+        bootUtt.lang = voice ? voice.lang : (typeof navigator !== 'undefined' ? navigator.language : 'en-US');
         
         window.speechSynthesis.speak(bootUtt);
       } catch (e) {
@@ -275,7 +242,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const doSpeakNative = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
-    cancel(true); // Transition safely without premature mic activations
+    cancel(true); // Stop active utterances securely without triggering premature onEnd mic openings
 
     let activeVoice = voice;
     if (!activeVoice) {
@@ -321,7 +288,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         if (activeVoice && !isSafari) {
           utt.voice = activeVoice;
         }
-        utt.lang = activeVoice ? activeVoice.lang : (isMobile ? 'en-AU' : 'en-GB');
+        
+        utt.lang = activeVoice ? activeVoice.lang : (typeof navigator !== 'undefined' ? navigator.language : 'en-US');
 
         globalActiveUtterances.push(utt);
 
