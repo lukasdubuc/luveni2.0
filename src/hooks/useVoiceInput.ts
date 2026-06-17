@@ -31,8 +31,7 @@ export function useVoiceInput({
   const restartTimeoutRef = useRef<any>(null);
   const shouldRestartRef = useRef(enabled);
   
-  // 1. Sync parent callbacks to a stable ref. 
-  // This guarantees that re-renders never tear down the SpeechRecognition instance.
+  // Isolate parent callbacks in a persistent render-synced reference
   const callbacksRef = useRef({
     onInterim,
     onTranscript,
@@ -41,7 +40,6 @@ export function useVoiceInput({
     cancelSpeech
   });
 
-  // Keep references current on every render without triggering dependency effects
   useEffect(() => {
     callbacksRef.current = {
       onInterim,
@@ -52,12 +50,9 @@ export function useVoiceInput({
     };
   });
 
-  // Synchronously update the enabled ref
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
 
-  // 2. startRecognition now has ZERO dependencies.
-  // It is created exactly once and retains a completely stable reference.
   const startRecognition = useCallback(() => {
     if (!enabledRef.current || recognitionRef.current) return;
 
@@ -138,9 +133,8 @@ export function useVoiceInput({
       console.error("Failed to start recognition", e);
       recognitionRef.current = null;
     }
-  }, []); // Zero dependencies. Never re-creates.
+  }, []); 
 
-  // 3. The main lifecycle effect now only triggers on enabled changes.
   useEffect(() => {
     if (enabled) {
       shouldRestartRef.current = true;
@@ -164,7 +158,7 @@ export function useVoiceInput({
         recognitionRef.current = null;
       }
     };
-  }, [enabled, startRecognition]); // Clean execution window bound strictly to enabled state transitions
+  }, [enabled, startRecognition]); 
 
   return null;
 }
