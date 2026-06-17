@@ -39,18 +39,19 @@ const ELEVENLABS_API_KEY =
   (typeof process !== 'undefined' && (process.env?.VITE_ELEVENLABS_API_KEY || process.env?.ELEVENLABS_API_KEY || process.env?.GOOGLE_API_KEY)) || 
   '';
 
-// Upgraded matching engine: Targets Apple's ultra-realistic Siri, Samantha, and Daniel system voices
+// Targets high-quality pre-installed system voices and Microsoft Online (Natural) voices
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+  const isMobile = detectMobileDevice();
   const isAppleDevice = typeof navigator !== 'undefined' && /mac|iphone|ipad|ipod/i.test(navigator.platform || navigator.userAgent);
 
-  // Filter pool: Keep English voices, and strictly filter out remote Google/Microsoft cloud voices 
-  // on Apple platforms to prevent silent browser hangs.
   const candidatePool = voices.filter(v => {
     const lang = v.lang.toLowerCase().replace('_', '-');
     const isEn = lang.startsWith('en');
-    const isRemoteCloud = v.name.toLowerCase().includes('google') || v.name.toLowerCase().includes('microsoft');
-    if (isAppleDevice && isRemoteCloud) {
-      return false; // Skip remote cloud voices on Apple platforms to avoid event locks
+    
+    // Skip Google cloud voices on Apple platforms due to documented event-locking bugs.
+    // We strictly keep Microsoft Online (Natural) voices active so you hear J.A.R.V.I.S.'s amazing voice.
+    if (isAppleDevice && v.name.toLowerCase().includes('google')) {
+      return false; 
     }
     return isEn;
   });
@@ -59,22 +60,54 @@ function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | n
     return voices.find(v => v.lang.toLowerCase().startsWith('en')) || voices[0] || null;
   }
 
-  // 1. Strictly prioritize J.A.R.V.I.S.'s high-quality premium system voices (Siri, Samantha, Daniel)
-  const premiumKeywords = ['siri', 'enhanced', 'samantha', 'daniel', 'premium', 'natural'];
-  for (const keyword of premiumKeywords) {
-    const match = candidatePool.find(v => v.name.toLowerCase().includes(keyword));
+  const gbVoices = candidatePool.filter(v => {
+    const lang = v.lang.toLowerCase().replace('_', '-');
+    return lang.startsWith('en-gb');
+  });
+
+  const preferredPool = gbVoices.length > 0 ? gbVoices : candidatePool;
+
+  if (isMobile) {
+    const englishVoices = preferredPool.filter(v => {
+      const lang = v.lang.toLowerCase().replace('_', '-');
+      return lang.startsWith('en-au') || lang.startsWith('en-gb');
+    });
+
+    if (englishVoices.length > 0) {
+      const qualityKeywords = ['premium', 'enhanced', 'natural', 'siri'];
+      for (const keyword of qualityKeywords) {
+        const match = englishVoices.find(v => v.name.toLowerCase().includes(keyword));
+        if (match) return match;
+      }
+
+      const maleKeywords = ['ryan', 'george', 'thomas', 'guy', 'daniel', 'arthur', 'oliver', 'harry', 'male'];
+      for (const keyword of maleKeywords) {
+        const match = englishVoices.find(v => v.name.toLowerCase().includes(keyword));
+        if (match) return match;
+      }
+
+      return englishVoices[0];
+    }
+  }
+
+  if (gbVoices.length === 0) {
+    return preferredPool.find(v => v.lang.toLowerCase().startsWith('en-au')) ?? preferredPool.find(v => v.lang.toLowerCase().startsWith('en')) ?? null;
+  }
+
+  // Prioritize high-quality neural desktop voices (specifically matches Microsoft Ryan Online Natural)
+  const premiumDesktop = ['natural', 'premium', 'enhanced', 'siri'];
+  for (const keyword of premiumDesktop) {
+    const match = gbVoices.find(v => v.name.toLowerCase().includes(keyword));
     if (match) return match;
   }
 
-  // 2. Fallback to British English (en-GB) candidates if available
-  const gbVoices = candidatePool.filter(v => v.lang.toLowerCase().replace('_', '-').startsWith('en-gb'));
-  if (gbVoices.length > 0) return gbVoices[0];
+  const maleKeywords = ['ryan', 'george', 'thomas', 'guy', 'daniel', 'arthur', 'oliver', 'harry', 'male'];
+  for (const keyword of maleKeywords) {
+    const match = gbVoices.find(v => v.name.toLowerCase().includes(keyword));
+    if (match) return match;
+  }
 
-  // 3. Fallback to local US English (en-US) candidates pre-installed on US Macs
-  const usVoices = candidatePool.filter(v => v.lang.toLowerCase().replace('_', '-').startsWith('en-us'));
-  if (usVoices.length > 0) return usVoices[0];
-
-  return candidatePool[0];
+  return gbVoices[0];
 }
 
 function loadVoices(): Promise<SpeechSynthesisVoice[]> {
@@ -183,9 +216,10 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
   }, []);
 
-  const cancel = useCallback(() => {
+  const cancel = useCallback((isTransitioning = false) => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       try {
+        window.speechSynthesis.resume();
         window.speechSynthesis.cancel();
       } catch (e) {
         console.warn("[Speech Output] Cancel error handled safely:", e);
@@ -206,7 +240,12 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       audioIntervalRef.current = null;
     }
 
-    endSpeechCleanup();
+    if (isTransitioning) {
+      speaking.current = false;
+      setCurrentSubtitle("");
+    } else {
+      endSpeechCleanup();
+    }
   }, [endSpeechCleanup]);
 
   // Synchronously speak J.A.R.V.I.S.'s online chime using your pre-installed Siri/Samantha system voice
@@ -235,7 +274,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const doSpeakNative = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
-    cancel(); // Revert back to the highly stable, baseline cancel triggers
+    cancel(true); // Stop active utterances securely without triggering premature onEnd mic openings
 
     let activeVoice = voice;
     if (!activeVoice) {
@@ -287,7 +326,17 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
         globalActiveUtterances.push(utt);
 
+        // macOS Safeguard: If browser silences/queues speech due to gesture policy,
+        // cancel the lock after 1.5 seconds so J.A.R.V.I.S. never freezes the UI.
+        const failsafeTimeout = setTimeout(() => {
+          if (speaking.current) {
+            console.warn("[Speech Output] Mac browser locked or delayed speech. Releasing interface block.");
+            endSpeechCleanup();
+          }
+        }, 1500);
+
         utt.onstart = () => {
+          clearTimeout(failsafeTimeout);
           setCurrentSubtitle(rawChunk);
         };
 
@@ -296,16 +345,19 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         };
 
         utt.onend = () => {
+          clearTimeout(failsafeTimeout);
           speakChunk(index + 1);
         };
 
         utt.onerror = () => {
+          clearTimeout(failsafeTimeout);
           speakChunk(index + 1);
         };
 
         try {
           window.speechSynthesis.speak(utt);
         } catch (e) {
+          clearTimeout(failsafeTimeout);
           console.warn("[Speech Output] Synchronous speak error handled safely:", e);
           speakChunk(index + 1);
         }
@@ -316,7 +368,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   }, [cancel, isMobile, endSpeechCleanup]);
 
   const doSpeakElevenLabs = useCallback(async (text: string) => {
-    cancel();
+    cancel(true);
 
     setTimeout(async () => {
       speaking.current = true;
