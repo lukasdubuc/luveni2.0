@@ -57,9 +57,6 @@ export function useVoiceInput({
 
     const rec = new SpeechRecognition();
 
-    // ─── INSTANT-COMPILE LATENCY RESOLUTION ───
-    // Setting continuous to false on all browsers forces the speech engine to emit
-    // finalized isFinal chunks instantly instead of waiting for long silence gaps.
     rec.continuous = false; 
     rec.interimResults = true; 
     rec.lang = 'en-US';
@@ -71,12 +68,8 @@ export function useVoiceInput({
     rec.onresult = (event: any) => {
       if (!enabledRef.current) return;
 
-      const isSpeakingNative = typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking;
-      if (isSpeakingNative) {
-        return;
-      }
-
-      callbacksRef.current.cancelSpeech(); 
+      // Completely removed the immediate high-frequency cancelSpeech() triggers
+      // to resolve browser-level CPU thrashing and macOS Chrome deadlocks.
 
       let interim = '';
       let final = '';
@@ -105,13 +98,12 @@ export function useVoiceInput({
           if (enabledRef.current && !recognitionRef.current && shouldRestartRef.current) {
             startRecognition();
           }
-        }, 150); // Shorter restart delay for snappier conversation transitions
+        }, 150);
       }
     };
 
     rec.onerror = (event: any) => {
         const err = event?.error;
-        console.warn("[Voice Input] Speech recognition error encountered:", err);
 
         if (err === 'not-allowed' || err === 'service-not-allowed' || err === 'language-not-supported') {
             shouldRestartRef.current = false;
@@ -119,10 +111,12 @@ export function useVoiceInput({
             return;
         }
 
+        // Silent suppression of routine events
         if (err === 'no-speech' || err === 'network' || err === 'aborted') {
             return;
         }
         
+        console.error("Speech recognition error", err);
         callbacksRef.current.onStateChange('error');
     };
 
