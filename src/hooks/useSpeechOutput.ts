@@ -34,7 +34,6 @@ function findBestAppleVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoic
   );
   if (!englishVoices.length) return voices[0];
 
-  // Explicit priority list for Apple devices — best quality first
   const priority = [
     'daniel (enhanced)',
     'daniel',
@@ -56,7 +55,6 @@ function findBestAppleVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoic
     if (match) return match;
   }
 
-  // Fall back to any enhanced/premium English voice
   const enhanced = englishVoices.find(v => /enhanced|premium/.test(v.name.toLowerCase()));
   if (enhanced) return enhanced;
 
@@ -265,9 +263,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     speaking.current = true;
     if (onStartRef.current) onStartRef.current();
 
-    // Pre-load voices so fallback is instant if needed
     const voicesPromise = loadVoices();
-
     const chunks = chunkText(sanitizeTextForSpeech(text), 150);
 
     try {
@@ -277,11 +273,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         const { data, error } = await supabase.functions.invoke('jarvis-brain', {
           body: { tool: 'tts', args: { text: chunk } },
         });
-
-        // Treat both network errors and API-level errors (quota, key missing) as failures
         if (error) throw error;
         if (!data || !data.audio) throw new Error(data?.error ?? 'No audio returned');
-
         const buffer = Uint8Array.from(atob(data.audio), c => c.charCodeAt(0));
         const blob = new Blob([buffer], { type: 'audio/mpeg' });
         audioUrls.push(URL.createObjectURL(blob));
@@ -319,7 +312,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
     } catch (err) {
       console.warn('[Speech Engine] ElevenLabs failed, falling back to native:', err);
-      // Reset speaking state so doSpeakNative can set it up cleanly
       speaking.current = false;
       const voices = await voicesPromise;
       const fallbackVoice = voiceCache ?? findBestVoice(voices);
@@ -329,7 +321,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   }, [cancel, doSpeakNative]);
 
   const speak = useCallback(async (text: string) => {
-    // Unlock audio context synchronously under user gesture before any awaits
     if (typeof window !== 'undefined') {
       try {
         if (!globalAudioRef.current) globalAudioRef.current = new Audio();
@@ -339,7 +330,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       if (window.speechSynthesis) {
         try {
           const primer = new SpeechSynthesisUtterance(' ');
-          primer.volume = 0; primer.rate = 10;
+          primer.volume = 0;
+          primer.rate = 10;
           window.speechSynthesis.speak(primer);
         } catch (e) {}
       }
