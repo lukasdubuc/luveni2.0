@@ -53,6 +53,7 @@ export function useVoiceInput({
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
 
+  // startRecognition has zero external react state dependencies
   const startRecognition = useCallback(() => {
     if (!enabledRef.current || recognitionRef.current) return;
 
@@ -75,6 +76,14 @@ export function useVoiceInput({
 
     rec.onresult = (event: any) => {
       if (!enabledRef.current) return;
+
+      // ─── SELF-INTERRUPTION FILTER ───
+      // If the browser's speech synthesis is actively speaking, ignore the audio input.
+      // This prevents J.A.R.V.I.S.'s own voice from triggering cancelSpeech and clearing his subtitles.
+      const isSpeakingNative = typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking;
+      if (isSpeakingNative) {
+        return;
+      }
 
       callbacksRef.current.cancelSpeech(); 
 
