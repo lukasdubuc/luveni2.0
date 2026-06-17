@@ -69,16 +69,6 @@ function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | n
 
   const isAppleDevice = typeof navigator !== 'undefined' && /mac|iphone|ipad|ipod/i.test(navigator.platform || navigator.userAgent);
 
-  // ── PRIORITY ORDER (confirmed available on Mac + iPhone) ──
-  // 1. Daniel (English (United Kingdom)) — highest quality British male on Apple
-  // 2. Reed (English (United Kingdom))   — second best British male on Apple
-  // 3. Arthur                            — good British male
-  // 4. Any other en-GB male name
-  // 5. Any en-GB voice
-  // 6. Any en-AU voice
-  // 7. Any English voice
-  // 8. First available voice
-
   const englishVoices = voices.filter(v => {
     const lang = v.lang.toLowerCase().replace('_', '-');
     // Skip Google cloud voices on Apple — they stall or fail silently
@@ -90,41 +80,47 @@ function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | n
     return voices[0] || null;
   }
 
-  const gbVoices = englishVoices.filter(v =>
-    v.lang.toLowerCase().replace('_', '-').startsWith('en-gb')
-  );
+  // ── FIX (mobile robot voice): score every available voice instead of
+  // relying on a fixed list of exact name strings. The old approach only
+  // matched voices named EXACTLY "Daniel (English (United Kingdom))" etc.
+  // Mobile browsers (Android Chrome, iOS Safari/Chrome) almost never expose
+  // those exact names, so it fell through to englishVoices[0] — whatever
+  // low-quality voice happened to be listed first. Scoring lets a good
+  // voice win on ANY platform's naming scheme, not just the one we tested on.
+  const knownGoodNames = ['daniel', 'reed', 'arthur', 'gordon', 'george', 'thomas', 'ryan', 'oliver', 'harry', 'eddy', 'rocko', 'guy', 'liam'];
+  const knownBadNames = ['flo', 'fred', 'albert', 'bad news', 'bahh', 'bells', 'boing', 'bubbles', 'cellos', 'good news', 'jester', 'organ', 'superstar', 'trinoids', 'whisper', 'zarvox'];
 
-  // Exact name matches first — most reliable on Apple platforms
-  const exactPriority = [
-    'Daniel (English (United Kingdom))',
-    'Reed (English (United Kingdom))',
-    'Arthur',
-    'Gordon',
-    'Eddy (English (United Kingdom))',
-    'Rocko (English (United Kingdom))',
-  ];
+  const scoreVoice = (v: SpeechSynthesisVoice): number => {
+    const name = v.name.toLowerCase();
+    const lang = v.lang.toLowerCase().replace('_', '-');
+    let score = 0;
 
-  for (const name of exactPriority) {
-    const match = voices.find(v => v.name === name);
-    if (match) return match;
-  }
+    if (knownBadNames.some(bad => name.includes(bad))) return -100; // novelty/joke voices, never use
 
-  // Fuzzy male keyword search within en-GB
-  const malePriorityKeywords = ['daniel', 'reed', 'arthur', 'gordon', 'george', 'thomas', 'ryan', 'oliver', 'harry', 'eddy', 'rocko', 'grandpa'];
-  for (const keyword of malePriorityKeywords) {
-    const match = gbVoices.find(v => v.name.toLowerCase().includes(keyword));
-    if (match) return match;
-  }
+    if (lang.startsWith('en-gb')) score += 30;
+    else if (lang.startsWith('en-au')) score += 15;
+    else if (lang.startsWith('en-us')) score += 10;
+    else if (lang.startsWith('en')) score += 5;
 
-  // Any en-GB voice
-  if (gbVoices.length > 0) return gbVoices[0];
+    // Quality/engine signals across platforms (Edge "Online (Natural)",
+    // Chrome "Neural", iOS premium voices, etc.)
+    if (/natural/.test(name)) score += 25;
+    if (/neural/.test(name)) score += 25;
+    if (/online/.test(name)) score += 10;
+    if (/premium|enhanced|wavenet/.test(name)) score += 20;
+    if (v.localService) score += 8; // on-device voices tend to be reliable + low latency
 
-  // en-AU fallback
-  const auVoice = englishVoices.find(v => v.lang.toLowerCase().replace('_', '-').startsWith('en-au'));
-  if (auVoice) return auVoice;
+    if (knownGoodNames.some(good => name.includes(good))) score += 40;
 
-  // Any English voice
-  return englishVoices[0];
+    // Mild signal toward male-leaning default names when nothing else distinguishes them
+    if (/male/.test(name)) score += 5;
+    if (/female/.test(name)) score -= 2;
+
+    return score;
+  };
+
+  const ranked = [...englishVoices].sort((a, b) => scoreVoice(b) - scoreVoice(a));
+  return ranked[0] || englishVoices[0];
 }
 
 // ── FIX 2: loadVoices with hard retry ───────────────────────
@@ -241,7 +237,16 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   }, []);
 
   const cancel = useCallback((isTransitioning = false) => {
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
+    // FIX (desktop silence / "click to reopen mic"): only touch speechSynthesis
+    // if something is actually speaking or queued. Calling cancel() on an
+    // already-idle queue is what was silently revoking the page's trusted-
+    // gesture flag on desktop Chrome/Edge — that revoked flag is exactly why
+    // the mic/voice needed a click to "re-arm" before every utterance.
+    if (
+      typeof window !== 'undefined' &&
+      window.speechSynthesis &&
+      (window.speechSynthesis.speaking || window.speechSynthesis.pending)
+    ) {
       try {
         window.speechSynthesis.resume();
         window.speechSynthesis.cancel();
@@ -405,7 +410,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       };
 
       speakChunk(0);
-    }, 250); 
+    }, 0); 
   }, [cancel, isMobile, endSpeechCleanup]);
 
   // ─── HIGH-QUALITY FREE ELEVENLABS AUDIO PLAYBACK ───
@@ -501,7 +506,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         if (fallbackVoice) voiceCache = fallbackVoice;
         doSpeakNative(text, fallbackVoice || null);
       }
-    }, 250);
+    }, 0);
   }, [cancel, doSpeakNative]);
 
   // ── FIX 2 (part 4): speak() awaits voices before calling doSpeakNative ──
