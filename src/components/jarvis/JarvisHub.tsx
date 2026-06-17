@@ -150,16 +150,15 @@ function cleanResponseForSpeech(rawText: string): string {
     .trim();
 }
 
-// ── GESTURE TRUST BRIDGE ──────────────────────────────────── 
-// Safari/Chrome revoke audio permission the moment any await fires.
-// We hold a silent AudioContext open AND prime a real <audio> element
-// from the synchronous gesture handler so BOTH browser permission tracks
-// (Web Audio API "audiocontext" AND HTMLMediaElement "mediaelement") are
-// unlocked. These are tracked SEPARATELY by the browser — unlocking the
-// AudioContext does NOT unlock <audio>.play(), which is what
-// useSpeechOutput.ts's ElevenLabs/fallback playback actually uses. That
-// gap was silently blocking all ElevenLabs audio on desktop Chrome with
-// zero console errors (the .catch() inside playNext() swallowed it).
+// ── GESTURE TRUST BRIDGE ────────────────────────────────────
+// Browsers track TWO SEPARATE audio permission systems:
+//   1. Web Audio API (AudioContext) — what this function used to unlock.
+//   2. HTMLMediaElement (<audio>/<video> .play()) — what ElevenLabs
+//      playback in useSpeechOutput.ts actually uses (new Audio(blobUrl)).
+// Unlocking #1 does NOT unlock #2. That gap is why ElevenLabs audio was
+// silently blocked on desktop Chrome: the AudioContext was unlocked, the
+// <audio> element track never was, so play() rejected with no console
+// error (swallowed by the .catch() inside useSpeechOutput's playNext()).
 let gestureAudioCtx: AudioContext | null = null;
 let gestureAudioEl: HTMLAudioElement | null = null;
 
@@ -182,12 +181,10 @@ function activateGestureTrust() {
     source.connect(gestureAudioCtx.destination);
     source.start(0);
 
-    // ── NEW: unlock the separate <audio> element track ──────────────
-    // This is what ElevenLabs/fallback playback in useSpeechOutput.ts
-    // actually uses (new Audio(blobUrl); audio.play()). Reusing ONE
-    // element and just calling play()+pause() on every gesture keeps
-    // that element's playback authorization "warm" so later play()
-    // calls succeed even after the async fetch() delay.
+    // ── Unlock the separate <audio> element track ──────────────────
+    // Reuse ONE element and replay it on every gesture so the browser
+    // keeps treating new Audio() elements created shortly after a
+    // gesture as authorized for play().
     if (!gestureAudioEl) {
       gestureAudioEl = new Audio(SILENT_WAV);
       gestureAudioEl.volume = 0;
@@ -200,6 +197,7 @@ function activateGestureTrust() {
     console.warn('[Jarvis] Gesture trust activation failed silently:', e);
   }
 }
+
 export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
   const [orbState, setOrbState] = useState<OrbState>('idle');
   const [userQuery, setUserQuery] = useState('');
@@ -354,7 +352,9 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
 
   const handleOrbClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    // ── Always activate gesture trust synchronously on every click ──
+    // Gesture trust must still fire on every click (cheap, idempotent) —
+    // browsers want a real gesture close to the play() call, and replaying
+    // this costs nothing since it's silent and doesn't speak anything.
     activateGestureTrust();
     unlockAudio();
     if (!isReady) {
@@ -366,11 +366,15 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
 
   const handleContainerClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    // ── Always activate gesture trust synchronously on every click ──
     activateGestureTrust();
     unlockAudio();
+    // FIX: tapping the transcript/text area should open the text box,
+    // not silently force full mic initialization (isLive = true). Mic
+    // listening should only start from the orb click, or once already
+    // initialized. First-time text input no longer turns the mic on.
     if (!isReady) {
-      initializeJarvis();
+      setIsReady(true);
+      setIsTextInputActive(true);
       return;
     }
     if (orbState !== 'thinking' && orbState !== 'speaking') {
@@ -438,7 +442,7 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
 
   return (
     <div 
-      style={styles.root} 
+      style={styles.root}
       onClick={!isReady ? initializeJarvis : undefined}
     >
       <style dangerouslySetInnerHTML={{ __html: `body { background-color: #020408 !important; margin: 0; overflow: hidden; }`}} />
@@ -476,7 +480,7 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
                   key={displayText} 
                   initial={{ opacity: 0, y: 5 }} 
                   animate={{ opacity: 1, y: 0 }} 
-                  exit={{ opacity: 0, y: -5 }} 
+                  exit={{ opacity: 0, y: -5 }}
                   style={styles.transcript}
                 >
                   {displayText}
