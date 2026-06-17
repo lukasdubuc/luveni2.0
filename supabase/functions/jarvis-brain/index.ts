@@ -2,7 +2,7 @@
 //  J.A.R.V.I.S — Luveni GM  |  supabase/functions/jarvis-brain/index.ts
 // ─────────────────────────────────────────────────────────────
 
-import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -472,7 +472,8 @@ async function requireAdminCaller(req: Request): Promise<Response | null> {
   }
 }
 
-serve(async (req) => {
+// Optimized with native cold-start-proof Deno serve API
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
