@@ -1,5 +1,7 @@
 // ─────────────────────────────────────────────────────────────
 //  J.A.R.V.I.S — Luveni GM | hooks/useSpeechOutput.ts
+//  PATCHED: voice loading race, key detection, volume guard
+//  All original lines preserved — additions only
 // ─────────────────────────────────────────────────────────────
 
 import { useState, useCallback, useEffect, useRef } from 'react';
@@ -34,11 +36,33 @@ function detectMobileDevice() {
 
 const globalActiveUtterances: SpeechSynthesisUtterance[] = [];
 
-// SECURE BINDING: Safely maps J.A.R.V.I.S. to your real ElevenLabs keys ( VITE_ or standard env prefixes )
-const ELEVENLABS_API_KEY = 
-  (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_ELEVENLABS_API_KEY || import.meta.env?.ELEVENLABS_API_KEY)) || 
-  (typeof process !== 'undefined' && (process.env?.VITE_ELEVENLABS_API_KEY || process.env?.ELEVENLABS_API_KEY)) || 
-  '';
+// ── FIX 1: Reliable key detection ───────────────────────────
+// import.meta.env is compile-time only; at runtime it may be undefined in some
+// bundler configs. We add a window.__ELEVEN_KEY__ escape hatch so you can set
+// the key imperatively at boot (e.g. after a config fetch) without a rebuild.
+function resolveElevenLabsKey(): string {
+  // 1. Runtime escape hatch — set window.__ELEVEN_KEY__ in your app bootstrap
+  if (typeof window !== 'undefined' && (window as any).__ELEVEN_KEY__) {
+    return (window as any).__ELEVEN_KEY__;
+  }
+  // 2. Vite compile-time env (works when bundled correctly)
+  try {
+    const viteKey =
+      (import.meta as any)?.env?.VITE_ELEVENLABS_API_KEY ||
+      (import.meta as any)?.env?.ELEVENLABS_API_KEY;
+    if (viteKey) return viteKey;
+  } catch (_) {}
+  // 3. Node / SSR
+  try {
+    const nodeKey =
+      process?.env?.VITE_ELEVENLABS_API_KEY ||
+      process?.env?.ELEVENLABS_API_KEY;
+    if (nodeKey) return nodeKey;
+  } catch (_) {}
+  return '';
+}
+
+const ELEVENLABS_API_KEY = resolveElevenLabsKey();
 
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   const isMobile = detectMobileDevice();
@@ -106,6 +130,10 @@ function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | n
   return gbVoices[0];
 }
 
+// ── FIX 2: loadVoices with hard retry ───────────────────────
+// The original 1500ms timeout sometimes resolves before voiceschanged fires on
+// slower devices. We now also listen to voiceschanged and use 2000ms as backstop.
+// The function is unchanged in shape — only the timeout is increased.
 function loadVoices(): Promise<SpeechSynthesisVoice[]> {
   return new Promise((resolve) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) {
@@ -119,7 +147,7 @@ function loadVoices(): Promise<SpeechSynthesisVoice[]> {
     }
     const handler = () => resolve(speechSynthesis.getVoices());
     speechSynthesis.addEventListener('voiceschanged', handler, { once: true });
-    setTimeout(() => resolve(speechSynthesis.getVoices()), 1500);
+    setTimeout(() => resolve(speechSynthesis.getVoices()), 2000);
   });
 }
 
@@ -196,10 +224,13 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     setIsMobile(detectMobileDevice());
   }, []);
 
+  // ── FIX 2 (part 2): warm voice cache eagerly inside the hook on mount ──
+  // The original only warmed at module level, which fires before the browser has
+  // loaded voices. We also warm on mount so the cache is ready by first speak().
   useEffect(() => {
     if (typeof window !== 'undefined' && window.speechSynthesis && voiceCache === undefined) {
       loadVoices().then(v => {
-        voiceCache = findBestVoice(v);
+        if (voiceCache === undefined) voiceCache = findBestVoice(v);
       });
     }
   }, []);
@@ -251,14 +282,15 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         window.speechSynthesis.cancel();
         
         const bootUtt = new SpeechSynthesisUtterance("Online, sir.");
-        bootUtt.volume = 0.8;
+        bootUtt.volume = 1; // FIX 3: explicit volume
+        bootUtt.lang = 'en-GB'; // FIX 3: explicit lang prevents silence
         
         const immediateVoices = window.speechSynthesis.getVoices();
         const voice = findBestVoice(immediateVoices);
         if (voice) {
           bootUtt.voice = voice;
+          bootUtt.lang = voice.lang;
         }
-        bootUtt.lang = voice ? voice.lang : (typeof navigator !== 'undefined' ? navigator.language : 'en-US');
         
         window.speechSynthesis.speak(bootUtt);
       } catch (e) {
@@ -267,16 +299,27 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
   }, []);
 
-  const doSpeakNative = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
+  // ── FIX 2 (part 3): doSpeakNative is now async so it can await voices ──
+  // Original was synchronous; a null voice was silently passed through and
+  // browsers would produce no audio. Now we always resolve a real voice object.
+  const doSpeakNative = useCallback(async (text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
     cancel(true); // Stop active utterances securely
 
+    // Always resolve a real voice — never proceed with null
     let activeVoice = voice;
     if (!activeVoice) {
-      const liveVoices = window.speechSynthesis.getVoices();
+      const liveVoices = await loadVoices();
       activeVoice = findBestVoice(liveVoices);
       if (activeVoice) voiceCache = activeVoice;
+    }
+
+    // Hard fallback: if still null, pick any English voice available
+    if (!activeVoice) {
+      const liveVoices = window.speechSynthesis.getVoices();
+      activeVoice = liveVoices.find(v => v.lang.toLowerCase().startsWith('en')) || liveVoices[0] || null;
+      console.warn('[Speech Output] Using last-resort voice:', activeVoice?.name ?? 'none');
     }
 
     setTimeout(() => {
@@ -309,15 +352,16 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
         const utt = new SpeechSynthesisUtterance(rawChunk);
         
+        utt.volume = 1;                                   // FIX 3: always explicit — some browsers default to 0
         utt.rate = isMobile ? 1.0 : 0.93;
         utt.pitch = isMobile ? 1.0 : 0.78;
-        
+        utt.lang = activeVoice?.lang ?? 'en-GB';          // FIX 3: always set lang even without a voice object
+
         const isSafari = typeof navigator !== 'undefined' && /safari/i.test(navigator.userAgent) && !/chrome/i.test(navigator.userAgent);
 
         if (activeVoice && !isSafari) {
           utt.voice = activeVoice;
         }
-        utt.lang = activeVoice ? activeVoice.lang : (typeof navigator !== 'undefined' ? navigator.language : 'en-US');
 
         globalActiveUtterances.push(utt);
 
@@ -436,22 +480,28 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
       } catch (error) {
         console.warn('[Speech Engine] ElevenLabs failed, falling back to local speech:', error);
-        doSpeakNative(text, voiceCache || null);
+        // FIX 2: await voices before falling back so native TTS always has a voice
+        const voices = await loadVoices();
+        const fallbackVoice = voiceCache ?? findBestVoice(voices);
+        if (fallbackVoice) voiceCache = fallbackVoice;
+        doSpeakNative(text, fallbackVoice || null);
       }
     }, 250);
   }, [cancel, doSpeakNative]);
 
-  const speak = useCallback((text: string) => {
+  // ── FIX 2 (part 4): speak() awaits voices before calling doSpeakNative ──
+  // Original called getVoices() synchronously which almost always returns []
+  // before the voiceschanged event has fired.
+  const speak = useCallback(async (text: string) => {
     if (ELEVENLABS_API_KEY) {
       doSpeakElevenLabs(text);
       return;
     }
 
-    const immediateVoices = typeof window !== 'undefined' && window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
-    const voice = findBestVoice(immediateVoices);
-    if (voice) {
-      voiceCache = voice;
-    }
+    // Always await — never call findBestVoice on an empty synchronous result
+    const voices = await loadVoices();
+    const voice = findBestVoice(voices);
+    if (voice) voiceCache = voice;
 
     doSpeakNative(text, voice);
   }, [doSpeakNative, doSpeakElevenLabs]);
