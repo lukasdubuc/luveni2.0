@@ -243,10 +243,23 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
   }, [endSpeechCleanup]);
 
+  // Synchronously speak a silent workspace to whitelist and unlock macOS audio context
+  const unlock = useCallback(() => {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      try {
+        const silentUtt = new SpeechSynthesisUtterance(" ");
+        silentUtt.volume = 0;
+        window.speechSynthesis.speak(silentUtt);
+      } catch (e) {
+        console.warn("[Speech Output] Gesture unlock block handled safely:", e);
+      }
+    }
+  }, []);
+
   const doSpeakNative = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
-    cancel(true); // Stop any active utterances securely without triggering premature onEnd mic openings
+    cancel(true); // Stop active utterances safely
 
     let activeVoice = voice;
     if (!activeVoice) {
@@ -256,7 +269,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
 
     setTimeout(() => {
-      // Begin the session
       speaking.current = true;
 
       const cleanText = sanitizeTextForSpeech(text);
@@ -297,8 +309,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
         globalActiveUtterances.push(utt);
 
-        // macOS Safeguard: If browser silences/queues speech due to gesture policy,
-        // cancel the lock after 1.5 seconds so J.A.R.V.I.S. never freezes the UI.
         const failsafeTimeout = setTimeout(() => {
           if (speaking.current) {
             console.warn("[Speech Output] Mac browser locked or delayed speech. Releasing interface block.");
@@ -445,5 +455,5 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     doSpeakNative(text, voice);
   }, [doSpeakNative, doSpeakElevenLabs]);
 
-  return { speak, cancel, isSpeaking: () => speaking.current, currentSubtitle };
+  return { speak, cancel, unlock, isSpeaking: () => speaking.current, currentSubtitle };
 }
