@@ -230,7 +230,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     try {
       const audioUrls: string[] = [];
       for (const chunk of chunks) {
-        // INVOKE WITHOUT MANUAL HEADERS: This lets the Supabase SDK safely stringify the body to JSON
+        // Standardized function invoke that guarantees standard serialization by the SDK 
+        // to prevent double-stringification or parsing failures.
         const { data, error } = await supabase.functions.invoke('jarvis-brain', {
           body: { tool: 'tts', args: { text: chunk } },
         });
