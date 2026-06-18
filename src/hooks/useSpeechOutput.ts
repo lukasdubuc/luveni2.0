@@ -28,53 +28,34 @@ const globalActiveUtterances: SpeechSynthesisUtterance[] = [];
 
 function findBestAppleVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   if (!voices.length) return null;
-
   const englishVoices = voices.filter(v =>
     v.lang.toLowerCase().replace('_', '-').startsWith('en')
   );
   if (!englishVoices.length) return voices[0];
-
   const priority = [
-    'daniel (enhanced)',
-    'daniel',
-    'siri',
-    'samantha (enhanced)',
-    'karen (enhanced)',
-    'kate (enhanced)',
-    'oliver (enhanced)',
-    'arthur (enhanced)',
-    'rishi (enhanced)',
-    'moira (enhanced)',
-    'tessa (enhanced)',
-    'samantha',
-    'karen',
+    'daniel (enhanced)', 'daniel', 'siri', 'samantha (enhanced)',
+    'karen (enhanced)', 'kate (enhanced)', 'oliver (enhanced)',
+    'arthur (enhanced)', 'rishi (enhanced)', 'moira (enhanced)',
+    'tessa (enhanced)', 'samantha', 'karen',
   ];
-
   for (const target of priority) {
     const match = englishVoices.find(v => v.name.toLowerCase().includes(target));
     if (match) return match;
   }
-
   const enhanced = englishVoices.find(v => /enhanced|premium/.test(v.name.toLowerCase()));
   if (enhanced) return enhanced;
-
   return englishVoices[0];
 }
 
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   if (isAppleDevice()) return findBestAppleVoice(voices);
-
   if (!voices.length) return null;
-
   const knownBadNames = ['flo', 'fred', 'albert', 'bad news', 'bahh', 'bells', 'boing', 'bubbles', 'cellos', 'good news', 'jester', 'organ', 'superstar', 'trinoids', 'whisper', 'zarvox'];
-
   const englishVoices = voices.filter(v =>
     v.lang.toLowerCase().replace('_', '-').startsWith('en') &&
     !knownBadNames.some(bad => v.name.toLowerCase().includes(bad))
   );
-
   if (!englishVoices.length) return voices[0];
-
   const scoreVoice = (v: SpeechSynthesisVoice): number => {
     const name = v.name.toLowerCase();
     const lang = v.lang.toLowerCase().replace('_', '-');
@@ -87,7 +68,6 @@ function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | n
     if (/online/.test(name)) score += 200;
     return score;
   };
-
   return [...englishVoices].sort((a, b) => scoreVoice(b) - scoreVoice(a))[0];
 }
 
@@ -104,7 +84,7 @@ function loadVoices(): Promise<SpeechSynthesisVoice[]> {
 
 function sanitizeTextForSpeech(rawText: string): string {
   return rawText
-    .replace(/J\.A\.R\.V\.I\.S\.?/gi, "Jarvis")
+    .replace(/J\.A\.R\.V\.I\.S\.?/gi, 'Jarvis')
     .replace(/\*\*/g, '')
     .replace(/\*/g, '')
     .replace(/^#+\s+/gm, '')
@@ -140,13 +120,12 @@ function chunkText(text: string, maxLength = 150): string[] {
 let voiceCache: SpeechSynthesisVoice | null | undefined = undefined;
 
 export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputOptions = {}) {
-  const [currentSubtitle, setCurrentSubtitle] = useState("");
+  const [currentSubtitle, setCurrentSubtitle] = useState('');
   const [isMobile, setIsMobile] = useState(false);
   const speaking = useRef(false);
   const onStartRef = useRef(onStart);
   const onBoundaryRef = useRef(onBoundary);
   const onEndRef = useRef(onEnd);
-
   const activeAudiosRef = useRef<HTMLAudioElement[]>([]);
   const audioIntervalRef = useRef<any>(null);
   const globalAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -167,28 +146,22 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
   const endSpeechCleanup = useCallback(() => {
     speaking.current = false;
-    setCurrentSubtitle("");
+    setCurrentSubtitle('');
     if (onEndRef.current) onEndRef.current();
   }, []);
 
   const cancel = useCallback((isTransitioning = false) => {
-    if (
-      typeof window !== 'undefined' &&
-      window.speechSynthesis &&
-      (window.speechSynthesis.speaking || window.speechSynthesis.pending)
-    ) {
+    if (typeof window !== 'undefined' && window.speechSynthesis &&
+        (window.speechSynthesis.speaking || window.speechSynthesis.pending)) {
       try { window.speechSynthesis.resume(); window.speechSynthesis.cancel(); } catch (e) {}
     }
     globalActiveUtterances.length = 0;
-
     activeAudiosRef.current.forEach(audio => {
       try { audio.pause(); audio.currentTime = 0; audio.src = ''; } catch (e) {}
     });
     activeAudiosRef.current = [];
-
     if (audioIntervalRef.current) { clearInterval(audioIntervalRef.current); audioIntervalRef.current = null; }
-
-    if (isTransitioning) { speaking.current = false; setCurrentSubtitle(""); }
+    if (isTransitioning) { speaking.current = false; setCurrentSubtitle(''); }
     else endSpeechCleanup();
   }, [endSpeechCleanup]);
 
@@ -212,7 +185,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const doSpeakNative = useCallback(async (text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     cancel(true);
-
     let activeVoice = voice;
     if (!activeVoice) {
       const liveVoices = await loadVoices();
@@ -223,38 +195,29 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       const liveVoices = window.speechSynthesis.getVoices();
       activeVoice = liveVoices.find(v => v.lang.toLowerCase().startsWith('en')) || liveVoices[0] || null;
     }
-
     speaking.current = true;
     if (onStartRef.current) onStartRef.current();
-
     const chunks = chunkText(sanitizeTextForSpeech(text), 150);
     if (chunks.length === 0) { endSpeechCleanup(); return; }
-
     globalActiveUtterances.length = 0;
-
     const speakChunk = (index: number) => {
       if (!speaking.current) return;
       if (index >= chunks.length) { endSpeechCleanup(); return; }
-
       const rawChunk = chunks[index].trim();
       if (!rawChunk) { speakChunk(index + 1); return; }
-
       const utt = new SpeechSynthesisUtterance(rawChunk);
       utt.volume = 1;
       utt.rate = isMobile ? 1.0 : 0.95;
       utt.pitch = 1.0;
       utt.lang = activeVoice?.lang ?? 'en-GB';
       if (activeVoice) utt.voice = activeVoice;
-
       globalActiveUtterances.push(utt);
       utt.onstart = () => setCurrentSubtitle(rawChunk);
       utt.onboundary = () => { if (onBoundaryRef.current) onBoundaryRef.current(0.3 + Math.random() * 0.55); };
       utt.onend = () => speakChunk(index + 1);
       utt.onerror = () => speakChunk(index + 1);
-
       try { window.speechSynthesis.speak(utt); } catch (e) { speakChunk(index + 1); }
     };
-
     speakChunk(0);
   }, [cancel, isMobile, endSpeechCleanup]);
 
@@ -262,13 +225,10 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     cancel(true);
     speaking.current = true;
     if (onStartRef.current) onStartRef.current();
-
     const voicesPromise = loadVoices();
     const chunks = chunkText(sanitizeTextForSpeech(text), 150);
-
     try {
       const audioUrls: string[] = [];
-
       for (const chunk of chunks) {
         const { data, error } = await supabase.functions.invoke('jarvis-brain', {
           body: { tool: 'tts', args: { text: chunk } },
@@ -279,37 +239,29 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         const blob = new Blob([buffer], { type: 'audio/mpeg' });
         audioUrls.push(URL.createObjectURL(blob));
       }
-
       let currentIndex = 0;
-
       const playNext = () => {
         if (!speaking.current || currentIndex >= audioUrls.length) {
           speaking.current = false;
-          setCurrentSubtitle("");
+          setCurrentSubtitle('');
           if (audioIntervalRef.current) { clearInterval(audioIntervalRef.current); audioIntervalRef.current = null; }
           if (onEndRef.current) onEndRef.current();
           return;
         }
-
         setCurrentSubtitle(chunks[currentIndex]);
-
         if (!globalAudioRef.current) globalAudioRef.current = new Audio();
         const audio = globalAudioRef.current;
         audio.src = audioUrls[currentIndex];
         activeAudiosRef.current = [audio];
-
         if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
         audioIntervalRef.current = setInterval(() => {
           if (onBoundaryRef.current && speaking.current) onBoundaryRef.current(0.3 + Math.random() * 0.55);
         }, 80);
-
         audio.onended = () => { URL.revokeObjectURL(audioUrls[currentIndex]); currentIndex++; playNext(); };
         audio.onerror = () => { URL.revokeObjectURL(audioUrls[currentIndex]); currentIndex++; playNext(); };
         audio.play().catch(() => { URL.revokeObjectURL(audioUrls[currentIndex]); currentIndex++; playNext(); });
       };
-
       playNext();
-
     } catch (err) {
       console.warn('[Speech Engine] ElevenLabs failed, falling back to native:', err);
       speaking.current = false;
