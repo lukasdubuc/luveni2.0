@@ -230,30 +230,18 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     try {
       const audioUrls: string[] = [];
       for (const chunk of chunks) {
-        const { data, error } = await supabase.functions.invoke('jarvis-brain', {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: { tool: 'tts', args: { text: chunk } },
+        // Calling our robust Postgres RPC directly. 
+        // This completely bypasses the Lovable Edge Function compilation block.
+        const { data, error } = await supabase.rpc('generate_tts_audio', {
+          text_to_speak: chunk,
         });
 
         if (error) {
-          if (typeof error === 'object' && 'context' in error) {
-            try {
-              const details = await (error as any).context.json();
-              console.error('[Speech Engine] Edge Function returned error details:', details);
-            } catch {
-              try {
-                const textDetails = await (error as any).context.text();
-                console.error('[Speech Engine] Edge Function returned raw text error:', textDetails);
-              } catch {}
-            }
-          }
           throw error;
         }
 
-        if (!data || !data.audio) throw new Error(data?.error ?? 'No audio returned');
-        const buffer = Uint8Array.from(atob(data.audio), c => c.charCodeAt(0));
+        if (!data) throw new Error('No audio returned from database function');
+        const buffer = Uint8Array.from(atob(data), c => c.charCodeAt(0));
         const blob = new Blob([buffer], { type: 'audio/mpeg' });
         audioUrls.push(URL.createObjectURL(blob));
       }
