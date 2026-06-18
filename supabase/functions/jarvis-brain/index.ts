@@ -464,7 +464,28 @@ Deno.serve(async (req) => {
   if (authError) return authError;
 
   try {
-    const { tool, args } = await req.json();
+    // 1. Robust Body Extraction to bypass any potential stream parsing or double-stringification bugs
+    let body: any;
+    try {
+      body = await req.json();
+    } catch (err: any) {
+      console.warn("[Jarvis] Could not parse direct JSON body:", err.message);
+      return new Response(JSON.stringify({ error: `Invalid JSON body: ${err.message}` }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+      });
+    }
+
+    // 2. Decode double-stringification if the client SDK passed stringified JSON as a payload string
+    if (typeof body === "string") {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        // Keep as raw string if it is not valid JSON
+      }
+    }
+
+    const { tool, args } = body || {};
 
     if (tool === "open_link") {
       return new Response(JSON.stringify({ results: await readWebPage(args?.url || "") }), {
@@ -473,12 +494,19 @@ Deno.serve(async (req) => {
     }
 
     if (tool === "tts") {
-      const text = args?.text;
+      // Robust fallbacks to fetch text from nested structures or flat structures
+      const text = args?.text || body?.text;
       if (!text || typeof text !== "string") {
-        return new Response(JSON.stringify({ error: "args.text is required" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 400,
-        });
+        return new Response(
+          JSON.stringify({ 
+            error: "args.text is required", 
+            parsed_body_debug: body 
+          }), 
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 400,
+          }
+        );
       }
       if (!ELEVENLABS_API_KEY) {
         return new Response(JSON.stringify({ error: "ELEVENLABS_API_KEY not set in Supabase secrets" }), {
@@ -580,5 +608,3 @@ Deno.serve(async (req) => {
     });
   }
 });
-// ─────────────────────────────────────────────────────────────
-// v2
