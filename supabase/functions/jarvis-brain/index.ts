@@ -485,14 +485,19 @@ Deno.serve(async (req) => {
     }
 
     const { tool, args } = body || {};
+    
+    // Explicit server-side console logging for debugging
+    console.log("[Jarvis] Received Request Body:", JSON.stringify(body));
+    const currentTool = tool ? String(tool).trim().toLowerCase() : "";
+    console.log("[Jarvis] Resolved Tool Name:", currentTool);
 
-    if (tool === "open_link") {
+    if (currentTool === "open_link") {
       return new Response(JSON.stringify({ results: await readWebPage(args?.url || "") }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    if (tool === "tts") {
+    if (currentTool === "tts") {
       const text = args?.text || body?.text;
       if (!text || typeof text !== "string") {
         return new Response(
@@ -551,7 +556,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (tool === "chat") {
+    if (currentTool === "chat") {
       const { userText, history, storeSnapshot, timezone } = args;
 
       if (!MISTRAL_API_KEY) throw new Error("MISTRAL_API_KEY is not configured in Supabase secrets.");
