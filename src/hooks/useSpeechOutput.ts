@@ -11,20 +11,6 @@ interface UseSpeechOutputOptions {
   onEnd?: () => void;
 }
 
-const BRITISH_VOICES = [
-  'Microsoft Ryan Online (Natural) - English (United Kingdom)',
-  'Microsoft Sonia Online (Natural) - English (United Kingdom)',
-  'Microsoft Thomas Online (Natural) - English (United Kingdom)',
-  'Google UK English Male',
-  'Google UK English Female',
-  'Daniel',
-  'Hazel',
-  'Siri',
-  'Microsoft Susan',
-  'Microsoft George',
-  'Microsoft Ryan',
-];
-
 function detectMobileDevice() {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
   return (
@@ -35,7 +21,6 @@ function detectMobileDevice() {
 
 const globalActiveUtterances: SpeechSynthesisUtterance[] = [];
 
-
 function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   if (!voices.length) return null;
 
@@ -43,22 +28,12 @@ function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | n
 
   const englishVoices = voices.filter(v => {
     const lang = v.lang.toLowerCase().replace('_', '-');
-    // Skip Google cloud voices on Apple — they stall or fail silently
     if (isAppleDevice && v.name.toLowerCase().includes('google')) return false;
     return lang.startsWith('en');
   });
 
-  if (englishVoices.length === 0) {
-    return voices[0] || null;
-  }
+  if (englishVoices.length === 0) return voices[0] || null;
 
-  // ── FIX (mobile robot voice): score every available voice instead of
-  // relying on a fixed list of exact name strings. The old approach only
-  // matched voices named EXACTLY "Daniel (English (United Kingdom))" etc.
-  // Mobile browsers (Android Chrome, iOS Safari/Chrome) almost never expose
-  // those exact names, so it fell through to englishVoices[0] — whatever
-  // low-quality voice happened to be listed first. Scoring lets a good
-  // voice win on ANY platform's naming scheme, not just the one we tested on.
   const knownGoodNames = ['daniel', 'reed', 'arthur', 'gordon', 'george', 'thomas', 'ryan', 'oliver', 'harry', 'eddy', 'rocko', 'guy', 'liam', 'sonia', 'serena', 'libby', 'kate', 'samantha'];
   const knownBadNames = ['flo', 'fred', 'albert', 'bad news', 'bahh', 'bells', 'boing', 'bubbles', 'cellos', 'good news', 'jester', 'organ', 'superstar', 'trinoids', 'whisper', 'zarvox'];
 
@@ -67,39 +42,27 @@ function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | n
     const lang = v.lang.toLowerCase().replace('_', '-');
     let score = 0;
 
-    if (knownBadNames.some(bad => name.includes(bad))) return -1000; // novelty/joke voices, never use
+    if (knownBadNames.some(bad => name.includes(bad))) return -1000;
 
-    // Prioritize UK/British English for Jarvis, followed by other dialects
     if (lang.startsWith('en-gb')) score += 100;
     else if (lang.startsWith('en-au')) score += 50;
     else if (lang.startsWith('en-us')) score += 30;
     else if (lang.startsWith('en')) score += 10;
 
-    // Quality signals: Neural, Natural, Siri, Premium, and Enhanced voices sound miles ahead of standard offline engines
     if (/natural/.test(name)) score += 500;
     if (/neural/.test(name)) score += 500;
     if (/premium|enhanced|wavenet/.test(name)) score += 400;
     if (/siri/.test(name)) score += 300;
     if (/online/.test(name)) score += 200;
 
-    // Specific good voice names
-    if (knownGoodNames.some(good => name.includes(good))) {
-      score += 50;
-    }
+    if (knownGoodNames.some(good => name.includes(good))) score += 50;
 
-    // Reject or heavily penalize non-premium local (offline) system voices which sound extremely robotic
     if (v.localService) {
-      if (/premium|enhanced|siri/.test(name)) {
-        score += 100;
-      } else {
-        score -= 100; // Penalize standard/basic offline system voices
-      }
+      if (/premium|enhanced|siri/.test(name)) score += 100;
+      else score -= 100;
     }
 
-    // Jarvis feel: Mild bias towards British/male/neutral sounding voices
-    if (lang.startsWith('en-gb') && (/male|ryan|george|thomas|daniel|oliver/.test(name))) {
-      score += 80;
-    }
+    if (lang.startsWith('en-gb') && (/male|ryan|george|thomas|daniel|oliver/.test(name))) score += 80;
 
     return score;
   };
@@ -108,10 +71,6 @@ function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | n
   return ranked[0] || englishVoices[0];
 }
 
-// ── FIX 2: loadVoices with hard retry ───────────────────────
-// The original 1500ms timeout sometimes resolves before voiceschanged fires on
-// slower devices. We now also listen to voiceschanged and use 2000ms as backstop.
-// The function is unchanged in shape — only the timeout is increased.
 function loadVoices(): Promise<SpeechSynthesisVoice[]> {
   return new Promise((resolve) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) {
@@ -158,9 +117,7 @@ function chunkText(text: string, maxLength = 150): string[] {
     const breakPoints = ['. ', '! ', '? ', '; ', ', '];
     for (const punct of breakPoints) {
       const idx = remaining.lastIndexOf(punct, maxLength);
-      if (idx > splitIndex) {
-        splitIndex = idx + punct.length - 1;
-      }
+      if (idx > splitIndex) splitIndex = idx + punct.length - 1;
     }
 
     if (splitIndex === -1) {
@@ -168,9 +125,7 @@ function chunkText(text: string, maxLength = 150): string[] {
       if (idx > 0) splitIndex = idx;
     }
 
-    if (splitIndex === -1) {
-      splitIndex = maxLength;
-    }
+    if (splitIndex === -1) splitIndex = maxLength;
 
     chunks.push(remaining.substring(0, splitIndex).trim());
     remaining = remaining.substring(splitIndex).trim();
@@ -180,6 +135,35 @@ function chunkText(text: string, maxLength = 150): string[] {
 }
 
 let voiceCache: SpeechSynthesisVoice | null | undefined = undefined;
+
+// ── ElevenLabs client-side key resolver (optional direct-call fallback) ──────
+// PRIMARY path is the `jarvis-brain` edge function (key stays server-side).
+// This only enables a direct browser call if the edge function is unreachable
+// AND a client-side key is present. A browser-side key is publicly visible —
+// use only as a stopgap. Set via VITE_ELEVENLABS_API_KEY or window.__ELEVEN_KEY__.
+function resolveElevenLabsKey(): string {
+  if (typeof window !== 'undefined' && (window as any).__ELEVEN_KEY__) {
+    return (window as any).__ELEVEN_KEY__;
+  }
+  try {
+    const viteKey =
+      (import.meta as any)?.env?.VITE_ELEVENLABS_API_KEY ||
+      (import.meta as any)?.env?.ELEVENLABS_API_KEY;
+    if (viteKey) return viteKey;
+  } catch (_) {}
+  return '';
+}
+
+const ELEVENLABS_VOICE_ID = 'pNInz6obpgDQGcFbJwr1';
+
+// Decode a base64 mp3 payload into a playable object URL.
+function base64ToBlobUrl(base64: string): string {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const blob = new Blob([bytes], { type: 'audio/mpeg' });
+  return URL.createObjectURL(blob);
+}
 
 export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputOptions = {}) {
   const [currentSubtitle, setCurrentSubtitle] = useState("");
@@ -203,9 +187,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     setIsMobile(detectMobileDevice());
   }, []);
 
-  // ── FIX 2 (part 2): warm voice cache eagerly inside the hook on mount ──
-  // The original only warmed at module level, which fires before the browser has
-  // loaded voices. We also warm on mount so the cache is ready by first speak().
   useEffect(() => {
     if (typeof window !== 'undefined' && window.speechSynthesis && voiceCache === undefined) {
       loadVoices().then(v => {
@@ -217,17 +198,10 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const endSpeechCleanup = useCallback(() => {
     speaking.current = false;
     setCurrentSubtitle("");
-    if (onEndRef.current) {
-      onEndRef.current();
-    }
+    if (onEndRef.current) onEndRef.current();
   }, []);
 
   const cancel = useCallback((isTransitioning = false) => {
-    // FIX (desktop silence / "click to reopen mic"): only touch speechSynthesis
-    // if something is actually speaking or queued. Calling cancel() on an
-    // already-idle queue is what was silently revoking the page's trusted-
-    // gesture flag on desktop Chrome/Edge — that revoked flag is exactly why
-    // the mic/voice needed a click to "re-arm" before every utterance.
     if (
       typeof window !== 'undefined' &&
       window.speechSynthesis &&
@@ -264,18 +238,12 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
   }, [endSpeechCleanup]);
 
-  // Synchronously register gesture trust with a near-silent utterance.
-  // Updated: Removed the audible "Online, sir" native fallback vocalization.
-  // We keep a silent dummy speech and prime the persistent HTML5 Audio pipeline 
-  // under the user gesture window so Safari permits clean future ElevenLabs playbacks.
   const unlock = useCallback(() => {
     if (typeof window === 'undefined') return;
-    
-    // 1. Prime SpeechSynthesis silently
+
     if (window.speechSynthesis) {
       try {
         window.speechSynthesis.cancel();
-
         const trustUtt = new SpeechSynthesisUtterance(' ');
         trustUtt.volume = 0.01;
         trustUtt.rate = 10;
@@ -286,11 +254,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       }
     }
 
-    // 2. Prime the HTML5 Audio pipeline silently under the trusted user gesture
     try {
-      if (!globalAudioRef.current) {
-        globalAudioRef.current = new Audio();
-      }
+      if (!globalAudioRef.current) globalAudioRef.current = new Audio();
       globalAudioRef.current.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==';
       globalAudioRef.current.play().catch(() => {});
     } catch (e) {
@@ -298,15 +263,11 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
   }, []);
 
-  // ── FIX 2 (part 3): doSpeakNative is now async so it can await voices ──
-  // Original was synchronous; a null voice was silently passed through and
-  // browsers would produce no audio. Now we always resolve a real voice object.
   const doSpeakNative = useCallback(async (text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
-    cancel(true); // Stop active utterances securely
+    cancel(true);
 
-    // Always resolve a real voice — never proceed with null
     let activeVoice = voice;
     if (!activeVoice) {
       const liveVoices = await loadVoices();
@@ -314,7 +275,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       if (activeVoice) voiceCache = activeVoice;
     }
 
-    // Hard fallback: if still null, pick any English voice available
     if (!activeVoice) {
       const liveVoices = window.speechSynthesis.getVoices();
       activeVoice = liveVoices.find(v => v.lang.toLowerCase().startsWith('en')) || liveVoices[0] || null;
@@ -327,7 +287,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
       const cleanText = sanitizeTextForSpeech(text);
       const chunks = chunkText(cleanText, 150);
-      
+
       if (chunks.length === 0) {
         endSpeechCleanup();
         return;
@@ -337,7 +297,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
       const speakChunk = (index: number) => {
         if (!speaking.current) return;
-        
+
         if (index >= chunks.length) {
           endSpeechCleanup();
           return;
@@ -350,38 +310,20 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         }
 
         const utt = new SpeechSynthesisUtterance(rawChunk);
-        
-        utt.volume = 1;                                   // FIX 3: always explicit — some browsers default to 0
-        utt.rate = isMobile ? 1.0 : 0.95;                 // Smooth, natural speech rate
-        utt.pitch = 1.0;                                  // FIX: normalized pitch to resolve robotic distortion
-        utt.lang = activeVoice?.lang ?? 'en-GB';          // FIX 3: always set lang even without a voice object
-
-        // Always assign the voice object on every browser/platform.
-        // The previous isSafari guard prevented voice assignment on Safari/iPhone,
-        // causing the utterance to fire with no voice — silence on all Apple devices.
-        // Web Speech API voice assignment works correctly on Safari when voices are
-        // loaded first (which loadVoices() above guarantees).
-        if (activeVoice) {
-          utt.voice = activeVoice;
-        }
+        utt.volume = 1;
+        utt.rate = isMobile ? 1.0 : 0.95;
+        utt.pitch = 1.0;
+        utt.lang = activeVoice?.lang ?? 'en-GB';
+        if (activeVoice) utt.voice = activeVoice;
 
         globalActiveUtterances.push(utt);
 
-        utt.onstart = () => {
-          setCurrentSubtitle(rawChunk);
-        };
-
+        utt.onstart = () => setCurrentSubtitle(rawChunk);
         utt.onboundary = () => {
           if (onBoundaryRef.current) onBoundaryRef.current(0.3 + Math.random() * 0.55);
         };
-
-        utt.onend = () => {
-          speakChunk(index + 1);
-        };
-
-        utt.onerror = () => {
-          speakChunk(index + 1);
-        };
+        utt.onend = () => speakChunk(index + 1);
+        utt.onerror = () => speakChunk(index + 1);
 
         try {
           window.speechSynthesis.speak(utt);
@@ -392,12 +334,59 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       };
 
       speakChunk(0);
-    }, 0); 
+    }, 0);
   }, [cancel, isMobile, endSpeechCleanup]);
 
-  // ─── ELEVENLABS VIA EDGE FUNCTION ───────────────────────────
-  // The API key lives server-side (Supabase secret). The edge function returns
-  // { audio: base64_mp3 }. We decode it to a blob URL and play sequentially.
+  // ─── Play one ready ElevenLabs audio blob ───────────────────
+  // Single audio element, single object URL. Animates the boundary callback
+  // while it plays and cleans up on end/error/cancel.
+  const playAudioBlobUrl = useCallback((audioUrl: string, subtitle: string) => {
+    if (!speaking.current) {
+      try { URL.revokeObjectURL(audioUrl); } catch (_) {}
+      return;
+    }
+
+    setCurrentSubtitle(subtitle);
+
+    if (!globalAudioRef.current) globalAudioRef.current = new Audio();
+    const audio = globalAudioRef.current;
+    audio.src = audioUrl;
+    activeAudiosRef.current = [audio];
+
+    const finish = () => {
+      try { URL.revokeObjectURL(audioUrl); } catch (_) {}
+      if (audioIntervalRef.current) {
+        clearInterval(audioIntervalRef.current);
+        audioIntervalRef.current = null;
+      }
+      speaking.current = false;
+      setCurrentSubtitle("");
+      if (onEndRef.current) onEndRef.current();
+    };
+
+    if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
+    audioIntervalRef.current = setInterval(() => {
+      if (onBoundaryRef.current && speaking.current) {
+        onBoundaryRef.current(0.3 + Math.random() * 0.55);
+      }
+    }, 80);
+
+    audio.onended = finish;
+    audio.onerror = finish;
+    audio.play().catch((err) => {
+      console.warn('[Speech Output] HTML5 audio playback error:', err);
+      finish();
+    });
+  }, []);
+
+  // ─── ELEVENLABS (edge → direct → native), ONE request per reply ───
+  // ROOT-CAUSE FIX: the previous version split each reply into ~150-char chunks
+  // and fired them as PARALLEL edge-function invocations. Under the edge
+  // runtime's cold-start / recycle behaviour, a burst of concurrent calls hits
+  // instances that are booting or shutting down, so a fraction return non-2xx —
+  // and a single rejected chunk dropped the whole reply to the native voice
+  // (~50% success). We now send ONE request for the full reply (ElevenLabs
+  // handles long text), so there is no concurrency to fail on.
   const doSpeakElevenLabs = useCallback(async (text: string) => {
     cancel(true);
 
@@ -406,80 +395,65 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       if (onStartRef.current) onStartRef.current();
 
       const cleanText = sanitizeTextForSpeech(text);
-      const chunks = chunkText(cleanText, 150);
-
-      try {
-        const audioPromises = chunks.map(async (chunk) => {
-          const { data, error } = await supabase.functions.invoke('jarvis-brain', {
-            body: { tool: 'tts', args: { text: chunk } },
-          });
-          if (error) throw error;
-          if (!data?.audio) throw new Error(data?.error ?? 'No audio returned');
-          const binary = atob(data.audio);
-          const bytes = new Uint8Array(binary.length);
-          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-          const blob = new Blob([bytes], { type: 'audio/mpeg' });
-          return URL.createObjectURL(blob);
-        });
-
-        const audioUrls = await Promise.all(audioPromises);
-        let currentIndex = 0;
-
-        const playNext = () => {
-          if (!speaking.current || currentIndex >= audioUrls.length) {
-            speaking.current = false;
-            setCurrentSubtitle("");
-            if (audioIntervalRef.current) {
-              clearInterval(audioIntervalRef.current);
-              audioIntervalRef.current = null;
-            }
-            if (onEndRef.current) onEndRef.current();
-            return;
-          }
-
-          setCurrentSubtitle(chunks[currentIndex]);
-
-          if (!globalAudioRef.current) globalAudioRef.current = new Audio();
-          const audio = globalAudioRef.current;
-          audio.src = audioUrls[currentIndex];
-          activeAudiosRef.current = [audio];
-
-          if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
-          audioIntervalRef.current = setInterval(() => {
-            if (onBoundaryRef.current && speaking.current) {
-              onBoundaryRef.current(0.3 + Math.random() * 0.55);
-            }
-          }, 80);
-
-          audio.onended = () => {
-            URL.revokeObjectURL(audioUrls[currentIndex]);
-            currentIndex++;
-            playNext();
-          };
-          audio.onerror = () => {
-            URL.revokeObjectURL(audioUrls[currentIndex]);
-            currentIndex++;
-            playNext();
-          };
-          audio.play().catch((err) => {
-            console.warn('[Speech Output] HTML5 audio playback error:', err);
-            URL.revokeObjectURL(audioUrls[currentIndex]);
-            currentIndex++;
-            playNext();
-          });
-        };
-
-        playNext();
-
-      } catch (error) {
-        console.warn('[Speech Engine] ElevenLabs failed, falling back to native:', error);
-        const voices = await loadVoices();
-        const fallbackVoice = voiceCache ?? findBestVoice(voices);
-        if (fallbackVoice) voiceCache = fallbackVoice;
-        doSpeakNative(text, fallbackVoice || null);
+      if (!cleanText) {
+        endSpeechCleanup();
+        return;
       }
+
+      // 1) PRIMARY — edge function, single request. Returns { audio: base64_mp3 }.
+      try {
+        const { data, error } = await supabase.functions.invoke('jarvis-brain', {
+          body: { tool: 'tts', args: { text: cleanText } },
+        });
+        if (error) throw error;
+        if (!data?.audio) throw new Error(data?.error ?? 'No audio returned');
+        playAudioBlobUrl(base64ToBlobUrl(data.audio), cleanText);
+        return;
+      } catch (edgeError) {
+        console.warn('[Speech Engine] Edge ElevenLabs failed, trying direct call:', edgeError);
+      }
+
+      // 2) STOPGAP — direct browser call, only if a client-side key exists.
+      const directKey = resolveElevenLabsKey();
+      if (directKey) {
+        try {
+          const response = await fetch(
+            `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'xi-api-key': directKey,
+              },
+              body: JSON.stringify({
+                text: cleanText,
+                model_id: 'eleven_multilingual_v2',
+                voice_settings: {
+                  stability: 0.35,
+                  similarity_boost: 0.9,
+                  style: 0.1,
+                  use_speaker_boost: true,
+                },
+              }),
+            },
+          );
+          if (!response.ok) throw new Error(`ElevenLabs error: ${response.status}`);
+          const blob = await response.blob();
+          playAudioBlobUrl(URL.createObjectURL(blob), cleanText);
+          return;
+        } catch (directError) {
+          console.warn('[Speech Engine] Direct ElevenLabs failed:', directError);
+        }
+      }
+
+      // 3) LAST RESORT — native browser voice.
+      console.warn('[Speech Engine] ElevenLabs unavailable, falling back to native.');
+      const voices = await loadVoices();
+      const fallbackVoice = voiceCache ?? findBestVoice(voices);
+      if (fallbackVoice) voiceCache = fallbackVoice;
+      doSpeakNative(text, fallbackVoice || null);
     }, 0);
-  }, [cancel, doSpeakNative]);
+  }, [cancel, doSpeakNative, endSpeechCleanup, playAudioBlobUrl]);
 
   const speak = useCallback(async (text: string) => {
     doSpeakElevenLabs(text);
