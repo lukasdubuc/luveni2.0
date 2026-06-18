@@ -464,7 +464,6 @@ Deno.serve(async (req) => {
   if (authError) return authError;
 
   try {
-    // 1. Robust Body Extraction to bypass any potential stream parsing or double-stringification bugs
     let body: any;
     try {
       body = await req.json();
@@ -476,7 +475,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 2. Decode double-stringification if the client SDK passed stringified JSON as a payload string
+    // Decode double-stringification if the client SDK passed stringified JSON as a payload string
     if (typeof body === "string") {
       try {
         body = JSON.parse(body);
@@ -494,7 +493,6 @@ Deno.serve(async (req) => {
     }
 
     if (tool === "tts") {
-      // Robust fallbacks to fetch text from nested structures or flat structures
       const text = args?.text || body?.text;
       if (!text || typeof text !== "string") {
         return new Response(
