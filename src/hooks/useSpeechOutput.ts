@@ -1,6 +1,6 @@
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 //  J.A.R.V.I.S — Luveni GM | hooks/useSpeechOutput.ts
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -263,14 +263,16 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
   }, []);
 
-  const doSpeakNative = useCallback(async (text: string, voice: SpeechSynthesisVoice | null) => {
+  // 100% Synchronous, non-async native speaker implementation 
+  // keeping the gesture authorization alive with 0ms delay
+  const doSpeakNative = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
     cancel(true);
 
     let activeVoice = voice;
     if (!activeVoice) {
-      const liveVoices = await loadVoices();
+      const liveVoices = window.speechSynthesis.getVoices();
       activeVoice = findBestVoice(liveVoices);
       if (activeVoice) voiceCache = activeVoice;
     }
@@ -278,68 +280,63 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     if (!activeVoice) {
       const liveVoices = window.speechSynthesis.getVoices();
       activeVoice = liveVoices.find(v => v.lang.toLowerCase().startsWith('en')) || liveVoices[0] || null;
-      console.warn('[Speech Output] Using last-resort voice:', activeVoice?.name ?? 'none');
     }
 
-    setTimeout(() => {
-      speaking.current = true;
-      if (onStartRef.current) onStartRef.current();
+    speaking.current = true;
+    if (onStartRef.current) onStartRef.current();
 
-      const cleanText = sanitizeTextForSpeech(text);
-      const chunks = chunkText(cleanText, 150);
+    const cleanText = sanitizeTextForSpeech(text);
+    const chunks = chunkText(cleanText, 150);
 
-      if (chunks.length === 0) {
+    if (chunks.length === 0) {
+      endSpeechCleanup();
+      return;
+    }
+
+    globalActiveUtterances.length = 0;
+
+    const speakChunk = (index: number) => {
+      if (!speaking.current) return;
+
+      if (index >= chunks.length) {
         endSpeechCleanup();
         return;
       }
 
-      globalActiveUtterances.length = 0;
+      const rawChunk = chunks[index].trim();
+      if (!rawChunk) {
+        speakChunk(index + 1);
+        return;
+      }
 
-      const speakChunk = (index: number) => {
-        if (!speaking.current) return;
+      const utt = new SpeechSynthesisUtterance(rawChunk);
+      utt.volume = 1;
+      utt.rate = isMobile ? 1.0 : 0.95;
+      utt.pitch = 1.0;
+      utt.lang = activeVoice?.lang ?? 'en-GB';
+      if (activeVoice) utt.voice = activeVoice;
 
-        if (index >= chunks.length) {
-          endSpeechCleanup();
-          return;
-        }
+      globalActiveUtterances.push(utt);
 
-        const rawChunk = chunks[index].trim();
-        if (!rawChunk) {
-          speakChunk(index + 1);
-          return;
-        }
-
-        const utt = new SpeechSynthesisUtterance(rawChunk);
-        utt.volume = 1;
-        utt.rate = isMobile ? 1.0 : 0.95;
-        utt.pitch = 1.0;
-        utt.lang = activeVoice?.lang ?? 'en-GB';
-        if (activeVoice) utt.voice = activeVoice;
-
-        globalActiveUtterances.push(utt);
-
-        utt.onstart = () => setCurrentSubtitle(rawChunk);
-        utt.onboundary = () => {
-          if (onBoundaryRef.current) onBoundaryRef.current(0.3 + Math.random() * 0.55);
-        };
-        utt.onend = () => speakChunk(index + 1);
-        utt.onerror = () => speakChunk(index + 1);
-
-        try {
-          window.speechSynthesis.speak(utt);
-        } catch (e) {
-          console.warn("[Speech Output] Synchronous speak error handled safely:", e);
-          speakChunk(index + 1);
-        }
+      utt.onstart = () => setCurrentSubtitle(rawChunk);
+      utt.onboundary = () => {
+        if (onBoundaryRef.current) onBoundaryRef.current(0.3 + Math.random() * 0.55);
       };
+      utt.onend = () => speakChunk(index + 1);
+      utt.onerror = () => speakChunk(index + 1);
 
-      speakChunk(0);
-    }, 0);
+      try {
+        window.speechSynthesis.speak(utt);
+      } catch (e) {
+        console.warn("[Speech Output] Synchronous speak error handled safely:", e);
+        speakChunk(index + 1);
+      }
+    };
+
+    speakChunk(0);
   }, [cancel, isMobile, endSpeechCleanup]);
 
   // ─── Play one ready ElevenLabs audio blob ───────────────────
-  // Single audio element, single object URL. Animates the boundary callback
-  // while it plays and cleans up on end/error/cancel.
   const playAudioBlobUrl = useCallback((audioUrl: string, subtitle: string) => {
     if (!speaking.current) {
       try { URL.revokeObjectURL(audioUrl); } catch (_) {}
@@ -380,13 +377,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   }, []);
 
   // ─── ELEVENLABS (edge → direct → native), ONE request per reply ───
-  // ROOT-CAUSE FIX: the previous version split each reply into ~150-char chunks
-  // and fired them as PARALLEL edge-function invocations. Under the edge
-  // runtime's cold-start / recycle behaviour, a burst of concurrent calls hits
-  // instances that are booting or shutting down, so a fraction return non-2xx —
-  // and a single rejected chunk dropped the whole reply to the native voice
-  // (~50% success). We now send ONE request for the full reply (ElevenLabs
-  // handles long text), so there is no concurrency to fail on.
   const doSpeakElevenLabs = useCallback(async (text: string) => {
     cancel(true);
 
@@ -446,10 +436,9 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         }
       }
 
-      // 3) LAST RESORT — native browser voice.
+      // 3) LAST RESORT — native browser voice triggered synchronously with 0ms delay
       console.warn('[Speech Engine] ElevenLabs unavailable, falling back to native.');
-      const voices = await loadVoices();
-      const fallbackVoice = voiceCache ?? findBestVoice(voices);
+      const fallbackVoice = voiceCache ?? findBestVoice(window.speechSynthesis.getVoices());
       if (fallbackVoice) voiceCache = fallbackVoice;
       doSpeakNative(text, fallbackVoice || null);
     }, 0);
