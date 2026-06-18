@@ -70,9 +70,9 @@ async function loadMemories(limit = 10): Promise<string> {
     return rows
       .map((m: any, i: number) => {
         const date = new Date(m.created_at).toLocaleDateString("en-GB");
-        return \`[Memory \${i + 1} — \${date}]: \${m.content}\`;
+        return `[Memory ${i + 1} — ${date}]: ${m.content}`;
       })
-      .join("\\n");
+      .join("\n");
   } catch {
     return "Memory retrieval unavailable.";
   }
@@ -82,15 +82,15 @@ async function searchMemories(query: string): Promise<string> {
   try {
     const rows = await dbSelect(
       "memories",
-      \`select=content,metadata,created_at&content=ilike.*\${encodeURIComponent(query)}*&order=created_at.desc&limit=20\`,
+      `select=content,metadata,created_at&content=ilike.*${encodeURIComponent(query)}*&order=created_at.desc&limit=20`,
     );
-    if (!rows.length) return \`No memories found matching "\${query}".\`;
+    if (!rows.length) return `No memories found matching "${query}".`;
     return rows
       .map((m: any, i: number) => {
         const date = new Date(m.created_at).toLocaleDateString("en-GB");
-        return \`[Memory \${i + 1} — \${date}]: \${m.content}\`;
+        return `[Memory ${i + 1} — ${date}]: ${m.content}`;
       })
-      .join("\\n");
+      .join("\n");
   } catch {
     return "Memory search unavailable.";
   }
@@ -101,7 +101,7 @@ async function saveMemory(content: string, metadata: any = {}): Promise<string> 
     await dbInsert("memories", { content, metadata, created_at: new Date().toISOString() });
     return "Memory saved successfully, sir.";
   } catch (e: any) {
-    return \`Failed to save memory: \${e.message}\`;
+    return `Failed to save memory: ${e.message}`;
   }
 }
 
@@ -120,16 +120,16 @@ async function callTavily(query: string): Promise<string> {
         max_results: 1,
       }),
     });
-    if (!res.ok) throw new Error(\`Tavily error \${res.status}\`);
+    if (!res.ok) throw new Error(`Tavily error ${res.status}`);
     const data = await res.json();
     const lines: string[] = [];
     if (data.results?.length) {
       const r = data.results[0];
-      lines.push(\`Source: \${r.title} (\${r.url}): \${r.content?.slice(0, 200)}\`);
+      lines.push(`Source: ${r.title} (${r.url}): ${r.content?.slice(0, 200)}`);
     }
-    return lines.join("\\n") || "No results found.";
+    return lines.join("\n") || "No results found.";
   } catch (e: any) {
-    return \`Search error: \${e.message}\`;
+    return `Search error: ${e.message}`;
   }
 }
 
@@ -141,17 +141,17 @@ async function readWebPage(url: string): Promise<string> {
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       },
     });
-    if (!response.ok) return \`Error: Failed to fetch \${url}. Status: \${response.status}\`;
+    if (!response.ok) return `Error: Failed to fetch ${url}. Status: ${response.status}`;
     let html = await response.text();
-    html = html.replace(/<script[^>]*>[\\s\\S]*?<\\/script>/gi, "");
-    html = html.replace(/<style[^>]*>[\\s\\S]*?<\\/style>/gi, "");
+    html = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
+    html = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
     html = html
       .replace(/<[^>]*>/g, " ")
-      .replace(/\\s+/g, " ")
+      .replace(/\s+/g, " ")
       .trim();
     return html.slice(0, 5000) + (html.length > 5000 ? "... [truncated]" : "");
   } catch (e: any) {
-    return \`Error loading URL: \${e.message}\`;
+    return `Error loading URL: ${e.message}`;
   }
 }
 
@@ -162,7 +162,7 @@ async function fetchUserRepos(token: string): Promise<any[]> {
       headers: {
         Accept: "application/vnd.github+json",
         "User-Agent": "Luveni-JARVIS-Brain",
-        Authorization: \`Bearer \${token}\`,
+        Authorization: `Bearer ${token}`,
       },
     });
     if (!res.ok) return [];
@@ -177,7 +177,7 @@ async function callGithub(toolName: string, args: any): Promise<string> {
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
     "User-Agent": "Luveni-JARVIS-Brain",
-    ...(GITHUB_TOKEN && { Authorization: \`Bearer \${GITHUB_TOKEN}\` }),
+    ...(GITHUB_TOKEN && { Authorization: `Bearer ${GITHUB_TOKEN}` }),
   };
 
   let owner = args.owner;
@@ -199,22 +199,22 @@ async function callGithub(toolName: string, args: any): Promise<string> {
   }
 
   try {
-    const url = \`https://api.github.com/repos/\${owner}/\&repo/contents/\${path}?ref=\${branch}\`;
+    const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
     const response = await fetch(url, { headers });
-    if (!response.ok) throw new Error(\`GitHub status \${response.status}\`);
+    if (!response.ok) throw new Error(`GitHub status ${response.status}`);
     const data = await response.json();
     if (toolName === "github_list_files") {
       return Array.isArray(data)
-        ? data.map((item: any) => \`[\${item.type.toUpperCase()}] \${item.path}\`).join("\\n")
+        ? data.map((item: any) => `[${item.type.toUpperCase()}] ${item.path}`).join("\n")
         : JSON.stringify(data);
     }
     if (toolName === "github_read_file") {
       if (Array.isArray(data)) return "Error: Path points to a directory, not a file.";
       if (!data.content) return "Error: File content empty.";
-      return atob(data.content.replace(/\\s/g, ""));
+      return atob(data.content.replace(/\s/g, ""));
     }
   } catch (e: any) {
-    return \`GitHub error: \${e.message}\`;
+    return `GitHub error: ${e.message}`;
   }
   return "Unknown GitHub action.";
 }
@@ -239,7 +239,7 @@ async function executeTool(
     case "search_memories":
       return searchMemories(args.query || "");
     default:
-      return \`Unknown tool: \${name}\`;
+      return `Unknown tool: ${name}`;
   }
 }
 
@@ -350,13 +350,13 @@ async function runJarvisChat(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: \`Bearer \${MISTRAL_API_KEY}\`,
+        Authorization: `Bearer ${MISTRAL_API_KEY}`,
       },
       body: JSON.stringify(body),
     });
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(\`Mistral API error: \${response.status} \${errorText}\`);
+      throw new Error(`Mistral API error: ${response.status} ${errorText}`);
     }
     return await response.json();
   }
@@ -405,8 +405,8 @@ async function requireAdminCaller(req: Request): Promise<Response | null> {
   }
   const token = authHeader.slice("Bearer ".length);
   try {
-    const userRes = await fetch(\`\${SUPABASE_URL}/auth/v1/user\`, {
-      headers: { apikey: SUPABASE_KEY, Authorization: \`Bearer \${token}\` },
+    const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` },
     });
     if (!userRes.ok) {
       return new Response(JSON.stringify({ error: "Unauthorized (token check failed)" }), {
@@ -423,11 +423,11 @@ async function requireAdminCaller(req: Request): Promise<Response | null> {
       });
     }
 
-    const rpcRes = await fetch(\`\${SUPABASE_URL}/rest/v1/rpc/has_role\`, {
+    const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/has_role`, {
       method: "POST",
       headers: {
         apikey: SUPABASE_KEY,
-        Authorization: \`Bearer \${SUPABASE_KEY}\`,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ _user_id: userId, _role: "admin" }),
@@ -469,12 +469,13 @@ Deno.serve(async (req) => {
       body = await req.json();
     } catch (err: any) {
       console.warn("[Jarvis] Could not parse direct JSON body:", err.message);
-      return new Response(JSON.stringify({ error: \`Invalid JSON body: \${err.message}\` }), {
+      return new Response(JSON.stringify({ error: `Invalid JSON body: ${err.message}` }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 400,
       });
     }
 
+    // Decode double-stringification if the client SDK passed stringified JSON as a payload string
     if (typeof body === "string") {
       try {
         body = JSON.parse(body);
@@ -511,7 +512,7 @@ Deno.serve(async (req) => {
           status: 500,
         });
       }
-      const res = await fetch(\`https://api.elevenlabs.io/v1/text-to-speech/\${ELEVENLABS_VOICE_ID}\`, {
+      const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -530,13 +531,21 @@ Deno.serve(async (req) => {
       });
       if (!res.ok) {
         const errText = await res.text();
-        return new Response(JSON.stringify({ error: \`ElevenLabs \${res.status}: \${errText}\` }), {
+        return new Response(JSON.stringify({ error: `ElevenLabs ${res.status}: ${errText}` }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 500,
         });
       }
       const buffer = await res.arrayBuffer();
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+      
+      // Fixed base64 conversion using compatible array iteration to prevent spread operator compilation errors
+      const uint8 = new Uint8Array(buffer);
+      let binary = "";
+      for (let i = 0; i < uint8.length; i++) {
+        binary += String.fromCharCode(uint8[i]);
+      }
+      const base64 = btoa(binary);
+      
       return new Response(JSON.stringify({ audio: base64 }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -549,7 +558,7 @@ Deno.serve(async (req) => {
 
       const memories = await loadMemories(20);
       const storeCtx = storeSnapshot
-        ? \`--- LIVE STORE DATA ---\\nRevenue today: \$\${(storeSnapshot.revenue_today_cents / 100).toFixed(2)}\\nOrders total: \${storeSnapshot.orders_total}\\n--- END STORE DATA ---\`
+        ? `--- LIVE STORE DATA ---\nRevenue today: $${(storeSnapshot.revenue_today_cents / 100).toFixed(2)}\nOrders total: ${storeSnapshot.orders_total}\n--- END STORE DATA ---`
         : "";
 
       let githubCtx = "";
@@ -557,8 +566,8 @@ Deno.serve(async (req) => {
         const repos = await fetchUserRepos(GITHUB_TOKEN);
         if (repos.length > 0) {
           const preferred = repos.find((r: any) => r.name?.toLowerCase() === "luveni2.0") || repos[0];
-          const repoList = repos.map((r: any) => \`- \${r.owner?.login}/\${r.name}\`).join("\\n");
-          githubCtx = \`Primary Default Repo: \${preferred.owner?.login}/\${preferred.name}\\nAvailable Repos:\\n\${repoList}\`;
+          const repoList = repos.map((r: any) => `- ${r.owner?.login}/${r.name}`).join("\n");
+          githubCtx = `Primary Default Repo: ${preferred.owner?.login}/${preferred.name}\nAvailable Repos:\n${repoList}`;
         }
       }
 
@@ -567,24 +576,24 @@ Deno.serve(async (req) => {
       const dateStr = now.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: userTimezone });
       const timeStr = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: userTimezone });
 
-      const systemContent = \`
-    \${JARVIS_SYSTEM_PROMPT}
+      const systemContent = `
+    ${JARVIS_SYSTEM_PROMPT}
 
     CURRENT DATE & TIME:
-    - Date: \${dateStr}
-    - Time: \${timeStr}
+    - Date: ${dateStr}
+    - Time: ${timeStr}
 
     LONG-TERM MEMORIES:
-    \${memories}
+    ${memories}
 
-    \${storeCtx}
+    ${storeCtx}
 
-    \${githubCtx}
+    ${githubCtx}
 
     FORMATTING:
     - Voice-first. Spoken-friendly English.
     - NO markdown bullet points or hashtags.
-    \`.trim();
+    `.trim();
 
       const reply = await runJarvisChat(systemContent, history || [], userText);
 
@@ -593,7 +602,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ error: \`Unknown tool: \${tool}\` }), {
+    return new Response(JSON.stringify({ error: `Unknown tool: ${tool}` }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 400,
     });
