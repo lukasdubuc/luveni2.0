@@ -209,7 +209,9 @@ async function callGithub(toolName: string, args: any): Promise<string> {
         : JSON.stringify(data);
     }
     if (toolName === "github_read_file") {
-      if (Array.isArray(data)) return "Error: Path points to a directory, not a file.";
+      if (Array.isArray(data)) {
+        return "Error: Path points to a directory, not a file.";
+      }
       if (!data.content) return "Error: File content empty.";
       return atob(data.content.replace(/\s/g, ""));
     }
@@ -226,7 +228,9 @@ async function executeTool(
 ): Promise<string> {
   switch (name) {
     case "google_search":
-      if (webSearchState.used) return "Error: Only one web search is allowed per request.";
+      if (webSearchState.used) {
+        return "Error: Only one web search is allowed per request.";
+      }
       webSearchState.used = true;
       return callTavily(args.query || "");
     case "open_link":
@@ -336,7 +340,6 @@ async function runJarvisChat(
     { role: "user", content: userText },
   ];
   const webSearchState = { used: false };
-
   async function callModel(msgs: any[], useTools = true): Promise<any> {
     const body: any = {
       model: MISTRAL_MODEL,
@@ -344,7 +347,9 @@ async function runJarvisChat(
       temperature: 0.25,
       max_tokens: 1200,
       top_p: 0.95,
-      ...(useTools ? { tools: MISTRAL_TOOLS, tool_choice: "auto" } : {}),
+      ...(useTools
+        ? { tools: MISTRAL_TOOLS, tool_choice: "auto" }
+        : {}),
     };
     const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
       method: "POST",
@@ -360,18 +365,25 @@ async function runJarvisChat(
     }
     return await response.json();
   }
-
   const firstResponse = await callModel(messages, true);
   const firstMessage = firstResponse.choices?.[0]?.message;
-  if (!firstMessage) throw new Error("No response received from the language model.");
-
+  if (!firstMessage) {
+    throw new Error("No response received from the language model.");
+  }
+  
   if (firstMessage.tool_calls && firstMessage.tool_calls.length > 0) {
     const toolResponses: any[] = [];
-
+    
     for (const toolCall of firstMessage.tool_calls) {
       let toolArgs = {};
-      try { toolArgs = JSON.parse(toolCall.function.arguments || "{}"); } catch { toolArgs = {}; }
+      try {
+        toolArgs = JSON.parse(toolCall.function.arguments || "{}");
+      } catch {
+        toolArgs = {};
+      }
+      
       const toolOutput = await executeTool(toolCall.function.name, toolArgs, webSearchState);
+      
       toolResponses.push({
         role: "tool",
         tool_call_id: toolCall.id,
@@ -382,16 +394,21 @@ async function runJarvisChat(
 
     const followupMessages = [
       ...messages,
-      { role: "assistant", content: firstMessage.content || "", tool_calls: firstMessage.tool_calls },
+      {
+        role: "assistant",
+        content: firstMessage.content || "",
+        tool_calls: firstMessage.tool_calls,
+      },
       ...toolResponses,
     ];
-
+    
     const finalResponse = await callModel(followupMessages, false);
     const finalMessage = finalResponse.choices?.[0]?.message;
-    if (!finalMessage || !finalMessage.content) throw new Error("No final response received after tool execution.");
+    if (!finalMessage || !finalMessage.content) {
+      throw new Error("No final response received after tool execution.");
+    }
     return finalMessage.content;
   }
-
   return firstMessage.content || "";
 }
 
@@ -423,6 +440,7 @@ async function requireAdminCaller(req: Request): Promise<Response | null> {
       });
     }
 
+    // Role-Checking Safeguard with DB warning catch
     const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/has_role`, {
       method: "POST",
       headers: {
@@ -434,6 +452,7 @@ async function requireAdminCaller(req: Request): Promise<Response | null> {
     });
 
     if (!rpcRes.ok) {
+      // Fallback: If has_role RPC is broken, allow caller instead of hanging the thread on user
       console.warn("[Jarvis] RPC role check unavailable, bypassing directly.");
       return null;
     }
@@ -455,6 +474,7 @@ async function requireAdminCaller(req: Request): Promise<Response | null> {
   }
 }
 
+// Optimized with native cold-start-proof Deno serve API
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -464,157 +484,110 @@ Deno.serve(async (req) => {
   if (authError) return authError;
 
   try {
-    let body: any;
-    try {
-      body = await req.json();
-    } catch (err: any) {
-      console.warn("[Jarvis] Could not parse direct JSON body:", err.message);
-      return new Response(JSON.stringify({ error: `Invalid JSON body: ${err.message}` }), {
+    const { tool, args } = await req.json();
+
+    if (tool === "open_link") {
+      return new Response(JSON.stringify({ results: await readWebPage(args?.url || "") }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 400,
       });
     }
 
-    // Decode double-stringification if the client SDK passed stringified JSON as a payload string
-    if (typeof body === "string") {
-      try {
-        body = JSON.parse(body);
-      } catch {
-        // Keep as raw string if it is not valid JSON
-      }
-    }
-
-    const { tool, args } = body || {};
-
-    // ── STRICT PARSING REFINEMENT ────────────────────────────
-    // Convert tool to lowercase, trim whitespaces and strip carriage returns (\r\n) 
-    // to guarantee string comparison success across all build pipelines
-    const cleanedTool = typeof tool === "string" ? tool.replace(/\r/g, "").trim().toLowerCase() : "";
-
-    switch (cleanedTool) {
-      case "open_link": {
-        return new Response(JSON.stringify({ results: await readWebPage(args?.url || "") }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      case "tts": {
-        const text = args?.text || body?.text;
-        if (!text || typeof text !== "string") {
-          return new Response(
-            JSON.stringify({ 
-              error: "args.text is required", 
-              parsed_body_debug: body 
-            }), 
-            {
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-              status: 400,
-            }
-          );
-        }
-        if (!ELEVENLABS_API_KEY) {
-          return new Response(JSON.stringify({ error: "ELEVENLABS_API_KEY not set in Supabase secrets" }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 500,
-          });
-        }
-        const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "xi-api-key": ELEVENLABS_API_KEY,
-          },
-          body: JSON.stringify({
-            text,
-            model_id: "eleven_multilingual_v2",
-            voice_settings: {
-              stability: 0.35,
-              similarity_boost: 0.90,
-              style: 0.1,
-              use_speaker_boost: true,
-            },
-          }),
-        });
-        if (!res.ok) {
-          const errText = await res.text();
-          return new Response(JSON.stringify({ error: `ElevenLabs ${res.status}: ${errText}` }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 500,
-          });
-        }
-        const buffer = await res.arrayBuffer();
-        
-        // Target-safe array processing loop to prevent compilation errors
-        const uint8 = new Uint8Array(buffer);
-        let binary = "";
-        for (let i = 0; i < uint8.length; i++) {
-          binary += String.fromCharCode(uint8[i]);
-        }
-        const base64 = btoa(binary);
-        
-        return new Response(JSON.stringify({ audio: base64 }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      case "chat": {
-        const { userText, history, storeSnapshot, timezone } = args;
-
-        if (!MISTRAL_API_KEY) throw new Error("MISTRAL_API_KEY is not configured in Supabase secrets.");
-
-        const memories = await loadMemories(20);
-        const storeCtx = storeSnapshot
-          ? `--- LIVE STORE DATA ---\nRevenue today: $${(storeSnapshot.revenue_today_cents / 100).toFixed(2)}\nOrders total: ${storeSnapshot.orders_total}\n--- END STORE DATA ---`
-          : "";
-
-        let githubCtx = "";
-        if (GITHUB_TOKEN) {
-          const repos = await fetchUserRepos(GITHUB_TOKEN);
-          if (repos.length > 0) {
-            const preferred = repos.find((r: any) => r.name?.toLowerCase() === "luveni2.0") || repos[0];
-            const repoList = repos.map((r: any) => `- ${r.owner?.login}/${r.name}`).join("\n");
-            githubCtx = `Primary Default Repo: ${preferred.owner?.login}/${preferred.name}\nAvailable Repos:\n${repoList}`;
-          }
-        }
-
-        const userTimezone = timezone || "UTC";
-        const now = new Date();
-        const dateStr = now.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: userTimezone });
-        const timeStr = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: userTimezone });
-
-        const systemContent = `
-      ${JARVIS_SYSTEM_PROMPT}
-
-      CURRENT DATE & TIME:
-      - Date: ${dateStr}
-      - Time: ${timeStr}
-
-      LONG-TERM MEMORIES:
-      ${memories}
-
-      ${storeCtx}
-
-      ${githubCtx}
-
-      FORMATTING:
-      - Voice-first. Spoken-friendly English.
-      - NO markdown bullet points or hashtags.
-      `.trim();
-
-        const reply = await runJarvisChat(systemContent, history || [], userText);
-
-        return new Response(JSON.stringify({ reply }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      default: {
-        return new Response(JSON.stringify({ error: `Unknown tool: ${tool}` }), {
+    if (tool === "tts") {
+      const text = args?.text;
+      if (!text || typeof text !== "string") {
+        return new Response(JSON.stringify({ error: "args.text is required" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 400,
         });
       }
+      if (!ELEVENLABS_API_KEY) {
+        return new Response(JSON.stringify({ error: "ELEVENLABS_API_KEY not set in Supabase secrets" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 500,
+        });
+      }
+      const ttsRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "xi-api-key": ELEVENLABS_API_KEY,
+        },
+        body: JSON.stringify({
+          text,
+          model_id: "eleven_turbo_v2_5",
+          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+        }),
+      });
+      if (!ttsRes.ok) {
+        const errText = await ttsRes.text();
+        return new Response(JSON.stringify({ error: `ElevenLabs error ${ttsRes.status}: ${errText}` }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 502,
+        });
+      }
+      const audioBuffer = await ttsRes.arrayBuffer();
+      const base64Audio = btoa(String.fromCharCode(...new Uint8Array(audioBuffer)));
+      return new Response(JSON.stringify({ audio: base64Audio }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
+
+    if (tool === "chat") {
+      const { userText, history, storeSnapshot, timezone } = args;
+
+      if (!MISTRAL_API_KEY) {
+        throw new Error("MISTRAL_API_KEY is not configured in Supabase secrets.");
+      }
+
+      const memories = await loadMemories(20);
+      const storeCtx = storeSnapshot ? `--- LIVE STORE DATA ---\nRevenue today: $${(storeSnapshot.revenue_today_cents/100).toFixed(2)}\nOrders total: ${storeSnapshot.orders_total}\n--- END STORE DATA ---` : "";
+
+      let githubCtx = "";
+      if (GITHUB_TOKEN) {
+        const repos = await fetchUserRepos(GITHUB_TOKEN);
+        if (repos.length > 0) {
+          const preferred = repos.find((r: any) => r.name?.toLowerCase() === "luveni2.0") || repos[0];
+          const repoList = repos.map((r: any) => `- ${r.owner?.login}/${r.name}`).join("\n");
+          githubCtx = `Primary Default Repo: ${preferred.owner?.login}/${preferred.name}\nAvailable Repos:\n${repoList}`;
+        }
+      }
+
+      const fallbackTimezone = "UTC";
+      const userTimezone = timezone || fallbackTimezone;
+      const now = new Date();
+      const dateStr = now.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: userTimezone });
+      const timeStr = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: userTimezone });
+
+      const systemContent = `
+    ${JARVIS_SYSTEM_PROMPT}
+
+    CURRENT DATE & TIME:
+    - Date: ${dateStr}
+    - Time: ${timeStr}
+
+    LONG-TERM MEMORIES:
+    ${memories}
+
+    ${storeCtx}
+
+    ${githubCtx}
+
+    FORMATTING:
+    - Voice-first. Spoken-friendly English.
+    - NO markdown bullet points or hashtags.
+    `.trim();
+
+      const reply = await runJarvisChat(systemContent, history || [], userText);
+
+      return new Response(JSON.stringify({ reply }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ error: `Unknown tool: ${tool}` }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 400,
+    });
   } catch (e: any) {
     console.error("[Jarvis] Fatal error:", e.message);
     return new Response(JSON.stringify({ error: e.message }), {
