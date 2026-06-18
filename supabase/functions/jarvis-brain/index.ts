@@ -347,9 +347,7 @@ async function runJarvisChat(
       temperature: 0.25,
       max_tokens: 1200,
       top_p: 0.95,
-      ...(useTools
-        ? { tools: MISTRAL_TOOLS, tool_choice: "auto" }
-        : {}),
+      ...(useTools ? { tools: MISTRAL_TOOLS, tool_choice: "auto" } : {}),
     };
     const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
       method: "POST",
@@ -489,7 +487,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (tool === "tts") {
+    // ─── STRICT STRIP CASE ROUTER ────────────────────────────
+    // Convert tool string to lowercase, strip trailing spaces 
+    // and carriage returns (\r\n) to guarantee comparison success.
+    const cleanedTool = typeof tool === "string" ? tool.replace(/[^a-zA-Z0-9_]/g, "").trim().toLowerCase() : "";
+
+    if (cleanedTool === "tts") {
       const text = args?.text;
       if (!text || typeof text !== "string") {
         return new Response(JSON.stringify({ error: "args.text is required" }), {
@@ -523,21 +526,29 @@ Deno.serve(async (req) => {
         });
       }
       const audioBuffer = await ttsRes.arrayBuffer();
-      const base64Audio = btoa(String.fromCharCode(...new Uint8Array(audioBuffer)));
+      
+      // Target-safe array processing loop to prevent compilation errors and call-stack limits on large payloads
+      const uint8 = new Uint8Array(audioBuffer);
+      let binary = "";
+      for (let i = 0; i < uint8.length; i++) {
+        binary += String.fromCharCode(uint8[i]);
+      }
+      const base64Audio = btoa(binary);
+      
       return new Response(JSON.stringify({ audio: base64Audio }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    if (tool === "chat") {
+    if (cleanedTool === "chat") {
       const { userText, history, storeSnapshot, timezone } = args;
 
-      if (!MISTRAL_API_KEY) {
-        throw new Error("MISTRAL_API_KEY is not configured in Supabase secrets.");
-      }
+      if (!MISTRAL_API_KEY) throw new Error("MISTRAL_API_KEY is not configured in Supabase secrets.");
 
       const memories = await loadMemories(20);
-      const storeCtx = storeSnapshot ? `--- LIVE STORE DATA ---\nRevenue today: $${(storeSnapshot.revenue_today_cents/100).toFixed(2)}\nOrders total: ${storeSnapshot.orders_total}\n--- END STORE DATA ---` : "";
+      const storeCtx = storeSnapshot
+        ? `--- LIVE STORE DATA ---\nRevenue today: $${(storeSnapshot.revenue_today_cents / 100).toFixed(2)}\nOrders total: ${storeSnapshot.orders_total}\n--- END STORE DATA ---`
+        : "";
 
       let githubCtx = "";
       if (GITHUB_TOKEN) {
@@ -581,7 +592,25 @@ Deno.serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ error: `Unknown tool: ${tool}` }), {
+    // ─── STRICT DIAGNOSTIC LOG FALLBACK ─────────────────────
+    // If the tool is not matched, we return detailed debug_info 
+    // including charCode analysis to identify hidden characters.
+    const charCodes: number[] = [];
+    if (typeof tool === "string") {
+      for (let i = 0; i < tool.length; i++) {
+        charCodes.push(tool.charCodeAt(i));
+      }
+    }
+    return new Response(JSON.stringify({ 
+      error: `Unknown tool: ${tool}`,
+      debug_info: {
+        tool_type: typeof tool,
+        tool_length: typeof tool === "string" ? tool.length : 0,
+        tool_char_codes: charCodes,
+        cleaned_tool: cleanedTool,
+        cleaned_tool_length: cleanedTool.length
+      }
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 400,
     });
