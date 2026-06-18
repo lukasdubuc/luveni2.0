@@ -71,15 +71,9 @@ function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | n
   return [...englishVoices].sort((a, b) => scoreVoice(b) - scoreVoice(a))[0];
 }
 
-function loadVoices(): Promise<SpeechSynthesisVoice[]> {
-  return new Promise((resolve) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) { resolve([]); return; }
-    const voices = speechSynthesis.getVoices();
-    if (voices.length > 0) { resolve(voices); return; }
-    const handler = () => resolve(speechSynthesis.getVoices());
-    speechSynthesis.addEventListener('voiceschanged', handler, { once: true });
-    setTimeout(() => resolve(speechSynthesis.getVoices()), 2000);
-  });
+function getVoicesSync(): SpeechSynthesisVoice[] {
+  if (typeof window === 'undefined' || !window.speechSynthesis) return [];
+  return window.speechSynthesis.getVoices();
 }
 
 function sanitizeTextForSpeech(rawText: string): string {
@@ -140,7 +134,11 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.speechSynthesis && voiceCache === undefined) {
-      loadVoices().then(v => { if (voiceCache === undefined) voiceCache = findBestVoice(v); });
+      window.speechSynthesis.getVoices();
+      const handler = () => {
+        voiceCache = findBestVoice(window.speechSynthesis.getVoices());
+      };
+      window.speechSynthesis.addEventListener('voiceschanged', handler, { once: true });
     }
   }, []);
 
@@ -182,40 +180,43 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     } catch (e) {}
   }, []);
 
-  const doSpeakNative = useCallback(async (text: string, voice: SpeechSynthesisVoice | null) => {
+  // Completely synchronous fallback rendering to prevent browser user-gesture timeouts or hangs
+  const doSpeakNative = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     cancel(true);
+    
     let activeVoice = voice;
     if (!activeVoice) {
-      const liveVoices = await loadVoices();
+      const liveVoices = getVoicesSync();
       activeVoice = findBestVoice(liveVoices);
-      if (activeVoice) voiceCache = activeVoice;
     }
-    if (!activeVoice) {
-      const liveVoices = window.speechSynthesis.getVoices();
-      activeVoice = liveVoices.find(v => v.lang.toLowerCase().startsWith('en')) || liveVoices[0] || null;
-    }
+    
     speaking.current = true;
     if (onStartRef.current) onStartRef.current();
+    
     const chunks = chunkText(sanitizeTextForSpeech(text), 150).filter(Boolean);
     if (chunks.length === 0) { endSpeechCleanup(); return; }
+    
     globalActiveUtterances.length = 0;
     const speakChunk = (index: number) => {
       if (!speaking.current) return;
       if (index >= chunks.length) { endSpeechCleanup(); return; }
       const rawChunk = chunks[index].trim();
       if (!rawChunk) { speakChunk(index + 1); return; }
+      
       const utt = new SpeechSynthesisUtterance(rawChunk);
       utt.volume = 1;
       utt.rate = isMobile ? 1.0 : 0.95;
       utt.pitch = 1.0;
       utt.lang = activeVoice?.lang ?? 'en-GB';
       if (activeVoice) utt.voice = activeVoice;
+      
       globalActiveUtterances.push(utt);
       utt.onstart = () => setCurrentSubtitle(rawChunk);
       utt.onboundary = () => { if (onBoundaryRef.current) onBoundaryRef.current(0.3 + Math.random() * 0.55); };
       utt.onend = () => speakChunk(index + 1);
       utt.onerror = () => speakChunk(index + 1);
+      
       try { window.speechSynthesis.speak(utt); } catch (e) { speakChunk(index + 1); }
     };
     speakChunk(0);
@@ -225,29 +226,16 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     cancel(true);
     speaking.current = true;
     if (onStartRef.current) onStartRef.current();
-    const voicesPromise = loadVoices();
     const chunks = chunkText(sanitizeTextForSpeech(text), 150).filter(Boolean);
     try {
       const audioUrls: string[] = [];
       for (const chunk of chunks) {
-        // Standardized function invoke that guarantees standard serialization by the SDK 
-        // to prevent double-stringification or parsing failures.
+        // Standardized function invoke with no manual headers
         const { data, error } = await supabase.functions.invoke('jarvis-brain', {
           body: { tool: 'tts', args: { text: chunk } },
         });
 
         if (error) {
-          if (typeof error === 'object' && 'context' in error) {
-            try {
-              const details = await (error as any).context.json();
-              console.error('[Speech Engine] Edge Function returned error details:', details);
-            } catch {
-              try {
-                const textDetails = await (error as any).context.text();
-                console.error('[Speech Engine] Edge Function returned raw text error:', textDetails);
-              } catch {}
-            }
-          }
           throw error;
         }
 
@@ -256,6 +244,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         const blob = new Blob([buffer], { type: 'audio/mpeg' });
         audioUrls.push(URL.createObjectURL(blob));
       }
+      
       let currentIndex = 0;
       const playNext = () => {
         if (!speaking.current || currentIndex >= audioUrls.length) {
@@ -281,11 +270,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       playNext();
     } catch (err) {
       console.warn('[Speech Engine] ElevenLabs failed, falling back to native:', err);
-      speaking.current = false;
-      const voices = await voicesPromise;
-      const fallbackVoice = voiceCache ?? findBestVoice(voices);
-      if (fallbackVoice) voiceCache = fallbackVoice;
-      doSpeakNative(text, fallbackVoice || null);
+      // Synchronous, unblocked native playback triggers instantly here on error
+      doSpeakNative(text, voiceCache || null);
     }
   }, [cancel, doSpeakNative]);
 
