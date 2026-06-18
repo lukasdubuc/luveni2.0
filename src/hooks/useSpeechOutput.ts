@@ -136,11 +136,6 @@ function chunkText(text: string, maxLength = 150): string[] {
 
 let voiceCache: SpeechSynthesisVoice | null | undefined = undefined;
 
-// ── ElevenLabs client-side key resolver (optional direct-call fallback) ──────
-// PRIMARY path is the `jarvis-brain` edge function (key stays server-side).
-// This only enables a direct browser call if the edge function is unreachable
-// AND a client-side key is present. A browser-side key is publicly visible —
-// use only as a stopgap. Set via VITE_ELEVENLABS_API_KEY or window.__ELEVEN_KEY__.
 function resolveElevenLabsKey(): string {
   if (typeof window !== 'undefined' && (window as any).__ELEVEN_KEY__) {
     return (window as any).__ELEVEN_KEY__;
@@ -156,7 +151,6 @@ function resolveElevenLabsKey(): string {
 
 const ELEVENLABS_VOICE_ID = 'pNInz6obpgDQGcFbJwr1';
 
-// Decode a base64 mp3 payload into a playable object URL.
 function base64ToBlobUrl(base64: string): string {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
@@ -263,7 +257,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
   }, []);
 
-  // 100% Synchronous, non-async native speaker implementation 
+  // Synchronous, non-async native speaker implementation 
   // keeping the gesture authorization alive with 0ms delay
   const doSpeakNative = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
@@ -336,7 +330,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     speakChunk(0);
   }, [cancel, isMobile, endSpeechCleanup]);
 
-  // ─── Play one ready ElevenLabs audio blob ───────────────────
+  // Play one ready ElevenLabs audio blob
   const playAudioBlobUrl = useCallback((audioUrl: string, subtitle: string) => {
     if (!speaking.current) {
       try { URL.revokeObjectURL(audioUrl); } catch (_) {}
@@ -376,7 +370,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     });
   }, []);
 
-  // ─── ELEVENLABS (edge → direct → native), ONE request per reply ───
+  // ELEVENLABS (edge → direct → native), ONE request per reply
   const doSpeakElevenLabs = useCallback(async (text: string) => {
     cancel(true);
 
@@ -436,7 +430,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         }
       }
 
-      // 3) LAST RESORT — native browser voice triggered synchronously with 0ms delay
+      // 3) LAST RESORT — native browser voice.
       console.warn('[Speech Engine] ElevenLabs unavailable, falling back to native.');
       const fallbackVoice = voiceCache ?? findBestVoice(window.speechSynthesis.getVoices());
       if (fallbackVoice) voiceCache = fallbackVoice;
