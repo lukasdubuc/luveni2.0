@@ -197,7 +197,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
     speaking.current = true;
     if (onStartRef.current) onStartRef.current();
-    const chunks = chunkText(sanitizeTextForSpeech(text), 150);
+    const chunks = chunkText(sanitizeTextForSpeech(text), 150).filter(Boolean);
     if (chunks.length === 0) { endSpeechCleanup(); return; }
     globalActiveUtterances.length = 0;
     const speakChunk = (index: number) => {
@@ -226,12 +226,12 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     speaking.current = true;
     if (onStartRef.current) onStartRef.current();
     const voicesPromise = loadVoices();
-    const chunks = chunkText(sanitizeTextForSpeech(text), 150);
+    const chunks = chunkText(sanitizeTextForSpeech(text), 150).filter(Boolean);
     try {
       const audioUrls: string[] = [];
       for (const chunk of chunks) {
         const { data, error } = await supabase.functions.invoke('jarvis-brain', {
-          body: { tool: 'tts', args: { text: chunk } },
+          body: JSON.stringify({ tool: 'tts', args: { text: chunk } }),
         });
         if (error) throw error;
         if (!data || !data.audio) throw new Error(data?.error ?? 'No audio returned');
