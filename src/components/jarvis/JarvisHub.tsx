@@ -150,20 +150,11 @@ function cleanResponseForSpeech(rawText: string): string {
     .trim();
 }
 
-// ── GESTURE TRUST BRIDGE ────────────────────────────────────
-// Browsers track TWO SEPARATE audio permission systems:
-//   1. Web Audio API (AudioContext) — what this function used to unlock.
-//   2. HTMLMediaElement (<audio>/<video> .play()) — what ElevenLabs
-//      playback in useSpeechOutput.ts actually uses (new Audio(blobUrl)).
-// Unlocking #1 does NOT unlock #2. That gap is why ElevenLabs audio was
-// silently blocked on desktop Chrome: the AudioContext was unlocked, the
-// <audio> element track never was, so play() rejected with no console
-// error (swallowed by the .catch() inside useSpeechOutput's playNext()).
 let gestureAudioCtx: AudioContext | null = null;
 let gestureAudioEl: HTMLAudioElement | null = null;
 
 const SILENT_WAV =
-  'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+  'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQQAAAAAAA==';
 
 function activateGestureTrust() {
   try {
@@ -174,17 +165,12 @@ function activateGestureTrust() {
     if (gestureAudioCtx.state === 'suspended') {
       gestureAudioCtx.resume();
     }
-    // Play a zero-duration silent buffer — unlocks the AudioContext track.
     const buffer = gestureAudioCtx.createBuffer(1, 1, 22050);
     const source = gestureAudioCtx.createBufferSource();
     source.buffer = buffer;
     source.connect(gestureAudioCtx.destination);
     source.start(0);
 
-    // ── Unlock the separate <audio> element track ──────────────────
-    // Reuse ONE element and replay it on every gesture so the browser
-    // keeps treating new Audio() elements created shortly after a
-    // gesture as authorized for play().
     if (!gestureAudioEl) {
       gestureAudioEl = new Audio(SILENT_WAV);
       gestureAudioEl.volume = 0;
@@ -214,6 +200,9 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
   const orbStateRef = useRef(orbState);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const isProcessingRef = useRef(false);
+
+  // We keep a local reference to track active speech directly in the callback
+  const localSpeakingRef = useRef(false);
 
   useEffect(() => { orbStateRef.current = orbState; }, [orbState]);
   useEffect(() => { setIsMobile(detectMobileDevice()); }, []);
@@ -261,12 +250,22 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
   }, []);
   
   const { speak, cancel, unlock: unlockAudio, currentSubtitle } = useSpeechOutput({
-    onStart: () => changeOrbState('speaking'),
+    onStart: () => {
+      localSpeakingRef.current = true;
+      changeOrbState('speaking');
+    },
     onEnd: () => {
+      localSpeakingRef.current = false;
       if (orbStateRef.current === 'speaking' || orbStateRef.current === 'thinking') {
-        changeOrbState('idle');
-        setUserQuery('');
-        isProcessingRef.current = false;
+        // SURGICAL TIMING DEBOUNCE: We introduce a tiny 400ms delay before setting state to 'idle'
+        // This gives the browser's asynchronous SpeechRecognition thread ample time to cleanly 
+        // shut down and fire its onend handler, preventing state overlap errors on reopen.
+        setTimeout(() => {
+          if (localSpeakingRef.current) return; // Safeguard if another speech context launched
+          changeOrbState('idle');
+          setUserQuery('');
+          isProcessingRef.current = false;
+        }, 400);
       }
     },
   });
@@ -284,8 +283,6 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       if (!reply) throw new Error("No response received");
       setLastAiResponse(reply);
       
-      // CRITICAL SPEED FIX: Transition to 'speaking' immediately upon data resolution
-      // so your text reply displays with 0 milliseconds of delay.
       changeOrbState('speaking');
 
       const cleanReply = cleanResponseForSpeech(reply);
@@ -326,7 +323,6 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
   const initializeJarvis = useCallback(async () => {
     if (isReady) return;
     try {
-      // ── Activate gesture trust bridge synchronously before any await ──
       activateGestureTrust();
       unlockAudio();
 
@@ -352,9 +348,6 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
 
   const handleOrbClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    // Gesture trust must still fire on every click (cheap, idempotent) —
-    // browsers want a real gesture close to the play() call, and replaying
-    // this costs nothing since it's silent and doesn't speak anything.
     activateGestureTrust();
     unlockAudio();
     if (!isReady) {
@@ -368,10 +361,6 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     e.stopPropagation();
     activateGestureTrust();
     unlockAudio();
-    // FIX: tapping the transcript/text area should open the text box,
-    // not silently force full mic initialization (isLive = true). Mic
-    // listening should only start from the orb click, or once already
-    // initialized. First-time text input no longer turns the mic on.
     if (!isReady) {
       setIsReady(true);
       setIsTextInputActive(true);
@@ -395,7 +384,6 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     setIsTextInputActive(false);
     setTextInputValue('');
     if (query) {
-      // ── Gesture trust must fire here, synchronously, before handleFinalTranscript's awaits ──
       activateGestureTrust();
       unlockAudio();
       handleFinalTranscript(query);
