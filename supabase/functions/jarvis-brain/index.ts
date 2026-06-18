@@ -485,132 +485,136 @@ Deno.serve(async (req) => {
     }
 
     const { tool, args } = body || {};
-    
-    // Explicit server-side console logging for debugging
-    console.log("[Jarvis] Received Request Body:", JSON.stringify(body));
-    const currentTool = tool ? String(tool).trim().toLowerCase() : "";
-    console.log("[Jarvis] Resolved Tool Name:", currentTool);
 
-    if (currentTool === "open_link") {
-      return new Response(JSON.stringify({ results: await readWebPage(args?.url || "") }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // ── STRICT PARSING REFINEMENT ────────────────────────────
+    // Convert tool to lowercase, trim whitespaces and strip carriage returns (\r\n) 
+    // to guarantee string comparison success across all build pipelines
+    const cleanedTool = typeof tool === "string" ? tool.replace(/\r/g, "").trim().toLowerCase() : "";
 
-    if (currentTool === "tts") {
-      const text = args?.text || body?.text;
-      if (!text || typeof text !== "string") {
-        return new Response(
-          JSON.stringify({ 
-            error: "args.text is required", 
-            parsed_body_debug: body 
-          }), 
-          {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 400,
-          }
-        );
-      }
-      if (!ELEVENLABS_API_KEY) {
-        return new Response(JSON.stringify({ error: "ELEVENLABS_API_KEY not set in Supabase secrets" }), {
+    switch (cleanedTool) {
+      case "open_link": {
+        return new Response(JSON.stringify({ results: await readWebPage(args?.url || "") }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 500,
         });
       }
-      const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "xi-api-key": ELEVENLABS_API_KEY,
-        },
-        body: JSON.stringify({
-          text,
-          model_id: "eleven_multilingual_v2",
-          voice_settings: {
-            stability: 0.35,
-            similarity_boost: 0.90,
-            style: 0.1,
-            use_speaker_boost: true,
-          },
-        }),
-      });
-      if (!res.ok) {
-        const errText = await res.text();
-        return new Response(JSON.stringify({ error: `ElevenLabs ${res.status}: ${errText}` }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 500,
-        });
-      }
-      const buffer = await res.arrayBuffer();
-      
-      // Target-safe array processing loop to prevent compilation errors
-      const uint8 = new Uint8Array(buffer);
-      let binary = "";
-      for (let i = 0; i < uint8.length; i++) {
-        binary += String.fromCharCode(uint8[i]);
-      }
-      const base64 = btoa(binary);
-      
-      return new Response(JSON.stringify({ audio: base64 }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
 
-    if (currentTool === "chat") {
-      const { userText, history, storeSnapshot, timezone } = args;
-
-      if (!MISTRAL_API_KEY) throw new Error("MISTRAL_API_KEY is not configured in Supabase secrets.");
-
-      const memories = await loadMemories(20);
-      const storeCtx = storeSnapshot
-        ? `--- LIVE STORE DATA ---\nRevenue today: $${(storeSnapshot.revenue_today_cents / 100).toFixed(2)}\nOrders total: ${storeSnapshot.orders_total}\n--- END STORE DATA ---`
-        : "";
-
-      let githubCtx = "";
-      if (GITHUB_TOKEN) {
-        const repos = await fetchUserRepos(GITHUB_TOKEN);
-        if (repos.length > 0) {
-          const preferred = repos.find((r: any) => r.name?.toLowerCase() === "luveni2.0") || repos[0];
-          const repoList = repos.map((r: any) => `- ${r.owner?.login}/${r.name}`).join("\n");
-          githubCtx = `Primary Default Repo: ${preferred.owner?.login}/${preferred.name}\nAvailable Repos:\n${repoList}`;
+      case "tts": {
+        const text = args?.text || body?.text;
+        if (!text || typeof text !== "string") {
+          return new Response(
+            JSON.stringify({ 
+              error: "args.text is required", 
+              parsed_body_debug: body 
+            }), 
+            {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 400,
+            }
+          );
         }
+        if (!ELEVENLABS_API_KEY) {
+          return new Response(JSON.stringify({ error: "ELEVENLABS_API_KEY not set in Supabase secrets" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 500,
+          });
+        }
+        const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "xi-api-key": ELEVENLABS_API_KEY,
+          },
+          body: JSON.stringify({
+            text,
+            model_id: "eleven_multilingual_v2",
+            voice_settings: {
+              stability: 0.35,
+              similarity_boost: 0.90,
+              style: 0.1,
+              use_speaker_boost: true,
+            },
+          }),
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          return new Response(JSON.stringify({ error: `ElevenLabs ${res.status}: ${errText}` }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 500,
+          });
+        }
+        const buffer = await res.arrayBuffer();
+        
+        // Target-safe array processing loop to prevent compilation errors
+        const uint8 = new Uint8Array(buffer);
+        let binary = "";
+        for (let i = 0; i < uint8.length; i++) {
+          binary += String.fromCharCode(uint8[i]);
+        }
+        const base64 = btoa(binary);
+        
+        return new Response(JSON.stringify({ audio: base64 }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
-      const userTimezone = timezone || "UTC";
-      const now = new Date();
-      const dateStr = now.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: userTimezone });
-      const timeStr = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: userTimezone });
+      case "chat": {
+        const { userText, history, storeSnapshot, timezone } = args;
 
-      const systemContent = `
-    ${JARVIS_SYSTEM_PROMPT}
+        if (!MISTRAL_API_KEY) throw new Error("MISTRAL_API_KEY is not configured in Supabase secrets.");
 
-    CURRENT DATE & TIME:
-    - Date: ${dateStr}
-    - Time: ${timeStr}
+        const memories = await loadMemories(20);
+        const storeCtx = storeSnapshot
+          ? `--- LIVE STORE DATA ---\nRevenue today: $${(storeSnapshot.revenue_today_cents / 100).toFixed(2)}\nOrders total: ${storeSnapshot.orders_total}\n--- END STORE DATA ---`
+          : "";
 
-    LONG-TERM MEMORIES:
-    ${memories}
+        let githubCtx = "";
+        if (GITHUB_TOKEN) {
+          const repos = await fetchUserRepos(GITHUB_TOKEN);
+          if (repos.length > 0) {
+            const preferred = repos.find((r: any) => r.name?.toLowerCase() === "luveni2.0") || repos[0];
+            const repoList = repos.map((r: any) => `- ${r.owner?.login}/${r.name}`).join("\n");
+            githubCtx = `Primary Default Repo: ${preferred.owner?.login}/${preferred.name}\nAvailable Repos:\n${repoList}`;
+          }
+        }
 
-    ${storeCtx}
+        const userTimezone = timezone || "UTC";
+        const now = new Date();
+        const dateStr = now.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: userTimezone });
+        const timeStr = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: userTimezone });
 
-    ${githubCtx}
+        const systemContent = `
+      ${JARVIS_SYSTEM_PROMPT}
 
-    FORMATTING:
-    - Voice-first. Spoken-friendly English.
-    - NO markdown bullet points or hashtags.
-    `.trim();
+      CURRENT DATE & TIME:
+      - Date: ${dateStr}
+      - Time: ${timeStr}
 
-      const reply = await runJarvisChat(systemContent, history || [], userText);
+      LONG-TERM MEMORIES:
+      ${memories}
 
-      return new Response(JSON.stringify({ reply }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      ${storeCtx}
+
+      ${githubCtx}
+
+      FORMATTING:
+      - Voice-first. Spoken-friendly English.
+      - NO markdown bullet points or hashtags.
+      `.trim();
+
+        const reply = await runJarvisChat(systemContent, history || [], userText);
+
+        return new Response(JSON.stringify({ reply }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      default: {
+        return new Response(JSON.stringify({ error: `Unknown tool: ${tool}` }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
+        });
+      }
     }
-
-    return new Response(JSON.stringify({ error: `Unknown tool: ${tool}` }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 400,
-    });
   } catch (e: any) {
     console.error("[Jarvis] Fatal error:", e.message);
     return new Response(JSON.stringify({ error: e.message }), {
