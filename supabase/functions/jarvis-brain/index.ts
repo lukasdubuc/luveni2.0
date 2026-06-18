@@ -440,7 +440,6 @@ async function requireAdminCaller(req: Request): Promise<Response | null> {
       });
     }
 
-    // Role-Checking Safeguard with DB warning catch
     const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/has_role`, {
       method: "POST",
       headers: {
@@ -452,7 +451,6 @@ async function requireAdminCaller(req: Request): Promise<Response | null> {
     });
 
     if (!rpcRes.ok) {
-      // Fallback: If has_role RPC is broken, allow caller instead of hanging the thread on user
       console.warn("[Jarvis] RPC role check unavailable, bypassing directly.");
       return null;
     }
@@ -474,7 +472,6 @@ async function requireAdminCaller(req: Request): Promise<Response | null> {
   }
 }
 
-// Optimized with native cold-start-proof Deno serve API
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
