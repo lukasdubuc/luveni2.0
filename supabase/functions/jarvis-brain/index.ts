@@ -469,7 +469,7 @@ Deno.serve(async (req) => {
       body = await req.json();
     } catch (err: any) {
       console.warn("[Jarvis] Could not parse direct JSON body:", err.message);
-      return new Response(JSON.stringify({ error: \`Invalid JSON body: \${err.message}\` }), {
+      return new Response(JSON.stringify({ error: `Invalid JSON body: ${err.message}` }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 400,
       });
@@ -512,7 +512,7 @@ Deno.serve(async (req) => {
           status: 500,
         });
       }
-      const res = await fetch(\`https://api.elevenlabs.io/v1/text-to-speech/\${ELEVENLABS_VOICE_ID}\`, {
+      const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -531,7 +531,7 @@ Deno.serve(async (req) => {
       });
       if (!res.ok) {
         const errText = await res.text();
-        return new Response(JSON.stringify({ error: \`ElevenLabs \${res.status}: \${errText}\` }), {
+        return new Response(JSON.stringify({ error: `ElevenLabs ${res.status}: ${errText}` }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 500,
         });
@@ -558,7 +558,7 @@ Deno.serve(async (req) => {
 
       const memories = await loadMemories(20);
       const storeCtx = storeSnapshot
-        ? \`--- LIVE STORE DATA ---\\nRevenue today: \$\${(storeSnapshot.revenue_today_cents / 100).toFixed(2)}\\nOrders total: \${storeSnapshot.orders_total}\\n--- END STORE DATA ---\`
+        ? `--- LIVE STORE DATA ---\nRevenue today: $${(storeSnapshot.revenue_today_cents / 100).toFixed(2)}\nOrders total: ${storeSnapshot.orders_total}\n--- END STORE DATA ---`
         : "";
 
       let githubCtx = "";
@@ -566,8 +566,8 @@ Deno.serve(async (req) => {
         const repos = await fetchUserRepos(GITHUB_TOKEN);
         if (repos.length > 0) {
           const preferred = repos.find((r: any) => r.name?.toLowerCase() === "luveni2.0") || repos[0];
-          const repoList = repos.map((r: any) => \`- \${r.owner?.login}/\${r.name}\`).join("\\n");
-          githubCtx = \`Primary Default Repo: \${preferred.owner?.login}/\${preferred.name}\\nAvailable Repos:\\n\${repoList}\`;
+          const repoList = repos.map((r: any) => `- ${r.owner?.login}/${r.name}`).join("\n");
+          githubCtx = `Primary Default Repo: ${preferred.owner?.login}/${preferred.name}\nAvailable Repos:\n${repoList}`;
         }
       }
 
@@ -577,18 +577,18 @@ Deno.serve(async (req) => {
       const timeStr = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: userTimezone });
 
       const systemContent = `
-    \${JARVIS_SYSTEM_PROMPT}
+    ${JARVIS_SYSTEM_PROMPT}
 
     CURRENT DATE & TIME:
-    - Date: \${dateStr}
-    - Time: \${timeStr}
+    - Date: ${dateStr}
+    - Time: ${timeStr}
 
     LONG-TERM MEMORIES:
-    \${memories}
+    ${memories}
 
-    \${storeCtx}
+    ${storeCtx}
 
-    \${githubCtx}
+    ${githubCtx}
 
     FORMATTING:
     - Voice-first. Spoken-friendly English.
@@ -602,7 +602,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ error: \`Unknown tool: \${tool}\` }), {
+    return new Response(JSON.stringify({ error: `Unknown tool: ${tool}` }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 400,
     });
