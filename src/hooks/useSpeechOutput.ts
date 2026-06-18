@@ -230,7 +230,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     try {
       const audioUrls: string[] = [];
       for (const chunk of chunks) {
-        // Invoke with an explicit header and non-stringified payload
         const { data, error } = await supabase.functions.invoke('jarvis-brain', {
           headers: {
             'Content-Type': 'application/json',
@@ -239,7 +238,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         });
 
         if (error) {
-          // Robust error reading to output exact reasons from the server to your browser console
           if (typeof error === 'object' && 'context' in error) {
             try {
               const details = await (error as any).context.json();
