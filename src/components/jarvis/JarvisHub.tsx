@@ -242,7 +242,8 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [isTextInputActive, isMobile]);
 
-  const { ask } = useGemini();
+  const { ask, morningBrief } = useGemini();
+  const morningBriefDoneRef = useRef(false);
 
   const changeOrbState = useCallback((newState: OrbState) => {
     if (stateTimeoutRef.current) clearTimeout(stateTimeoutRef.current);
