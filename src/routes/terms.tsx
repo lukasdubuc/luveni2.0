@@ -1,85 +1,113 @@
 import { createFileRoute } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { Mail } from "lucide-react";
 import { site } from "@/config/site";
 
 export const Route = createFileRoute("/terms")({
   head: () => ({
     meta: [
-      { title: `Terms of Service ${site.brand}` },
-      { name: "description", content: `The terms that govern your use of ${site.brand}.` },
+      { title: `Terms of Service — ${site.brand || "Luveni"}` },
+      { name: "description", content: `The terms that govern your use of ${site.brand || "Luveni"} and our products.` },
     ],
   }),
   component: Terms,
 });
 
-function H({ children }: { children: ReactNode }) {
-  return <h2 className="mt-10 text-xl font-semibold tracking-tight text-foreground">{children}</h2>;
+const BRAND = site.brand || "Luveni";
+const SUPPORT_EMAIL = "luveni.apparel@gmail.com";
+const UPDATED = "June 2026";
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="border-b border-border py-8">
+      <h2 className="text-lg font-semibold tracking-tight text-foreground">{title}</h2>
+      <div className="mt-3 space-y-3 text-sm font-light leading-relaxed text-muted-foreground">{children}</div>
+    </section>
+  );
 }
 
 function Terms() {
   return (
-    <section className="bg-background">
-      <article className="mx-auto max-w-3xl px-4 py-16 text-base leading-relaxed text-muted-foreground">
-        <p className="text-sm uppercase tracking-wider text-accent">Legal</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-          Terms of Service
+    <section className="bg-background text-foreground">
+      <article className="mx-auto max-w-3xl px-6 py-20 md:py-28">
+        <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-muted-foreground">Legal</p>
+        <h1
+          className="mt-4 tracking-tighter text-foreground"
+          style={{ fontSize: "clamp(34px, 5vw, 58px)", fontWeight: 200, lineHeight: 1.04, letterSpacing: "-0.03em" }}
+        >
+          Terms of service.
         </h1>
-        <p className="mt-2 text-sm">Last updated: {new Date().toLocaleDateString()}</p>
-
-        <p className="mt-8">
-          These Terms govern your access to and use of {site.brand}. By using
-          our website or purchasing our products, you agree to these Terms.
-          This template is a starting point and should be reviewed by qualified
-          legal counsel before you launch.
+        <p className="mt-4 max-w-xl text-sm font-light leading-relaxed text-muted-foreground">
+          These terms govern your access to and use of {BRAND}. By browsing our site or purchasing our products,
+          you agree to them.
         </p>
+        <p className="mt-6 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70">Last updated {UPDATED}</p>
 
-        <H>Use of the service</H>
-        <p className="mt-3">
-          You agree to use the service only for lawful purposes. You may not
-          resell, redistribute, or share access credentials for paid products
-          without our written permission.
-        </p>
+        <div className="mt-12 border-t border-border">
+          <Section title="Use of the site">
+            <p>
+              You agree to use our site only for lawful purposes. You may not attempt to disrupt the service,
+              access it through automated means without permission, or use it in any way that infringes the rights
+              of others.
+            </p>
+          </Section>
 
-        <H>Purchases</H>
-        <p className="mt-3">
-          All purchases are billed in the currency displayed at checkout.
-          You authorize us and our payment processor to charge the payment
-          method you provide for the amount shown.
-        </p>
+          <Section title="Orders &amp; pricing">
+            <p>
+              All orders are subject to acceptance and availability. Prices are shown in the currency displayed at
+              checkout and may change without notice. We reserve the right to refuse or cancel any order — for
+              example in cases of suspected fraud, pricing errors, or stock issues — and to refund you in full if we
+              do.
+            </p>
+          </Section>
 
-        <H>Intellectual property</H>
-        <p className="mt-3">
-          All content, materials, and code provided as part of the product
-          remain the property of {site.brand} unless explicitly stated. You
-          receive a personal, non-exclusive, non-transferable license to use
-          the materials for your own purposes.
-        </p>
+          <Section title="Payment">
+            <p>
+              You authorize us and our payment processor to charge the payment method you provide for the full
+              amount shown at checkout, including any applicable shipping and taxes.
+            </p>
+          </Section>
 
-        <H>Refunds</H>
-        <p className="mt-3">
-          Refunds are governed by our{" "}
-          <a className="underline" href="/refund">Refund Policy</a>.
-        </p>
+          <Section title="Shipping &amp; returns">
+            <p>
+              Delivery is governed by our{" "}
+              <a className="underline" href="/shipping">Shipping</a> policy, and returns and refunds are governed by
+              our <a className="underline" href="/refund">Returns &amp; Refunds</a> policy.
+            </p>
+          </Section>
 
-        <H>Limitation of liability</H>
-        <p className="mt-3">
-          The service is provided "as is" without warranty of any kind. To the
-          fullest extent permitted by law, {site.brand} is not liable for any
-          indirect, incidental, or consequential damages arising from your use
-          of the service.
-        </p>
+          <Section title="Intellectual property">
+            <p>
+              All branding, designs, graphics, photography, and site content remain the property of {BRAND} unless
+              explicitly stated. You may not reproduce, resell, or redistribute them without our written permission.
+            </p>
+          </Section>
 
-        <H>Changes</H>
-        <p className="mt-3">
-          We may update these Terms from time to time. Continued use of the
-          service after changes constitutes acceptance of the updated Terms.
-        </p>
+          <Section title="Limitation of liability">
+            <p>
+              Our products and site are provided on an "as is" basis. To the fullest extent permitted by law,
+              {" "}{BRAND} is not liable for any indirect, incidental, or consequential damages arising from your use
+              of the site or products.
+            </p>
+          </Section>
 
-        <H>Contact</H>
-        <p className="mt-3">
-          Questions? Email{"luveni.apparel@gmail.com"}
-          <a className="underline" href={`mailto:${site.supportEmail}`}>{site.supportEmail}</a>.
-        </p>
+          <Section title="Changes to these terms">
+            <p>
+              We may update these terms from time to time. Continued use of the site after changes are posted
+              constitutes acceptance of the updated terms.
+            </p>
+          </Section>
+        </div>
+
+        <div className="mt-10 flex items-center gap-3 border border-border bg-muted/30 p-4">
+          <span className="grid h-10 w-10 place-items-center border border-border bg-background text-foreground">
+            <Mail className="h-5 w-5" />
+          </span>
+          <div className="text-sm">
+            <p className="text-muted-foreground">Questions about these terms?</p>
+            <a href={`mailto:${SUPPORT_EMAIL}`} className="font-medium underline">{SUPPORT_EMAIL}</a>
+          </div>
+        </div>
       </article>
     </section>
   );
