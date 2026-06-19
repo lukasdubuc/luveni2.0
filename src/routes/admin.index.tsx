@@ -651,6 +651,11 @@ function AdminPage() {
     }
   };
 
+  const handleOpenJarvis = () => {
+    // Completely removed the unhandled fullscreen request behavior for safe mobile navigation transitions
+    navigate({ to: "/admin/jarvis" as any });
+  };
+
   // ── Computed: Revenue ───────────────────────────────────────────────────
   const filterByRange = (date: Date, range: typeof revenueRange) => {
     const now = new Date();
@@ -1467,7 +1472,7 @@ function AdminPage() {
                       {!selectMode && (
                         <div className="flex items-center justify-end gap-2.5 mt-2 pt-2 border-t border-neutral-200/20 dark:border-neutral-900/40">
                           <button onClick={e => { e.stopPropagation(); togglePublished(p.id, p.is_published); }}
-                            className={`w-1.5 h-1.5 rounded-full transition-all ${p.is_published ? "bg-emerald-500" : "bg-rose-500"}`} />
+                            className={`w-1.5 h-1.5 rounded-full transition-all ${p.is_published ? "bg-emerald-555" : "bg-rose-500"}`} />
                           {isPrintful || isApliq ? (
                             <span className={`${isDark ? "text-neutral-800" : "text-neutral-305"} cursor-not-allowed`} title={`${isPrintful ? "Printful" : "Apliq"} products are synced from supplier hub`}>
                               <Edit3 size={11} />
@@ -1725,7 +1730,7 @@ function AdminPage() {
               <div className="space-y-3">
                 <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Origin Referrers</p>
                 {topReferrers.length === 0 ? (
-                  <p className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-700" : "text-neutral-300"}`}>Empty logs</p>
+                  <p className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-700" : "text-neutral-303"}`}>Empty logs</p>
                 ) : (
                   <div className={`p-4 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-955/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-2.5`}>
                     {topReferrers.map(([ref, count]) => (
@@ -1853,7 +1858,7 @@ function AdminPage() {
                 <div className={`p-5 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "bg-neutral-955/30 border-neutral-900" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-6`}>
                   <div className="flex gap-3 flex-wrap items-end">
                     <div className="flex-1 min-w-[200px] space-y-1.5">
-                      <label className={`text-[8px] font-mono font-semibold uppercase ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>ADD TEAM MEMBER</label>
+                      <label className={`text-[8px] font-mono font-semibold uppercase ${isDark ? "text-neutral-555" : "text-neutral-400"}`}>ADD TEAM MEMBER</label>
                       <input
                         type="email"
                         placeholder="EMAIL ADDR…"
