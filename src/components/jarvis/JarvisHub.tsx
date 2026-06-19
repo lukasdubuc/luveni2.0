@@ -319,8 +319,22 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     enabled: isReady && isLive && !isTextInputActive && (orbState === 'idle' || orbState === 'listening'),
     cancelSpeech: cancel
   });
-
-  const initializeJarvis = useCallback(async () => {
+    // Fires once per session after audio is unlocked. The edge function decides
+  // whether it's actually morning; off-hours it returns nothing and we stay silent.
+  const maybePlayMorningBrief = useCallback(async () => {
+    if (morningBriefDoneRef.current) return;
+    morningBriefDoneRef.current = true;
+    try {
+      const { isMorning, brief } = await morningBrief();
+      if (!isMorning || !brief) return;
+      setLastAiResponse(brief);
+      changeOrbState('speaking');
+      speak(cleanResponseForSpeech(brief));
+    } catch (err) {
+      console.error('[Jarvis] Morning brief error:', err);
+    }
+  }, [morningBrief, speak, changeOrbState]);
+   const initializeJarvis = useCallback(async () => {
     if (isReady) return;
     try {
       activateGestureTrust();
@@ -333,12 +347,14 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       }
       setIsReady(true);
       setIsLive(true);
-    } catch (e) { 
-      console.error("[Jarvis] Audio context resume failed.", e); 
+      void maybePlayMorningBrief();
+    } catch (e) {
+      console.error("[Jarvis] Audio context resume failed.", e);
       setIsReady(true);
       setIsLive(true);
+      void maybePlayMorningBrief();
     }
-  }, [isReady, unlockAudio]);
+  }, [isReady, unlockAudio, maybePlayMorningBrief]);
 
   useEffect(() => { 
     if (autoStart && !isMobile) {
@@ -423,7 +439,7 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
   } else if (isLive) {
     displayText = "Click or start speaking, sir...";
   } else {
-    displayText = "Click to initialize J.A.R.V.I.S.";
+    displayText = "Click to initialize Astra.";
   }
 
   const orbSize = isMobile ? 280 : 400;
