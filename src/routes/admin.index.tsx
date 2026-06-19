@@ -847,20 +847,18 @@ function AdminPage() {
   }, [analyticsEvents]);
 
   // ── RENDER SECURITY SAFEGUARD LOADERS ───────────────────────────────────
-  if (isLoadingAuth) {
+   if (isLoadingAuth) {
     return (
       <div 
-        className={`min-h-screen flex flex-col items-center justify-center ${isDark ? "bg-black text-white" : "bg-[#f5f5f7] text-black"}`}
+        className="min-h-screen flex flex-col items-center justify-center bg-[#f5f5f7] text-black dark:bg-black dark:text-white"
         style={{
-          backgroundColor: isDark ? "#000000" : "#f5f5f7",
-          color: isDark ? "#ffffff" : "#000000",
           fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "SF Pro", "SF Compact", "Helvetica Neue", Helvetica, Arial, sans-serif'
         }}
       >
         <div className="space-y-4 text-center max-w-sm px-6">
           <div className="relative w-12 h-12 mx-auto">
-            <div className={`absolute inset-0 rounded-full border-2 border-t-transparent animate-spin ${isDark ? "border-white" : "border-black"}`} />
-            <div className={`absolute inset-2 rounded-full border border-b-transparent animate-spin ${isDark ? "border-neutral-800" : "border-neutral-305"}`} style={{ animationDirection: "reverse" }} />
+            <div className="absolute inset-0 rounded-full border-2 border-t-transparent animate-spin border-black dark:border-white" />
+            <div className="absolute inset-2 rounded-full border border-b-transparent animate-spin border-neutral-300 dark:border-neutral-800" style={{ animationDirection: "reverse" }} />
           </div>
           <div className="space-y-1">
             <p className="text-[10px] uppercase tracking-[0.2em] font-mono font-bold">INITIALIZING CORE CONTROL</p>
@@ -877,7 +875,7 @@ function AdminPage() {
 
   return (
     <div 
-      className={`admin-page min-h-screen relative ${isDark ? "bg-black text-neutral-105 selection:bg-neutral-800" : "bg-[#f5f5f7] text-neutral-900 selection:bg-neutral-200"}`}
+      className="admin-page min-h-screen relative bg-[#f5f5f7] text-neutral-900 selection:bg-neutral-200 dark:bg-black dark:text-neutral-105 dark:selection:bg-neutral-800"
       style={{
         fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "SF Pro", "SF Compact", "Helvetica Neue", Helvetica, Arial, sans-serif'
       }}
