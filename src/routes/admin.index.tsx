@@ -9,6 +9,20 @@ import { requireAdmin } from "@/lib/admin-guard";
 
 
 // ────────────────────────────────────────────────────────────────────────────
+// IMMEDIATE THEME INITIALIZATION TO PREVENT FLASH ON REFRESH
+// ────────────────────────────────────────────────────────────────────────────
+if (typeof document !== "undefined") {
+  const localTheme = localStorage.getItem("theme");
+  if (localTheme === "dark") {
+    document.documentElement.classList.add("dark");
+    document.documentElement.style.backgroundColor = "#000000";
+  } else if (localTheme === "light") {
+    document.documentElement.classList.remove("dark");
+    document.documentElement.style.backgroundColor = "#f5f5f7";
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // TYPES & ROUTE DEFINITION
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -130,6 +144,7 @@ function AdminPage() {
       const hasLocalDark = localStorage.getItem("theme") === "dark";
       if (hasLocalDark && !hasDarkClass) {
         document.documentElement.classList.add("dark");
+        document.documentElement.style.backgroundColor = "#000000";
       }
       return hasDarkClass || hasLocalDark;
     }
@@ -211,9 +226,11 @@ function AdminPage() {
     if (!localStorage.getItem("theme") && siteContent.theme) {
       if (siteContent.theme === "dark") {
         document.documentElement.classList.add("dark");
+        document.documentElement.style.backgroundColor = "#000000";
         setIsDark(true);
       } else {
         document.documentElement.classList.remove("dark");
+        document.documentElement.style.backgroundColor = "#f5f5f7";
         setIsDark(false);
       }
     }
@@ -1348,7 +1365,7 @@ function AdminPage() {
                 <div className="flex items-center justify-between">
                   <button onClick={() => setProductForm(f => ({ ...f, is_published: !f.is_published }))}
                     className={`text-[9px] font-mono font-semibold uppercase px-4 py-1.5 rounded-[9999px] border transition-all ${
-                      productForm.is_published ? "bg-emerald-555/10 text-emerald-500 border-emerald-555/20" : "bg-rose-505/10 text-rose-505/20"
+                      productForm.is_published ? "bg-emerald-555/10 text-emerald-500 border-emerald-555/20" : "bg-rose-505/10 text-rose-500 border-rose-505/20"
                     }`}>
                     {productForm.is_published ? "Status: Deployed" : "Status: Draft"}
                   </button>
@@ -1517,7 +1534,7 @@ function AdminPage() {
               <table className="w-full text-left">
                 <thead>
                   <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${
-                    isDark ? "text-neutral-500 border-neutral-900 bg-neutral-955/50" : "text-neutral-500 border-[#D1D1D6] bg-[#f5f5f7]"
+                    isDark ? "text-neutral-500 border-neutral-900 bg-neutral-955/50" : "text-neutral-555 border-[#D1D1D6] bg-[#f5f5f7]"
                   }`}>
                     <th className="px-5 py-3 font-semibold">Invoicing Email</th>
                     <th className="px-5 py-3 font-semibold">Recipient Identity</th>
@@ -1705,7 +1722,7 @@ function AdminPage() {
               <div className="space-y-3">
                 <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Origin Referrers</p>
                 {topReferrers.length === 0 ? (
-                  <p className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-700" : "text-neutral-300"}`}>Empty logs</p>
+                  <p className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-700" : "text-neutral-303"}`}>Empty logs</p>
                 ) : (
                   <div className={`p-4 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-955/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-2.5`}>
                     {topReferrers.map(([ref, count]) => (
@@ -1788,7 +1805,7 @@ function AdminPage() {
           <div className="max-w-2xl space-y-10 animate-in fade-in duration-500">
             <div className="border-b pb-4 dark:border-neutral-900 border-[#D1D1D6]">
               <h1 className="text-xl font-medium tracking-tight">System Settings</h1>
-              <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>ROOT HOOK CONTROL</p>
+              <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-450"}`}>ROOT HOOK CONTROL</p>
             </div>
 
             <div className="space-y-10">
@@ -1804,6 +1821,7 @@ function AdminPage() {
                           setIsDark(false);
                           localStorage.setItem("theme", "light");
                           document.documentElement.classList.remove("dark");
+                          document.documentElement.style.backgroundColor = "#f5f5f7";
                           saveSiteConfig({ ...siteContent, theme: "light" });
                         }}
                         className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all rounded-[9999px] ${!isDark ? "bg-black text-white" : "text-neutral-405 hover:bg-neutral-900"}`}
@@ -1815,6 +1833,7 @@ function AdminPage() {
                           setIsDark(true);
                           document.documentElement.classList.add("dark");
                           localStorage.setItem("theme", "dark");
+                          document.documentElement.style.backgroundColor = "#000000";
                           saveSiteConfig({ ...siteContent, theme: "dark" });
                         }}
                         className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all rounded-[9999px] ${isDark ? "bg-white text-black" : "text-neutral-555 hover:bg-neutral-101"}`}
@@ -1987,7 +2006,7 @@ function AdminPage() {
               price_cents: item.price_cents || item.price || dbProduct?.price_cents,
               image_url: dbProduct?.image_urls?.[0] || item.image_url || item.image,
               quantity: item.quantity || 1,
-              });
+            });
           });
         }
 
