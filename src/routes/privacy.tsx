@@ -1,80 +1,107 @@
 import { createFileRoute } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { Mail } from "lucide-react";
 import { site } from "@/config/site";
 
 export const Route = createFileRoute("/privacy")({
   head: () => ({
     meta: [
-      { title: `Privacy Policy ${site.brand}` },
-      { name: "description", content: `How ${site.brand} collects, uses, and protects your information.` },
+      { title: `Privacy Policy — ${site.brand || "Luveni"}` },
+      { name: "description", content: `How ${site.brand || "Luveni"} collects, uses, and protects your information.` },
     ],
   }),
   component: Privacy,
 });
 
-function H({ children }: { children: ReactNode }) {
-  return <h2 className="mt-10 text-xl font-semibold tracking-tight text-foreground">{children}</h2>;
+const BRAND = site.brand || "Luveni";
+const SUPPORT_EMAIL = "luveni.apparel@gmail.com";
+const UPDATED = "June 2026";
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="border-b border-border py-8">
+      <h2 className="text-lg font-semibold tracking-tight text-foreground">{title}</h2>
+      <div className="mt-3 space-y-3 text-sm font-light leading-relaxed text-muted-foreground">{children}</div>
+    </section>
+  );
 }
 
 function Privacy() {
   return (
-    <section className="bg-background">
-      <article className="mx-auto max-w-3xl px-4 py-16 text-base leading-relaxed text-muted-foreground">
-        <p className="text-sm uppercase tracking-wider text-accent">Legal</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-          Privacy Policy
+    <section className="bg-background text-foreground">
+      <article className="mx-auto max-w-3xl px-6 py-20 md:py-28">
+        <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-muted-foreground">Legal</p>
+        <h1
+          className="mt-4 tracking-tighter text-foreground"
+          style={{ fontSize: "clamp(34px, 5vw, 58px)", fontWeight: 200, lineHeight: 1.04, letterSpacing: "-0.03em" }}
+        >
+          Privacy policy.
         </h1>
-        <p className="mt-2 text-sm">Last updated: {new Date().toLocaleDateString()}</p>
-
-        <p className="mt-8">
-          This Privacy Policy describes how {site.brand} ("we", "us", or "our")
-          collects, uses, and shares information about you when you use our
-          website and services. This template is a starting point and should be
-          reviewed by qualified legal counsel before you launch.
+        <p className="mt-4 max-w-xl text-sm font-light leading-relaxed text-muted-foreground">
+          This policy describes how {BRAND} collects, uses, and protects your information when you shop with us
+          or visit our site. We keep it short, and we keep it honest.
         </p>
+        <p className="mt-6 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70">Last updated {UPDATED}</p>
 
-        <H>Information we collect</H>
-        <p className="mt-3">
-          We collect information you provide directly — such as your name, email
-          address, and payment details when you place an order or contact us.
-          We also collect limited technical information such as IP address,
-          browser type, and pages visited via standard server logs and
-          privacy-respecting analytics.
-        </p>
+        <div className="mt-12 border-t border-border">
+          <Section title="Information we collect">
+            <p>
+              We collect information you provide directly — such as your name, email address, shipping address, and
+              payment details when you place an order or contact us. We also collect limited technical information
+              such as IP address, browser type, and pages visited through standard server logs and
+              privacy-respecting analytics.
+            </p>
+          </Section>
 
-        <H>How we use information</H>
-        <ul className="mt-3 list-disc space-y-2 pl-5">
-          <li>To process orders and deliver the product you purchased.</li>
-          <li>To send transactional emails (receipts, account, support).</li>
-          <li>To send marketing emails when you opt in (you can unsubscribe at any time).</li>
-          <li>To improve our website and prevent abuse.</li>
-        </ul>
+          <Section title="How we use information">
+            <ul className="list-disc space-y-2 pl-5">
+              <li>To process, pack, and ship the orders you place.</li>
+              <li>To send transactional emails — order confirmations, shipping updates, and support.</li>
+              <li>To send marketing emails only when you opt in. You can unsubscribe at any time.</li>
+              <li>To improve our products and site, and to prevent fraud and abuse.</li>
+            </ul>
+          </Section>
 
-        <H>Sharing</H>
-        <p className="mt-3">
-          We do not sell your personal information. We share information only
-          with service providers that help us operate — for example payment
-          processors and email tools — and only as needed to provide the service.
-        </p>
+          <Section title="Payments">
+            <p>
+              Payments are handled by our PCI-compliant payment processor. We never see or store your full card
+              number — it is transmitted directly to the processor and tokenized.
+            </p>
+          </Section>
 
-        <H>Your choices</H>
-        <p className="mt-3">
-          You can request access, correction, or deletion of your information by
-          emailing <a className="underline" href={`mailto:${site.supportEmail}`}>{site.supportEmail}</a>.
-          You can unsubscribe from marketing emails using the link in each email.
-        </p>
+          <Section title="Sharing">
+            <p>
+              We do not sell your personal information. We share it only with the service providers that help us
+              operate — for example payment processors, shipping carriers, and email tools — and only as needed to
+              fulfil your order and run the business.
+            </p>
+          </Section>
 
-        <H>Cookies</H>
-        <p className="mt-3">
-          We use a small number of cookies to operate the site and remember
-          preferences. You can control cookies in your browser settings.
-        </p>
+          <Section title="Your choices">
+            <p>
+              You can request access to, correction of, or deletion of your information at any time by emailing{" "}
+              <a className="underline" href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>. You can unsubscribe from
+              marketing emails using the link in any message we send.
+            </p>
+          </Section>
 
-        <H>Contact</H>
-        <p className="mt-3">
-          Questions? Email{"luveni.apparel@gmail.com"}
-          <a className="underline" href={`mailto:${site.supportEmail}`}>{site.supportEmail}</a>.
-        </p>
+          <Section title="Cookies">
+            <p>
+              We use a small number of cookies to operate the store, keep your cart, and remember preferences. You
+              can control or clear cookies in your browser settings at any time.
+            </p>
+          </Section>
+        </div>
+
+        <div className="mt-10 flex items-center gap-3 border border-border bg-muted/30 p-4">
+          <span className="grid h-10 w-10 place-items-center border border-border bg-background text-foreground">
+            <Mail className="h-5 w-5" />
+          </span>
+          <div className="text-sm">
+            <p className="text-muted-foreground">Privacy questions?</p>
+            <a href={`mailto:${SUPPORT_EMAIL}`} className="font-medium underline">{SUPPORT_EMAIL}</a>
+          </div>
+        </div>
       </article>
     </section>
   );
