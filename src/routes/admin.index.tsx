@@ -128,10 +128,18 @@ function AdminPage() {
     if (typeof document !== "undefined") {
       const hasDarkClass = document.documentElement.classList.contains("dark");
       const localTheme = localStorage.getItem("theme");
-      if (localTheme) {
-        return localTheme === "dark";
+      const isThemeDark = localTheme ? (localTheme === "dark") : (hasDarkClass || window.matchMedia("(prefers-color-scheme: dark)").matches);
+      
+      if (isThemeDark) {
+        document.documentElement.classList.add("dark");
+        document.documentElement.classList.remove("light");
+        if (document.body) document.body.style.backgroundColor = "#000000";
+      } else {
+        document.documentElement.classList.remove("dark");
+        document.documentElement.classList.add("light");
+        if (document.body) document.body.style.backgroundColor = "#f5f5f7";
       }
-      return hasDarkClass || window.matchMedia("(prefers-color-scheme: dark)").matches;
+      return isThemeDark;
     }
     return false;
   });
@@ -212,10 +220,12 @@ function AdminPage() {
       if (siteContent.theme === "dark") {
         document.documentElement.classList.add("dark");
         document.documentElement.classList.remove("light");
+        if (document.body) document.body.style.backgroundColor = "#000000";
         setIsDark(true);
       } else {
         document.documentElement.classList.remove("dark");
         document.documentElement.classList.add("light");
+        if (document.body) document.body.style.backgroundColor = "#f5f5f7";
         setIsDark(false);
       }
     }
@@ -228,18 +238,22 @@ function AdminPage() {
       if (localTheme === "dark") {
         document.documentElement.classList.add("dark");
         document.documentElement.classList.remove("light");
+        if (document.body) document.body.style.backgroundColor = "#000000";
       } else {
         document.documentElement.classList.remove("dark");
         document.documentElement.classList.add("light");
+        if (document.body) document.body.style.backgroundColor = "#f5f5f7";
       }
     } else {
       const isSystemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
       if (isSystemDark) {
         document.documentElement.classList.add("dark");
         document.documentElement.classList.remove("light");
+        if (document.body) document.body.style.backgroundColor = "#000000";
       } else {
         document.documentElement.classList.remove("dark");
         document.documentElement.classList.add("light");
+        if (document.body) document.body.style.backgroundColor = "#f5f5f7";
       }
     }
   }, []);
@@ -838,6 +852,8 @@ function AdminPage() {
       <div 
         className={`min-h-screen flex flex-col items-center justify-center ${isDark ? "bg-black text-white" : "bg-[#f5f5f7] text-black"}`}
         style={{
+          backgroundColor: isDark ? "#000000" : "#f5f5f7",
+          color: isDark ? "#ffffff" : "#000000",
           fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "SF Pro", "SF Compact", "Helvetica Neue", Helvetica, Arial, sans-serif'
         }}
       >
@@ -1830,6 +1846,7 @@ function AdminPage() {
                           localStorage.setItem("theme", "light");
                           document.documentElement.classList.remove("dark");
                           document.documentElement.classList.add("light");
+                          if (document.body) document.body.style.backgroundColor = "#f5f5f7";
                           saveSiteConfig({ ...siteContent, theme: "light" });
                         }}
                         className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all rounded-[9999px] ${!isDark ? "bg-black text-white" : "text-neutral-405 hover:bg-neutral-900"}`}
@@ -1842,6 +1859,7 @@ function AdminPage() {
                           document.documentElement.classList.add("dark");
                           document.documentElement.classList.remove("light");
                           localStorage.setItem("theme", "dark");
+                          if (document.body) document.body.style.backgroundColor = "#000000";
                           saveSiteConfig({ ...siteContent, theme: "dark" });
                         }}
                         className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all rounded-[9999px] ${isDark ? "bg-white text-black" : "text-neutral-555 hover:bg-neutral-101"}`}
