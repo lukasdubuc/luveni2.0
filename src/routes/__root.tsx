@@ -90,9 +90,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
             } catch (e) {}
           })()
         ` }} />
-                <script dangerouslySetInnerHTML={{ __html: `window.__ELEVEN_KEY__ = 
-                "sk_fbc7020008def9b40aeac5ff2ea8bbe2160a5c105dd659ca";` }} />
-        <HeadContent />
+      <HeadContent />
       </head>
       <body suppressHydrationWarning>{children}<Scripts /></body>
     </html>
