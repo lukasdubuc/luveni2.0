@@ -410,11 +410,11 @@ async function runMorningBrief(systemContent: string): Promise<string> {
       Authorization: `Bearer ${MISTRAL_API_KEY}`,
     },
     body: JSON.stringify({
-      model: MISTRAL_MODEL,
+     model: MISTRAL_MODEL,
       messages,
-      temperature: 0.3,
-      max_tokens: 350,
-      top_p: 0.95,
+      temperature: 0.2,
+      max_tokens: 240,
+      top_p: 0.9,
     }),
   });
   if (!response.ok) {
@@ -667,8 +667,7 @@ Deno.serve(async (req) => {
 
       ${storeCtx}
 
-      TASK: Deliver a single, concise spoken MORNING BRIEFING for Luveni GM, sir. Open with a brief, warm morning greeting suited to the time. In 2 to 4 sentences, summarise what genuinely matters: today's and this week's revenue and orders if available, anything pending or notable, and one clear priority for the day drawn from the store data or memories. Sharp and brief. No markdown, no lists, no headings.`.trim();
-
+      TASK: Deliver a single, concise spoken MORNING BRIEFING for Luveni GM, sir — no more than 2 to 3 sentences. Greet me naturally for the morning and state today's date. Then report ONLY what is actually supported by the LIVE STORE DATA or LONG-TERM MEMORIES above — revenue, orders, leads, or pending items. If there is no store data and nothing notable in memory, say plainly that there is nothing significant to report yet and offer one sensible, grounded priority for the day. Never invent people, events, numbers, anecdotes, or facts. A touch of dry wit is welcome, but never fabricate. No markdown, no lists, no headings.`.trim();
         const brief = await runMorningBrief(systemContent);
         return new Response(JSON.stringify({ isMorning: true, brief }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
