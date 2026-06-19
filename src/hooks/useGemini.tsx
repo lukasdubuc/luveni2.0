@@ -39,21 +39,15 @@ export function useGemini(options: UseGeminiOptions = {}) {
 
       try {
         console.log("[useGemini] Executing Edge Function request...");
-        const { data, error } = await supabase.functions.invoke<{ reply?: string }>(
-          "jarvis-brain",
-          {
-            body: {
-              tool: "chat",
-              args: {
-                userText,
-                history: history.current.slice(0, -1),
-                storeSnapshot: storeSnapshot || null,
-                googleToken: googleToken || null,
-                timezone,
-              },
-            },
-          },
-        );
+        const CHAT_URL = 'https://unitqfuetxedmmrvlocu.supabase.co/functions/v1/jarvis-chat';
+        const CHAT_ANON = 'sb_publishable_0jMwlf-VJWjWFjpA1Iz2dA_Lq8EIumc';
+        const response = await fetch(CHAT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': CHAT_ANON, 'Authorization': `Bearer ${CHAT_ANON}` },
+          body: JSON.stringify({ tool: 'chat', args: { userText, history: history.current.slice(0, -1), storeSnapshot: storeSnapshot || null, timezone } }),
+        });
+        const data = await response.json().catch(() => ({}));
+        const error = !response.ok || !data?.reply ? new Error(data?.error || `chat ${response.status}`) : null;
 
         if (error) {
           console.error("[useGemini] Edge Function returned an explicit error object:", error);
