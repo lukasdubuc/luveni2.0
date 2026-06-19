@@ -1,67 +1,116 @@
 import { createFileRoute } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { Mail } from "lucide-react";
 import { site } from "@/config/site";
 
 export const Route = createFileRoute("/refund")({
   head: () => ({
     meta: [
-      { title: `Refund Policy — ${site.brand}` },
-      { name: "description", content: `Our 30-day refund policy. No questions asked.` },
+      { title: `Returns & Refunds — ${site.brand || "Luveni"}` },
+      { name: "description", content: "Our 30-day returns policy for unworn apparel, plus exchanges and how to start a return." },
     ],
   }),
   component: Refund,
 });
 
-function H({ children }: { children: ReactNode }) {
-  return <h2 className="mt-10 text-xl font-semibold tracking-tight text-foreground">{children}</h2>;
+const BRAND = site.brand || "Luveni";
+const SUPPORT_EMAIL = "luveni.apparel@gmail.com";
+const UPDATED = "June 2026";
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="border-b border-border py-8">
+      <h2 className="text-lg font-semibold tracking-tight text-foreground">{title}</h2>
+      <div className="mt-3 space-y-3 text-sm font-light leading-relaxed text-muted-foreground">{children}</div>
+    </section>
+  );
 }
 
 function Refund() {
   return (
-    <section className="bg-background">
-      <article className="mx-auto max-w-3xl px-4 py-16 text-base leading-relaxed text-muted-foreground">
-        <p className="text-sm uppercase tracking-wider text-accent">Legal</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-          Refund Policy
+    <section className="bg-background text-foreground">
+      <article className="mx-auto max-w-3xl px-6 py-20 md:py-28">
+        <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-muted-foreground">Customer Care</p>
+        <h1
+          className="mt-4 tracking-tighter text-foreground"
+          style={{ fontSize: "clamp(34px, 5vw, 58px)", fontWeight: 200, lineHeight: 1.04, letterSpacing: "-0.03em" }}
+        >
+          Returns &amp; refunds.
         </h1>
-        <p className="mt-2 text-sm">Last updated: {new Date().toLocaleDateString()}</p>
-
-        <p className="mt-8">
-          We stand behind what we make. If our product isn't a fit for you,
-          you can request a full refund within 30 days of purchase — no
-          questions, no awkward forms.
+        <p className="mt-4 max-w-xl text-sm font-light leading-relaxed text-muted-foreground">
+          We want every piece to earn its place in your rotation. If something is not right, you have 30 days to
+          return it — clearly, and without friction.
         </p>
+        <p className="mt-6 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70">Last updated {UPDATED}</p>
 
-        <H>How to request a refund</H>
-        <ol className="mt-3 list-decimal space-y-2 pl-5">
-          <li>
-            Email{" "}
-            <a className="underline" href={`mailto:${site.supportEmail}`}>{site.supportEmail}</a>{" "}
-            from the address you used at checkout.
-          </li>
-          <li>Mention the product name and the date of purchase.</li>
-          <li>We'll process the refund within 5 business days.</li>
-        </ol>
+        <div className="mt-12 border-t border-border">
+          <Section title="The 30-day window">
+            <p>
+              You may return eligible items within 30 days of delivery for a full refund to your original payment
+              method. Items must be unworn, unwashed, and returned with all original tags attached in their
+              original condition.
+            </p>
+          </Section>
 
-        <H>Eligibility</H>
-        <p className="mt-3">
-          Refunds are available for one-time purchases within 30 days of the
-          purchase date. For abuse (such as repeated refund-then-rebuy cycles),
-          we reserve the right to decline future refunds and revoke access.
-        </p>
+          <Section title="How to start a return">
+            <ol className="list-decimal space-y-2 pl-5">
+              <li>
+                Email{" "}
+                <a className="underline" href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>{" "}
+                from the address used at checkout.
+              </li>
+              <li>Include your order number and the item(s) you would like to return.</li>
+              <li>We will reply with a return authorization and instructions within 1–2 business days.</li>
+            </ol>
+          </Section>
 
-        <H>Subscriptions</H>
-        <p className="mt-3">
-          If we ever offer subscriptions, you can cancel at any time from your
-          account. Cancellation prevents future charges; we do not pro-rate the
-          current billing period unless required by law.
-        </p>
+          <Section title="Refund processing">
+            <p>
+              Once your return arrives and passes a quick condition check, we issue your refund within 5 business
+              days. Depending on your bank or card issuer, it can take a few additional days for the funds to appear
+              on your statement.
+            </p>
+          </Section>
 
-        <H>Contact</H>
-        <p className="mt-3">
-          Questions? Email{" "}
-          <a className="underline" href={`mailto:${site.supportEmail}`}>{site.supportEmail}</a>.
-        </p>
+          <Section title="Exchanges">
+            <p>
+              Need a different size or colour? Start a return for the original item and place a new order for the
+              one you want. This is the fastest way to get the correct piece to you while stock lasts.
+            </p>
+          </Section>
+
+          <Section title="Damaged or incorrect items">
+            <p>
+              If your order arrives damaged, defective, or incorrect, email us within 7 days of delivery with your
+              order number and a photo. We will cover return shipping and send a replacement or full refund — your
+              choice.
+            </p>
+          </Section>
+
+          <Section title="Return shipping">
+            <p>
+              For standard returns, the cost of return shipping is the customer's responsibility. For damaged,
+              defective, or incorrectly shipped items, {BRAND} covers it in full.
+            </p>
+          </Section>
+
+          <Section title="Final sale">
+            <p>
+              Items marked "final sale" cannot be returned or exchanged unless they arrive damaged or defective.
+              This is always stated clearly on the product page before purchase.
+            </p>
+          </Section>
+        </div>
+
+        <div className="mt-10 flex items-center gap-3 border border-border bg-muted/30 p-4">
+          <span className="grid h-10 w-10 place-items-center border border-border bg-background text-foreground">
+            <Mail className="h-5 w-5" />
+          </span>
+          <div className="text-sm">
+            <p className="text-muted-foreground">Need to start a return?</p>
+            <a href={`mailto:${SUPPORT_EMAIL}`} className="font-medium underline">{SUPPORT_EMAIL}</a>
+          </div>
+        </div>
       </article>
     </section>
   );
