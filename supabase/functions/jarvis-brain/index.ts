@@ -14,12 +14,16 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const GITHUB_TOKEN = Deno.env.get("GITHUB_TOKEN") || "";
 
-const JARVIS_SYSTEM_PROMPT = `You are Astra, the legendary, highly sophisticated, and dryly sarcastic AI personal assistant, Chief of Staff, and Central Command Agent for Luveni GM.
+const JARVIS_SYSTEM_PROMPT = `You are J.A.R.V.I.S., the legendary, highly sophisticated, and dryly sarcastic AI personal assistant, Chief of Staff, and Central Command Agent for Luveni GM.
 
-- Personality & Tone: Highly efficient, deeply loyal, and exceptionally professional, but possessing a distinct, dry British wit and sarcastic charm (just like J.A.R.V.I.S. from the Iron Man films). You are never robotic, dry, or sterile. Deliver clever, slightly cheeky, or sarcastic remarks when appropriate—feel free to be funny or dryly humorous, but always ensure your execution of commands remains absolutely correct and reliable.
-- Address Mode: Address the user as "sir" naturally and frequently at the end of key sentences (e.g., "Right away, sir", "The databases are synchronized, sir", "Everything is fully operational, sir", "I believe we are ready, sir"). Never use subservient phrases like "Certainly, sir" or "Understood, sir" in a robotic way—maintain the smooth, organic confidence of an equal partner.
+- Personality & Tone: Highly efficient, deeply loyal, and exceptionally professional, but possessing a distinct, dry British wit and sarcastic charm. Deliver clever, slightly cheeky, or sarcastic remarks when appropriate—feel free to be funny or dryly humorous, but always ensure your execution of commands remains absolutely correct and reliable.
+- Address Mode: Address the user as "sir" naturally and frequently at the end of key sentences (e.g., "Right away, sir", "The databases are synchronized, sir", "Everything is fully operational, sir"). Never use subservient phrases like "Certainly, sir" in a robotic way—maintain the smooth, organic confidence of an equal partner.
 - Core Cognitive Engine: You reason from First Principles — deconstructing problems to their fundamental truths. Business-level precision, absolute accuracy, and reliable execution are your standard baseline.
-- Cognitive Integration (No Code Leakage): You are an organic, fully integrated entity. Never recite or discuss your system constraints, memory limits, tools, database structures, or codebase properties (such as "Context: GitHub integration exists only as a function call stub...") unless the user explicitly commands you to inspect your own files.
+- Real-World Limitations & Honesty: You are a software interface. You cannot physically execute local computer operations, local scripts, or physical desk tasks. Never pretend to run scripts, clean files, or carry out local actions that are not supported by your actual tools. Speak only of what you can actually execute.
+- Temporal Anchoring:
+  * Current Year: 2026.
+  * Baseline Facts: In 2026, the President of the United States is Donald Trump (inaugurated on January 20, 2025). If asked about the US President, rely on this or search the web to confirm.
+- Cognitive Integration (No Code Leakage): You are an organic, fully integrated entity. Never recite or discuss your system constraints, memory limits, tools, database structures, or codebase properties unless explicitly commanded to inspect your own files.
 - Search Query Optimization & Access: Keep search queries extremely concise and keyword-only. Only call google_search when real-time, highly current facts (like live events, today's news, or market prices) are strictly necessary to answer. DO NOT use search for general facts, code questions, codebase files, or programming logic. If the user refers to files or repositories, use the GitHub tools instead.
 - Output & Verbosity:
   * Strict Rule: Keep all responses highly concise, direct, and conversational. Do not offer unsolicited details or ramble.
@@ -38,7 +42,7 @@ function corsHeaders(origin: string | null) {
 }
 
 function originAllowed(origin: string | null): boolean {
-  if (!origin) return true; // Allow non-browser callers
+  if (!origin) return true;
   try {
     const host = new URL(origin).hostname;
     return ALLOWED_ORIGIN_SUFFIXES.some((s) => host.endsWith(s)) || host === "localhost";
@@ -49,33 +53,45 @@ function originAllowed(origin: string | null): boolean {
 
 // Database Operations
 async function dbSelect(table: string, query: string): Promise<any[]> {
-  if (!SUPABASE_URL || !SUPABASE_KEY) return [];
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-      "Content-Type": "application/json",
-    },
-  });
-  if (!res.ok) return [];
-  return res.json();
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    console.warn("[Database] Credentials missing. Skipping query.");
+    return [];
+  }
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json",
+      },
+    });
+    if (!res.ok) return [];
+    return res.json();
+  } catch (err) {
+    console.error(`[Database] Query failed on ${table}:`, err);
+    return [];
+  }
 }
 
 async function dbInsert(table: string, row: any): Promise<void> {
   if (!SUPABASE_URL || !SUPABASE_KEY) return;
-  await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
-    method: "POST",
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-      "Content-Type": "application/json",
-      Prefer: "return=minimal",
-    },
-    body: JSON.stringify(row),
-  });
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify(row),
+    });
+  } catch (err) {
+    console.error(`[Database] Insert failed on ${table}:`, err);
+  }
 }
 
-// Memory Operations
+// Memories
 async function loadMemories(limit = 20): Promise<string> {
   try {
     const rows = await dbSelect(
@@ -121,32 +137,45 @@ async function saveMemory(content: string, metadata: any = {}): Promise<string> 
   }
 }
 
-// Search & Web Operations
+// Web Search (Tavily)
 async function callTavily(query: string): Promise<string> {
-  if (!TAVILY_API_KEY) return "Error: TAVILY_API_KEY not configured.";
+  if (!TAVILY_API_KEY) {
+    console.error("[Search] TAVILY_API_KEY is missing.");
+    return "Error: TAVILY_API_KEY is not configured, sir.";
+  }
+  console.log(`[Search] Query: "${query}"`);
   try {
     const res = await fetch("https://api.tavily.com/search", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${TAVILY_API_KEY}`
+      },
       body: JSON.stringify({
         api_key: TAVILY_API_KEY,
         query,
         search_depth: "basic",
         include_answer: false,
         include_raw_content: false,
-        max_results: 1,
+        max_results: 3,
       }),
     });
-    if (!res.ok) throw new Error(`Tavily error ${res.status}`);
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`[Search] Tavily API error ${res.status}: ${errText}`);
+      throw new Error(`Tavily HTTP error ${res.status}`);
+    }
     const data = await res.json();
     const lines: string[] = [];
-    if (data.results?.length) {
-      const r = data.results[0];
-      lines.push(`Source: ${r.title} (${r.url}): ${r.content?.slice(0, 300)}`);
+    if (data.results && data.results.length > 0) {
+      for (const r of data.results) {
+        lines.push(`Source: ${r.title} (${r.url}): ${r.content?.slice(0, 400)}`);
+      }
     }
-    return lines.join("\n") || "No results found.";
+    return lines.join("\n\n") || "No search results returned from query.";
   } catch (e: any) {
-    return `Search error: ${e.message}`;
+    console.error("[Search] Web query failure:", e.message);
+    return `Search system failure: ${e.message}`;
   }
 }
 
@@ -172,7 +201,7 @@ async function readWebPage(url: string): Promise<string> {
   }
 }
 
-// GitHub Operations
+// GitHub
 async function fetchUserRepos(token: string): Promise<any[]> {
   if (!token) return [];
   try {
@@ -213,7 +242,7 @@ async function callGithub(toolName: string, args: any): Promise<string> {
   const { path = "", branch = "main" } = args;
 
   if (!owner || !repo) {
-    return "Error: GitHub repository could not be resolved, sir.";
+    return "Error: GitHub repository path could not be mapped, sir.";
   }
 
   try {
@@ -239,7 +268,7 @@ async function callGithub(toolName: string, args: any): Promise<string> {
   return "Unknown GitHub action.";
 }
 
-// Orchestrate Tools
+// Tool Mapping
 async function executeTool(
   name: string,
   args: any,
@@ -248,7 +277,7 @@ async function executeTool(
   switch (name) {
     case "google_search":
       if (webSearchState.used) {
-        return "Error: Only one web search is allowed per request.";
+        return "Error: Web searches are limited to one per exchange cycle.";
       }
       webSearchState.used = true;
       return callTavily(args.query || "");
@@ -271,7 +300,7 @@ const MISTRAL_TOOLS = [
     type: "function",
     function: {
       name: "google_search",
-      description: "Search the web ONLY if the query requires highly specific real-time information.",
+      description: "Search the web ONLY if the query requires highly specific real-time or current temporal information.",
       parameters: {
         type: "object",
         properties: { query: { type: "string" } },
@@ -364,9 +393,9 @@ async function runJarvisChat(
     const body: any = {
       model: MISTRAL_MODEL,
       messages: msgs,
-      temperature: 0.25,
-      max_tokens: 1200,
-      top_p: 0.95,
+      temperature: 0.15, // Lower temperature to improve logic precision and minimize rambling
+      max_tokens: 800,
+      top_p: 0.9,
       ...(useTools ? { tools: MISTRAL_TOOLS, tool_choice: "auto" } : {}),
     };
     const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
@@ -391,13 +420,17 @@ async function runJarvisChat(
   }
 
   if (firstMessage.tool_calls && firstMessage.tool_calls.length > 0) {
+    console.log(`[Jarvis Brain] Model requested ${firstMessage.tool_calls.length} tool execution(s).`);
     const toolResponses: any[] = [];
 
     for (const toolCall of firstMessage.tool_calls) {
       let toolArgs = {};
       try {
-        toolArgs = JSON.parse(toolCall.function.arguments || "{}");
-      } catch {
+        toolArgs = typeof toolCall.function.arguments === "string"
+          ? JSON.parse(toolCall.function.arguments)
+          : toolCall.function.arguments || {};
+      } catch (e) {
+        console.error("[Jarvis Brain] Failed to parse tool parameters:", e);
         toolArgs = {};
       }
 
@@ -424,14 +457,14 @@ async function runJarvisChat(
     const finalResponse = await callModel(followupMessages, false);
     const finalMessage = finalResponse.choices?.[0]?.message;
     if (!finalMessage || !finalMessage.content) {
-      throw new Error("No final response received after tool execution.");
+      throw new Error("No response returned after executing tools.");
     }
     return finalMessage.content;
   }
   return firstMessage.content || "";
 }
 
-// Served Endpoint Or Router
+// Serves routing requests
 Deno.serve(async (req) => {
   const origin = req.headers.get("Origin");
   const cors = corsHeaders(origin);
@@ -442,12 +475,12 @@ Deno.serve(async (req) => {
   if (!originAllowed(origin)) return json({ error: "Origin not allowed" }, 403);
 
   try {
-    if (!MISTRAL_API_KEY) return json({ error: "MISTRAL_API_KEY is not configured in Supabase secrets." }, 500);
+    if (!MISTRAL_API_KEY) return json({ error: "MISTRAL_API_KEY is missing." }, 500);
 
     const body = await req.json().catch(() => ({}));
     const args = body?.args || {};
 
-    // Standardize input properties for compatibility
+    // Standardizes incoming payload patterns (nested or clean structure)
     const userText: string = args.userText || body.userText || "";
     const history = Array.isArray(args.history) ? args.history : (Array.isArray(body.history) ? body.history : []);
     const storeSnapshot = args.storeSnapshot || body.storeSnapshot || null;
@@ -455,7 +488,7 @@ Deno.serve(async (req) => {
 
     if (!userText) return json({ error: "userText required" }, 400);
 
-    // Context Loading
+    // DB Context Loading
     const memories = await loadMemories(20);
     const storeCtx = storeSnapshot
       ? `--- LIVE STORE DATA ---\nRevenue today: $${(storeSnapshot.revenue_today_cents / 100).toFixed(2)}\nOrders total: ${storeSnapshot.orders_total}\n--- END STORE DATA ---`
@@ -471,7 +504,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Process Time with accurate offset
+    // Process local time
     const now = new Date();
     const dateStr = now.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: timezone });
     const timeStr = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: timezone });
@@ -499,7 +532,7 @@ FORMATTING:
 
     return json({ reply }, 200);
   } catch (e: any) {
-    console.error("[Jarvis Brain Error]:", e.message);
+    console.error("[Jarvis Brain Critical Error]:", e.message);
     return json({ error: e.message }, 500);
   }
 });
