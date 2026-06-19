@@ -1,7 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+ximport { createFileRoute } from "@tanstack/react-router";
 import { site } from "@/config/site";
 import { useEffect, useRef, useState } from "react";
-import { Shield, Sparkles, Eye, Users } from "lucide-react";
 
 export const Route = createFileRoute("/about")({
   head: () => ({
@@ -19,10 +18,8 @@ const TSHIRT_2 = "/unisex-organic-mid-light-crafter-t-shirt-black-front-6a28f7a4
 const TSHIRT_3 = "/unisex-organic-mid-light-crafter-t-shirt-black-front-6a28f7a4550cd.png";
 const GRAPHIC_LOGO = "/design-lab-upscaled-6a25d1f65103a2.77471166-1780863478.png";
 
-const SHIRT_FLAT    = TSHIRT_1;
-const SHIRT_FOLDED  = TSHIRT_2;
-const SHIRT_MODEL   = TSHIRT_3;
-const SHIRT_LOGO    = GRAPHIC_LOGO;
+const SHIRT_FLAT   = TSHIRT_1;
+const SHIRT_FOLDED = TSHIRT_2;
 
 const HAT_ANGLE_0 = "/classic-dad-hat-black-front-6a28d8da62cc9.png";
 const HAT_ANGLE_1 = "/classic-dad-hat-black-left-front-6a28d8da63cca.png";
@@ -31,10 +28,28 @@ const HAT_ANGLE_3 = "/classic-dad-hat-black-back-6a28d8da63130.png";
 const HAT_ANGLE_4 = "/classic-dad-hat-black-right-side-6a28d8da633f3.png";
 const HAT_ANGLE_5 = "/classic-dad-hat-black-right-front-6a28d8da639e0.png";
 
+// ─── SHARED CONSTANTS ───
+const APPLE_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
+const SF_DISPLAY = "'SF Pro Display', -apple-system, BlinkMacSystemFont, system-ui, sans-serif";
+
+// Apple-flavoured smootherstep — perceptually even acceleration / deceleration.
+const smoother = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
+
+// Theme-aware blueprint grid: reads in both light (multiply) and dark (screen).
+const GRID_STYLE: React.CSSProperties = {
+  backgroundImage:
+    "linear-gradient(to right, var(--border) 1px, transparent 1px), linear-gradient(to bottom, var(--border) 1px, transparent 1px)",
+  backgroundSize: "40px 44px",
+  mixBlendMode: "var(--grid-blend)" as React.CSSProperties["mixBlendMode"],
+};
+
+// Theme-aware product drop-shadow built from --shadow-rgb.
+const shadow = (y: number, blur: number, alpha: number) =>
+  `drop-shadow(0 ${y}px ${blur}px rgba(var(--shadow-rgb), ${alpha}))`;
+
 function About() {
-  const heroRef               = useRef<HTMLDivElement>(null);
-  const rotatorContainerRef   = useRef<HTMLDivElement>(null);
-  const editorialRef          = useRef<HTMLDivElement>(null);
+  const heroRef      = useRef<HTMLDivElement>(null);
+  const editorialRef = useRef<HTMLDivElement>(null);
 
   const trigger0 = useRef<HTMLDivElement>(null);
   const trigger1 = useRef<HTMLDivElement>(null);
@@ -45,23 +60,26 @@ function About() {
 
   const featRefs = [useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null)];
 
-  const [heroScrollP,       setHeroScrollP]       = useState(0);
-  const [editorialScrollP,  setEditorialScrollP]  = useState(0);
-  const [heroEntered,       setHeroEntered]       = useState(false);
-  const [editorialEntered,  setEditorialEntered]  = useState(false);
-  const [hatAngleIndex,     setHatAngleIndex]     = useState(0);
-  const [featVisible,       setFeatVisible]       = useState([false, false, false]);
-  const [featScrollP,       setFeatScrollP]       = useState([0, 0, 0]);
+  const [heroScrollP,      setHeroScrollP]      = useState(0);
+  const [editorialScrollP, setEditorialScrollP] = useState(0);
+  const [heroEntered,      setHeroEntered]      = useState(false);
+  const [editorialEntered, setEditorialEntered] = useState(false);
+  const [hatAngleIndex,    setHatAngleIndex]    = useState(0);
+  const [featVisible,      setFeatVisible]      = useState([false, false, false]);
+  const [featScrollP,      setFeatScrollP]      = useState([0, 0, 0]);
 
   // ─── APPLE-STYLE CROSSFADE: 0 = flat, 1 = folded ───
-  // Slow breathe: 0→1 over 4s, hold 1.5s, 1→0 over 4s, hold 1.5s
-  const [crossfadeP, setCrossfadeP] = useState(0); // 0..1
+  // Slow breathe with held end-states so the swap feels intentional, not jittery.
+  const [crossfadeP, setCrossfadeP] = useState(0);
   useEffect(() => {
-    const FADE_DURATION   = 4000;   // ms to crossfade
-    const HOLD_DURATION   = 2000;   // ms to hold at each end
-    const TOTAL           = FADE_DURATION * 2 + HOLD_DURATION * 2;
+    // Respect reduced-motion: hold the flat hero, no looping animation.
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+
+    const FADE_DURATION = 4000;
+    const HOLD_DURATION = 2000;
+    const TOTAL = FADE_DURATION * 2 + HOLD_DURATION * 2;
     let startTime: number | null = null;
-    let raf: number;
+    let raf = 0;
 
     const tick = (now: number) => {
       if (startTime === null) startTime = now;
@@ -69,20 +87,13 @@ function About() {
 
       let p = 0;
       if (elapsed < HOLD_DURATION) {
-        // Hold flat
         p = 0;
       } else if (elapsed < HOLD_DURATION + FADE_DURATION) {
-        // Fade in folded
-        const t = (elapsed - HOLD_DURATION) / FADE_DURATION;
-        // Apple easing: cubic-bezier approximation via smootherstep
-        p = t * t * t * (t * (t * 6 - 15) + 10);
+        p = smoother((elapsed - HOLD_DURATION) / FADE_DURATION);
       } else if (elapsed < HOLD_DURATION * 2 + FADE_DURATION) {
-        // Hold folded
         p = 1;
       } else {
-        // Fade back to flat
-        const t = (elapsed - HOLD_DURATION * 2 - FADE_DURATION) / FADE_DURATION;
-        p = 1 - t * t * t * (t * (t * 6 - 15) + 10);
+        p = 1 - smoother((elapsed - HOLD_DURATION * 2 - FADE_DURATION) / FADE_DURATION);
       }
 
       setCrossfadeP(p);
@@ -93,9 +104,11 @@ function About() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  // ─── SCROLL ENGINE ───
+  // ─── SCROLL ENGINE (rAF-throttled for a buttery 60fps) ───
   useEffect(() => {
-    const onScroll = () => {
+    let ticking = false;
+    const compute = () => {
+      ticking = false;
       if (heroRef.current) {
         const rect = heroRef.current.getBoundingClientRect();
         const vh = window.innerHeight;
@@ -109,12 +122,19 @@ function About() {
         setEditorialScrollP(Math.max(0, Math.min(1, -start / total)));
       }
     };
+    const onScroll = () => {
+      if (!ticking) { ticking = true; requestAnimationFrame(compute); }
+    };
     window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
-    return () => window.removeEventListener("scroll", onScroll);
+    window.addEventListener("resize", onScroll, { passive: true });
+    compute();
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
   }, []);
 
-  // ─── INTERSECTION OBSERVERS ───
+  // ─── INTERSECTION OBSERVERS (reveal-on-scroll + hero / editorial entrance) ───
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -152,7 +172,7 @@ function About() {
     return () => observers.forEach((o) => o.disconnect());
   }, []);
 
-  // ─── FEATURE ROWS ───
+  // ─── FEATURE ROWS (entrance + parallax) ───
   useEffect(() => {
     const observers = featRefs.map((ref, idx) => {
       const o = new IntersectionObserver(([e]) => {
@@ -165,7 +185,9 @@ function About() {
       return o;
     });
 
-    const handleFeatScroll = () => {
+    let ticking = false;
+    const compute = () => {
+      ticking = false;
       featRefs.forEach((ref, idx) => {
         if (!ref.current) return;
         const r = ref.current.getBoundingClientRect();
@@ -175,35 +197,46 @@ function About() {
         setFeatScrollP(prev => { const next = [...prev]; next[idx] = Math.max(0, Math.min(1, -start / total)); return next; });
       });
     };
+    const handleFeatScroll = () => {
+      if (!ticking) { ticking = true; requestAnimationFrame(compute); }
+    };
 
     window.addEventListener("scroll", handleFeatScroll, { passive: true });
-    handleFeatScroll();
-    return () => { observers.forEach(o => o.disconnect()); window.removeEventListener("scroll", handleFeatScroll); };
+    window.addEventListener("resize", handleFeatScroll, { passive: true });
+    compute();
+    return () => {
+      observers.forEach(o => o.disconnect());
+      window.removeEventListener("scroll", handleFeatScroll);
+      window.removeEventListener("resize", handleFeatScroll);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const FEATURES = [
-    { eyebrow: "Anatomy", title: "Engineered in silence.", body: "No noise. No filler. Every panel, seam, and stitch exists for a reason — and the reasons are visible the moment you hold it.", src: TSHIRT_1, side: "right" as const },
-    { eyebrow: "Iconography", title: "A subtle relief print.", body: "Marked with the high-resolution transparent butterfly logo. Patience and steady growth rendered in clean lines.", src: GRAPHIC_LOGO, side: "left" as const },
-    { eyebrow: "Weight", title: "240 GSM. Built to last.", body: "Heavyweight combed organic cotton with a tactile hand-feel that softens beautifully wash after wash, without losing its structure.", src: TSHIRT_2, side: "right" as const }
+    { eyebrow: "Anatomy",     title: "Engineered in silence.",   body: "No noise. No filler. Every panel, seam, and stitch exists for a reason — and the reasons are visible the moment you hold it.",     src: TSHIRT_1,      side: "right" as const },
+    { eyebrow: "Iconography", title: "A subtle relief print.",   body: "Marked with the high-resolution transparent butterfly logo. Patience and steady growth rendered in clean lines.",                    src: GRAPHIC_LOGO, side: "left"  as const },
+    { eyebrow: "Weight",      title: "240 GSM. Built to last.",  body: "Heavyweight combed organic cotton with a tactile hand-feel that softens beautifully wash after wash, without losing its structure.", src: TSHIRT_2,      side: "right" as const },
   ];
 
   const hatAngles = [
-    { name: "Front Flat View",           src: HAT_ANGLE_0 },
-    { name: "Front Left Tilt",           src: HAT_ANGLE_1 },
-    { name: "Left Profile (Logo Detail)",src: HAT_ANGLE_2 },
-    { name: "Back View (Brass Adjuster)",src: HAT_ANGLE_3 },
-    { name: "Right Profile (Minimal)",   src: HAT_ANGLE_4 },
-    { name: "Front Right Tilt",          src: HAT_ANGLE_5 },
+    { name: "Front Flat View",            src: HAT_ANGLE_0 },
+    { name: "Front Left Tilt",            src: HAT_ANGLE_1 },
+    { name: "Left Profile (Logo Detail)", src: HAT_ANGLE_2 },
+    { name: "Back View (Brass Adjuster)", src: HAT_ANGLE_3 },
+    { name: "Right Profile (Minimal)",    src: HAT_ANGLE_4 },
+    { name: "Front Right Tilt",           src: HAT_ANGLE_5 },
   ];
+
+  const hatTriggers = [trigger0, trigger1, trigger2, trigger3, trigger4, trigger5];
 
   return (
     <div
-      className="about-page w-full bg-background text-foreground selection:bg-neutral-800 transition-colors duration-300"
-      style={{ fontFamily: "'SF Pro Display', -apple-system, system-ui" }}
+      className="about-page w-full bg-background text-foreground selection:bg-foreground/15 transition-colors duration-500"
+      style={{ fontFamily: SF_DISPLAY }}
     >
 
       {/* ═══════════════════════════════════════════════════════════════
-          1. CINEMATIC HERO — Apple-style crossfade, no toggle buttons
+          1. CINEMATIC HERO — Apple-style crossfade
          ═══════════════════════════════════════════════════════════════ */}
       <section
         ref={heroRef}
@@ -212,26 +245,19 @@ function About() {
       >
         {/* LEFT — Cinematic crossfade stage */}
         <div
-          className="relative w-full h-full bg-neutral-50/40 dark:bg-neutral-950/20 overflow-hidden flex flex-col justify-between border-b md:border-b-0 md:border-r border-border"
+          className="relative w-full h-full bg-muted/40 overflow-hidden flex flex-col justify-between border-b md:border-b-0 md:border-r border-border"
           style={{ minHeight: "65vh" }}
         >
           {/* Blueprint grid */}
+          <div className="absolute inset-0 pointer-events-none opacity-[0.05] z-0" style={GRID_STYLE} />
+          {/* Soft center light */}
           <div
-            className="absolute inset-0 pointer-events-none opacity-[0.03] mix-blend-screen z-0"
-            style={{
-              backgroundImage: "linear-gradient(to right, var(--border) 1px, transparent 1px), linear-gradient(to bottom, var(--border) 1px, transparent 1px)",
-              backgroundSize: "40px 44px",
-            }}
-          />
-          <div
-            className="absolute inset-0 pointer-events-none rounded-full"
-            style={{ background: "radial-gradient(circle at 50% 50%, var(--border) 0%, transparent 65%)" }}
+            className="absolute inset-0 pointer-events-none"
+            style={{ background: "radial-gradient(circle at 50% 45%, var(--border) 0%, transparent 60%)" }}
           />
 
-          {/* Image stage — both images occupy same absolute space, crossfade via opacity */}
+          {/* Image stage — both images share the same absolute space, crossfade via opacity */}
           <div className="flex-1 w-full relative flex items-center justify-center p-8">
-
-            {/* FLAT SHIRT — always rendered, fades out as crossfadeP → 1 */}
             <img
               src={SHIRT_FLAT}
               alt="GZ R-01 tee flat layout"
@@ -242,19 +268,15 @@ function About() {
               decoding="async"
               className="absolute select-none"
               style={{
-                maxHeight: "82%",
-                maxWidth: "82%",
-                objectFit: "contain",
+                maxHeight: "82%", maxWidth: "82%", objectFit: "contain",
                 opacity: heroEntered ? (1 - crossfadeP) : 0,
                 transform: `scale(${1 + heroScrollP * 0.08})`,
-                filter: "drop-shadow(0 30px 60px rgba(0,0,0,0.18))",
-                transition: "opacity 0.05s linear",
-                willChange: crossfadeP > 0 && crossfadeP < 1 ? "opacity, transform" : "transform",
+                filter: shadow(30, 60, 0.18),
+                transition: "opacity 0.08s linear",
+                willChange: "opacity, transform",
                 imageRendering: "high-quality" as React.CSSProperties["imageRendering"],
               }}
             />
-
-            {/* FOLDED SHIRT — fades in as crossfadeP → 1, position-matched to flat */}
             <img
               src={SHIRT_FOLDED}
               alt="GZ R-01 tee styled on model"
@@ -265,40 +287,31 @@ function About() {
               decoding="async"
               className="absolute select-none"
               style={{
-                maxHeight: "82%",
-                maxWidth: "82%",
-                objectFit: "contain",
+                maxHeight: "82%", maxWidth: "82%", objectFit: "contain",
                 opacity: heroEntered ? crossfadeP : 0,
                 transform: `scale(${1 + heroScrollP * 0.08})`,
-                filter: "drop-shadow(0 30px 60px rgba(0,0,0,0.22))",
-                transition: "opacity 0.05s linear",
-                willChange: crossfadeP > 0 && crossfadeP < 1 ? "opacity, transform" : "transform",
+                filter: shadow(30, 60, 0.22),
+                transition: "opacity 0.08s linear",
+                willChange: "opacity, transform",
                 imageRendering: "high-quality" as React.CSSProperties["imageRendering"],
               }}
             />
           </div>
 
-          {/* Subtle label at the bottom — no buttons */}
           <div className="relative z-20 pb-6 w-full flex flex-col items-center gap-2">
             <span
-              style={{
-                fontFamily: "monospace",
-                fontSize: "8.5px",
-                letterSpacing: "0.3em",
-                color: "var(--color-muted-foreground)",
-                textTransform: "uppercase",
-                opacity: 0.4,
-              }}
+              className="font-mono uppercase text-subtle"
+              style={{ fontSize: "8.5px", letterSpacing: "0.3em" }}
             >
               Signature GZ R-01 Tee
             </span>
           </div>
         </div>
 
-        {/* RIGHT — Technical specs (unchanged) */}
+        {/* RIGHT — Technical specs */}
         <div className="flex flex-col justify-center px-8 py-16 sm:px-12 md:px-16 lg:px-24">
           <div className="reveal-on-scroll transition-all duration-[900ms] ease-out opacity-0 translate-y-6 [&.revealed]:opacity-100 [&.revealed]:translate-y-0">
-            <p className="text-neutral-500 uppercase mb-4" style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "0.28em" }}>
+            <p className="text-subtle uppercase mb-4 font-mono" style={{ fontSize: "9px", letterSpacing: "0.28em" }}>
               The Signature Silhouette
             </p>
             <h1
@@ -328,14 +341,14 @@ function About() {
                     borderBottom: i < 2 ? "1px solid var(--border)" : "none",
                   }}
                 >
-                  <span className="text-neutral-500 uppercase block mb-1" style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "0.18em" }}>{label}</span>
+                  <span className="text-subtle uppercase block mb-1 font-mono" style={{ fontSize: "9px", letterSpacing: "0.18em" }}>{label}</span>
                   <span className="text-foreground text-xs font-semibold">{val}</span>
                 </div>
               ))}
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-mono tracking-widest text-neutral-500 uppercase">Hardware Price</span>
+              <span className="text-[10px] font-mono tracking-widest text-subtle uppercase">Hardware Price</span>
               <span className="text-3xl font-light tracking-tighter text-foreground ml-2">$28</span>
             </div>
           </div>
@@ -343,7 +356,7 @@ function About() {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════
-          2. DETAILS BLUEPRINTS GRID (UNCHANGED)
+          2. DETAILS BLUEPRINTS GRID
          ═══════════════════════════════════════════════════════════════ */}
       <div id="anatomy">
         {FEATURES.map((feat, idx) => {
@@ -357,30 +370,35 @@ function About() {
                 style={{
                   opacity: isVisible ? 1 : 0,
                   transform: isVisible ? "translateY(0)" : "translateY(32px)",
-                  transition: "opacity 0.9s cubic-bezier(.16,1,.3,1), transform 0.9s cubic-bezier(.16,1,.3,1)",
+                  transition: `opacity 0.9s ${APPLE_EASE}, transform 0.9s ${APPLE_EASE}`,
                 }}
               >
                 <div className={feat.side === "right" ? "md:order-2" : ""}>
-                  <p className="mb-4 text-[10px] font-mono tracking-[0.24em] text-neutral-500 uppercase">{feat.eyebrow}</p>
+                  <p className="mb-4 text-[10px] font-mono tracking-[0.24em] text-subtle uppercase">{feat.eyebrow}</p>
                   <h2
                     className="text-foreground tracking-tighter"
-                    style={{ fontFamily: "'SF Pro Display', -apple-system, system-ui", fontSize: "clamp(34px, 4.8vw, 64px)", lineHeight: 1.04, fontWeight: 200 }}
+                    style={{ fontFamily: SF_DISPLAY, fontSize: "clamp(34px, 4.8vw, 64px)", lineHeight: 1.04, fontWeight: 200 }}
                   >{feat.title}</h2>
                   <p className="mt-5 max-w-md text-[14px] font-light leading-relaxed text-muted-foreground font-sans">{feat.body}</p>
                 </div>
 
                 <div className={feat.side === "right" ? "md:order-1" : ""}>
                   <div className="relative flex items-center justify-center w-full min-h-[300px] md:min-h-[440px] p-6 z-10">
+                    {/* Soft pedestal glow keeps the cut-out grounded in both themes */}
+                    <div
+                      className="absolute inset-0 pointer-events-none"
+                      style={{ background: "radial-gradient(circle at 50% 55%, var(--border) 0%, transparent 60%)" }}
+                    />
                     <img
                       src={feat.src}
                       alt={feat.title}
                       draggable={false}
                       loading="lazy"
                       decoding="async"
-                      className="max-h-[92%] max-w-[92%] object-contain select-none"
+                      className="max-h-[92%] max-w-[92%] object-contain select-none relative"
                       style={{
                         transform: `translateY(${yOffset}px) scale(1.02)`,
-                        filter: "drop-shadow(0 20px 40px rgba(0,0,0,0.12))",
+                        filter: shadow(20, 40, 0.14),
                         transition: "transform 0.1s linear",
                       }}
                     />
@@ -393,9 +411,9 @@ function About() {
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════
-          3. 360° SCROLL ROTATOR (UNCHANGED)
+          3. 360° SCROLL ROTATOR
          ═══════════════════════════════════════════════════════════════ */}
-      <section id="rotator" ref={rotatorContainerRef} className="relative bg-background border-b border-border" style={{ height: "240vh" }}>
+      <section id="rotator" className="relative bg-background border-b border-border" style={{ height: "240vh" }}>
         <div className="absolute inset-y-0 left-0 w-full pointer-events-none flex flex-col justify-between">
           <div ref={trigger0} className="h-10 w-full" />
           <div ref={trigger1} className="h-10 w-full" />
@@ -406,13 +424,10 @@ function About() {
         </div>
 
         <div className="sticky top-0 h-screen w-full flex flex-col justify-between overflow-hidden">
-          <div className="absolute inset-0 pointer-events-none opacity-[0.03] mix-blend-screen z-0" style={{
-            backgroundImage: "linear-gradient(to right, var(--border) 1px, transparent 1px), linear-gradient(to bottom, var(--border) 1px, transparent 1px)",
-            backgroundSize: "40px 44px",
-          }} />
+          <div className="absolute inset-0 pointer-events-none opacity-[0.05] z-0" style={GRID_STYLE} />
 
           <div className="pt-20 px-6 text-center z-20">
-            <p className="text-[10px] font-mono tracking-[0.3em] text-neutral-500 uppercase mb-2">Sub-Highlight Piece</p>
+            <p className="text-[10px] font-mono tracking-[0.3em] text-subtle uppercase mb-2">Sub-Highlight Piece</p>
             <h2 className="text-foreground tracking-tighter text-3xl sm:text-5xl font-extralight font-sans">
               Embroidered Dad Hat.<br />
               <span className="font-semibold text-foreground">Rotatable perspective.</span>
@@ -421,7 +436,7 @@ function About() {
 
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="relative w-full aspect-square max-w-[340px] flex items-center justify-center">
-              <div className="absolute inset-0 pointer-events-none rounded-full" style={{ background: "radial-gradient(circle at 50% 50%, var(--border) 0%, transparent 65%)" }} />
+              <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(circle at 50% 50%, var(--border) 0%, transparent 65%)" }} />
               {hatAngles.map((angle, idx) => (
                 <img
                   key={idx}
@@ -429,11 +444,12 @@ function About() {
                   alt={`Hat angle - ${angle.name}`}
                   loading={idx === 0 ? "eager" : "lazy"}
                   decoding="async"
-                  className="absolute max-h-[85%] max-w-[85%] object-contain select-none transition-opacity duration-300"
+                  className="absolute max-h-[85%] max-w-[85%] object-contain select-none"
                   style={{
                     opacity: hatAngleIndex === idx ? 1 : 0,
-                    visibility: hatAngleIndex === idx ? "visible" : "hidden",
-                    filter: "drop-shadow(0 30px 60px rgba(0,0,0,0.15))",
+                    transform: `scale(${hatAngleIndex === idx ? 1 : 0.97})`,
+                    transition: `opacity 0.5s ${APPLE_EASE}, transform 0.6s ${APPLE_EASE}`,
+                    filter: shadow(30, 60, 0.15),
                   }}
                   draggable={false}
                 />
@@ -453,10 +469,11 @@ function About() {
               ].map((text, idx) => (
                 <p
                   key={idx}
-                  className="absolute inset-x-0 top-0 text-xs text-muted-foreground font-light transition-all duration-500 leading-relaxed font-sans"
+                  className="absolute inset-x-0 top-0 text-xs text-muted-foreground font-light leading-relaxed font-sans"
                   style={{
                     opacity: hatAngleIndex === idx ? 0.95 : 0,
                     transform: hatAngleIndex === idx ? "translateY(0)" : "translateY(12px)",
+                    transition: `opacity 0.5s ${APPLE_EASE}, transform 0.5s ${APPLE_EASE}`,
                   }}
                 >
                   {text}
@@ -466,18 +483,16 @@ function About() {
           </div>
 
           <div className="pb-16 flex flex-col items-center gap-3 z-20">
-            <span className="text-[9px] font-mono text-neutral-500 tracking-widest uppercase">{hatAngles[hatAngleIndex]?.name || "Perspective"}</span>
+            <span className="text-[9px] font-mono text-subtle tracking-widest uppercase">{hatAngles[hatAngleIndex]?.name || "Perspective"}</span>
             <div className="flex gap-1.5">
-              {hatAngles.map((_, idx) => (
+              {hatAngles.map((angle, idx) => (
                 <button
                   key={idx}
-                  onClick={() => {
-                    const triggers = [trigger0, trigger1, trigger2, trigger3, trigger4, trigger5];
-                    if (triggers[idx].current) {
-                      triggers[idx].current.scrollIntoView({ behavior: "smooth", block: "center" });
-                    }
-                  }}
-                  className={`h-1.5 rounded-full transition-all duration-500 ${hatAngleIndex === idx ? "w-5 bg-foreground" : "w-1.5 bg-neutral-300 dark:bg-neutral-700 hover:bg-neutral-500"}`}
+                  type="button"
+                  aria-label={`View ${angle.name}`}
+                  aria-pressed={hatAngleIndex === idx}
+                  onClick={() => hatTriggers[idx].current?.scrollIntoView({ behavior: "smooth", block: "center" })}
+                  className={`h-1.5 rounded-full transition-all duration-500 ${hatAngleIndex === idx ? "w-5 bg-foreground" : "w-1.5 bg-foreground/25 hover:bg-foreground/50"}`}
                 />
               ))}
             </div>
@@ -486,19 +501,16 @@ function About() {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════
-          4. THE STUDIO (UNCHANGED)
+          4. THE STUDIO
          ═══════════════════════════════════════════════════════════════ */}
       <section id="story" className="relative py-24 sm:py-36 border-b border-border bg-background">
-        <div className="absolute inset-0 pointer-events-none opacity-[0.03] mix-blend-screen z-0" style={{
-          backgroundImage: "linear-gradient(to right, var(--border) 1px, transparent 1px), linear-gradient(to bottom, var(--border) 1px, transparent 1px)",
-          backgroundSize: "40px 44px",
-        }} />
-        <div className="mx-auto max-w-[1200px] px-6 grid grid-cols-1 md:grid-cols-2 gap-12 lg:gap-24">
+        <div className="absolute inset-0 pointer-events-none opacity-[0.05] z-0" style={GRID_STYLE} />
+        <div className="mx-auto max-w-[1200px] px-6 grid grid-cols-1 md:grid-cols-2 gap-12 lg:gap-24 relative">
           <div className="reveal-on-scroll transition-all duration-[900ms] ease-out opacity-0 translate-y-6 [&.revealed]:opacity-100 [&.revealed]:translate-y-0">
-            <p className="text-[10px] font-mono tracking-[0.24em] text-neutral-500 uppercase mb-4">The Studio</p>
+            <p className="text-[10px] font-mono tracking-[0.24em] text-subtle uppercase mb-4">The Studio</p>
             <h2
               className="text-foreground tracking-tighter"
-              style={{ fontFamily: "'SF Pro Display', -apple-system, system-ui", fontSize: "clamp(34px, 4.8vw, 64px)", lineHeight: 1.04, fontWeight: 200 }}
+              style={{ fontFamily: SF_DISPLAY, fontSize: "clamp(34px, 4.8vw, 64px)", lineHeight: 1.04, fontWeight: 200 }}
             >
               Formed in quiet conviction.<br />
               <span className="font-semibold">Built by hands who notice.</span>
@@ -520,7 +532,7 @@ function About() {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════
-          5. PHILOSOPHY CONVICTION DECK (UNCHANGED)
+          5. PHILOSOPHY CONVICTION DECK
          ═══════════════════════════════════════════════════════════════ */}
       <section className="bg-background px-6 py-40 border-b border-border">
         <div className="mx-auto max-w-[900px] text-center transition-all duration-[900ms] ease-out opacity-0 translate-y-6 [&.revealed]:opacity-100 [&.revealed]:translate-y-0 reveal-on-scroll">
@@ -532,7 +544,7 @@ function About() {
           </p>
           <h2
             className="text-foreground tracking-tighter"
-            style={{ fontFamily: "'SF Pro Display', -apple-system, system-ui", fontSize: "clamp(38px, 6vw, 84px)", lineHeight: 1.04, fontWeight: 200 }}
+            style={{ fontFamily: SF_DISPLAY, fontSize: "clamp(38px, 6vw, 84px)", lineHeight: 1.04, fontWeight: 200 }}
           >
             A wardrobe of quiet conviction.
           </h2>
@@ -549,9 +561,9 @@ function About() {
               <div key={l}>
                 <div
                   className="text-foreground tracking-tighter"
-                  style={{ fontFamily: "'SF Pro Display', -apple-system, system-ui", fontSize: "clamp(36px, 4vw, 56px)", fontWeight: 200 }}
+                  style={{ fontFamily: SF_DISPLAY, fontSize: "clamp(36px, 4vw, 56px)", fontWeight: 200 }}
                 >{n}</div>
-                <div className="mt-1 text-[11px] font-mono tracking-[0.18em] text-neutral-500 uppercase">{l}</div>
+                <div className="mt-1 text-[11px] font-mono tracking-[0.18em] text-subtle uppercase">{l}</div>
               </div>
             ))}
           </div>
@@ -559,7 +571,7 @@ function About() {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════
-          6. EDITORIAL FOOTER PARALLAX (UNCHANGED)
+          6. EDITORIAL FOOTER PARALLAX
          ═══════════════════════════════════════════════════════════════ */}
       <section
         ref={editorialRef}
@@ -576,14 +588,16 @@ function About() {
             className="w-full h-full object-cover"
             style={{
               transform: `translateY(${editorialScrollP * -50}px) scale(1.10)`,
-              transition: "transform 0.1s linear, opacity 0.5s ease-out",
+              transition: "transform 0.1s linear, opacity 0.6s ease-out",
               opacity: editorialEntered ? 1 : 0,
             }}
           />
         </div>
+        {/* Overlay always sits on a photographic image, so a dark scrim + white type
+            reads correctly in both light and dark site themes. */}
         <div
           className="absolute inset-0 flex flex-col items-center justify-center text-center px-6"
-          style={{ background: "linear-gradient(rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.45) 100%)" }}
+          style={{ background: "linear-gradient(rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.50) 100%)" }}
         >
           <div className="transition-all duration-[900ms] ease-out opacity-0 translate-y-6 [&.revealed]:opacity-100 [&.revealed]:translate-y-0 reveal-on-scroll">
             <p className="uppercase mb-3 font-semibold font-mono" style={{ fontSize: "9px", letterSpacing: "0.32em", color: "rgba(255,255,255,0.85)" }}>
