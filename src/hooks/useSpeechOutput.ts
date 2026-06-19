@@ -1,9 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  J.A.R.V.I.S — Luveni GM | hooks/useSpeechOutput.ts
+//  Voice output hook  |  hooks/useSpeechOutput.ts
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 
 interface UseSpeechOutputOptions {
   onStart?: () => void;
@@ -90,7 +89,6 @@ function loadVoices(): Promise<SpeechSynthesisVoice[]> {
 
 function sanitizeTextForSpeech(rawText: string): string {
   return rawText
-    .replace(/J\.A\.R\.V\.I\.S\.?/gi, "Jarvis")
     .replace(/\*\*/g, '')
     .replace(/\*/g, '')
     .replace(/^#+\s+/gm, '')
@@ -136,20 +134,12 @@ function chunkText(text: string, maxLength = 150): string[] {
 
 let voiceCache: SpeechSynthesisVoice | null | undefined = undefined;
 
-function resolveElevenLabsKey(): string {
-  if (typeof window !== 'undefined' && (window as any).__ELEVEN_KEY__) {
-    return (window as any).__ELEVEN_KEY__;
-  }
-  try {
-    const viteKey =
-      (import.meta as any)?.env?.VITE_ELEVENLABS_API_KEY ||
-      (import.meta as any)?.env?.ELEVENLABS_API_KEY;
-    if (viteKey) return viteKey;
-  } catch (_) {}
-  return '';
-}
-
-const ELEVENLABS_VOICE_ID = 'pNInz6obpgDQGcFbJwr1';
+// Dedicated server-side TTS function. The ElevenLabs API key lives in this
+// project's Supabase Edge Function secrets — never in the frontend bundle.
+// The publishable key below is public by design (safe to ship).
+const JARVIS_TTS_URL = 'https://unitqfuetxedmmrvlocu.supabase.co/functions/v1/jarvis-tts';
+const JARVIS_TTS_ANON = 'sb_publishable_0jMwlf-VJWjWFjpA1Iz2dA_Lq8EIumc';
+const VOICE_ID = 'EXAVITQu4vr4xnSDxMaL'; // Sarah — mature, warm, confident
 
 function base64ToBlobUrl(base64: string): string {
   const binary = atob(base64);
@@ -257,8 +247,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     }
   }, []);
 
-  // Synchronous, non-async native speaker implementation 
-  // keeping the gesture authorization alive with 0ms delay
   const doSpeakNative = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
@@ -330,7 +318,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     speakChunk(0);
   }, [cancel, isMobile, endSpeechCleanup]);
 
-  // Play one ready ElevenLabs audio blob
   const playAudioBlobUrl = useCallback((audioUrl: string, subtitle: string) => {
     if (!speaking.current) {
       try { URL.revokeObjectURL(audioUrl); } catch (_) {}
@@ -370,7 +357,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     });
   }, []);
 
-  // ELEVENLABS (edge → direct → native), ONE request per reply
   const doSpeakElevenLabs = useCallback(async (text: string) => {
     cancel(true);
 
@@ -384,54 +370,28 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         return;
       }
 
-      // 1) PRIMARY — edge function, single request. Returns { audio: base64_mp3 }.
+      // PRIMARY — server-side TTS function (ElevenLabs key stays in Supabase secrets).
       try {
-        const { data, error } = await supabase.functions.invoke('jarvis-brain', {
-          body: { tool: 'tts', args: { text: cleanText } },
+        const response = await fetch(JARVIS_TTS_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': JARVIS_TTS_ANON,
+            'Authorization': `Bearer ${JARVIS_TTS_ANON}`,
+          },
+          body: JSON.stringify({ text: cleanText, voiceId: VOICE_ID }),
         });
-        if (error) throw error;
-        if (!data?.audio) throw new Error(data?.error ?? 'No audio returned');
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data?.audio) {
+          throw new Error(data?.error ?? `TTS error ${response.status}`);
+        }
         playAudioBlobUrl(base64ToBlobUrl(data.audio), cleanText);
         return;
-      } catch (edgeError) {
-        console.warn('[Speech Engine] Edge ElevenLabs failed, trying direct call:', edgeError);
+      } catch (ttsError) {
+        console.warn('[Speech Engine] Server TTS failed, falling back to native:', ttsError);
       }
 
-      // 2) STOPGAP — direct browser call, only if a client-side key exists.
-      const directKey = resolveElevenLabsKey();
-      if (directKey) {
-        try {
-          const response = await fetch(
-            `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'xi-api-key': directKey,
-              },
-              body: JSON.stringify({
-                text: cleanText,
-                model_id: 'eleven_multilingual_v2',
-                voice_settings: {
-                  stability: 0.35,
-                  similarity_boost: 0.9,
-                  style: 0.1,
-                  use_speaker_boost: true,
-                },
-              }),
-            },
-          );
-          if (!response.ok) throw new Error(`ElevenLabs error: ${response.status}`);
-          const blob = await response.blob();
-          playAudioBlobUrl(URL.createObjectURL(blob), cleanText);
-          return;
-        } catch (directError) {
-          console.warn('[Speech Engine] Direct ElevenLabs failed:', directError);
-        }
-      }
-
-      // 3) LAST RESORT — native browser voice.
-      console.warn('[Speech Engine] ElevenLabs unavailable, falling back to native.');
+      // LAST RESORT — native browser voice.
       const fallbackVoice = voiceCache ?? findBestVoice(window.speechSynthesis.getVoices());
       if (fallbackVoice) voiceCache = fallbackVoice;
       doSpeakNative(text, fallbackVoice || null);
