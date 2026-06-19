@@ -10,6 +10,8 @@ export function Footer({ description: _description, theme: _theme }: { descripti
           <Link to="/shop" className="text-[10px] tracking-[0.2em] transition-colors text-foreground/50 hover:text-foreground">SHOP</Link>
           <Link to="/about" className="text-[10px] tracking-[0.2em] transition-colors text-foreground/50 hover:text-foreground">ABOUT</Link>
           <Link to="/contact" className="text-[10px] tracking-[0.2em] transition-colors text-foreground/50 hover:text-foreground">CONTACT</Link>
+          <Link to="/shipping" className="text-[10px] tracking-[0.2em] transition-colors text-foreground/50 hover:text-foreground">SHIPPING</Link>
+          <Link to="/refund" className="text-[10px] tracking-[0.2em] transition-colors text-foreground/50 hover:text-foreground">REFUND</Link>
           <Link to="/privacy" className="text-[10px] tracking-[0.2em] transition-colors text-foreground/50 hover:text-foreground">PRIVACY</Link>
           <Link to="/terms" className="text-[10px] tracking-[0.2em] transition-colors text-foreground/50 hover:text-foreground">TERMS</Link>
         </div>
