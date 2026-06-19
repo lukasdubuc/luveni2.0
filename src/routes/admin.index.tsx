@@ -9,20 +9,6 @@ import { requireAdmin } from "@/lib/admin-guard";
 
 
 // ────────────────────────────────────────────────────────────────────────────
-// IMMEDIATE THEME INITIALIZATION TO PREVENT FLASH ON REFRESH
-// ────────────────────────────────────────────────────────────────────────────
-if (typeof document !== "undefined") {
-  const localTheme = localStorage.getItem("theme");
-  if (localTheme === "dark") {
-    document.documentElement.classList.add("dark");
-    document.documentElement.style.backgroundColor = "#000000";
-  } else if (localTheme === "light") {
-    document.documentElement.classList.remove("dark");
-    document.documentElement.style.backgroundColor = "#f5f5f7";
-  }
-}
-
-// ────────────────────────────────────────────────────────────────────────────
 // TYPES & ROUTE DEFINITION
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -141,12 +127,11 @@ function AdminPage() {
   const [isDark, setIsDark] = useState<boolean>(() => {
     if (typeof document !== "undefined") {
       const hasDarkClass = document.documentElement.classList.contains("dark");
-      const hasLocalDark = localStorage.getItem("theme") === "dark";
-      if (hasLocalDark && !hasDarkClass) {
-        document.documentElement.classList.add("dark");
-        document.documentElement.style.backgroundColor = "#000000";
+      const localTheme = localStorage.getItem("theme");
+      if (localTheme) {
+        return localTheme === "dark";
       }
-      return hasDarkClass || hasLocalDark;
+      return hasDarkClass || window.matchMedia("(prefers-color-scheme: dark)").matches;
     }
     return false;
   });
@@ -226,15 +211,38 @@ function AdminPage() {
     if (!localStorage.getItem("theme") && siteContent.theme) {
       if (siteContent.theme === "dark") {
         document.documentElement.classList.add("dark");
-        document.documentElement.style.backgroundColor = "#000000";
+        document.documentElement.classList.remove("light");
         setIsDark(true);
       } else {
         document.documentElement.classList.remove("dark");
-        document.documentElement.style.backgroundColor = "#f5f5f7";
+        document.documentElement.classList.add("light");
         setIsDark(false);
       }
     }
   }, [siteContent.theme]);
+
+  // Synchronize CSS class configurations on element mount
+  useEffect(() => {
+    const localTheme = localStorage.getItem("theme");
+    if (localTheme) {
+      if (localTheme === "dark") {
+        document.documentElement.classList.add("dark");
+        document.documentElement.classList.remove("light");
+      } else {
+        document.documentElement.classList.remove("dark");
+        document.documentElement.classList.add("light");
+      }
+    } else {
+      const isSystemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      if (isSystemDark) {
+        document.documentElement.classList.add("dark");
+        document.documentElement.classList.remove("light");
+      } else {
+        document.documentElement.classList.remove("dark");
+        document.documentElement.classList.add("light");
+      }
+    }
+  }, []);
 
   // Sync orderedProducts when products update
   useEffect(() => {
@@ -641,11 +649,6 @@ function AdminPage() {
     } catch (e: any) {
       toast.error(`Update failed: ${e.message}`);
     }
-  };
-
-  const handleOpenJarvis = () => {
-    // Completely removed the unhandled fullscreen request behavior for safe mobile navigation transitions
-    navigate({ to: "/admin/jarvis" });
   };
 
   // ── Computed: Revenue ───────────────────────────────────────────────────
@@ -1094,7 +1097,7 @@ function AdminPage() {
                       revenueDelta > 0
                         ? "bg-emerald-555/10 text-emerald-400 border border-emerald-555/20"
                         : revenueDelta < 0
-                        ? "bg-rose-505/10 text-rose-400 border border-rose-505/20"
+                        ? "bg-rose-505/10 text-rose-450 border border-rose-505/20"
                         : isDark ? "bg-neutral-800 text-neutral-400 border border-neutral-700" : "bg-neutral-101 text-neutral-500 border border-neutral-200"
                     }`}>
                       {revenueDelta > 0 ? <TrendingUp size={10} /> : revenueDelta < 0 ? <TrendingDown size={10} /> : <Minus size={10} />}
@@ -1427,12 +1430,12 @@ function AdminPage() {
                       </div>
                     )}
                     {isPrintful && (
-                      <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-0.5 px-1.5 py-0.5 rounded-[9999px] bg-sky-505/10 text-sky-400 text-[7px] font-mono font-bold uppercase border border-sky-505/10">
+                      <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-0.5 px-1.5 py-0.5 rounded-[9999px] bg-sky-505/10 text-sky-450 text-[7px] font-mono font-bold uppercase border border-sky-505/10">
                         <Lock size={6} /> PF
                       </div>
                     )}
                     {isApliq && (
-                      <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-0.5 px-1.5 py-0.5 rounded-[9999px] bg-purple-500/10 text-purple-400 text-[7px] font-mono font-bold uppercase border border-purple-500/10">
+                      <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-0.5 px-1.5 py-0.5 rounded-[9999px] bg-purple-500/10 text-purple-450 text-[7px] font-mono font-bold uppercase border border-purple-500/10">
                         <Lock size={6} /> AQ
                       </div>
                     )}
@@ -1722,7 +1725,7 @@ function AdminPage() {
               <div className="space-y-3">
                 <p className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Origin Referrers</p>
                 {topReferrers.length === 0 ? (
-                  <p className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-700" : "text-neutral-303"}`}>Empty logs</p>
+                  <p className={`text-[9px] font-mono uppercase ${isDark ? "text-neutral-700" : "text-neutral-300"}`}>Empty logs</p>
                 ) : (
                   <div className={`p-4 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-955/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-2.5`}>
                     {topReferrers.map(([ref, count]) => (
@@ -1805,7 +1808,7 @@ function AdminPage() {
           <div className="max-w-2xl space-y-10 animate-in fade-in duration-500">
             <div className="border-b pb-4 dark:border-neutral-900 border-[#D1D1D6]">
               <h1 className="text-xl font-medium tracking-tight">System Settings</h1>
-              <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-450"}`}>ROOT HOOK CONTROL</p>
+              <p className={`text-[11px] font-mono mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>ROOT HOOK CONTROL</p>
             </div>
 
             <div className="space-y-10">
@@ -1821,7 +1824,7 @@ function AdminPage() {
                           setIsDark(false);
                           localStorage.setItem("theme", "light");
                           document.documentElement.classList.remove("dark");
-                          document.documentElement.style.backgroundColor = "#f5f5f7";
+                          document.documentElement.classList.add("light");
                           saveSiteConfig({ ...siteContent, theme: "light" });
                         }}
                         className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all rounded-[9999px] ${!isDark ? "bg-black text-white" : "text-neutral-405 hover:bg-neutral-900"}`}
@@ -1832,8 +1835,8 @@ function AdminPage() {
                         onClick={() => {
                           setIsDark(true);
                           document.documentElement.classList.add("dark");
+                          document.documentElement.classList.remove("light");
                           localStorage.setItem("theme", "dark");
-                          document.documentElement.style.backgroundColor = "#000000";
                           saveSiteConfig({ ...siteContent, theme: "dark" });
                         }}
                         className={`px-3 py-1.5 text-[9px] font-mono font-bold uppercase transition-all rounded-[9999px] ${isDark ? "bg-white text-black" : "text-neutral-555 hover:bg-neutral-101"}`}
@@ -2223,3 +2226,35 @@ function Input({ label, value, onChange, type = "text", isDark }: { label: strin
     </div>
   );
 }
+```
+
+---
+
+### Step 3: Global HTML Blocker (Required for Manual Override configurations)
+If you configure your system to be in Light Mode, but set this specific application manually to Dark Mode, the browser requires access to the preference *before* the DOM structure paints.
+
+To handle this, place this 4-line inline script directly in the `<head>` of your root `index.html` file (usually found in the project root or `/public` folder depending on your framework):
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Place this script as high up in the <head> as possible -->
+    <script>
+      try {
+        const theme = localStorage.getItem("theme");
+        if (theme === "dark" || (!theme && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+          document.documentElement.classList.add("dark");
+        } else {
+          document.documentElement.classList.add("light");
+        }
+      } catch (e) {}
+    </script>
+    ...
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
