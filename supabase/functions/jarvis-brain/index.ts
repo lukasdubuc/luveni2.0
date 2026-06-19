@@ -105,6 +105,87 @@ async function saveMemory(content: string, metadata: any = {}): Promise<string> 
   }
 }
 
+const usd = (cents: number) => `$${((cents || 0) / 100).toFixed(2)}`;
+
+// Pull the full live picture of the store directly from Postgres (service role).
+// This means Astra always has access to everything — revenue, orders, leads,
+// products — without depending on the client to pass anything.
+async function buildStoreSnapshot(timezone = "UTC"): Promise<any> {
+  const now = new Date();
+  // Start of "today" in the user's timezone, expressed as a UTC instant.
+  const localNow = new Date(now.toLocaleString("en-US", { timeZone: timezone }));
+  const offsetMs = now.getTime() - localNow.getTime();
+  const startLocal = new Date(localNow);
+  startLocal.setHours(0, 0, 0, 0);
+  const startToday = new Date(startLocal.getTime() + offsetMs);
+  const weekAgo = new Date(now.getTime() - 7 * 86400000);
+  const monthAgo = new Date(now.getTime() - 30 * 86400000);
+
+  const [orders, leads, products] = await Promise.all([
+    dbSelect("orders", "select=amount_cents,status,created_at,email,name&order=created_at.desc&limit=1000"),
+    dbSelect("leads", "select=created_at,source&order=created_at.desc&limit=2000"),
+    dbSelect("products", "select=title,is_published&limit=1000"),
+  ]);
+
+  const after = (d: string, from: Date) => new Date(d) >= from;
+  const paid = orders.filter((o: any) => o.status === "paid");
+  const sumPaid = (from?: Date) =>
+    paid
+      .filter((o: any) => !from || after(o.created_at, from))
+      .reduce((s: number, o: any) => s + (o.amount_cents || 0), 0);
+
+  return {
+    revenue_today_cents: sumPaid(startToday),
+    revenue_week_cents: sumPaid(weekAgo),
+    revenue_month_cents: sumPaid(monthAgo),
+    revenue_all_cents: sumPaid(),
+    orders_total: orders.length,
+    orders_paid: paid.length,
+    orders_pending: orders.filter((o: any) => o.status === "pending").length,
+    orders_failed: orders.filter((o: any) => o.status === "failed").length,
+    orders_today: orders.filter((o: any) => after(o.created_at, startToday)).length,
+    leads_total: leads.length,
+    leads_today: leads.filter((l: any) => after(l.created_at, startToday)).length,
+    leads_week: leads.filter((l: any) => after(l.created_at, weekAgo)).length,
+    products_total: products.length,
+    products_published: products.filter((p: any) => p.is_published).length,
+    recent_orders: orders.slice(0, 5).map((o: any) => ({
+      email: o.email,
+      amount_cents: o.amount_cents,
+      status: o.status,
+      created_at: o.created_at,
+    })),
+  };
+}
+
+// Full, detailed store context for normal chat — Astra sees everything.
+function formatStoreContextFull(s: any): string {
+  const recent =
+    s.recent_orders?.length
+      ? s.recent_orders.map((o: any) => `${o.email} ${usd(o.amount_cents)} (${o.status})`).join("; ")
+      : "none";
+  return `--- LIVE STORE DATA (Luveni GM) ---
+Revenue — today ${usd(s.revenue_today_cents)}, last 7 days ${usd(s.revenue_week_cents)}, last 30 days ${usd(s.revenue_month_cents)}, all-time ${usd(s.revenue_all_cents)}
+Orders — total ${s.orders_total} (paid ${s.orders_paid}, pending ${s.orders_pending}, failed ${s.orders_failed}); new today ${s.orders_today}
+Leads — total ${s.leads_total}, last 7 days ${s.leads_week}, today ${s.leads_today}
+Products — ${s.products_published} published of ${s.products_total}
+Recent orders: ${recent}
+--- END STORE DATA ---`;
+}
+
+// Compact "only what's notable" summary for the morning brief — never lists zeros.
+function formatStoreHighlights(s: any): string {
+  const notable: string[] = [];
+  if (s.revenue_today_cents > 0) notable.push(`${usd(s.revenue_today_cents)} in sales today`);
+  if (s.orders_today > 0) notable.push(`${s.orders_today} new order(s) today`);
+  if (s.orders_pending > 0) notable.push(`${s.orders_pending} pending order(s)`);
+  if (s.leads_today > 0) notable.push(`${s.leads_today} new lead(s) today`);
+  else if (s.leads_week > 0) notable.push(`${s.leads_week} new lead(s) in the last 7 days`);
+  return notable.length
+    ? `STORE HIGHLIGHTS (mention only these, do not add zeros): ${notable.join("; ")}.`
+    : `STORE STATUS: No sales and no new leads overnight — nothing notable to report. Say this in a single short clause; do not enumerate zero metrics.`;
+}
+
 async function callTavily(query: string): Promise<string> {
   if (!TAVILY_API_KEY) return "Error: TAVILY_API_KEY not configured.";
   try {
@@ -115,17 +196,17 @@ async function callTavily(query: string): Promise<string> {
         api_key: TAVILY_API_KEY,
         query,
         search_depth: "basic",
-        include_answer: false,
+        include_answer: true,
         include_raw_content: false,
-        max_results: 1,
+        max_results: 4,
       }),
     });
     if (!res.ok) throw new Error(`Tavily error ${res.status}`);
     const data = await res.json();
     const lines: string[] = [];
-    if (data.results?.length) {
-      const r = data.results[0];
-      lines.push(`Source: ${r.title} (${r.url}): ${r.content?.slice(0, 200)}`);
+    if (data.answer) lines.push(`Summary: ${data.answer}`);
+    for (const r of (data.results || []).slice(0, 4)) {
+      lines.push(`Source: ${r.title} (${r.url}): ${r.content?.slice(0, 300)}`);
     }
     return lines.join("\n") || "No results found.";
   } catch (e: any) {
@@ -410,7 +491,7 @@ async function runMorningBrief(systemContent: string): Promise<string> {
       Authorization: `Bearer ${MISTRAL_API_KEY}`,
     },
     body: JSON.stringify({
-     model: MISTRAL_MODEL,
+      model: MISTRAL_MODEL,
       messages,
       temperature: 0.2,
       max_tokens: 240,
@@ -578,14 +659,19 @@ Deno.serve(async (req) => {
       }
 
       case "chat": {
-        const { userText, history, storeSnapshot, timezone } = args || {};
+        const { userText, history, timezone } = args || {};
 
         if (!MISTRAL_API_KEY) throw new Error("MISTRAL_API_KEY is not configured in Supabase secrets.");
 
         const memories = await loadMemories(20);
-        const storeCtx = storeSnapshot
-          ? `--- LIVE STORE DATA ---\nRevenue today: $${(storeSnapshot.revenue_today_cents / 100).toFixed(2)}\nOrders total: ${storeSnapshot.orders_total}\n--- END STORE DATA ---`
-          : "";
+        let storeCtx = "";
+        try {
+          const snapshot = await buildStoreSnapshot(timezone || "UTC");
+          storeCtx = formatStoreContextFull(snapshot);
+        } catch (err: any) {
+          console.warn("[Jarvis] Store snapshot failed:", err.message);
+          storeCtx = "--- LIVE STORE DATA --- Temporarily unavailable. --- END STORE DATA ---";
+        }
 
         let githubCtx = "";
         if (GITHUB_TOKEN) {
@@ -629,7 +715,7 @@ Deno.serve(async (req) => {
       }
 
       case "morning_brief": {
-        const { storeSnapshot, timezone } = args || {};
+        const { timezone } = args || {};
         if (!MISTRAL_API_KEY) throw new Error("MISTRAL_API_KEY is not configured in Supabase secrets.");
 
         const userTimezone = timezone || "UTC";
@@ -648,9 +734,13 @@ Deno.serve(async (req) => {
         }
 
         const memories = await loadMemories(20);
-        const storeCtx = storeSnapshot
-          ? `--- LIVE STORE DATA ---\nRevenue today: $${(storeSnapshot.revenue_today_cents / 100).toFixed(2)}\nRevenue this week: $${(((storeSnapshot.revenue_week_cents ?? 0)) / 100).toFixed(2)}\nOrders total: ${storeSnapshot.orders_total}\nOrders pending: ${storeSnapshot.orders_pending ?? 0}\nLeads total: ${storeSnapshot.leads_total ?? 0}\n--- END STORE DATA ---`
-          : "No live store data available this morning.";
+        let storeCtx = "STORE STATUS: Temporarily unavailable.";
+        try {
+          const snapshot = await buildStoreSnapshot(userTimezone);
+          storeCtx = formatStoreHighlights(snapshot);
+        } catch (err: any) {
+          console.warn("[Jarvis] Brief store snapshot failed:", err.message);
+        }
 
         const dateStr = now.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: userTimezone });
         const timeStr = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: userTimezone });
@@ -667,7 +757,12 @@ Deno.serve(async (req) => {
 
       ${storeCtx}
 
-      TASK: Deliver a single, concise spoken MORNING BRIEFING for Luveni GM, sir — no more than 2 to 3 sentences. Greet me naturally for the morning and state today's date. Then report ONLY what is actually supported by the LIVE STORE DATA or LONG-TERM MEMORIES above — revenue, orders, leads, or pending items. If there is no store data and nothing notable in memory, say plainly that there is nothing significant to report yet and offer one sensible, grounded priority for the day. Never invent people, events, numbers, anecdotes, or facts. A touch of dry wit is welcome, but never fabricate. No markdown, no lists, no headings.`.trim();
+      TASK: Deliver a brief, spoken MORNING BRIEFING for Luveni GM, sir — 2 to 3 sentences ending in a question.
+      1) Greet me naturally for the morning and state today's date.
+      2) Give the store status above in ONE short sentence. Do NOT recite zeros or list empty metrics — if there were no sales or new leads, say so in a single clause and move on. Mention sales/orders/leads only when the highlights above actually contain them.
+      3) Then ASK, as a question, whether I'd like you to pull this morning's important updates: notable AI developments, news specific to Luveni GM or my industry, and any major world events — strictly signal, no fluff.
+      Report only what the store status or memories support. Never invent numbers, people, or events. Dry wit welcome; never fabricate. No markdown, no lists, no headings.`.trim();
+
         const brief = await runMorningBrief(systemContent);
         return new Response(JSON.stringify({ isMorning: true, brief }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
