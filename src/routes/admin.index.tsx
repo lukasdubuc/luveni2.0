@@ -2226,35 +2226,3 @@ function Input({ label, value, onChange, type = "text", isDark }: { label: strin
     </div>
   );
 }
-```
-
----
-
-### Step 3: Global HTML Blocker (Required for Manual Override configurations)
-If you configure your system to be in Light Mode, but set this specific application manually to Dark Mode, the browser requires access to the preference *before* the DOM structure paints.
-
-To handle this, place this 4-line inline script directly in the `<head>` of your root `index.html` file (usually found in the project root or `/public` folder depending on your framework):
-
-```html
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Place this script as high up in the <head> as possible -->
-    <script>
-      try {
-        const theme = localStorage.getItem("theme");
-        if (theme === "dark" || (!theme && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
-          document.documentElement.classList.add("dark");
-        } else {
-          document.documentElement.classList.add("light");
-        }
-      } catch (e) {}
-    </script>
-    ...
-  </head>
-  <body>
-    <div id="root"></div>
-  </body>
-</html>
