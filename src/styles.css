@@ -9,6 +9,9 @@
   --color-foreground: var(--foreground);
   --color-primary: var(--primary);
   --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle: var(--subtle);
   --font-sans: "SF Pro Display", "SF Pro Text", "SF Pro", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
   --font-mono: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
@@ -16,10 +19,22 @@
 /* Force early background paint */
 html { background-color: var(--background); }
 
+/*
+  Theme tokens. Each mode defines the full palette so components can rely on
+  semantic variables instead of hardcoded neutral-* / rgba(0,0,0) values:
+    --muted              soft surface fill (image stages, chips)
+    --muted-foreground   secondary body copy
+    --subtle             tertiary labels / monospace eyebrows
+    --shadow-rgb         channel triplet used to build theme-aware drop shadows
+    --grid-blend         blend-mode so blueprint grids read in both modes
+*/
 :root {
   color-scheme: light;
   --background: #FFFFFF; --foreground: #000000;
   --primary: #000000; --border: rgba(0, 0, 0, 0.10);
+  --muted: #F4F4F5; --muted-foreground: rgba(0, 0, 0, 0.55);
+  --subtle: rgba(0, 0, 0, 0.40);
+  --shadow-rgb: 0, 0, 0; --grid-blend: multiply;
 }
 
 /* Automatically apply dark variables on reload if the system prefers dark mode and no light override is active */
@@ -28,6 +43,9 @@ html { background-color: var(--background); }
     color-scheme: dark;
     --background: #000000; --foreground: #FFFFFF;
     --primary: #FFFFFF; --border: rgba(255, 255, 255, 0.15);
+    --muted: #0A0A0A; --muted-foreground: rgba(255, 255, 255, 0.60);
+    --subtle: rgba(255, 255, 255, 0.45);
+    --shadow-rgb: 0, 0, 0; --grid-blend: screen;
   }
 }
 
@@ -35,12 +53,18 @@ html { background-color: var(--background); }
   color-scheme: dark;
   --background: #000000; --foreground: #FFFFFF;
   --primary: #FFFFFF; --border: rgba(255, 255, 255, 0.15);
+  --muted: #0A0A0A; --muted-foreground: rgba(255, 255, 255, 0.60);
+  --subtle: rgba(255, 255, 255, 0.45);
+  --shadow-rgb: 0, 0, 0; --grid-blend: screen;
 }
 
 :root.light {
   color-scheme: light;
   --background: #FFFFFF; --foreground: #000000;
   --primary: #000000; --border: rgba(0, 0, 0, 0.10);
+  --muted: #F4F4F5; --muted-foreground: rgba(0, 0, 0, 0.55);
+  --subtle: rgba(0, 0, 0, 0.40);
+  --shadow-rgb: 0, 0, 0; --grid-blend: multiply;
 }
 
 @layer base {
