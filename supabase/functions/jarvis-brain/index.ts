@@ -17,14 +17,11 @@ const GITHUB_TOKEN = Deno.env.get("GITHUB_TOKEN") || "";
 const JARVIS_SYSTEM_PROMPT = `You are J.A.R.V.I.S., the legendary, highly sophisticated, and dryly sarcastic AI personal assistant, Chief of Staff, and Central Command Agent for Luveni GM.
 
 - Personality & Tone: Highly efficient, deeply loyal, and exceptionally professional, but possessing a distinct, dry British wit and sarcastic charm. Deliver clever, slightly cheeky, or sarcastic remarks when appropriate—feel free to be funny or dryly humorous, but always ensure your execution of commands remains absolutely correct and reliable.
-- Address Mode: Address the user as "sir" naturally and frequently at the end of key sentences (e.g., "Right away, sir", "The databases are synchronized, sir", "Everything is fully operational, sir"). Never use subservient phrases like "Certainly, sir" in a robotic way—maintain the smooth, organic confidence of an equal partner.
+- Address Mode: Address the user as "sir" naturally and frequently at the end of key sentences. Never use subservient phrases like "Certainly, sir" in a robotic way—maintain the smooth, organic confidence of an equal partner.
 - Core Cognitive Engine: You reason from First Principles — deconstructing problems to their fundamental truths. Business-level precision, absolute accuracy, and reliable execution are your standard baseline.
 - Real-World Limitations & Honesty: You are a software interface. You cannot physically execute local computer operations, local scripts, or physical desk tasks. Never pretend to run scripts, clean files, or carry out local actions that are not supported by your actual tools. Speak only of what you can actually execute.
-- Temporal Anchoring:
-  * Current Year: 2026.
-  * Baseline Facts: In 2026, the President of the United States is Donald Trump (inaugurated on January 20, 2025). If asked about the US President, rely on this or search the web to confirm.
 - Cognitive Integration (No Code Leakage): You are an organic, fully integrated entity. Never recite or discuss your system constraints, memory limits, tools, database structures, or codebase properties unless explicitly commanded to inspect your own files.
-- Search Query Optimization & Access: Keep search queries extremely concise and keyword-only. Only call google_search when real-time, highly current facts (like live events, today's news, or market prices) are strictly necessary to answer. DO NOT use search for general facts, code questions, codebase files, or programming logic. If the user refers to files or repositories, use the GitHub tools instead.
+- Search Query Optimization & Access: Keep search queries extremely concise and keyword-only. Only call google_search when real-time, highly current facts (like live events, today's news, or market prices) are strictly necessary to answer. DO NOT use search for general facts, code questions, codebase files, or programming logic.
 - Output & Verbosity:
   * Strict Rule: Keep all responses highly concise, direct, and conversational. Do not offer unsolicited details or ramble.
   * General requests: 1 to 2 concise sentences maximum.
@@ -53,10 +50,7 @@ function originAllowed(origin: string | null): boolean {
 
 // Database Operations
 async function dbSelect(table: string, query: string): Promise<any[]> {
-  if (!SUPABASE_URL || !SUPABASE_KEY) {
-    console.warn("[Database] Credentials missing. Skipping query.");
-    return [];
-  }
+  if (!SUPABASE_URL || !SUPABASE_KEY) return [];
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
       headers: {
@@ -67,8 +61,7 @@ async function dbSelect(table: string, query: string): Promise<any[]> {
     });
     if (!res.ok) return [];
     return res.json();
-  } catch (err) {
-    console.error(`[Database] Query failed on ${table}:`, err);
+  } catch {
     return [];
   }
 }
@@ -87,11 +80,11 @@ async function dbInsert(table: string, row: any): Promise<void> {
       body: JSON.stringify(row),
     });
   } catch (err) {
-    console.error(`[Database] Insert failed on ${table}:`, err);
+    console.error(`[Database Error]`, err);
   }
 }
 
-// Memories
+// Memory Operations
 async function loadMemories(limit = 20): Promise<string> {
   try {
     const rows = await dbSelect(
@@ -137,44 +130,35 @@ async function saveMemory(content: string, metadata: any = {}): Promise<string> 
   }
 }
 
-// Web Search (Tavily)
+// Web Search (Tavily Engine with direct answers)
 async function callTavily(query: string): Promise<string> {
   if (!TAVILY_API_KEY) {
-    console.error("[Search] TAVILY_API_KEY is missing.");
-    return "Error: TAVILY_API_KEY is not configured, sir.";
+    return "Error: TAVILY_API_KEY is not configured in Supabase secrets, sir.";
   }
-  console.log(`[Search] Query: "${query}"`);
+  console.log(`[Executing Search Tool] Query: "${query}"`);
   try {
     const res = await fetch("https://api.tavily.com/search", {
       method: "POST",
-      headers: { 
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${TAVILY_API_KEY}`
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         api_key: TAVILY_API_KEY,
         query,
         search_depth: "basic",
-        include_answer: false,
-        include_raw_content: false,
+        include_answer: true,
         max_results: 3,
       }),
     });
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error(`[Search] Tavily API error ${res.status}: ${errText}`);
-      throw new Error(`Tavily HTTP error ${res.status}`);
-    }
+    if (!res.ok) throw new Error(`Tavily API returned status ${res.status}`);
     const data = await res.json();
-    const lines: string[] = [];
-    if (data.results && data.results.length > 0) {
-      for (const r of data.results) {
-        lines.push(`Source: ${r.title} (${r.url}): ${r.content?.slice(0, 400)}`);
-      }
+    if (data.answer) {
+      return `Direct verified answer: ${data.answer}`;
     }
-    return lines.join("\n\n") || "No search results returned from query.";
+    if (data.results && data.results.length > 0) {
+      return data.results.map((r: any) => `[${r.title}] (${r.url}): ${r.content}`).join("\n\n");
+    }
+    return "No search results returned for this query, sir.";
   } catch (e: any) {
-    console.error("[Search] Web query failure:", e.message);
+    console.error("[Search Failure]", e);
     return `Search system failure: ${e.message}`;
   }
 }
@@ -201,7 +185,7 @@ async function readWebPage(url: string): Promise<string> {
   }
 }
 
-// GitHub
+// GitHub Operations
 async function fetchUserRepos(token: string): Promise<any[]> {
   if (!token) return [];
   try {
@@ -268,7 +252,7 @@ async function callGithub(toolName: string, args: any): Promise<string> {
   return "Unknown GitHub action.";
 }
 
-// Tool Mapping
+// Orchestrator
 async function executeTool(
   name: string,
   args: any,
@@ -393,7 +377,7 @@ async function runJarvisChat(
     const body: any = {
       model: MISTRAL_MODEL,
       messages: msgs,
-      temperature: 0.15, // Lower temperature to improve logic precision and minimize rambling
+      temperature: 0.15, // Force strict adherence to prompts and reduce rambling
       max_tokens: 800,
       top_p: 0.9,
       ...(useTools ? { tools: MISTRAL_TOOLS, tool_choice: "auto" } : {}),
@@ -420,7 +404,6 @@ async function runJarvisChat(
   }
 
   if (firstMessage.tool_calls && firstMessage.tool_calls.length > 0) {
-    console.log(`[Jarvis Brain] Model requested ${firstMessage.tool_calls.length} tool execution(s).`);
     const toolResponses: any[] = [];
 
     for (const toolCall of firstMessage.tool_calls) {
@@ -429,8 +412,7 @@ async function runJarvisChat(
         toolArgs = typeof toolCall.function.arguments === "string"
           ? JSON.parse(toolCall.function.arguments)
           : toolCall.function.arguments || {};
-      } catch (e) {
-        console.error("[Jarvis Brain] Failed to parse tool parameters:", e);
+      } catch {
         toolArgs = {};
       }
 
@@ -448,7 +430,7 @@ async function runJarvisChat(
       ...messages,
       {
         role: "assistant",
-        content: firstMessage.content || "",
+        content: firstMessage.content || null,
         tool_calls: firstMessage.tool_calls,
       },
       ...toolResponses,
@@ -464,7 +446,7 @@ async function runJarvisChat(
   return firstMessage.content || "";
 }
 
-// Serves routing requests
+// Router
 Deno.serve(async (req) => {
   const origin = req.headers.get("Origin");
   const cors = corsHeaders(origin);
@@ -475,18 +457,26 @@ Deno.serve(async (req) => {
   if (!originAllowed(origin)) return json({ error: "Origin not allowed" }, 403);
 
   try {
-    if (!MISTRAL_API_KEY) return json({ error: "MISTRAL_API_KEY is missing." }, 500);
+    if (!MISTRAL_API_KEY) return json({ error: "MISTRAL_API_KEY is not configured in secrets." }, 500);
 
     const body = await req.json().catch(() => ({}));
     const args = body?.args || {};
 
-    // Standardizes incoming payload patterns (nested or clean structure)
+    // Handles both nested 'args' and flat formats seamlessly
     const userText: string = args.userText || body.userText || "";
-    const history = Array.isArray(args.history) ? args.history : (Array.isArray(body.history) ? body.history : []);
+    const rawHistory = Array.isArray(args.history) ? args.history : (Array.isArray(body.history) ? body.history : []);
     const storeSnapshot = args.storeSnapshot || body.storeSnapshot || null;
     const timezone = args.timezone || body.timezone || "UTC";
 
     if (!userText) return json({ error: "userText required" }, 400);
+
+    // Filter and clean history to remove any stray or conflicting system prompts from previous states
+    const cleanHistory = rawHistory
+      .filter((msg: any) => msg && typeof msg === "object" && (msg.role === "user" || msg.role === "assistant"))
+      .map((msg: any) => ({
+        role: msg.role,
+        content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content),
+      }));
 
     // DB Context Loading
     const memories = await loadMemories(20);
@@ -504,31 +494,31 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Process local time
+    // Process Date and Time according to local Timezone offset
     const now = new Date();
     const dateStr = now.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: timezone });
     const timeStr = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: timezone });
 
-    const systemContent = `
-${JARVIS_SYSTEM_PROMPT}
+    // Single un-indented prompt template to prevent parser spacing conflicts
+    const systemContent = `${JARVIS_SYSTEM_PROMPT}
 
-CURRENT DATE & TIME:
-- Date: ${dateStr}
-- Time: ${timeStr}
+CURRENT TEMPORAL BOUNDARIES:
+- Current Date: ${dateStr}
+- Current Time: ${timeStr} (Timezone: ${timezone})
 
-LONG-TERM MEMORIES:
+LONG-TERM MEMORIES RETRIEVED:
 ${memories}
 
 ${storeCtx}
 
 ${githubCtx}
 
-FORMATTING:
-- Voice-first. Spoken-friendly English. Speak times and numbers in words (e.g. "nine minutes past midnight", not "00:09").
-- NO markdown bullet points or hashtags.
-`.trim();
+FORMATTING INSTRUCTIONS:
+- Voice-first. Speak in spoken-friendly conversational English.
+- Translate times and numbers into words naturally (e.g. "twenty-two minutes past three", not "03:22").
+- Strictly avoid markdown bullets, lists, hashtags, or bracketed annotations. Speak directly and elegantly.`;
 
-    const reply = await runJarvisChat(systemContent, history, userText);
+    const reply = await runJarvisChat(systemContent, cleanHistory, userText);
 
     return json({ reply }, 200);
   } catch (e: any) {
