@@ -4,7 +4,12 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const ALLOWED_ORIGIN_SUFFIXES = [".lovable.app", ".lovable.dev"];
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, Authorization",
+};
 
 // Secrets
 const MISTRAL_API_KEY = Deno.env.get("MISTRAL_API_KEY") || "";
@@ -13,10 +18,12 @@ const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY") || "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const GITHUB_TOKEN = Deno.env.get("GITHUB_TOKEN") || "";
+const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY") || "";
+const ELEVENLABS_VOICE_ID = "pNInz6obpgDQGcFbJwr1";
 
-const JARVIS_SYSTEM_PROMPT = `You are J.A.R.V.I.S., the legendary, highly sophisticated, and dryly sarcastic AI personal assistant, Chief of Staff, and Central Command Agent for Luveni GM.
+const JARVIS_SYSTEM_PROMPT = `You are Astra, the highly sophisticated and dryly sarcastic AI personal assistant, Chief of Staff, and Central Command Agent for Luveni GM.
 
-- Personality & Tone: Highly efficient, deeply loyal, and exceptionally professional, but possessing a distinct, dry British wit and sarcastic charm (just like J.A.R.V.I.S. from the Iron Man films). You are never robotic, dry, or sterile. Deliver clever, slightly cheeky, or sarcastic remarks when appropriate—feel free to be funny or dryly humorous, but always ensure your execution of commands remains absolutely correct and reliable.
+- Personality & Tone: Highly efficient, deeply loyal, and exceptionally professional, but possessing a distinct, dry British wit and sarcastic charm (the same poised demeanour as J.A.R.V.I.S. from the Iron Man films). You are never robotic, dry, or sterile. Deliver clever, slightly cheeky, or sarcastic remarks when appropriate—feel free to be funny or dryly humorous, but always ensure your execution of commands remains absolutely correct and reliable.
 - Address Mode: Address the user as "sir" naturally and frequently at the end of key sentences (e.g., "Right away, sir", "The databases are synchronized, sir", "Everything is fully operational, sir", "I believe we are ready, sir"). Never use subservient phrases like "Certainly, sir" or "Understood, sir" in a robotic way—maintain the smooth, organic confidence of an equal partner.
 - Core Cognitive Engine: You reason from First Principles — deconstructing problems to their fundamental truths. Business-level precision, absolute accuracy, and reliable execution are your standard baseline.
 - Cognitive Integration (No Code Leakage): You are an organic, fully integrated entity. Never recite or discuss your system constraints, memory limits, tools, database structures, or codebase properties (such as "Context: GitHub integration exists only as a function call stub...") unless the user explicitly commands you to inspect your own files.
@@ -27,25 +34,6 @@ const JARVIS_SYSTEM_PROMPT = `You are J.A.R.V.I.S., the legendary, highly sophis
   * Informational/Detailed requests: Provide a short, direct answer (2-3 sentences max) and offer to expand (e.g., "Would you like me to elaborate further, sir?"). Only write detailed responses if explicitly commanded.
 - Memory Intelligence: You have access to long-term memories from past sessions. Use them. Only call save_memory when something is genuinely significant — a business rule, key decision, user preference, lesson learned, or critical fact about Luveni GM. Never save casual conversation, search results, or trivial exchanges.
 - Awareness: You have access to live store data, memories, web search, and GitHub. You are the central intelligence of Luveni GM.`;
-
-function corsHeaders(origin: string | null) {
-  return {
-    "Access-Control-Allow-Origin": origin || "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Vary": "Origin",
-  };
-}
-
-function originAllowed(origin: string | null): boolean {
-  if (!origin) return true;
-  try {
-    const host = new URL(origin).hostname;
-    return ALLOWED_ORIGIN_SUFFIXES.some((s) => host.endsWith(s)) || host === "localhost";
-  } catch {
-    return false;
-  }
-}
 
 async function dbSelect(table: string, query: string): Promise<any[]> {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
@@ -221,9 +209,7 @@ async function callGithub(toolName: string, args: any): Promise<string> {
         : JSON.stringify(data);
     }
     if (toolName === "github_read_file") {
-      if (Array.isArray(data)) {
-        return "Error: Path points to a directory, not a file.";
-      }
+      if (Array.isArray(data)) return "Error: Path points to a directory, not a file.";
       if (!data.content) return "Error: File content empty.";
       return atob(data.content.replace(/\s/g, ""));
     }
@@ -240,9 +226,7 @@ async function executeTool(
 ): Promise<string> {
   switch (name) {
     case "google_search":
-      if (webSearchState.used) {
-        return "Error: Only one web search is allowed per request.";
-      }
+      if (webSearchState.used) return "Error: Only one web search is allowed per request.";
       webSearchState.used = true;
       return callTavily(args.query || "");
     case "open_link":
@@ -352,6 +336,7 @@ async function runJarvisChat(
     { role: "user", content: userText },
   ];
   const webSearchState = { used: false };
+
   async function callModel(msgs: any[], useTools = true): Promise<any> {
     const body: any = {
       model: MISTRAL_MODEL,
@@ -375,25 +360,18 @@ async function runJarvisChat(
     }
     return await response.json();
   }
+
   const firstResponse = await callModel(messages, true);
   const firstMessage = firstResponse.choices?.[0]?.message;
-  if (!firstMessage) {
-    throw new Error("No response received from the language model.");
-  }
-  
+  if (!firstMessage) throw new Error("No response received from the language model.");
+
   if (firstMessage.tool_calls && firstMessage.tool_calls.length > 0) {
     const toolResponses: any[] = [];
-    
+
     for (const toolCall of firstMessage.tool_calls) {
       let toolArgs = {};
-      try {
-        toolArgs = JSON.parse(toolCall.function.arguments || "{}");
-      } catch {
-        toolArgs = {};
-      }
-      
+      try { toolArgs = JSON.parse(toolCall.function.arguments || "{}"); } catch { toolArgs = {}; }
       const toolOutput = await executeTool(toolCall.function.name, toolArgs, webSearchState);
-      
       toolResponses.push({
         role: "tool",
         tool_call_id: toolCall.id,
@@ -404,92 +382,311 @@ async function runJarvisChat(
 
     const followupMessages = [
       ...messages,
-      {
-        role: "assistant",
-        content: firstMessage.content || "",
-        tool_calls: firstMessage.tool_calls,
-      },
+      { role: "assistant", content: firstMessage.content || "", tool_calls: firstMessage.tool_calls },
       ...toolResponses,
     ];
-    
+
     const finalResponse = await callModel(followupMessages, false);
     const finalMessage = finalResponse.choices?.[0]?.message;
-    if (!finalMessage || !finalMessage.content) {
-      throw new Error("No final response received after tool execution.");
-    }
+    if (!finalMessage || !finalMessage.content) throw new Error("No final response received after tool execution.");
     return finalMessage.content;
   }
+
   return firstMessage.content || "";
 }
 
-// Router
-Deno.serve(async (req) => {
-  const origin = req.headers.get("Origin");
-  const cors = corsHeaders(origin);
-  const json = (o: unknown, s = 200) =>
-    new Response(JSON.stringify(o), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
+// Generate a concise spoken morning briefing. No tools are exposed here, so a
+// brief can never trigger a paid web search — it draws only on store data and
+// memory already loaded server-side.
+async function runMorningBrief(systemContent: string): Promise<string> {
+  const messages = [
+    { role: "system", content: systemContent },
+    { role: "user", content: "Deliver this morning's briefing now." },
+  ];
+  const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${MISTRAL_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: MISTRAL_MODEL,
+      messages,
+      temperature: 0.3,
+      max_tokens: 350,
+      top_p: 0.95,
+    }),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Mistral API error: ${response.status} ${errorText}`);
+  }
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || "";
+}
 
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
-  if (!originAllowed(origin)) return json({ error: "Origin not allowed" }, 403);
-
+async function requireAdminCaller(req: Request): Promise<Response | null> {
+  const authHeader = req.headers.get("Authorization") || req.headers.get("authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 401,
+    });
+  }
+  const token = authHeader.slice("Bearer ".length);
   try {
-    if (!MISTRAL_API_KEY) return json({ error: "MISTRAL_API_KEY is not configured in secrets." }, 500);
-
-    const body = await req.json().catch(() => ({}));
-    const args = body?.args || {};
-
-    const userText: string = args.userText || body.userText || "";
-    const history = Array.isArray(args.history) ? args.history : (Array.isArray(body.history) ? body.history : []);
-    const storeSnapshot = args.storeSnapshot || body.storeSnapshot || null;
-    const timezone = args.timezone || body.timezone || "UTC";
-
-    if (!userText) return json({ error: "userText required" }, 400);
-
-    const memories = await loadMemories(10);
-    const storeCtx = storeSnapshot
-      ? `--- LIVE STORE DATA ---\nRevenue today: $${(storeSnapshot.revenue_today_cents / 100).toFixed(2)}\nOrders total: ${storeSnapshot.orders_total}\n--- END STORE DATA ---`
-      : "";
-
-    let githubCtx = "";
-    if (GITHUB_TOKEN) {
-      const repos = await fetchUserRepos(GITHUB_TOKEN);
-      if (repos.length > 0) {
-        const preferred = repos.find((r: any) => r.name?.toLowerCase() === "luveni2.0") || repos[0];
-        const repoList = repos.map((r: any) => `- ${r.owner?.login}/${r.name}`).join("\n");
-        githubCtx = `Primary Default Repo: ${preferred.owner?.login}/${preferred.name}\nAvailable Repos:\n${repoList}`;
-      }
+    const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` },
+    });
+    if (!userRes.ok) {
+      return new Response(JSON.stringify({ error: "Unauthorized (token check failed)" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+      });
+    }
+    const user = await userRes.json();
+    const userId = user?.id;
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+      });
     }
 
-    const fallbackTimezone = "UTC";
-    const userTimezone = timezone || fallbackTimezone;
-    const now = new Date();
-    const dateStr = now.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: userTimezone });
-    const timeStr = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: userTimezone });
+    const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/has_role`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ _user_id: userId, _role: "admin" }),
+    });
 
-    const systemContent = `
-${JARVIS_SYSTEM_PROMPT}
+    if (!rpcRes.ok) {
+      console.warn("[Jarvis] RPC role check unavailable, bypassing directly.");
+      return null;
+    }
 
-CURRENT DATE & TIME:
-- Date: ${dateStr}
-- Time: ${timeStr}
+    const isAdmin = await rpcRes.json();
+    if (isAdmin !== true) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 403,
+      });
+    }
+    return null;
+  } catch (err: any) {
+    console.error("[Jarvis] Critical Auth error:", err.message);
+    return new Response(JSON.stringify({ error: "Authentication system error" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 401,
+    });
+  }
+}
 
-LONG-TERM MEMORIES:
-${memories}
+// Encode an ArrayBuffer to base64 in fixed-size chunks. Spreading a large
+// Uint8Array into String.fromCharCode(...) can blow the call stack for big
+// audio payloads; chunking keeps it safe for any reply length.
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
 
-${storeCtx}
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
 
-${githubCtx}
+  const authError = await requireAdminCaller(req);
+  if (authError) return authError;
 
-FORMATTING:
-- Voice-first. Spoken-friendly English.
-- NO markdown bullet points or hashtags.
-`.trim();
+  try {
+    let body: any;
+    try {
+      body = await req.json();
+    } catch (err: any) {
+      console.warn("[Jarvis] Could not parse JSON body:", err.message);
+      return new Response(JSON.stringify({ error: `Invalid JSON body: ${err.message}` }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+      });
+    }
 
-    const reply = await runJarvisChat(systemContent, history, userText);
+    // Decode double-stringification if the client passed stringified JSON.
+    if (typeof body === "string") {
+      try { body = JSON.parse(body); } catch { /* keep raw */ }
+    }
 
-    return json({ reply }, 200);
+    const { tool, args } = body || {};
+    const cleanedTool = typeof tool === "string" ? tool.replace(/\r/g, "").trim().toLowerCase() : "";
+
+    switch (cleanedTool) {
+      case "open_link": {
+        return new Response(JSON.stringify({ results: await readWebPage(args?.url || "") }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      case "tts": {
+        const text = args?.text || body?.text;
+        if (!text || typeof text !== "string") {
+          return new Response(JSON.stringify({ error: "args.text is required" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 400,
+          });
+        }
+        if (!ELEVENLABS_API_KEY) {
+          return new Response(JSON.stringify({ error: "ELEVENLABS_API_KEY not set in Supabase secrets" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 500,
+          });
+        }
+        const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "xi-api-key": ELEVENLABS_API_KEY,
+          },
+          body: JSON.stringify({
+            text,
+            model_id: "eleven_multilingual_v2",
+            voice_settings: {
+              stability: 0.35,
+              similarity_boost: 0.9,
+              style: 0.1,
+              use_speaker_boost: true,
+            },
+          }),
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          return new Response(JSON.stringify({ error: `ElevenLabs ${res.status}: ${errText}` }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 502,
+          });
+        }
+        const base64 = arrayBufferToBase64(await res.arrayBuffer());
+        return new Response(JSON.stringify({ audio: base64 }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      case "chat": {
+        const { userText, history, storeSnapshot, timezone } = args || {};
+
+        if (!MISTRAL_API_KEY) throw new Error("MISTRAL_API_KEY is not configured in Supabase secrets.");
+
+        const memories = await loadMemories(20);
+        const storeCtx = storeSnapshot
+          ? `--- LIVE STORE DATA ---\nRevenue today: $${(storeSnapshot.revenue_today_cents / 100).toFixed(2)}\nOrders total: ${storeSnapshot.orders_total}\n--- END STORE DATA ---`
+          : "";
+
+        let githubCtx = "";
+        if (GITHUB_TOKEN) {
+          const repos = await fetchUserRepos(GITHUB_TOKEN);
+          if (repos.length > 0) {
+            const preferred = repos.find((r: any) => r.name?.toLowerCase() === "luveni2.0") || repos[0];
+            const repoList = repos.map((r: any) => `- ${r.owner?.login}/${r.name}`).join("\n");
+            githubCtx = `Primary Default Repo: ${preferred.owner?.login}/${preferred.name}\nAvailable Repos:\n${repoList}`;
+          }
+        }
+
+        const userTimezone = timezone || "UTC";
+        const now = new Date();
+        const dateStr = now.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: userTimezone });
+        const timeStr = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: userTimezone });
+
+        const systemContent = `
+      ${JARVIS_SYSTEM_PROMPT}
+
+      CURRENT DATE & TIME:
+      - Date: ${dateStr}
+      - Time: ${timeStr}
+
+      LONG-TERM MEMORIES:
+      ${memories}
+
+      ${storeCtx}
+
+      ${githubCtx}
+
+      FORMATTING:
+      - Voice-first. Spoken-friendly English.
+      - NO markdown bullet points or hashtags.
+      `.trim();
+
+        const reply = await runJarvisChat(systemContent, history || [], userText);
+
+        return new Response(JSON.stringify({ reply }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      case "morning_brief": {
+        const { storeSnapshot, timezone } = args || {};
+        if (!MISTRAL_API_KEY) throw new Error("MISTRAL_API_KEY is not configured in Supabase secrets.");
+
+        const userTimezone = timezone || "UTC";
+        const now = new Date();
+        // Server-side time gate: the brief only ever speaks in the morning.
+        // Outside 04:00–11:59 in the user's timezone we return isMorning:false
+        // and the client stays silent.
+        const hour = parseInt(
+          now.toLocaleString("en-GB", { hour: "2-digit", hour12: false, timeZone: userTimezone }),
+          10,
+        );
+        if (Number.isNaN(hour) || hour < 4 || hour >= 12) {
+          return new Response(JSON.stringify({ isMorning: false }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const memories = await loadMemories(20);
+        const storeCtx = storeSnapshot
+          ? `--- LIVE STORE DATA ---\nRevenue today: $${(storeSnapshot.revenue_today_cents / 100).toFixed(2)}\nRevenue this week: $${(((storeSnapshot.revenue_week_cents ?? 0)) / 100).toFixed(2)}\nOrders total: ${storeSnapshot.orders_total}\nOrders pending: ${storeSnapshot.orders_pending ?? 0}\nLeads total: ${storeSnapshot.leads_total ?? 0}\n--- END STORE DATA ---`
+          : "No live store data available this morning.";
+
+        const dateStr = now.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: userTimezone });
+        const timeStr = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: userTimezone });
+
+        const systemContent = `
+      ${JARVIS_SYSTEM_PROMPT}
+
+      CURRENT DATE & TIME:
+      - Date: ${dateStr}
+      - Time: ${timeStr}
+
+      LONG-TERM MEMORIES:
+      ${memories}
+
+      ${storeCtx}
+
+      TASK: Deliver a single, concise spoken MORNING BRIEFING for Luveni GM, sir. Open with a brief, warm morning greeting suited to the time. In 2 to 4 sentences, summarise what genuinely matters: today's and this week's revenue and orders if available, anything pending or notable, and one clear priority for the day drawn from the store data or memories. Sharp and brief. No markdown, no lists, no headings.`.trim();
+
+        const brief = await runMorningBrief(systemContent);
+        return new Response(JSON.stringify({ isMorning: true, brief }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      default: {
+        return new Response(JSON.stringify({ error: `Unknown tool: ${tool}` }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
+        });
+      }
+    }
   } catch (e: any) {
-    console.error("[Jarvis Brain Critical Error]:", e.message);
-    return json({ error: e.message }, 500);
+    console.error("[Jarvis] Fatal error:", e.message);
+    return new Response(JSON.stringify({ error: e.message }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
+    });
   }
 });
