@@ -124,9 +124,17 @@ function AdminPage() {
   const navSections: NavSection[] = ["overview", "products", "orders", "leads", "analytics", "settings"];
   const [section, setSection] = useState<NavSection>("overview");
 
-  const [isDark, setIsDark] = useState<boolean>(
-    () => typeof document !== "undefined" && document.documentElement.classList.contains("dark")
-  );
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    if (typeof document !== "undefined") {
+      const hasDarkClass = document.documentElement.classList.contains("dark");
+      const hasLocalDark = localStorage.getItem("theme") === "dark";
+      if (hasLocalDark && !hasDarkClass) {
+        document.documentElement.classList.add("dark");
+      }
+      return hasDarkClass || hasLocalDark;
+    }
+    return false;
+  });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Secure Handshake & Authentication Gate States
@@ -1340,7 +1348,7 @@ function AdminPage() {
                 <div className="flex items-center justify-between">
                   <button onClick={() => setProductForm(f => ({ ...f, is_published: !f.is_published }))}
                     className={`text-[9px] font-mono font-semibold uppercase px-4 py-1.5 rounded-[9999px] border transition-all ${
-                      productForm.is_published ? "bg-emerald-555/10 text-emerald-500 border-emerald-555/20" : "bg-rose-505/10 text-rose-500 border-rose-505/20"
+                      productForm.is_published ? "bg-emerald-555/10 text-emerald-500 border-emerald-555/20" : "bg-rose-505/10 text-rose-505/20"
                     }`}>
                     {productForm.is_published ? "Status: Deployed" : "Status: Draft"}
                   </button>
@@ -1979,7 +1987,7 @@ function AdminPage() {
               price_cents: item.price_cents || item.price || dbProduct?.price_cents,
               image_url: dbProduct?.image_urls?.[0] || item.image_url || item.image,
               quantity: item.quantity || 1,
-            });
+              });
           });
         }
 
