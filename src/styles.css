@@ -22,10 +22,25 @@ html { background-color: var(--background); }
   --primary: #000000; --border: rgba(0, 0, 0, 0.10);
 }
 
+/* Automatically apply dark variables on reload if the system prefers dark mode and no light override is active */
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    color-scheme: dark;
+    --background: #000000; --foreground: #FFFFFF;
+    --primary: #FFFFFF; --border: rgba(255, 255, 255, 0.15);
+  }
+}
+
 :root.dark {
   color-scheme: dark;
   --background: #000000; --foreground: #FFFFFF;
   --primary: #FFFFFF; --border: rgba(255, 255, 255, 0.15);
+}
+
+:root.light {
+  color-scheme: light;
+  --background: #FFFFFF; --foreground: #000000;
+  --primary: #000000; --border: rgba(0, 0, 0, 0.10);
 }
 
 @layer base {
