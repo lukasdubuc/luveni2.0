@@ -30,11 +30,17 @@ export function useGemini(options: UseGeminiOptions = {}) {
   optionsRef.current = options;
 
   const ask = useCallback(
-    async (userText: string, onChunk?: (text: string) => void): Promise<string> => {
+    async (
+      userText: string,
+      opts?: { images?: string[]; fileText?: string },
+    ): Promise<string> => {
       const { googleToken, storeSnapshot } = optionsRef.current;
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      const images = opts?.images ?? [];
+      const fileText = opts?.fileText ?? "";
 
-      console.log("[useGemini] Chat Turn Requested:", { userText, timezone });
+      console.log("[useGemini] Chat Turn Requested:", { userText, timezone, images: images.length });
+      // Store only the text in history (images/files are per-turn, not replayed).
       history.current.push({ role: "user", content: userText });
 
       try {
@@ -50,6 +56,8 @@ export function useGemini(options: UseGeminiOptions = {}) {
                 storeSnapshot: storeSnapshot || null,
                 googleToken: googleToken || null,
                 timezone,
+                images,
+                fileText,
               },
             },
           },
@@ -64,7 +72,6 @@ export function useGemini(options: UseGeminiOptions = {}) {
 
         const reply = data?.reply || "No response received.";
         history.current.push({ role: "assistant", content: reply });
-        onChunk?.(reply);
         return reply;
       } catch (e) {
         // Prevent conversational poisoning by popping failed turns
@@ -94,7 +101,6 @@ export function useGemini(options: UseGeminiOptions = {}) {
         
         const fallbackMsg = "I apologize, sir, but I encountered a temporary connection issue. Could you repeat that?";
         history.current.push({ role: "assistant", content: fallbackMsg });
-        onChunk?.(fallbackMsg);
         return fallbackMsg;
       }
     },
