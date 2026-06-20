@@ -438,11 +438,11 @@ const S: Record<string, React.CSSProperties> = {
   },
   // Card chrome applied while the stage is open (transform handled by framer).
   hubCard: {
-    background: 'var(--background)',
-    border: '2px solid var(--border)',
-    borderRadius: 64,
-    boxShadow: '0 30px 80px rgba(var(--shadow-rgb), 0.35)',
-    overflow: 'hidden',
+    background: 'transparent',
+    border: 'none',
+    borderRadius: 0,
+    boxShadow: 'none',
+    overflow: 'visible',
     cursor: 'pointer',
   },
   contentCol: {
