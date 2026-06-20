@@ -14,6 +14,8 @@ import { useVoiceInput } from '@/hooks/useVoiceInput';
 import { useSpeechOutput } from '@/hooks/useSpeechOutput';
 import NeuralOrb from './NeuralOrb';
 import JarvisInputBar, { type Attachment } from './JarvisInputBar';
+import VisualStage from './visual/VisualStage';
+import type { VisualPayload } from './visual/types';
 
 export type OrbState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';
 
@@ -117,6 +119,9 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
   const [inputValue, setInputValue] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
+  // Desktop-only visual stage ("Astra's screen").
+  const [visual, setVisual] = useState<VisualPayload | null>(null);
+
   const stateTimeoutRef = useRef<any>(null);
   const orbStateRef = useRef(orbState);
   const isProcessingRef = useRef(false);
@@ -183,8 +188,11 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     setUserQuery(text);
     changeOrbState('thinking');
     try {
-      const reply = await ask(text, opts);
+      const { reply, visual: nextVisual } = await ask(text, opts);
       if (!reply) throw new Error('No response received');
+      // Stage is desktop-only. A null visual closes any open stage; a new
+      // one swaps it in. Mobile never opens it.
+      setVisual(isMobile ? null : (nextVisual ?? null));
       respond(reply);
     } catch (err) {
       console.error('[Jarvis] Error:', err);
@@ -194,7 +202,7 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       changeOrbState('idle');
       isProcessingRef.current = false;
     }
-  }, [ask, speak, changeOrbState, respond]);
+  }, [ask, speak, changeOrbState, respond, isMobile]);
 
   useVoiceInput({
     onInterim: (text: string) => { if (!mutedRef.current) setInterimTranscript(text); },
@@ -322,6 +330,10 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
   const accent = STATE_ACCENT[orbState];
   const isBusy = orbState === 'thinking' || orbState === 'speaking';
 
+  // Stage is desktop-only. When open, the whole hub shrinks into a live card
+  // in the top-left; tapping the card closes the stage and restores center.
+  const stageOpen = !isMobile && !!visual;
+
   return (
     <div className="admin-page" style={S.root}>
       {/* Theme-aware background: clean radial wash + faint grid that reads in
@@ -336,50 +348,67 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
         }}
       />
 
-      {/* Orb */}
-      <div
-        style={S.orbWrap}
-        onClick={() => { if (!isReady) void initializeJarvis(); }}
+      {/* Desktop visual stage ("Astra's screen") */}
+      <AnimatePresence>
+        {stageOpen && <VisualStage key="stage" visual={visual!} />}
+      </AnimatePresence>
+
+      {/* The hub. Shrinks → diagonal-slides to a top-left card when the stage
+          is open. transformOrigin top-left keeps the corner anchored. */}
+      <motion.div
+        style={{ ...S.hub, ...(stageOpen ? S.hubCard : null) }}
+        animate={{ scale: stageOpen ? 0.2 : 1, x: stageOpen ? 24 : 0, y: stageOpen ? 24 : 0 }}
+        transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+        onClick={stageOpen ? () => setVisual(null) : undefined}
+        title={stageOpen ? 'Return' : undefined}
       >
-        <NeuralOrb state={orbState} audioLevel={audioLevel} size={orbSize} />
-      </div>
+        <div style={{ ...S.contentCol, pointerEvents: stageOpen ? 'none' : 'auto' }}>
+          {/* Orb */}
+          <div
+            style={S.orbWrap}
+            onClick={() => { if (!isReady) void initializeJarvis(); }}
+          >
+            <NeuralOrb state={orbState} audioLevel={audioLevel} size={orbSize} />
+          </div>
 
-      {/* Output / transcript */}
-      <div style={S.transcriptWrap}>
-        <AnimatePresence mode="wait">
-          {displayText && (
-            <motion.div
-              key={displayText}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.28 }}
-              style={S.transcript}
-            >
-              {displayText}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+          {/* Output / transcript */}
+          <div style={S.transcriptWrap}>
+            <AnimatePresence mode="wait">
+              {displayText && (
+                <motion.div
+                  key={displayText}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.28 }}
+                  style={S.transcript}
+                >
+                  {displayText}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
-      {/* State label */}
-      <div style={{ ...S.stateLabel, color: `rgb(${accent})` }}>
-        {STATE_LABEL[orbState]}
-      </div>
+          {/* State label */}
+          <div style={{ ...S.stateLabel, color: `rgb(${accent})` }}>
+            {STATE_LABEL[orbState]}
+          </div>
 
-      {/* Command bar */}
-      <JarvisInputBar
-        value={inputValue}
-        onChange={setInputValue}
-        onSubmit={handleSubmit}
-        attachments={attachments}
-        onAttach={handleAttach}
-        onRemove={handleRemoveAttachment}
-        muted={muted}
-        onToggleMute={handleToggleMute}
-        disabled={isBusy}
-        onFocus={() => { if (!isReady) void initializeJarvis(); }}
-      />
+          {/* Command bar */}
+          <JarvisInputBar
+            value={inputValue}
+            onChange={setInputValue}
+            onSubmit={handleSubmit}
+            attachments={attachments}
+            onAttach={handleAttach}
+            onRemove={handleRemoveAttachment}
+            muted={muted}
+            onToggleMute={handleToggleMute}
+            disabled={isBusy}
+            onFocus={() => { if (!isReady) void initializeJarvis(); }}
+          />
+        </div>
+      </motion.div>
     </div>
   );
 }
@@ -390,14 +419,30 @@ const S: Record<string, React.CSSProperties> = {
     height: '100dvh',
     minHeight: '100vh',
     width: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
     overflow: 'hidden',
     boxSizing: 'border-box',
     background: 'var(--background)',
     color: 'var(--foreground)',
+  },
+  hub: {
+    position: 'absolute', inset: 0, zIndex: 20,
+    transformOrigin: 'top left',
+    transition: 'background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease',
+  },
+  // Card chrome applied while the stage is open (transform handled by framer).
+  hubCard: {
+    background: 'var(--background)',
+    border: '2px solid var(--border)',
+    borderRadius: 64,
+    boxShadow: '0 30px 80px rgba(var(--shadow-rgb), 0.35)',
+    overflow: 'hidden',
+    cursor: 'pointer',
+  },
+  contentCol: {
+    position: 'absolute', inset: 0,
+    display: 'flex', flexDirection: 'column',
+    alignItems: 'center', justifyContent: 'flex-end',
+    boxSizing: 'border-box',
   },
   bgWash: {
     position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
