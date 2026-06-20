@@ -2,10 +2,14 @@
 //  J.A.R.V.I.S — Luveni GM  |  components/jarvis/NeuralOrb.tsx
 //
 //  Perplexity-grade orb: a smooth, glossy, liquid-gradient sphere
-//  with domain-warped internal flow, an iridescent fresnel rim, a
-//  soft specular highlight, and a faint additive halo shell that
-//  fakes bloom (no fragile r128 postprocessing modules required).
-//  State + audio drive palette, flow speed and glow intensity.
+//  with domain-warped internal flow, an iridescent fresnel rim and a
+//  crisp glassy HD specular. State + audio drive palette and flow.
+//
+//  No outer halo shell — the orb is just the core sphere (unchanged
+//  size + animation), so there's no glow "box" around it.
+//
+//  Bonus: a springy pointer "fidget" tilt — the orb leans toward the
+//  cursor and settles back when you leave.
 // ─────────────────────────────────────────────────────────────
 
 import React, { useEffect, useRef } from 'react';
@@ -41,18 +45,12 @@ vec3 ACESFilm(vec3 x){
 `;
 
 // ── Per-state palette selector (4-segment continuous lerp on uState) ──
-//   deep   = shadowed interior   mid = body colour   bright = highlights/flow crest
 const PALETTE = `
 void stateColors(float s, out vec3 deep, out vec3 mid, out vec3 bright, out vec3 rim){
-  // idle (calm blue-cyan)
   vec3 d0=vec3(0.015,0.045,0.150), m0=vec3(0.05,0.32,0.72), b0=vec3(0.35,0.80,1.00), r0=vec3(0.45,0.75,1.00);
-  // listening (electric sky)
   vec3 d1=vec3(0.010,0.060,0.190), m1=vec3(0.02,0.42,0.92), b1=vec3(0.45,0.88,1.00), r1=vec3(0.40,0.85,1.00);
-  // thinking (violet)
   vec3 d2=vec3(0.090,0.020,0.190), m2=vec3(0.42,0.12,0.78), b2=vec3(0.82,0.45,1.00), r2=vec3(0.70,0.45,1.00);
-  // speaking (teal-emerald)
   vec3 d3=vec3(0.000,0.090,0.090), m3=vec3(0.02,0.48,0.42), b3=vec3(0.30,0.95,0.72), r3=vec3(0.30,0.95,0.78);
-  // error (crimson)
   vec3 d4=vec3(0.150,0.000,0.020), m4=vec3(0.62,0.06,0.12), b4=vec3(1.00,0.34,0.28), r4=vec3(1.00,0.35,0.30);
 
   s=clamp(s,0.0,4.0);
@@ -90,7 +88,7 @@ void main(){
 }
 `;
 
-// ── Core sphere: glossy liquid-gradient body ──
+// ── Core sphere: glossy liquid-gradient body (HD glassy lighting) ──
 const FRAG_CORE = `
 precision highp float;
 uniform float uTime;
@@ -128,45 +126,27 @@ void main(){
   // Iridescent fresnel rim.
   col += fres * rim * 1.25;
 
-  // Soft glossy specular highlight.
-  vec3 L = normalize(vec3(0.35, 0.75, 0.55));
-  vec3 H = normalize(L + V);
-  float spec = pow(max(dot(N, H), 0.0), 56.0);
-  col += spec * (bright * 0.6 + 0.4) * 0.7;
+  // Glassy multi-lobe specular — crisp HD glint + soft sheen.
+  vec3 L  = normalize(vec3(0.32, 0.78, 0.55));
+  vec3 H  = normalize(L + V);
+  float nh = max(dot(N, H), 0.0);
+  float specSharp = pow(nh, 110.0);          // tight clearcoat glint
+  float specSoft  = pow(nh, 24.0) * 0.30;    // broad sheen
+  vec3 specCol = bright * 0.55 + vec3(0.55);
+  col += (specSharp * 1.15 + specSoft) * specCol;
+
+  // Secondary back-rim light for extra definition.
+  col += pow(1.0 - ndv, 6.0) * rim * 0.40;
 
   // Depth shaping — darker toward the silhouette interior.
-  col *= mix(0.72, 1.12, ndv);
+  col *= mix(0.70, 1.14, ndv);
+
+  // Touch more clarity/contrast for a raw, 4K-clean read.
+  col = (col - 0.5) * 1.07 + 0.5;
+  col *= 1.06;
 
   col = ACESFilm(col);
   gl_FragColor = vec4(col, 1.0);
-}
-`;
-
-// ── Halo shell: faint additive fresnel glow → fake bloom ──
-const FRAG_HALO = `
-precision highp float;
-uniform float uTime;
-uniform float uAudio;
-uniform float uState;
-varying vec3 vNormal;
-varying vec3 vView;
-varying vec3 vPos;
-${NOISE}
-${ACES}
-${PALETTE}
-void main(){
-  vec3 N = normalize(vNormal);
-  vec3 V = normalize(vView);
-  float ndv  = max(dot(N, V), 0.0);
-  float glow = pow(1.0 - ndv, 3.2);
-
-  vec3 deep, mid, bright, rim;
-  stateColors(uState, deep, mid, bright, rim);
-
-  vec3 c = mix(mid, bright, 0.6);
-  float a = glow * (0.42 + uAudio * 0.35);
-  vec3 col = ACESFilm(c * glow * 1.9);
-  gl_FragColor = vec4(col, clamp(a, 0.0, 0.85));
 }
 `;
 
@@ -194,13 +174,15 @@ function loadThree(): Promise<void> {
   });
 }
 
+const clamp1 = (v: number) => Math.max(-1, Math.min(1, v));
+
 export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef(0);
   const stateRef = useRef(0);
+  const pointerRef = useRef({ x: 0, y: 0, active: false });
   const ctx = useRef<{
-    renderer: any; uCore: any; uHalo: any; clock: any;
-    geoCore?: any; matCore?: any; geoHalo?: any; matHalo?: any;
+    renderer: any; uCore: any; clock: any; geoCore?: any; matCore?: any;
   } | null>(null);
 
   useEffect(() => { audioRef.current = audioLevel; }, [audioLevel]);
@@ -210,13 +192,26 @@ export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbPr
     if (!mountRef.current) return;
     let active = true;
     let rafId: number | null = null;
+
+    const el = mountRef.current;
+    const onMove = (e: PointerEvent) => {
+      const r = el.getBoundingClientRect();
+      pointerRef.current = {
+        x: clamp1(((e.clientX - r.left) / r.width) * 2 - 1),
+        y: clamp1(((e.clientY - r.top) / r.height) * 2 - 1),
+        active: true,
+      };
+    };
+    const onLeave = () => { pointerRef.current.active = false; };
+    el.addEventListener('pointermove', onMove);
+    el.addEventListener('pointerleave', onLeave);
+
     loadThree()
       .then(() => { if (active && mountRef.current) boot(); })
       .catch(e => console.error('[NeuralOrb]', e));
 
     function boot() {
       const THREE = (window as any).THREE;
-      const el = mountRef.current!;
       el.querySelector('canvas')?.remove();
 
       const renderer = new THREE.WebGLRenderer({
@@ -238,15 +233,8 @@ export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbPr
       const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
       camera.position.z = 3.1;
 
-      const mkUniforms = () => ({
-        uTime:  { value: 0 },
-        uAudio: { value: 0 },
-        uState: { value: 0 },
-      });
-
-      // Core glossy body.
+      const uCore = { uTime: { value: 0 }, uAudio: { value: 0 }, uState: { value: 0 } };
       const geoCore = new THREE.SphereGeometry(1.0, 128, 128);
-      const uCore = mkUniforms();
       const matCore = new THREE.ShaderMaterial({
         vertexShader: VERT, fragmentShader: FRAG_CORE,
         uniforms: uCore, transparent: false, depthWrite: true, side: THREE.FrontSide,
@@ -254,56 +242,56 @@ export default function NeuralOrb({ state, audioLevel, size = 380 }: NeuralOrbPr
       const meshCore = new THREE.Mesh(geoCore, matCore);
       scene.add(meshCore);
 
-      // Halo bloom shell.
-      const geoHalo = new THREE.SphereGeometry(1.32, 64, 64);
-      const uHalo = mkUniforms();
-      const matHalo = new THREE.ShaderMaterial({
-        vertexShader: VERT, fragmentShader: FRAG_HALO,
-        uniforms: uHalo, transparent: true, depthWrite: false,
-        blending: THREE.AdditiveBlending, side: THREE.FrontSide,
-      });
-      const meshHalo = new THREE.Mesh(geoHalo, matHalo);
-      scene.add(meshHalo);
-
       const clock = new THREE.Clock();
       let iState = stateRef.current;
       let iAudio = 0;
+      let tiltX = 0, tiltY = 0, scl = 1;
 
       const tick = () => {
         if (!active) return;
         rafId = requestAnimationFrame(tick);
         const t = clock.getElapsedTime();
 
-        // LERP smooths state/audio so transitions never jitter.
         iState += (stateRef.current - iState) * 0.07;
         iAudio += (audioRef.current - iAudio) * 0.14;
 
         uCore.uTime.value = t; uCore.uState.value = iState; uCore.uAudio.value = iAudio;
-        uHalo.uTime.value = t; uHalo.uState.value = iState; uHalo.uAudio.value = iAudio;
 
-        // Barely-there drift keeps it alive without spinning like the old orb.
+        // Slow idle drift (unchanged animation).
         const ry = t * 0.05;
         const rx = Math.sin(t * 0.045) * 0.06;
-        meshCore.rotation.y = meshHalo.rotation.y = ry;
-        meshCore.rotation.x = meshHalo.rotation.x = rx;
+
+        // Springy pointer "fidget" — lean toward the cursor, settle back.
+        const p = pointerRef.current;
+        const tgtX = p.active ? p.y * 0.42 : 0;
+        const tgtY = p.active ? p.x * 0.55 : 0;
+        const tgtS = p.active ? 1.04 : 1.0;
+        tiltX += (tgtX - tiltX) * 0.09;
+        tiltY += (tgtY - tiltY) * 0.09;
+        scl   += (tgtS - scl)   * 0.10;
+
+        meshCore.rotation.x = rx + tiltX;
+        meshCore.rotation.y = ry + tiltY;
+        meshCore.scale.setScalar(scl);
 
         renderer.render(scene, camera);
       };
       tick();
-      ctx.current = { renderer, uCore, uHalo, clock, geoCore, matCore, geoHalo, matHalo };
+      ctx.current = { renderer, uCore, clock, geoCore, matCore };
     }
 
     return () => {
       active = false;
       if (rafId !== null) cancelAnimationFrame(rafId);
+      el.removeEventListener('pointermove', onMove);
+      el.removeEventListener('pointerleave', onLeave);
       if (ctx.current) {
-        const { renderer, geoCore, matCore, geoHalo, matHalo } = ctx.current;
+        const { renderer, geoCore, matCore } = ctx.current;
         geoCore?.dispose(); matCore?.dispose();
-        geoHalo?.dispose(); matHalo?.dispose();
         renderer?.dispose();
         ctx.current = null;
       }
-      mountRef.current?.querySelector('canvas')?.remove();
+      el.querySelector('canvas')?.remove();
     };
   }, [size]);
 
