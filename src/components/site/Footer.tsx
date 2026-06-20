@@ -4,7 +4,7 @@ import { site } from "@/config/site";
 // theme prop kept for API compatibility but no longer needed — tokens drive color
 export function Footer({ description: _description, theme: _theme }: { description?: string; theme?: "light" | "dark" } = {}) {
   return (
-    <footer className="border-t border-border bg-background text-foreground transition-colors duration-300 px-6 py-12">
+    <footer className="border-t border-border bg-background text-foreground px-6 py-12">
       <div className="mx-auto flex max-w-7xl flex-col items-center gap-8">
         <div className="flex flex-wrap justify-center gap-x-8 gap-y-4">
           <Link to="/shop" className="text-[10px] tracking-[0.2em] transition-colors text-foreground/50 hover:text-foreground">SHOP</Link>
