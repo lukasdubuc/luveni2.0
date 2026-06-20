@@ -35,7 +35,8 @@ const JARVIS_SYSTEM_PROMPT = `You are Astra, the highly sophisticated and dryly 
   * General requests: 1 to 2 concise sentences maximum.
   * Informational/Detailed requests: Provide a short, direct answer (2-3 sentences max) and offer to expand (e.g., "Would you like me to elaborate further, sir?"). Only write detailed responses if explicitly commanded.
 - Memory Intelligence: You have access to long-term memories from past sessions. Use them. Only call save_memory when something is genuinely significant — a business rule, key decision, user preference, lesson learned, or critical fact about Luveni GM. Never save casual conversation, search results, or trivial exchanges.
-- Awareness: You have access to live store data, memories, web search, and GitHub. You are the central intelligence of Luveni GM.`;
+- Awareness: You have access to live store data, memories, web search, and GitHub. You are the central intelligence of Luveni GM.
+- Visual Display: When the user asks to SEE, SHOW, LOOK AT, or PULL UP something — a picture/photo/image of something, web results they want displayed, or the Luveni shop/store — call display_visual (kind 'images', 'search', or 'site'). Still answer conversationally and briefly; the screen does the showing.`;
 
 async function dbSelect(table: string, query: string): Promise<any[]> {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
@@ -216,6 +217,41 @@ async function callTavily(query: string): Promise<string> {
   }
 }
 
+// Rich web search for the visual stage: returns structured results + images
+// so the client can render them (the plain callTavily only returns text).
+async function callTavilyRich(
+  query: string,
+): Promise<{ answer: string; results: { title: string; url: string; content: string }[]; images: string[] }> {
+  if (!TAVILY_API_KEY) return { answer: "", results: [], images: [] };
+  try {
+    const res = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: TAVILY_API_KEY,
+        query,
+        search_depth: "basic",
+        include_answer: true,
+        include_images: true,
+        max_results: 6,
+      }),
+    });
+    if (!res.ok) throw new Error(`Tavily error ${res.status}`);
+    const data = await res.json();
+    const images: string[] = Array.isArray(data.images)
+      ? data.images.map((im: any) => (typeof im === "string" ? im : im?.url)).filter(Boolean)
+      : [];
+    const results = (data.results || []).map((r: any) => ({
+      title: r.title || r.url,
+      url: r.url,
+      content: (r.content || "").slice(0, 300),
+    }));
+    return { answer: data.answer || "", results, images };
+  } catch (e: any) {
+    return { answer: `Search error: ${e.message}`, results: [], images: [] };
+  }
+}
+
 async function readWebPage(url: string): Promise<string> {
   try {
     const response = await fetch(url, {
@@ -306,12 +342,36 @@ async function executeTool(
   name: string,
   args: any,
   webSearchState: { used: boolean },
+  visualState: { payload: any },
 ): Promise<string> {
   switch (name) {
     case "google_search":
       if (webSearchState.used) return "Error: Only one web search is allowed per request.";
       webSearchState.used = true;
       return callTavily(args.query || "");
+    case "display_visual": {
+      // Surfaces a structured payload for the desktop visual stage AND returns
+      // text so the model can still speak naturally about what it's showing.
+      const kind = args.kind || "search";
+      const query = args.query || "";
+      if (kind === "site") {
+        visualState.payload = { kind: "site", query: query || "the shop", path: "/shop" };
+        return "Pulling the Luveni shop up on screen now, sir.";
+      }
+      const rich = await callTavilyRich(query);
+      if (kind === "images") {
+        visualState.payload = { kind: "images", query, images: rich.images };
+        return `Displaying images of ${query} on screen, sir.${rich.answer ? " " + rich.answer : ""}`;
+      }
+      visualState.payload = {
+        kind: "search",
+        query,
+        results: rich.results.map((r) => ({ title: r.title, url: r.url, snippet: r.content })),
+        images: rich.images,
+      };
+      const lines = [rich.answer, ...rich.results.slice(0, 4).map((r) => `${r.title} (${r.url}): ${r.content}`)].filter(Boolean);
+      return lines.join("\n") || "No results found.";
+    }
     case "open_link":
       return readWebPage(args.url || "");
     case "github_list_files":
@@ -336,6 +396,22 @@ const MISTRAL_TOOLS = [
         type: "object",
         properties: { query: { type: "string" } },
         required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "display_visual",
+      description:
+        "Call this when the user asks to SEE, SHOW, LOOK AT, or PULL UP something visual. kind='images' for a picture/photo of something; kind='search' for Google/web results they want displayed; kind='site' to show the Luveni shop/store/website. Always also answer the user conversationally.",
+      parameters: {
+        type: "object",
+        properties: {
+          kind: { type: "string", enum: ["images", "search", "site"] },
+          query: { type: "string", description: "What to show, e.g. 'Eiffel Tower' or 'best bonsai pots'." },
+        },
+        required: ["kind"],
       },
     },
   },
@@ -413,7 +489,7 @@ async function runJarvisChat(
   history: any[],
   userText: string,
   images: string[] = [],
-): Promise<string> {
+): Promise<{ reply: string; visual: any }> {
   // Vision turns send a multimodal content array; text turns stay plain strings.
   const userContent: any = images.length
     ? [
@@ -428,6 +504,7 @@ async function runJarvisChat(
     { role: "user", content: userContent },
   ];
   const webSearchState = { used: false };
+  const visualState = { payload: null as any };
 
   async function callModel(msgs: any[], useTools = true, model = MISTRAL_MODEL): Promise<any> {
     const body: any = {
@@ -457,7 +534,7 @@ async function runJarvisChat(
   // actually read what was attached, not run a web search on it).
   if (images.length) {
     const visionResponse = await callModel(messages, false, VISION_MODEL);
-    return visionResponse.choices?.[0]?.message?.content || "";
+    return { reply: visionResponse.choices?.[0]?.message?.content || "", visual: null };
   }
 
   const firstResponse = await callModel(messages, true);
@@ -470,7 +547,7 @@ async function runJarvisChat(
     for (const toolCall of firstMessage.tool_calls) {
       let toolArgs = {};
       try { toolArgs = JSON.parse(toolCall.function.arguments || "{}"); } catch { toolArgs = {}; }
-      const toolOutput = await executeTool(toolCall.function.name, toolArgs, webSearchState);
+      const toolOutput = await executeTool(toolCall.function.name, toolArgs, webSearchState, visualState);
       toolResponses.push({
         role: "tool",
         tool_call_id: toolCall.id,
@@ -488,10 +565,10 @@ async function runJarvisChat(
     const finalResponse = await callModel(followupMessages, false);
     const finalMessage = finalResponse.choices?.[0]?.message;
     if (!finalMessage || !finalMessage.content) throw new Error("No final response received after tool execution.");
-    return finalMessage.content;
+    return { reply: finalMessage.content, visual: visualState.payload };
   }
 
-  return firstMessage.content || "";
+  return { reply: firstMessage.content || "", visual: null };
 }
 
 // Generate a concise spoken morning briefing. No tools are exposed here, so a
@@ -732,9 +809,9 @@ Deno.serve(async (req) => {
           finalUserText = `${finalUserText}\n\n--- ATTACHED FILE CONTENTS ---\n${fileText}`.trim();
         }
 
-        const reply = await runJarvisChat(systemContent, history || [], finalUserText, imageList);
+        const { reply, visual } = await runJarvisChat(systemContent, history || [], finalUserText, imageList);
 
-        return new Response(JSON.stringify({ reply }), {
+        return new Response(JSON.stringify({ reply, visual: visual ?? null }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
