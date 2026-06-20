@@ -107,7 +107,7 @@ export default function JarvisInputBar({
           ref={taRef}
           value={value}
           rows={1}
-          placeholder={muted ? 'Type your command, sir…' : 'Speak, or type your command, sir…'}
+          placeholder={muted ? 'Type a command, sir…' : 'Speak or type, sir…'}
           onFocus={onFocus}
           onChange={(e) => { onChange(e.target.value); autosize(); }}
           onKeyDown={handleKey}
