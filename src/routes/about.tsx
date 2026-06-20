@@ -231,7 +231,7 @@ function About() {
 
   return (
     <div
-      className="about-page w-full bg-background text-foreground selection:bg-foreground/15 transition-colors duration-500"
+      className="about-page w-full bg-background text-foreground selection:bg-foreground/15"
       style={{ fontFamily: SF_DISPLAY }}
     >
 
