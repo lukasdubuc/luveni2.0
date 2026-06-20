@@ -46,6 +46,33 @@ function cleanResponseForSpeech(rawText: string): string {
     .trim();
 }
 
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result as string);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+// Turn attachments into model-ready inputs: images become base64 data URLs
+// (read by the vision model), text-ish files are inlined into the prompt.
+async function readAttachments(atts: Attachment[]): Promise<{ images: string[]; fileText: string }> {
+  const images: string[] = [];
+  const texts: string[] = [];
+  for (const a of atts) {
+    if (a.kind === 'image') {
+      try { images.push(await fileToDataUrl(a.file)); } catch { /* skip unreadable */ }
+    } else if (a.file.type.startsWith('text/') || /\.(txt|md|csv|json|log|tsx?|jsx?|html?|css)$/i.test(a.name)) {
+      try {
+        const txt = await a.file.text();
+        texts.push(`--- ${a.name} ---\n${txt.slice(0, 8000)}`);
+      } catch { /* skip unreadable */ }
+    }
+  }
+  return { images, fileText: texts.join('\n\n') };
+}
+
 let gestureAudioCtx: AudioContext | null = null;
 let gestureAudioEl: HTMLAudioElement | null = null;
 
@@ -146,14 +173,17 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     speak(cleanResponseForSpeech(reply));
   }, [changeOrbState, speak]);
 
-  const handleFinalTranscript = useCallback(async (text: string) => {
+  const handleFinalTranscript = useCallback(async (
+    text: string,
+    opts?: { images?: string[]; fileText?: string },
+  ) => {
     if (isProcessingRef.current || !text) return;
     isProcessingRef.current = true;
     setInterimTranscript('');
     setUserQuery(text);
     changeOrbState('thinking');
     try {
-      const reply = await ask(text);
+      const reply = await ask(text, opts);
       if (!reply) throw new Error('No response received');
       respond(reply);
     } catch (err) {
@@ -233,20 +263,30 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     });
   }, []);
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     const text = inputValue.trim();
-    if (!text && attachments.length === 0) return;
+    const atts = attachments;
+    if (!text && atts.length === 0) return;
     activateGestureTrust();
     unlockAudio();
     if (!isReady) setIsReady(true);
-
-    // Phase 1: attachments are captured but not yet read by the brain.
-    // Phase 1.5 wires vision here. Clear them so the seam stays clean.
-    attachments.forEach((a) => URL.revokeObjectURL(a.url));
     setAttachments([]);
     setInputValue('');
 
-    if (text) handleFinalTranscript(text);
+    // Read images (→ vision) and text files (→ inline) before dispatching.
+    let images: string[] = [];
+    let fileText = '';
+    if (atts.length) {
+      const read = await readAttachments(atts);
+      images = read.images;
+      fileText = read.fileText;
+    }
+    atts.forEach((a) => URL.revokeObjectURL(a.url));
+
+    const prompt =
+      text ||
+      (images.length ? 'Please take a look at this, sir.' : (fileText ? 'Please review this, sir.' : ''));
+    if (prompt) handleFinalTranscript(prompt, { images, fileText });
   }, [inputValue, attachments, isReady, unlockAudio, handleFinalTranscript]);
 
   const handleToggleMute = useCallback(() => {
@@ -292,7 +332,7 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       <div
         style={{
           ...S.orbGlow,
-          background: `radial-gradient(circle 420px at 50% 42%, rgba(${accent}, 0.16) 0%, transparent 70%)`,
+          background: `radial-gradient(circle 360px at 50% 44%, rgba(${accent}, 0.09) 0%, transparent 72%)`,
         }}
       />
 
