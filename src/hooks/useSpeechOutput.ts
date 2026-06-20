@@ -421,10 +421,17 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       const watchdog = setTimeout(finish, 90000);
       const wrappedFinish = () => { clearTimeout(watchdog); finish(); };
 
-      try {
+     try {
         const puter = (window as any).puter;
         if (!puter?.ai?.txt2speech) throw new Error("puter.js not loaded");
-        const audio: HTMLAudioElement = await puter.ai.txt2speech(cleanText);
+        
+        // Configured for OpenAI's 'nova' voice via 'tts-1-hd' for a highly realistic, expressive female voice
+        const audio: HTMLAudioElement = await puter.ai.txt2speech(cleanText, {
+          provider: "openai",
+          model: "tts-1-hd",
+          voice: "nova"
+        });
+
         if (!speaking.current) { clearTimeout(watchdog); return; } // canceled while loading
         activeAudiosRef.current = [audio];
         if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
