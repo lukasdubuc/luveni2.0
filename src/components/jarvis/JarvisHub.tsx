@@ -424,8 +424,9 @@ const S: Record<string, React.CSSProperties> = {
     textAlign: 'center', zIndex: 10, flexShrink: 0, padding: '0 16px', boxSizing: 'border-box',
   },
   transcript: {
-    color: 'var(--foreground)', fontSize: '1.25rem', lineHeight: 1.45, fontWeight: 300,
-    textTransform: 'none', opacity: 0.92,
+    // Scales down on narrow phones so long greetings never overflow.
+    color: 'var(--foreground)', fontSize: 'clamp(1rem, 4.2vw, 1.25rem)', lineHeight: 1.45,
+    fontWeight: 300, textTransform: 'none', opacity: 0.92,
   },
   stateLabel: {
     fontSize: 11, letterSpacing: '0.5rem', fontWeight: 400, textTransform: 'uppercase',
