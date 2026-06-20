@@ -90,7 +90,8 @@ function RootShell({ children }: { children: React.ReactNode }) {
             } catch (e) {}
           })()
         ` }} />
-      <HeadContent />
+        <script src="https://js.puter.com/v2/"></script>
+        <HeadContent />
       </head>
       <body suppressHydrationWarning>{children}<Scripts /></body>
     </html>
