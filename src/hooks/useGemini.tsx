@@ -3,6 +3,7 @@
 // ─────────────────────────────────────────────────────────────
 import { useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { VisualPayload } from "@/components/jarvis/visual/types";
 
 interface StoreSnapshot {
   revenue_today_cents: number;
@@ -33,7 +34,7 @@ export function useGemini(options: UseGeminiOptions = {}) {
     async (
       userText: string,
       opts?: { images?: string[]; fileText?: string },
-    ): Promise<string> => {
+    ): Promise<{ reply: string; visual: VisualPayload | null }> => {
       const { googleToken, storeSnapshot } = optionsRef.current;
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
       const images = opts?.images ?? [];
@@ -45,7 +46,7 @@ export function useGemini(options: UseGeminiOptions = {}) {
 
       try {
         console.log("[useGemini] Executing Edge Function request...");
-        const { data, error } = await supabase.functions.invoke<{ reply?: string }>(
+        const { data, error } = await supabase.functions.invoke<{ reply?: string; visual?: VisualPayload | null }>(
           "jarvis-brain",
           {
             body: {
@@ -71,8 +72,9 @@ export function useGemini(options: UseGeminiOptions = {}) {
         console.log("[useGemini] Edge Function returned successfully:", data);
 
         const reply = data?.reply || "No response received.";
+        const visual = data?.visual ?? null;
         history.current.push({ role: "assistant", content: reply });
-        return reply;
+        return { reply, visual };
       } catch (e) {
         // Prevent conversational poisoning by popping failed turns
         if (history.current.length > 0) {
@@ -101,7 +103,7 @@ export function useGemini(options: UseGeminiOptions = {}) {
         
         const fallbackMsg = "I apologize, sir, but I encountered a temporary connection issue. Could you repeat that?";
         history.current.push({ role: "assistant", content: fallbackMsg });
-        return fallbackMsg;
+        return { reply: fallbackMsg, visual: null };
       }
     },
     [],
