@@ -35,7 +35,7 @@ export function Header({ theme: _theme }: { theme?: "light" | "dark" } = {}) {
   const { count } = useCart();
 
   return (
-    <header className="sticky top-0 z-50 bg-background text-foreground border-b md:border-b-0 border-border transition-colors duration-300">
+    <header className="sticky top-0 z-50 bg-background text-foreground border-b md:border-b-0 border-border>
       <div className="flex h-14 w-full items-center justify-between px-6">
 
         {/* ── Left: burger (mobile) / brand (desktop) ── */}
