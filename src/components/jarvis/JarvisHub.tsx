@@ -224,16 +224,20 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
 
   // Fires once after audio is unlocked; the edge function decides if it's morning.
   const maybePlayMorningBrief = useCallback(async () => {
-    if (morningBriefDoneRef.current || mutedRef.current) return;
+    if (morningBriefDoneRef.current) return;
     morningBriefDoneRef.current = true;
     try {
+      if (localStorage.getItem('astra_brief_date') === new Date().toDateString()) return;
       const { isMorning, brief } = await morningBrief();
       if (!isMorning || !brief) return;
-      respond(brief);
+      localStorage.setItem('astra_brief_date', new Date().toDateString());
+      setLastAiResponse(brief);
+      changeOrbState('speaking');
+      speak(cleanResponseForSpeech(brief));
     } catch (err) {
       console.error('[Jarvis] Morning brief error:', err);
     }
-  }, [morningBrief, respond]);
+  }, [morningBrief, speak, changeOrbState]);
 
   const initializeJarvis = useCallback(async () => {
     if (isReady) return;
@@ -281,6 +285,9 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     setAttachments([]);
     setInputValue('');
 
+    cancel();                        // interrupt any current speech
+    isProcessingRef.current = false; // never let a stuck turn block text
+
     // Read images (→ vision) and text files (→ inline) before dispatching.
     let images: string[] = [];
     let fileText = '';
@@ -295,7 +302,7 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       text ||
       (images.length ? 'Please take a look at this, sir.' : (fileText ? 'Please review this, sir.' : ''));
     if (prompt) handleFinalTranscript(prompt, { images, fileText });
-  }, [inputValue, attachments, isReady, unlockAudio, handleFinalTranscript]);
+  }, [inputValue, attachments, isReady, unlockAudio, cancel, handleFinalTranscript]);
 
   const handleToggleMute = useCallback(() => {
     setMuted((m) => {
