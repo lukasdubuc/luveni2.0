@@ -146,7 +146,8 @@ const S: Record<string, React.CSSProperties> = {
     maxWidth: 720,
     margin: '0 auto',
     padding: '0 16px',
-    paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
+    // Lift the bar clear of the mobile browser chrome / home indicator.
+    paddingBottom: 'max(26px, calc(env(safe-area-inset-bottom) + 18px))',
     boxSizing: 'border-box',
     zIndex: 20,
   },
@@ -187,16 +188,17 @@ const S: Record<string, React.CSSProperties> = {
   },
   input: {
     flex: '1 1 auto',
+    minWidth: 0,                 // lets the textarea shrink instead of clipping text
     background: 'transparent',
     border: 'none',
     outline: 'none',
     resize: 'none',
     color: 'var(--foreground)',
-    fontSize: 15,
-    lineHeight: 1.45,
+    fontSize: 16,                // 16px keeps text readable + stops iOS auto-zoom
+    lineHeight: 1.4,
     fontFamily: 'inherit',
     textTransform: 'none',
-    padding: '9px 4px',
+    padding: '11px 4px',
     maxHeight: 140,
     overflowY: 'auto',
   },
