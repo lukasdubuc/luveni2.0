@@ -1,5 +1,10 @@
 // ─────────────────────────────────────────────────────────────
 //  J.A.R.V.I.S — Luveni GM | components/jarvis/JarvisHub.tsx
+//
+//  Phase 1 overhaul: Perplexity-grade orb, an always-visible
+//  theme-aware command bar (attach + mute/voice toggle), a clean
+//  centred output area, and full light/dark theming driven by the
+//  site's existing CSS-variable system (no more hardcoded dark).
 // ─────────────────────────────────────────────────────────────
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -8,6 +13,7 @@ import { useGemini } from '@/hooks/useGemini';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
 import { useSpeechOutput } from '@/hooks/useSpeechOutput';
 import NeuralOrb from './NeuralOrb';
+import JarvisInputBar, { type Attachment } from './JarvisInputBar';
 
 export type OrbState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';
 
@@ -15,120 +21,10 @@ const STATE_LABEL: Record<OrbState, string> = {
   idle: 'STANDBY', listening: 'LISTENING', thinking: 'PROCESSING', speaking: 'RESPONDING', error: 'MIC ERROR',
 };
 
-const STATE_COLOR: Record<OrbState, string> = {
-  idle: 'rgba(0,180,255,0.6)', listening: 'rgba(0,255,255,1.0)', thinking: 'rgba(180,100,255,1.0)', speaking: 'rgba(0,255,180,0.95)', error: 'rgba(255,80,80,1.0)',
-};
-
-const svgPattern = `
-<svg width="120" height="138.56" viewBox="0 0 120 138.56" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="top" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#14161d"/>
-      <stop offset="100%" stop-color="#0a0c10"/>
-    </linearGradient>
-    <linearGradient id="left" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#07080b"/>
-      <stop offset="100%" stop-color="#020304"/>
-    </linearGradient>
-    <linearGradient id="right" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#101116"/>
-      <stop offset="100%" stop-color="#050608"/>
-    </linearGradient>
-    <g id="c">
-      <polygon points="60,0 120,34.64 60,69.28 0,34.64" fill="url(#top)" stroke="#0a0c10" stroke-width="0.3"/>
-      <polygon points="0,34.64 60,69.28 60,138.56 0,103.92" fill="url(#left)" stroke="#020304" stroke-width="0.3"/>
-      <polygon points="60,69.28 120,34.64 120,103.92 60,138.56" fill="url(#right)" stroke="#050608" stroke-width="0.3"/>
-    </g>
-  </defs>
-  <use href="#c" x="0" y="0"/>
-  <use href="#c" x="0" y="138.56"/>
-  <use href="#c" x="0" y="-138.56"/>
-  <use href="#c" x="60" y="69.28"/>
-  <use href="#c" x="60" y="-69.28"/>
-  <use href="#c" x="-60" y="69.28"/>
-  <use href="#c" x="-60" y="-69.28"/>
-</svg>
-`;
-
-const styles: Record<string, React.CSSProperties> = {
-  root: {
-    height: '100dvh',
-    minHeight: '100vh',
-    width: '100%', 
-    display: 'flex', 
-    flexDirection: 'column', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    padding: '20px', 
-    boxSizing: 'border-box', 
-    position: 'relative', 
-    overflow: 'hidden' 
-  },
-  orbWrap: { 
-    cursor: 'pointer', 
-    display: 'flex', 
-    justifyContent: 'center', 
-    alignItems: 'center',
-    flex: '1 1 auto', 
-    maxHeight: '50vh', 
-    zIndex: 5 
-  },
-  stateLabel: { 
-    marginTop: 'auto', 
-    marginBottom: '20px', 
-    fontSize: '12px', 
-    fontFamily: "'Inter', sans-serif", 
-    letterSpacing: '0.6rem', 
-    fontWeight: 300, 
-    textTransform: 'uppercase', 
-    zIndex: 10,
-    flexShrink: 0
-  },
-  transcriptContainer: { 
-    width: '90%', 
-    maxWidth: '800px', 
-    textAlign: 'center', 
-    zIndex: 10, 
-    margin: '20px auto',
-    minHeight: '48px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0
-  },
-  transcript: { color: '#fff', fontSize: '1.4rem', fontFamily: "'Inter', sans-serif", lineHeight: 1.5, fontWeight: 300, cursor: 'pointer', opacity: 0.9 },
-  textInput: {
-    width: '100%',
-    background: 'transparent',
-    border: 'none',
-    outline: 'none',
-    color: '#fff',
-    fontSize: '1.4rem',
-    fontFamily: "'Inter', sans-serif",
-    fontWeight: 300,
-    textAlign: 'center',
-    padding: '10px 0',
-    boxSizing: 'border-box',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.15)',
-    caretColor: 'rgba(0, 180, 255, 0.8)',
-    resize: 'none',
-    overflowY: 'hidden',
-    minHeight: '40px',
-    lineHeight: 1.5,
-  },
-  gridBg: {
-    position: 'absolute',
-    inset: 0,
-    backgroundImage: `
-      radial-gradient(circle at 50% 50%, rgba(2, 4, 8, 0.15) 0%, rgba(2, 4, 8, 0.98) 95%),
-      url("data:image/svg+xml,${encodeURIComponent(svgPattern.trim())}")
-    `,
-    backgroundSize: '100% 100%, 120px 138.56px',
-    backgroundPosition: 'center, 0 0',
-    pointerEvents: 'none',
-    zIndex: 0,
-  },
-  orbShadow: { position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1, transition: 'background 0.3s ease' }
+// Accent per state — used only for the soft glow + the state label, so it reads
+// in both themes without fighting the theme background.
+const STATE_ACCENT: Record<OrbState, string> = {
+  idle: '90, 170, 255', listening: '60, 200, 255', thinking: '180, 110, 255', speaking: '60, 230, 170', error: '255, 90, 80',
 };
 
 function detectMobileDevice() {
@@ -159,12 +55,8 @@ const SILENT_WAV =
 function activateGestureTrust() {
   try {
     const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
-    if (!gestureAudioCtx) {
-      gestureAudioCtx = new AudioCtx();
-    }
-    if (gestureAudioCtx.state === 'suspended') {
-      gestureAudioCtx.resume();
-    }
+    if (!gestureAudioCtx) gestureAudioCtx = new AudioCtx();
+    if (gestureAudioCtx.state === 'suspended') gestureAudioCtx.resume();
     const buffer = gestureAudioCtx.createBuffer(1, 1, 22050);
     const source = gestureAudioCtx.createBufferSource();
     source.buffer = buffer;
@@ -176,9 +68,7 @@ function activateGestureTrust() {
       gestureAudioEl.volume = 0;
     }
     gestureAudioEl.currentTime = 0;
-    gestureAudioEl.play().catch((e) => {
-      console.warn('[Jarvis] <audio> element gesture unlock failed:', e);
-    });
+    gestureAudioEl.play().catch((e) => console.warn('[Jarvis] <audio> gesture unlock failed:', e));
   } catch (e) {
     console.warn('[Jarvis] Gesture trust activation failed silently:', e);
   }
@@ -190,57 +80,32 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
   const [interimTranscript, setInterimTranscript] = useState('');
   const [lastAiResponse, setLastAiResponse] = useState('');
   const [isReady, setIsReady] = useState(false);
-  const [isLive, setIsLive] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [audioLevel, setAudioLevel] = useState(0);
 
-  const [isTextInputActive, setIsTextInputActive] = useState(false);
-  const [textInputValue, setTextInputValue] = useState('');
-  
+  // Text-only mode: mic off + no spoken replies. Voice mode is the default.
+  const [muted, setMuted] = useState(false);
+
+  // Command bar state.
+  const [inputValue, setInputValue] = useState('');
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+
   const stateTimeoutRef = useRef<any>(null);
   const orbStateRef = useRef(orbState);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
   const isProcessingRef = useRef(false);
-
-  // We keep a local reference to track active speech directly in the callback
+  const mutedRef = useRef(muted);
   const localSpeakingRef = useRef(false);
 
   useEffect(() => { orbStateRef.current = orbState; }, [orbState]);
+  useEffect(() => { mutedRef.current = muted; }, [muted]);
   useEffect(() => { setIsMobile(detectMobileDevice()); }, []);
 
-  useEffect(() => {
-    if (isTextInputActive && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.style.height = 'auto';
-      inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
-    }
-  }, [isTextInputActive]);
+  // Browser autoplay/mic policies forbid initialising audio without a user
+  // gesture, so autoStart only marks intent — the first interaction wires it up.
+  useEffect(() => { if (autoStart) { /* intentional no-op: gesture-gated */ } }, [autoStart]);
 
-  useEffect(() => {
-    if (isMobile) return;
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      const activeEl = document.activeElement;
-      if (
-        activeEl &&
-        (activeEl.tagName === 'INPUT' ||
-          activeEl.tagName === 'TEXTAREA' ||
-          activeEl.getAttribute('contenteditable') === 'true')
-      ) {
-        return;
-      }
-      if (e.ctrlKey || e.metaKey || e.altKey || e.key === 'Escape' || e.key === 'Tab') {
-        return;
-      }
-      if (e.key.length === 1 && !isTextInputActive) {
-        if (e.key === ' ') {
-          e.preventDefault();
-        }
-        setIsTextInputActive(true);
-        setTextInputValue(e.key);
-      }
-    };
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [isTextInputActive, isMobile]);
+  // Revoke object URLs on unmount.
+  useEffect(() => () => { attachments.forEach(a => URL.revokeObjectURL(a.url)); }, [attachments]);
 
   const { ask, morningBrief } = useGemini();
   const morningBriefDoneRef = useRef(false);
@@ -249,20 +114,17 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     if (stateTimeoutRef.current) clearTimeout(stateTimeoutRef.current);
     setOrbState(newState);
   }, []);
-  
+
   const { speak, cancel, unlock: unlockAudio, currentSubtitle } = useSpeechOutput({
-    onStart: () => {
-      localSpeakingRef.current = true;
-      changeOrbState('speaking');
-    },
+    onStart: () => { localSpeakingRef.current = true; changeOrbState('speaking'); },
+    onBoundary: (level) => setAudioLevel(level),
     onEnd: () => {
       localSpeakingRef.current = false;
+      setAudioLevel(0);
       if (orbStateRef.current === 'speaking' || orbStateRef.current === 'thinking') {
-        // SURGICAL TIMING DEBOUNCE: We introduce a tiny 400ms delay before setting state to 'idle'
-        // This gives the browser's asynchronous SpeechRecognition thread ample time to cleanly 
-        // shut down and fire its onend handler, preventing state overlap errors on reopen.
+        // Small debounce lets SpeechRecognition shut down cleanly before idle.
         setTimeout(() => {
-          if (localSpeakingRef.current) return; // Safeguard if another speech context launched
+          if (localSpeakingRef.current) return;
           changeOrbState('idle');
           setUserQuery('');
           isProcessingRef.current = false;
@@ -271,236 +133,264 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     },
   });
 
-  const handleFinalTranscript = useCallback(async (text: string) => {
-    if (isProcessingRef.current || !text) {
+  // Either speak the reply, or (in text-only mode) just surface it and settle.
+  const respond = useCallback((reply: string) => {
+    setLastAiResponse(reply);
+    if (mutedRef.current) {
+      changeOrbState('idle');
+      setUserQuery('');
+      isProcessingRef.current = false;
       return;
     }
+    changeOrbState('speaking');
+    speak(cleanResponseForSpeech(reply));
+  }, [changeOrbState, speak]);
+
+  const handleFinalTranscript = useCallback(async (text: string) => {
+    if (isProcessingRef.current || !text) return;
     isProcessingRef.current = true;
     setInterimTranscript('');
     setUserQuery(text);
     changeOrbState('thinking');
     try {
       const reply = await ask(text);
-      if (!reply) throw new Error("No response received");
-      setLastAiResponse(reply);
-      
-      changeOrbState('speaking');
-
-      const cleanReply = cleanResponseForSpeech(reply);
-      speak(cleanReply);
+      if (!reply) throw new Error('No response received');
+      respond(reply);
     } catch (err) {
       console.error('[Jarvis] Error:', err);
-      const errorMessage = err instanceof Error ? err.message : "System error, sir.";
+      const errorMessage = err instanceof Error ? err.message : 'System error, sir.';
       setLastAiResponse(errorMessage);
-      speak(errorMessage);
+      if (!mutedRef.current) speak(errorMessage);
       changeOrbState('idle');
       isProcessingRef.current = false;
     }
-  }, [ask, speak, changeOrbState]);
+  }, [ask, speak, changeOrbState, respond]);
 
   useVoiceInput({
-    onInterim: (text: string) => {
-      if (isLive) setInterimTranscript(text);
-    },
-    onTranscript: (text: string) => { 
-      if (isLive) {
-        cancel();
-        handleFinalTranscript(text);
-      }
+    onInterim: (text: string) => { if (!mutedRef.current) setInterimTranscript(text); },
+    onTranscript: (text: string) => {
+      if (mutedRef.current) return;
+      cancel();
+      handleFinalTranscript(text);
     },
     onStateChange: (s: string) => {
-      if (!isLive) return;
-      if (s === 'listening') { cancel(); }
-      if ((s === 'idle' || s === 'listening') && (orbStateRef.current === 'speaking' || orbStateRef.current === 'thinking')) {
-        return;
-      }
+      if (mutedRef.current) return;
+      if (s === 'listening') cancel();
+      if ((s === 'idle' || s === 'listening') && (orbStateRef.current === 'speaking' || orbStateRef.current === 'thinking')) return;
       changeOrbState(s as OrbState);
     },
     onLevelChange: () => {},
-    enabled: isReady && isLive && !isTextInputActive && (orbState === 'idle' || orbState === 'listening'),
-    cancelSpeech: cancel
+    enabled: isReady && !muted && (orbState === 'idle' || orbState === 'listening'),
+    cancelSpeech: cancel,
   });
-    // Fires once per session after audio is unlocked. The edge function decides
-  // whether it's actually morning; off-hours it returns nothing and we stay silent.
+
+  // Fires once after audio is unlocked; the edge function decides if it's morning.
   const maybePlayMorningBrief = useCallback(async () => {
-    if (morningBriefDoneRef.current) return;
+    if (morningBriefDoneRef.current || mutedRef.current) return;
     morningBriefDoneRef.current = true;
     try {
       const { isMorning, brief } = await morningBrief();
       if (!isMorning || !brief) return;
-      setLastAiResponse(brief);
-      changeOrbState('speaking');
-      speak(cleanResponseForSpeech(brief));
+      respond(brief);
     } catch (err) {
       console.error('[Jarvis] Morning brief error:', err);
     }
-  }, [morningBrief, speak, changeOrbState]);
-   const initializeJarvis = useCallback(async () => {
-    if (isReady) return;
-    try {
-      activateGestureTrust();
-      unlockAudio();
+  }, [morningBrief, respond]);
 
+  const initializeJarvis = useCallback(async () => {
+    if (isReady) return;
+    activateGestureTrust();
+    unlockAudio();
+    try {
       const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
       const ctx = new AudioCtx();
-      if (ctx.state === 'suspended') {
-        await ctx.resume();
-      }
-      setIsReady(true);
-      setIsLive(true);
-      void maybePlayMorningBrief();
+      if (ctx.state === 'suspended') await ctx.resume();
     } catch (e) {
-      console.error("[Jarvis] Audio context resume failed.", e);
-      setIsReady(true);
-      setIsLive(true);
-      void maybePlayMorningBrief();
+      console.error('[Jarvis] Audio context resume failed.', e);
     }
+    setIsReady(true);
+    void maybePlayMorningBrief();
   }, [isReady, unlockAudio, maybePlayMorningBrief]);
 
-  useEffect(() => { 
-    if (autoStart && !isMobile) {
-      // Direct call omitted to respect browser strict security policies.
-    }
-  }, [autoStart, isMobile]);
+  // ── Command bar handlers ──
+  const handleAttach = useCallback((files: FileList | null) => {
+    if (!files?.length) return;
+    const next: Attachment[] = Array.from(files).map((file) => ({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      file,
+      url: URL.createObjectURL(file),
+      name: file.name,
+      kind: file.type.startsWith('image/') ? 'image' : 'file',
+    }));
+    setAttachments((prev) => [...prev, ...next]);
+  }, []);
 
-  const handleOrbClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleRemoveAttachment = useCallback((id: string) => {
+    setAttachments((prev) => {
+      const target = prev.find((a) => a.id === id);
+      if (target) URL.revokeObjectURL(target.url);
+      return prev.filter((a) => a.id !== id);
+    });
+  }, []);
+
+  const handleSubmit = useCallback(() => {
+    const text = inputValue.trim();
+    if (!text && attachments.length === 0) return;
     activateGestureTrust();
     unlockAudio();
-    if (!isReady) {
-      initializeJarvis();
-      return;
-    }
-    setIsTextInputActive(false);
-  };
+    if (!isReady) setIsReady(true);
 
-  const handleContainerClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    activateGestureTrust();
-    unlockAudio();
-    if (!isReady) {
-      setIsReady(true);
-      setIsTextInputActive(true);
-      return;
-    }
-    if (orbState !== 'thinking' && orbState !== 'speaking') {
-      setIsTextInputActive(true);
-    }
-  };
+    // Phase 1: attachments are captured but not yet read by the brain.
+    // Phase 1.5 wires vision here. Clear them so the seam stays clean.
+    attachments.forEach((a) => URL.revokeObjectURL(a.url));
+    setAttachments([]);
+    setInputValue('');
 
-  const handleTextAreaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setTextInputValue(e.target.value);
-    if (inputRef.current) {
-      inputRef.current.style.height = 'auto';
-      inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
-    }
-  };
+    if (text) handleFinalTranscript(text);
+  }, [inputValue, attachments, isReady, unlockAudio, handleFinalTranscript]);
 
-  const submitCommand = (queryText: string) => {
-    const query = queryText.trim();
-    setIsTextInputActive(false);
-    setTextInputValue('');
-    if (query) {
-      activateGestureTrust();
-      unlockAudio();
-      handleFinalTranscript(query);
-    }
-  };
+  const handleToggleMute = useCallback(() => {
+    setMuted((m) => {
+      const next = !m;
+      if (next) cancel();          // muting → stop any current speech
+      else if (!isReady) void initializeJarvis(); // unmuting → ensure audio is live
+      return next;
+    });
+  }, [cancel, isReady, initializeJarvis]);
 
-  const handleFormSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    submitCommand(textInputValue);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      e.currentTarget.blur();
-      submitCommand(textInputValue);
-    } else if (e.key === 'Escape') {
-      setIsTextInputActive(false);
-    }
-  };
-
-  const shadowColor = STATE_COLOR[orbState].replace('rgba(', '').replace(/,[^,]+\)$/, '');
-
+  // ── Derived display ──
   let displayText = '';
   if (orbState === 'thinking') {
-    displayText = "Thinking...";
+    displayText = 'Thinking…';
   } else if (orbState === 'speaking') {
     displayText = currentSubtitle || lastAiResponse;
   } else if (orbState === 'error') {
-    displayText = "Microphone error. Ensure permissions are allowed or open this page directly in a new browser tab.";
+    displayText = 'Microphone error. Allow permissions or use text-only mode.';
   } else if (interimTranscript) {
     displayText = interimTranscript;
   } else if (lastAiResponse) {
     displayText = lastAiResponse;
   } else if (userQuery) {
     displayText = userQuery;
-  } else if (isLive) {
-    displayText = "Click or start speaking, sir...";
+  } else if (isReady && !muted) {
+    displayText = 'Listening, sir…';
   } else {
-    displayText = "Click to initialize Astra.";
+    displayText = 'Astra at your service, sir.';
   }
 
-  const orbSize = isMobile ? 280 : 400;
+  const orbSize = isMobile ? 260 : 360;
+  const accent = STATE_ACCENT[orbState];
+  const isBusy = orbState === 'thinking' || orbState === 'speaking';
 
   return (
-    <div 
-      style={styles.root}
-      onClick={!isReady ? initializeJarvis : undefined}
-    >
-      <style dangerouslySetInnerHTML={{ __html: `body { background-color: #020408 !important; margin: 0; overflow: hidden; }`}} />
-      <div style={styles.gridBg} />
-      <div style={{
-        ...styles.orbShadow,
-        background: `radial-gradient(circle 350px at 50% 50%, rgba(${shadowColor}, 0.12) 0%, transparent 100%)`,
-      }} />
-      
-      <div style={{ flex: '0 0 40px' }} />
+    <div className="admin-page" style={S.root}>
+      {/* Theme-aware background: clean radial wash + faint grid that reads in
+          both light and dark via the --background / --border variables. */}
+      <div style={S.bgWash} />
+      <div style={S.bgGrid} />
+      {/* Soft accent glow behind the orb. */}
+      <div
+        style={{
+          ...S.orbGlow,
+          background: `radial-gradient(circle 420px at 50% 42%, rgba(${accent}, 0.16) 0%, transparent 70%)`,
+        }}
+      />
 
-      <div style={styles.orbWrap} onClick={handleOrbClick}>
-        <NeuralOrb state={orbState} audioLevel={0} size={orbSize} />
-      </div>
-      
-      <div style={styles.transcriptContainer}>
-        {isTextInputActive ? (
-          <form style={{ width: '100%' }} onSubmit={handleFormSubmit}>
-            <textarea
-              ref={inputRef}
-              value={textInputValue}
-              onChange={handleTextAreaChange}
-              onBlur={() => setIsTextInputActive(false)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type your command, sir..."
-              rows={1}
-              style={styles.textInput}
-            />
-          </form>
-        ) : (
-          <div onClick={handleContainerClick} style={{ width: '100%' }}>
-            <AnimatePresence mode="wait">
-              {displayText && (
-                <motion.div 
-                  key={displayText} 
-                  initial={{ opacity: 0, y: 5 }} 
-                  animate={{ opacity: 1, y: 0 }} 
-                  exit={{ opacity: 0, y: -5 }}
-                  style={styles.transcript}
-                >
-                  {displayText}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        )}
+      {/* Orb */}
+      <div
+        style={S.orbWrap}
+        onClick={() => { if (!isReady) void initializeJarvis(); }}
+      >
+        <NeuralOrb state={orbState} audioLevel={audioLevel} size={orbSize} />
       </div>
 
-      <div style={{ ...styles.stateLabel, color: orbState === 'idle' && isLive ? STATE_COLOR['listening'] : STATE_COLOR[orbState] }}>
-        {orbState === 'idle' && isLive ? STATE_LABEL['listening'] : STATE_LABEL[orbState]}
+      {/* Output / transcript */}
+      <div style={S.transcriptWrap}>
+        <AnimatePresence mode="wait">
+          {displayText && (
+            <motion.div
+              key={displayText}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.28 }}
+              style={S.transcript}
+            >
+              {displayText}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
+
+      {/* State label */}
+      <div style={{ ...S.stateLabel, color: `rgb(${accent})` }}>
+        {STATE_LABEL[orbState]}
+      </div>
+
+      {/* Command bar */}
+      <JarvisInputBar
+        value={inputValue}
+        onChange={setInputValue}
+        onSubmit={handleSubmit}
+        attachments={attachments}
+        onAttach={handleAttach}
+        onRemove={handleRemoveAttachment}
+        muted={muted}
+        onToggleMute={handleToggleMute}
+        disabled={isBusy}
+        onFocus={() => { if (!isReady) void initializeJarvis(); }}
+      />
     </div>
   );
 }
+
+const S: Record<string, React.CSSProperties> = {
+  root: {
+    position: 'relative',
+    height: '100dvh',
+    minHeight: '100vh',
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+    boxSizing: 'border-box',
+    background: 'var(--background)',
+    color: 'var(--foreground)',
+  },
+  bgWash: {
+    position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
+    background:
+      'radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--foreground) 4%, transparent) 0%, transparent 60%), var(--background)',
+  },
+  bgGrid: {
+    position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
+    backgroundImage:
+      'linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px)',
+    backgroundSize: '46px 46px',
+    opacity: 0.35,
+    maskImage: 'radial-gradient(circle at 50% 42%, #000 0%, transparent 72%)',
+    WebkitMaskImage: 'radial-gradient(circle at 50% 42%, #000 0%, transparent 72%)',
+  },
+  orbGlow: { position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1, transition: 'background 0.4s ease' },
+  orbWrap: {
+    display: 'flex', justifyContent: 'center', alignItems: 'center',
+    flex: '1 1 auto', minHeight: 0, marginTop: 24, zIndex: 5, cursor: 'pointer',
+  },
+  transcriptWrap: {
+    width: '90%', maxWidth: 720, minHeight: 56, margin: '8px auto 4px',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    textAlign: 'center', zIndex: 10, flexShrink: 0, padding: '0 16px', boxSizing: 'border-box',
+  },
+  transcript: {
+    color: 'var(--foreground)', fontSize: '1.25rem', lineHeight: 1.45, fontWeight: 300,
+    textTransform: 'none', opacity: 0.92,
+  },
+  stateLabel: {
+    fontSize: 11, letterSpacing: '0.5rem', fontWeight: 400, textTransform: 'uppercase',
+    marginBottom: 18, zIndex: 10, flexShrink: 0,
+  },
+};
 
 export default JarvisHub;
