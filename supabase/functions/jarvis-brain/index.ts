@@ -14,6 +14,8 @@ const corsHeaders = {
 // Secrets
 const MISTRAL_API_KEY = Deno.env.get("MISTRAL_API_KEY") || "";
 const MISTRAL_MODEL = "mistral-small-latest";
+// Vision-capable model — used only when the turn includes image attachments.
+const VISION_MODEL = "pixtral-12b-2409";
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY") || "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -410,17 +412,26 @@ async function runJarvisChat(
   systemContent: string,
   history: any[],
   userText: string,
+  images: string[] = [],
 ): Promise<string> {
+  // Vision turns send a multimodal content array; text turns stay plain strings.
+  const userContent: any = images.length
+    ? [
+        { type: "text", text: userText || "Describe what you see, sir." },
+        ...images.map((url) => ({ type: "image_url", image_url: { url } })),
+      ]
+    : userText;
+
   const messages = [
     { role: "system", content: systemContent },
     ...history,
-    { role: "user", content: userText },
+    { role: "user", content: userContent },
   ];
   const webSearchState = { used: false };
 
-  async function callModel(msgs: any[], useTools = true): Promise<any> {
+  async function callModel(msgs: any[], useTools = true, model = MISTRAL_MODEL): Promise<any> {
     const body: any = {
-      model: MISTRAL_MODEL,
+      model,
       messages: msgs,
       temperature: 0.25,
       max_tokens: 1200,
@@ -440,6 +451,13 @@ async function runJarvisChat(
       throw new Error(`Mistral API error: ${response.status} ${errorText}`);
     }
     return await response.json();
+  }
+
+  // Images: single call to the vision model, no tools (the user wants Astra to
+  // actually read what was attached, not run a web search on it).
+  if (images.length) {
+    const visionResponse = await callModel(messages, false, VISION_MODEL);
+    return visionResponse.choices?.[0]?.message?.content || "";
   }
 
   const firstResponse = await callModel(messages, true);
@@ -659,7 +677,8 @@ Deno.serve(async (req) => {
       }
 
       case "chat": {
-        const { userText, history, timezone } = args || {};
+        const { userText, history, timezone, images, fileText } = args || {};
+        const imageList: string[] = Array.isArray(images) ? images.filter((u: any) => typeof u === "string") : [];
 
         if (!MISTRAL_API_KEY) throw new Error("MISTRAL_API_KEY is not configured in Supabase secrets.");
 
@@ -707,7 +726,13 @@ Deno.serve(async (req) => {
       - NO markdown bullet points or hashtags.
       `.trim();
 
-        const reply = await runJarvisChat(systemContent, history || [], userText);
+        // Inline any text-file contents into the prompt so the model reads them.
+        let finalUserText = userText || "";
+        if (typeof fileText === "string" && fileText.trim()) {
+          finalUserText = `${finalUserText}\n\n--- ATTACHED FILE CONTENTS ---\n${fileText}`.trim();
+        }
+
+        const reply = await runJarvisChat(systemContent, history || [], finalUserText, imageList);
 
         return new Response(JSON.stringify({ reply }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
