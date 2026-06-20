@@ -76,9 +76,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: `
           (function() {
             try {
-              var p = location.pathname;
-              var isAdmin = p.indexOf('/admin') === 0 || p === '/login';
-              var t = isAdmin ? localStorage.getItem('theme') : 'light';
+              var t = localStorage.getItem('theme');
               var d = document.documentElement;
               if (t === 'dark') {
                 d.classList.add('dark');
