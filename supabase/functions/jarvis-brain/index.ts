@@ -759,25 +759,18 @@ Deno.serve(async (req) => {
 
         if (!MISTRAL_API_KEY) throw new Error("MISTRAL_API_KEY is not configured in Supabase secrets.");
 
-        const memories = await loadMemories(20);
-        let storeCtx = "";
-        try {
-          const snapshot = await buildStoreSnapshot(timezone || "UTC");
-          storeCtx = formatStoreContextFull(snapshot);
-        } catch (err: any) {
-          console.warn("[Jarvis] Store snapshot failed:", err.message);
-          storeCtx = "--- LIVE STORE DATA --- Temporarily unavailable. --- END STORE DATA ---";
-        }
-
-        let githubCtx = "";
-        if (GITHUB_TOKEN) {
-          const repos = await fetchUserRepos(GITHUB_TOKEN);
-          if (repos.length > 0) {
-            const preferred = repos.find((r: any) => r.name?.toLowerCase() === "luveni2.0") || repos[0];
-            const repoList = repos.map((r: any) => `- ${r.owner?.login}/${r.name}`).join("\n");
-            githubCtx = `Primary Default Repo: ${preferred.owner?.login}/${preferred.name}\nAvailable Repos:\n${repoList}`;
-          }
-        }
+               // Memory + live store data fetched in parallel — shaves latency off every turn.
+        const [memories, snapshot] = await Promise.all([
+          loadMemories(20),
+          buildStoreSnapshot(timezone || "UTC").catch((err: any) => {
+            console.warn("[Jarvis] Store snapshot failed:", err.message);
+            return null;
+          }),
+        ]);
+        const storeCtx = snapshot
+          ? formatStoreContextFull(snapshot)
+          : "--- LIVE STORE DATA --- Temporarily unavailable. --- END STORE DATA ---";
+        const githubCtx = "";
 
         const userTimezone = timezone || "UTC";
         const now = new Date();
