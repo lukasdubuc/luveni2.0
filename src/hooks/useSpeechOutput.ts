@@ -397,10 +397,60 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       doSpeakNative(text, fallbackVoice || null);
     }, 0);
   }, [cancel, doSpeakNative, endSpeechCleanup, playAudioBlobUrl]);
+    // PRIMARY voice: puter.js cloud TTS (free, no key, works desktop + mobile).
+  // ElevenLabs (doSpeakElevenLabs) stays wired but unused for now.
+  const doSpeakPuter = useCallback(async (text: string) => {
+    cancel(true);
+    setTimeout(async () => {
+      speaking.current = true;
+      if (onStartRef.current) onStartRef.current();
 
-  const speak = useCallback(async (text: string) => {
-    doSpeakElevenLabs(text);
-  }, [doSpeakElevenLabs]);
+      const cleanText = sanitizeTextForSpeech(text);
+      if (!cleanText) { endSpeechCleanup(); return; }
+      setCurrentSubtitle(cleanText);
+
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        if (audioIntervalRef.current) { clearInterval(audioIntervalRef.current); audioIntervalRef.current = null; }
+        speaking.current = false;
+        setCurrentSubtitle("");
+        if (onEndRef.current) onEndRef.current();
+      };
+      const watchdog = setTimeout(finish, 90000);
+      const wrappedFinish = () => { clearTimeout(watchdog); finish(); };
+
+      try {
+        const puter = (window as any).puter;
+        if (!puter?.ai?.txt2speech) throw new Error("puter.js not loaded");
+        const audio: HTMLAudioElement = await puter.ai.txt2speech(cleanText);
+        if (!speaking.current) { clearTimeout(watchdog); return; } // canceled while loading
+        activeAudiosRef.current = [audio];
+        if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
+        audioIntervalRef.current = setInterval(() => {
+          if (onBoundaryRef.current && speaking.current) onBoundaryRef.current(0.3 + Math.random() * 0.55);
+        }, 80);
+        audio.onended = wrappedFinish;
+        audio.onerror = wrappedFinish;
+        await audio.play();
+      } catch (e) {
+        clearTimeout(watchdog);
+        console.warn("[Speech] puter TTS unavailable, falling back to native:", e);
+        const fv = voiceCache ?? findBestVoice(typeof window !== "undefined" && window.speechSynthesis ? window.speechSynthesis.getVoices() : []);
+        if (fv) voiceCache = fv;
+        if (typeof window !== "undefined" && window.speechSynthesis && fv) {
+          doSpeakNative(text, fv);
+        } else {
+          finish(); // nothing can speak — still release the mic so input keeps working
+        }
+      }
+    }, 0);
+  }, [cancel, doSpeakNative, endSpeechCleanup]);
+
+    const speak = useCallback(async (text: string) => {
+    doSpeakPuter(text);
+  }, [doSpeakPuter]);
 
   return { speak, cancel, unlock, isSpeaking: () => speaking.current, currentSubtitle };
 }
