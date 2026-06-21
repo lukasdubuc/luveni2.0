@@ -333,7 +333,7 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     displayText = 'Astra at your service, sir.';
   }
 
-  const orbSize = isMobile ? 260 : 360;
+  const orbSize = stageOpen ? 88 : (isMobile ? 260 : 360);
   const accent = STATE_ACCENT[orbState];
   const isBusy = orbState === 'thinking' || orbState === 'speaking';
 
@@ -360,60 +360,47 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
         {stageOpen && <VisualStage key="stage" visual={visual!} />}
       </AnimatePresence>
 
-      {/* The hub. Shrinks → diagonal-slides to a top-left card when the stage
-          is open. transformOrigin left center keeps the corner anchored. */}
+      {/* Hub. When the MacBook stage opens, Astra becomes a small orb that sits
+          in the empty space to the LEFT of the laptop — never over it. */}
       <motion.div
-        style={{ ...S.hub, ...(stageOpen ? S.hubCard : null) }}
-        animate={{ scale: stageOpen ? 0.3 : 1, x: stageOpen ? '-4vw' : 0, y: stageOpen ? 0 : 0 }}
-        transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+        key={stageOpen ? 'astra-staged' : 'astra-full'}
+        style={stageOpen ? S.hubStaged : S.hub}
+        initial={stageOpen ? { opacity: 0, scale: 0.4 } : false}
+        animate={stageOpen ? { opacity: 1, scale: 1, x: '-50%' } : { opacity: 1, scale: 1, x: 0 }}
+        transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
         onClick={stageOpen ? () => setVisual(null) : undefined}
         title={stageOpen ? 'Return' : undefined}
       >
-        <div style={{ ...S.contentCol, justifyContent: stageOpen ? 'center' : 'flex-end', pointerEvents: stageOpen ? 'none' : 'auto' }}>
-          {/* Orb */}
-          <div
-            style={S.orbWrap}
-            onClick={() => { if (!isReady) void initializeJarvis(); }}
-          >
+        <div style={stageOpen ? S.contentColStaged : { ...S.contentCol, pointerEvents: 'auto' }}>
+          <div style={stageOpen ? S.orbWrapStaged : S.orbWrap}
+               onClick={() => { if (!isReady) void initializeJarvis(); }}>
             <NeuralOrb state={orbState} audioLevel={audioLevel} size={orbSize} />
           </div>
 
-          {/* Output / transcript */}
-          <div style={S.transcriptWrap}>
+          <div style={stageOpen ? S.transcriptWrapStaged : S.transcriptWrap}>
             <AnimatePresence mode="wait">
               {displayText && (
-                <motion.div
-                  key={displayText}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
+                <motion.div key={displayText}
+                  initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.28 }}
-                  style={S.transcript}
-                >
+                  style={stageOpen ? S.transcriptStaged : S.transcript}>
                   {displayText}
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
 
-          {/* State label */}
-          <div style={{ ...S.stateLabel, color: `rgb(${accent})` }}>
-            {STATE_LABEL[orbState]}
-          </div>
-
-          {/* Command bar */}
-          <JarvisInputBar
-            value={inputValue}
-            onChange={setInputValue}
-            onSubmit={handleSubmit}
-            attachments={attachments}
-            onAttach={handleAttach}
-            onRemove={handleRemoveAttachment}
-            muted={muted}
-            onToggleMute={handleToggleMute}
-            disabled={isBusy}
-            onFocus={() => { if (!isReady) void initializeJarvis(); }}
-          />
+          {!stageOpen && (
+            <>
+              <div style={{ ...S.stateLabel, color: `rgb(${accent})` }}>{STATE_LABEL[orbState]}</div>
+              <JarvisInputBar
+                value={inputValue} onChange={setInputValue} onSubmit={handleSubmit}
+                attachments={attachments} onAttach={handleAttach} onRemove={handleRemoveAttachment}
+                muted={muted} onToggleMute={handleToggleMute} disabled={isBusy}
+                onFocus={() => { if (!isReady) void initializeJarvis(); }}
+              />
+            </>
+          )}
         </div>
       </motion.div>
     </div>
@@ -436,6 +423,12 @@ const S: Record<string, React.CSSProperties> = {
     transformOrigin: 'left center',
     transition: 'background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease',
   },
+  hubStaged: {
+    position: 'fixed',
+    left: 'calc((100vw - min(76vw, 1200px)) / 4)', // centre of the gap left of the Mac
+    top: '13vh',
+    zIndex: 30, background: 'transparent', cursor: 'pointer',
+  },
   // Card chrome applied while the stage is open (transform handled by framer).
   hubCard: {
     background: 'transparent',
@@ -450,6 +443,10 @@ const S: Record<string, React.CSSProperties> = {
     display: 'flex', flexDirection: 'column',
     alignItems: 'center', justifyContent: 'flex-end',
     boxSizing: 'border-box',
+  },
+  contentColStaged: {
+    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start',
+    gap: 12, textAlign: 'center',
   },
   bgWash: {
     position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
@@ -470,16 +467,22 @@ const S: Record<string, React.CSSProperties> = {
     display: 'flex', justifyContent: 'center', alignItems: 'center',
     flex: '1 1 auto', minHeight: 0, marginTop: 24, zIndex: 5, cursor: 'pointer',
   },
+  orbWrapStaged: { display: 'flex', justifyContent: 'center', alignItems: 'center', cursor: 'pointer' },
   transcriptWrap: {
     width: '90%', maxWidth: 720, minHeight: 56, margin: '8px auto 4px',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     textAlign: 'center', zIndex: 10, flexShrink: 0, padding: '0 16px', boxSizing: 'border-box',
+  },
+  transcriptWrapStaged: {
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    maxWidth: 'calc((100vw - min(76vw, 1200px)) / 2 - 24px)',
   },
   transcript: {
     // Scales down on narrow phones so long greetings never overflow.
     color: 'var(--foreground)', fontSize: 'clamp(1rem, 4.2vw, 1.25rem)', lineHeight: 1.45,
     fontWeight: 300, textTransform: 'none', opacity: 0.92,
   },
+  transcriptStaged: { color: 'var(--foreground)', fontSize: '0.92rem', lineHeight: 1.4, fontWeight: 300, opacity: 0.92 },
   stateLabel: {
     fontSize: 11, letterSpacing: '0.5rem', fontWeight: 400, textTransform: 'uppercase',
     marginBottom: 18, zIndex: 10, flexShrink: 0,
