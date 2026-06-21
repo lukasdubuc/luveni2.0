@@ -361,15 +361,15 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       </AnimatePresence>
 
       {/* The hub. Shrinks → diagonal-slides to a top-left card when the stage
-          is open. transformOrigin top-left keeps the corner anchored. */}
+          is open. transformOrigin left center keeps the corner anchored. */}
       <motion.div
         style={{ ...S.hub, ...(stageOpen ? S.hubCard : null) }}
-        animate={{ scale: stageOpen ? 0.2 : 1, x: stageOpen ? 24 : 0, y: stageOpen ? 24 : 0 }}
+        animate={{ scale: stageOpen ? 0.3 : 1, x: stageOpen ? '-4vw' : 0, y: stageOpen ? 0 : 0 }}
         transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
         onClick={stageOpen ? () => setVisual(null) : undefined}
         title={stageOpen ? 'Return' : undefined}
       >
-        <div style={{ ...S.contentCol, pointerEvents: stageOpen ? 'none' : 'auto' }}>
+        <div style={{ ...S.contentCol, justifyContent: stageOpen ? 'center' : 'flex-end', pointerEvents: stageOpen ? 'none' : 'auto' }}>
           {/* Orb */}
           <div
             style={S.orbWrap}
@@ -433,7 +433,7 @@ const S: Record<string, React.CSSProperties> = {
   },
   hub: {
     position: 'absolute', inset: 0, zIndex: 20,
-    transformOrigin: 'top left',
+    transformOrigin: 'left center',
     transition: 'background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease',
   },
   // Card chrome applied while the stage is open (transform handled by framer).
