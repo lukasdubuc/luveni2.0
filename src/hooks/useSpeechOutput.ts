@@ -397,7 +397,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       doSpeakNative(text, fallbackVoice || null);
     }, 0);
   }, [cancel, doSpeakNative, endSpeechCleanup, playAudioBlobUrl]);
-    // PRIMARY voice: puter.js cloud TTS (free, no key, works desktop + mobile).
+
+  // PRIMARY voice: puter.js cloud TTS (free, no key, works desktop + mobile).
   // ElevenLabs (doSpeakElevenLabs) stays wired but unused for now.
   const doSpeakPuter = useCallback(async (text: string) => {
     cancel(true);
@@ -407,55 +408,56 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
       const cleanText = sanitizeTextForSpeech(text);
       if (!cleanText) { endSpeechCleanup(); return; }
-      setCurrentSubtitle(cleanText);
+      const chunks = chunkText(cleanText, 180);
 
       let done = false;
       const finish = () => {
-        if (done) return;
-        done = true;
+        if (done) return; done = true;
         if (audioIntervalRef.current) { clearInterval(audioIntervalRef.current); audioIntervalRef.current = null; }
-        speaking.current = false;
-        setCurrentSubtitle("");
+        speaking.current = false; setCurrentSubtitle("");
         if (onEndRef.current) onEndRef.current();
       };
-      const watchdog = setTimeout(finish, 90000);
-      const wrappedFinish = () => { clearTimeout(watchdog); finish(); };
 
-     try {
-        const puter = (window as any).puter;
-        if (!puter?.ai?.txt2speech) throw new Error("puter.js not loaded");
-        
-        // Configured for OpenAI's 'nova' voice via 'tts-1-hd' for a highly realistic, expressive female voice
-        const audio: HTMLAudioElement = await puter.ai.txt2speech(cleanText, {
-          provider: "openai",
-          model: "tts-1-hd",
-          voice: "nova"
-        });
-
-        if (!speaking.current) { clearTimeout(watchdog); return; } // canceled while loading
-        activeAudiosRef.current = [audio];
-        if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
-        audioIntervalRef.current = setInterval(() => {
-          if (onBoundaryRef.current && speaking.current) onBoundaryRef.current(0.3 + Math.random() * 0.55);
-        }, 80);
-        audio.onended = wrappedFinish;
-        audio.onerror = wrappedFinish;
-        await audio.play();
-      } catch (e) {
-        clearTimeout(watchdog);
-        console.warn("[Speech] puter TTS unavailable, falling back to native:", e);
+      const puter = (window as any).puter;
+      if (!puter?.ai?.txt2speech) {
         const fv = voiceCache ?? findBestVoice(typeof window !== "undefined" && window.speechSynthesis ? window.speechSynthesis.getVoices() : []);
         if (fv) voiceCache = fv;
-        if (typeof window !== "undefined" && window.speechSynthesis && fv) {
-          doSpeakNative(text, fv);
-        } else {
-          finish(); // nothing can speak — still release the mic so input keeps working
-        }
+        if (typeof window !== "undefined" && window.speechSynthesis && fv) doSpeakNative(text, fv); else finish();
+        return;
       }
+
+      if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
+      audioIntervalRef.current = setInterval(() => {
+        if (onBoundaryRef.current && speaking.current) onBoundaryRef.current(0.3 + Math.random() * 0.55);
+      }, 80);
+
+      // Using OpenAI's 'nova' voice via 'tts-1-hd' for highly realistic, expressive female neural TTS.
+      const fetchAudio = (t: string) => puter.ai.txt2speech(t, { 
+        provider: "openai", 
+        model: "tts-1-hd", 
+        voice: "nova" 
+      }) as Promise<HTMLAudioElement>;
+
+      let idx = 0;
+      let nextP: Promise<HTMLAudioElement> | null = chunks.length ? fetchAudio(chunks[0]) : null;
+      const playNext = async () => {
+        if (!speaking.current || !nextP || idx >= chunks.length) { finish(); return; }
+        let audio: HTMLAudioElement;
+        try { audio = await nextP; } catch (e) { console.warn('[Speech] chunk failed:', e); finish(); return; }
+        if (!speaking.current) { finish(); return; }
+        setCurrentSubtitle(chunks[idx]);
+        idx += 1;
+        nextP = idx < chunks.length ? fetchAudio(chunks[idx]) : null;
+        activeAudiosRef.current = [audio];
+        audio.onended = () => { if (nextP) void playNext(); else finish(); };
+        audio.onerror = () => { if (nextP) void playNext(); else finish(); };
+        try { await audio.play(); } catch { if (nextP) void playNext(); else finish(); }
+      };
+      void playNext();
     }, 0);
   }, [cancel, doSpeakNative, endSpeechCleanup]);
 
-    const speak = useCallback(async (text: string) => {
+  const speak = useCallback(async (text: string) => {
     doSpeakPuter(text);
   }, [doSpeakPuter]);
 
