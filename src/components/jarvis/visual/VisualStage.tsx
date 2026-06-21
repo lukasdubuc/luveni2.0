@@ -77,7 +77,7 @@ export default function VisualStage({ visual }: { visual: VisualPayload }) {
   );
 }
 
-const SCREEN_W = 'min(74vw, 1180px)';
+const SCREEN_W = 'min(76vw, 1200px)';
 
 const S: Record<string, React.CSSProperties> = {
   overlay: {
@@ -89,52 +89,54 @@ const S: Record<string, React.CSSProperties> = {
     position: 'absolute', inset: 0, pointerEvents: 'none',
     background: 'radial-gradient(circle at 58% 48%, color-mix(in srgb, var(--foreground) 6%, transparent) 0%, transparent 62%)',
   },
-  perspective: { perspective: 1700, pointerEvents: 'auto', marginTop: 8 },
+  perspective: { perspective: 2000, pointerEvents: 'auto', marginTop: 8 },
   device: { position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', transformStyle: 'preserve-3d' },
+
+  // Lid — dark aluminium bezel around the display
   screen: {
     width: SCREEN_W,
     aspectRatio: '16 / 10',
     transformOrigin: '50% 100%',
     transformStyle: 'preserve-3d',
-    background: 'linear-gradient(180deg, #1c1c1e 0%, #0e0e10 100%)',
-    borderRadius: '18px 18px 6px 6px',
-    padding: 12,
+    background: '#0b0b0d',
+    borderRadius: '22px 22px 6px 6px',
+    padding: '14px',
     boxSizing: 'border-box',
-    boxShadow: '0 40px 90px rgba(0,0,0,0.45), 0 0 0 2px #2a2a2c, inset 0 0 0 1px rgba(255,255,255,0.04)',
+    boxShadow: '0 50px 100px rgba(0,0,0,0.5), 0 0 0 2px #1d1d1f, inset 0 0 0 1px rgba(255,255,255,0.05)',
     position: 'relative',
   },
   notch: {
     position: 'absolute', top: 4, left: '50%', transform: 'translateX(-50%)',
-    width: 120, height: 7, background: '#0a0a0b', borderRadius: '0 0 8px 8px', zIndex: 2,
+    width: 150, height: 18, background: '#0b0b0d', borderRadius: '0 0 12px 12px', zIndex: 3,
   },
   display: {
-    width: '100%', height: '100%', borderRadius: 8, overflow: 'hidden',
-    background: '#fff', position: 'relative',
-    boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.25)',
+    width: '100%', height: '100%', borderRadius: 6, overflow: 'hidden',
+    background: '#fff', position: 'relative', boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.3)',
   },
   displayInner: { position: 'absolute', inset: 0 },
   sheen: {
     position: 'absolute', inset: 0, pointerEvents: 'none',
     background: 'linear-gradient(115deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 32%)',
   },
+
+  // Base — aluminium wedge, SAME width as the lid, with a centred finger-groove
   deck: {
-    width: 'calc(min(74vw, 1180px) + 86px)',
-    height: 22,
-    marginTop: -2,
-    background: 'linear-gradient(180deg, #c8ccd2 0%, #a7adb6 55%, #7e848d 100%)',
-    borderRadius: '8px 8px 14px 14px',
-    clipPath: 'polygon(2% 0, 98% 0, 100% 100%, 0 100%)',
+    width: SCREEN_W,
+    height: 16,
+    marginTop: 0,
+    background: 'linear-gradient(180deg, #e3e6ea 0%, #c2c7ce 42%, #969ba3 100%)',
+    borderRadius: '2px 2px 13px 13px',
     position: 'relative',
-    boxShadow: '0 26px 40px rgba(0,0,0,0.32)',
+    boxShadow: '0 30px 55px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.6)',
   },
   hinge: {
-    position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
-    width: 'min(74vw, 1180px)', height: 5,
-    background: 'linear-gradient(180deg, #5b5f66, #3a3d42)',
-    borderRadius: '0 0 4px 4px',
+    position: 'absolute', top: -3, left: '50%', transform: 'translateX(-50%)',
+    width: 'calc(100% - 26px)', height: 4,
+    background: 'linear-gradient(180deg, #3a3d42, #1f2125)',
+    borderRadius: '0 0 3px 3px',
   },
   notchOut: {
-    position: 'absolute', top: 4, left: '50%', transform: 'translateX(-50%)',
-    width: 110, height: 9, background: 'linear-gradient(180deg,#9aa0a8,#7c828b)', borderRadius: '0 0 9px 9px',
+    position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
+    width: 130, height: 9, background: '#aeb3bb', borderRadius: '0 0 11px 11px',
   },
 };
