@@ -75,11 +75,11 @@ export function ContactPopup() {
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/60 p-4"
       onClick={() => setOpen(false)}
     >
       <div
-        className="relative w-full max-w-lg border border-border bg-background p-6 text-foreground shadow-lg md:p-8"
+        className="relative my-8 w-full max-w-lg border border-border bg-background p-6 text-foreground shadow-lg md:p-8"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
