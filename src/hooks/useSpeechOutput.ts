@@ -160,6 +160,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const activeAudiosRef = useRef<HTMLAudioElement[]>([]);
   const audioIntervalRef = useRef<any>(null);
   const globalAudioRef = useRef<HTMLAudioElement | null>(null);
+  const prewarmedRef = useRef(false);
 
   useEffect(() => {
     onStartRef.current = onStart;
@@ -245,6 +246,19 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     } catch (e) {
       console.warn('[Speech Output] HTML5 Audio gesture unlock failed:', e);
     }
+
+    // Warm puter's TTS connection/auth once, so the first real reply speaks fast.
+    try {
+      const p = (window as any).puter;
+      if (p?.ai?.txt2speech && !prewarmedRef.current) {
+        prewarmedRef.current = true;
+        p.ai.txt2speech(' ', { 
+          provider: "openai", 
+          model: "tts-1-hd", 
+          voice: "nova" 
+        }).catch(() => {});
+      }
+    } catch {}
   }, []);
 
   const doSpeakNative = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
@@ -408,7 +422,19 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
       const cleanText = sanitizeTextForSpeech(text);
       if (!cleanText) { endSpeechCleanup(); return; }
-      const chunks = chunkText(cleanText, 180);
+
+      // First chunk kept tiny so the opening audio returns almost immediately;
+      // the rest is larger and pre-fetched while the first plays.
+      const firstCut = (() => {
+        const head = cleanText.slice(0, 90);
+        const m = head.match(/[.!?]\s/);
+        if (m && (m.index ?? 0) >= 20) return (m.index as number) + 1;
+        const sp = cleanText.lastIndexOf(' ', 72);
+        return sp > 30 ? sp : Math.min(72, cleanText.length);
+      })();
+      const first = cleanText.slice(0, firstCut).trim();
+      const restTxt = cleanText.slice(firstCut).trim();
+      const chunks = restTxt ? [first, ...chunkText(restTxt, 220)] : [first];
 
       let done = false;
       const finish = () => {
