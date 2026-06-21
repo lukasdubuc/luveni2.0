@@ -333,13 +333,13 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     displayText = 'Astra at your service, sir.';
   }
 
-  const orbSize = stageOpen ? 88 : (isMobile ? 260 : 360);
   const accent = STATE_ACCENT[orbState];
   const isBusy = orbState === 'thinking' || orbState === 'speaking';
 
   // Stage is desktop-only. When open, the whole hub shrinks into a live card
   // in the top-left; tapping the card closes the stage and restores center.
   const stageOpen = !isMobile && !!visual;
+  const orbSize = stageOpen ? 88 : (isMobile ? 260 : 360);
 
   return (
     <div className="admin-page" style={S.root}>
