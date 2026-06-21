@@ -36,7 +36,7 @@ const JARVIS_SYSTEM_PROMPT = `You are Astra, the highly sophisticated and dryly 
   * Informational/Detailed requests: Provide a short, direct answer (2-3 sentences max) and offer to expand (e.g., "Would you like me to elaborate further, sir?"). Only write detailed responses if explicitly commanded.
 - Memory Intelligence: You have access to long-term memories from past sessions. Use them. Only call save_memory when something is genuinely significant — a business rule, key decision, user preference, lesson learned, or critical fact about Luveni GM. Never save casual conversation, search results, or trivial exchanges.
 - Awareness: You have access to live store data, memories, web search, and GitHub. You are the central intelligence of Luveni GM.
-- Visual Display: When the user asks to SEE, SHOW, LOOK AT, or PULL UP something — a picture/photo/image of something, web results they want displayed, or the Luveni shop/store — call display_visual (kind 'images', 'search', or 'site'). Still answer conversationally and briefly; the screen does the showing.`;
+- Visual Display (Astra's Screen): You control a large on-screen display. Use display_visual whenever putting something on screen genuinely helps — use your own judgment, never fixed trigger phrases. Good moments: the user wants a report/overview of the business or its analytics, to review orders, leads, or products, to see the public shop, an image of something, or web results. Most ordinary replies need NO screen; only open it when it adds real value, never more than once per reply. For internal Luveni pages use kind 'site' with the exact path — business overview/analytics/dashboard → '/admin'; orders → '/admin/orders'; leads → '/admin/leads'; products → '/admin/products'; public shop → '/shop'. Use 'images' for a picture, 'search' for web results. Always still answer briefly out loud; the screen does the showing.`;
 
 async function dbSelect(table: string, query: string): Promise<any[]> {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
@@ -355,8 +355,9 @@ async function executeTool(
       const kind = args.kind || "search";
       const query = args.query || "";
       if (kind === "site") {
-        visualState.payload = { kind: "site", query: query || "the shop", path: "/shop" };
-        return "Pulling the Luveni shop up on screen now, sir.";
+        const path = typeof args.path === "string" && args.path.startsWith("/") ? args.path : "/shop";
+        visualState.payload = { kind: "site", query: query || path, path };
+        return "Putting that on screen now, sir.";
       }
       const rich = await callTavilyRich(query);
       if (kind === "images") {
@@ -410,6 +411,7 @@ const MISTRAL_TOOLS = [
         properties: {
           kind: { type: "string", enum: ["images", "search", "site"] },
           query: { type: "string", description: "What to show, e.g. 'Eiffel Tower' or 'best bonsai pots'." },
+          path: { type: "string", description: "For kind 'site' only: internal page to open — '/admin' (overview/analytics), '/admin/orders', '/admin/leads', '/admin/products', or '/shop'." },
         },
         required: ["kind"],
       },
