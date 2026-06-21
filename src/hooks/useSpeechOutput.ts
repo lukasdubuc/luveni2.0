@@ -139,7 +139,7 @@ let voiceCache: SpeechSynthesisVoice | null | undefined = undefined;
 // The publishable key below is public by design (safe to ship).
 const JARVIS_TTS_URL = 'https://unitqfuetxedmmrvlocu.supabase.co/functions/v1/jarvis-tts';
 const JARVIS_TTS_ANON = 'sb_publishable_0jMwlf-VJWjWFjpA1Iz2dA_Lq8EIumc';
-const VOICE_ID = 'EXAVITQu4vr4xnSDxMaL'; // Sarah — mature, warm, confident
+const VOICE_ID = 'EXAVITQu4vr4xnSDxMaL'; // Sarah — warm, mature, confident
 
 function base64ToBlobUrl(base64: string): string {
   const binary = atob(base64);
@@ -452,7 +452,9 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         return;
       }
 
-      if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
+      if (audioIntervalRef.current) {
+        clearInterval(audioIntervalRef.current);
+      }
       audioIntervalRef.current = setInterval(() => {
         if (onBoundaryRef.current && speaking.current) onBoundaryRef.current(0.3 + Math.random() * 0.55);
       }, 80);
@@ -484,8 +486,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   }, [cancel, doSpeakNative, endSpeechCleanup]);
 
   const speak = useCallback(async (text: string) => {
-    doSpeakPuter(text);
-  }, [doSpeakPuter]);
+    doSpeakElevenLabs(text);
+  }, [doSpeakElevenLabs]);
 
   return { speak, cancel, unlock, isSpeaking: () => speaking.current, currentSubtitle };
 }
