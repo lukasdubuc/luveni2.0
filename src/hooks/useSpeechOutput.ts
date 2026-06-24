@@ -246,19 +246,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
     } catch (e) {
       console.warn('[Speech Output] HTML5 Audio gesture unlock failed:', e);
     }
-
-    // Warm puter's TTS connection/auth once, so the first real reply speaks fast.
-    try {
-      const p = (window as any).puter;
-      if (p?.ai?.txt2speech && !prewarmedRef.current) {
-        prewarmedRef.current = true;
-        p.ai.txt2speech(' ', { 
-          provider: "openai", 
-          model: "tts-1-hd", 
-          voice: "nova" 
-        }).catch(() => {});
-      }
-    } catch {}
   }, []);
 
   const doSpeakNative = useCallback((text: string, voice: SpeechSynthesisVoice | null) => {
