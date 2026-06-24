@@ -160,7 +160,6 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
   const activeAudiosRef = useRef<HTMLAudioElement[]>([]);
   const audioIntervalRef = useRef<any>(null);
   const globalAudioRef = useRef<HTMLAudioElement | null>(null);
-  const prewarmedRef = useRef(false);
 
   useEffect(() => {
     onStartRef.current = onStart;
@@ -360,44 +359,72 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
 
   const doSpeakElevenLabs = useCallback(async (text: string) => {
     cancel(true);
-
     setTimeout(async () => {
       speaking.current = true;
       if (onStartRef.current) onStartRef.current();
-
       const cleanText = sanitizeTextForSpeech(text);
-      if (!cleanText) {
-        endSpeechCleanup();
-        return;
-      }
+      if (!cleanText) { endSpeechCleanup(); return; }
 
-      // PRIMARY — server-side TTS function (ElevenLabs key stays in Supabase secrets).
-      try {
-        const response = await fetch(JARVIS_TTS_URL, {
+      const firstCut = (() => {
+        const head = cleanText.slice(0, 90);
+        const m = head.match(/[.!?]\s/);
+        if (m && (m.index ?? 0) >= 20) return (m.index as number) + 1;
+        const sp = cleanText.lastIndexOf(' ', 72);
+        return sp > 30 ? sp : Math.min(72, cleanText.length);
+      })();
+      const first = cleanText.slice(0, firstCut).trim();
+      const restTxt = cleanText.slice(firstCut).trim();
+      const chunks = restTxt ? [first, ...chunkText(restTxt, 220)] : [first];
+
+      let done = false;
+      const finish = () => {
+        if (done) return; done = true;
+        if (audioIntervalRef.current) { clearInterval(audioIntervalRef.current); audioIntervalRef.current = null; }
+        speaking.current = false; setCurrentSubtitle("");
+        if (onEndRef.current) onEndRef.current();
+      };
+
+      if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
+      audioIntervalRef.current = setInterval(() => {
+        if (onBoundaryRef.current && speaking.current) onBoundaryRef.current(0.3 + Math.random() * 0.55);
+      }, 80);
+
+      const fetchAudio = async (t: string): Promise<HTMLAudioElement> => {
+        const res = await fetch(JARVIS_TTS_URL, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': JARVIS_TTS_ANON,
-            'Authorization': `Bearer ${JARVIS_TTS_ANON}`,
-          },
-          body: JSON.stringify({ text: cleanText, voiceId: VOICE_ID }),
+          headers: { 'Content-Type': 'application/json', 'apikey': JARVIS_TTS_ANON, 'Authorization': `Bearer ${JARVIS_TTS_ANON}` },
+          body: JSON.stringify({ text: t }),
         });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data?.audio) {
-          throw new Error(data?.error ?? `TTS error ${response.status}`);
-        }
-        playAudioBlobUrl(base64ToBlobUrl(data.audio), cleanText);
-        return;
-      } catch (ttsError) {
-        console.warn('[Speech Engine] Server TTS failed, falling back to native:', ttsError);
-      }
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.audio) throw new Error(data?.error ?? `TTS ${res.status}`);
+        return new Audio(base64ToBlobUrl(data.audio));
+      };
 
-      // LAST RESORT — native browser voice.
-      const fallbackVoice = voiceCache ?? findBestVoice(window.speechSynthesis.getVoices());
-      if (fallbackVoice) voiceCache = fallbackVoice;
-      doSpeakNative(text, fallbackVoice || null);
+      let idx = 0;
+      let nextP: Promise<HTMLAudioElement> | null = chunks.length ? fetchAudio(chunks[0]) : null;
+      const playNext = async () => {
+        if (!speaking.current || !nextP || idx >= chunks.length) { finish(); return; }
+        let audio: HTMLAudioElement;
+        try { audio = await nextP; }
+        catch (e) {
+          console.warn('[Speech] server TTS failed, native fallback:', e);
+          const fv = voiceCache ?? findBestVoice(window.speechSynthesis ? window.speechSynthesis.getVoices() : []);
+          if (fv) voiceCache = fv;
+          if (window.speechSynthesis && fv && idx === 0) doSpeakNative(text, fv); else finish();
+          return;
+        }
+        if (!speaking.current) { finish(); return; }
+        setCurrentSubtitle(chunks[idx]);
+        idx += 1;
+        nextP = idx < chunks.length ? fetchAudio(chunks[idx]) : null;
+        activeAudiosRef.current = [audio];
+        audio.onended = () => { if (nextP) void playNext(); else finish(); };
+        audio.onerror = () => { if (nextP) void playNext(); else finish(); };
+        try { await audio.play(); } catch { if (nextP) void playNext(); else finish(); }
+      };
+      void playNext();
     }, 0);
-  }, [cancel, doSpeakNative, endSpeechCleanup, playAudioBlobUrl]);
+  }, [cancel, doSpeakNative, endSpeechCleanup]);
 
   // PRIMARY voice: puter.js cloud TTS (free, no key, works desktop + mobile).
   // ElevenLabs (doSpeakElevenLabs) stays wired but unused for now.
