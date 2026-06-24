@@ -1,14 +1,18 @@
 // ─────────────────────────────────────────────────────────────
 //  J.A.R.V.I.S — Luveni GM | components/jarvis/JarvisHub.tsx
 //
-//  Phase 1 overhaul: Perplexity-grade orb, an always-visible
-//  theme-aware command bar (attach + mute/voice toggle), a clean
-//  centred output area, and full light/dark theming driven by the
-//  site's existing CSS-variable system (no more hardcoded dark).
+//  FIX: Response text no longer flashes the full paragraph before
+//  speech starts. pendingResponseRef holds the full reply until
+//  speech ends; displayText during 'speaking' state shows only
+//  the current spoken subtitle (sentence-by-sentence).
+//
+//  FIX: navigate_to visual payload triggers TanStack Router
+//  navigation so Astra can send you to admin sub-pages.
 // ─────────────────────────────────────────────────────────────
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from '@tanstack/react-router';
 import { useGemini } from '@/hooks/useGemini';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
 import { useSpeechOutput } from '@/hooks/useSpeechOutput';
@@ -23,8 +27,6 @@ const STATE_LABEL: Record<OrbState, string> = {
   idle: 'STANDBY', listening: 'LISTENING', thinking: 'PROCESSING', speaking: 'RESPONDING', error: 'MIC ERROR',
 };
 
-// Accent per state — used only for the soft glow + the state label, so it reads
-// in both themes without fighting the theme background.
 const STATE_ACCENT: Record<OrbState, string> = {
   idle: '90, 170, 255', listening: '60, 200, 255', thinking: '180, 110, 255', speaking: '60, 230, 170', error: '255, 90, 80',
 };
@@ -57,19 +59,17 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-// Turn attachments into model-ready inputs: images become base64 data URLs
-// (read by the vision model), text-ish files are inlined into the prompt.
 async function readAttachments(atts: Attachment[]): Promise<{ images: string[]; fileText: string }> {
   const images: string[] = [];
   const texts: string[] = [];
   for (const a of atts) {
     if (a.kind === 'image') {
-      try { images.push(await fileToDataUrl(a.file)); } catch { /* skip unreadable */ }
+      try { images.push(await fileToDataUrl(a.file)); } catch { /* skip */ }
     } else if (a.file.type.startsWith('text/') || /\.(txt|md|csv|json|log|tsx?|jsx?|html?|css)$/i.test(a.name)) {
       try {
         const txt = await a.file.text();
         texts.push(`--- ${a.name} ---\n${txt.slice(0, 8000)}`);
-      } catch { /* skip unreadable */ }
+      } catch { /* skip */ }
     }
   }
   return { images, fileText: texts.join('\n\n') };
@@ -104,6 +104,8 @@ function activateGestureTrust() {
 }
 
 export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
+  const navigate = useNavigate();
+
   const [orbState, setOrbState] = useState<OrbState>('idle');
   const [userQuery, setUserQuery] = useState('');
   const [interimTranscript, setInterimTranscript] = useState('');
@@ -111,15 +113,9 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
   const [isReady, setIsReady] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
-
-  // Text-only mode: mic off + no spoken replies. Voice mode is the default.
   const [muted, setMuted] = useState(false);
-
-  // Command bar state.
   const [inputValue, setInputValue] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-
-  // Desktop-only visual stage ("Astra's screen").
   const [visual, setVisual] = useState<VisualPayload | null>(null);
 
   const stateTimeoutRef = useRef<any>(null);
@@ -128,15 +124,15 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
   const mutedRef = useRef(muted);
   const localSpeakingRef = useRef(false);
 
+  // ── FIX: pendingResponseRef holds the full reply during speech so we never
+  //    flash the full text before the first sentence is spoken. We only commit
+  //    it to lastAiResponse (visible to the user) AFTER speech finishes.
+  const pendingResponseRef = useRef('');
+
   useEffect(() => { orbStateRef.current = orbState; }, [orbState]);
   useEffect(() => { mutedRef.current = muted; }, [muted]);
   useEffect(() => { setIsMobile(detectMobileDevice()); }, []);
-
-  // Browser autoplay/mic policies forbid initialising audio without a user
-  // gesture, so autoStart only marks intent — the first interaction wires it up.
   useEffect(() => { if (autoStart) { /* intentional no-op: gesture-gated */ } }, [autoStart]);
-
-  // Revoke object URLs on unmount.
   useEffect(() => () => { attachments.forEach(a => URL.revokeObjectURL(a.url)); }, [attachments]);
 
   const { ask, morningBrief } = useGemini();
@@ -153,8 +149,14 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     onEnd: () => {
       localSpeakingRef.current = false;
       setAudioLevel(0);
+
+      // ── FIX: now that speech is finished, reveal the full response text.
+      if (pendingResponseRef.current) {
+        setLastAiResponse(pendingResponseRef.current);
+        pendingResponseRef.current = '';
+      }
+
       if (orbStateRef.current === 'speaking' || orbStateRef.current === 'thinking') {
-        // Small debounce lets SpeechRecognition shut down cleanly before idle.
         setTimeout(() => {
           if (localSpeakingRef.current) return;
           changeOrbState('idle');
@@ -165,15 +167,20 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     },
   });
 
-  // Either speak the reply, or (in text-only mode) just surface it and settle.
   const respond = useCallback((reply: string) => {
-    setLastAiResponse(reply);
     if (mutedRef.current) {
+      // Text-only mode: show immediately (no speech to wait for)
+      setLastAiResponse(reply);
       changeOrbState('idle');
       setUserQuery('');
       isProcessingRef.current = false;
       return;
     }
+
+    // ── FIX: don't set lastAiResponse yet — that would flash the full paragraph.
+    //    Store in ref; the onEnd callback above will surface it after speech.
+    pendingResponseRef.current = reply;
+    setLastAiResponse('');          // clear any prior response so display is clean
     changeOrbState('speaking');
     speak(cleanResponseForSpeech(reply));
   }, [changeOrbState, speak]);
@@ -190,19 +197,32 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     try {
       const { reply, visual: nextVisual } = await ask(text, opts);
       if (!reply) throw new Error('No response received');
-      // Stage is desktop-only. A null visual closes any open stage; a new
-      // one swaps it in. Mobile never opens it.
-      setVisual(isMobile ? null : (nextVisual ?? null));
+
+      // ── navigate_to: Astra triggers admin navigation via TanStack Router
+      if (nextVisual && (nextVisual as any).kind === 'navigate') {
+        const navPayload = nextVisual as any;
+        try {
+          navigate({ to: navPayload.path });
+        } catch (navErr) {
+          console.warn('[Jarvis] Navigation failed:', navErr);
+        }
+        // Don't open the visual stage for navigate — just confirm verbally
+        setVisual(null);
+      } else {
+        setVisual(isMobile ? null : (nextVisual ?? null));
+      }
+
       respond(reply);
     } catch (err) {
       console.error('[Jarvis] Error:', err);
       const errorMessage = err instanceof Error ? err.message : 'System error, sir.';
       setLastAiResponse(errorMessage);
+      pendingResponseRef.current = '';
       if (!mutedRef.current) speak(errorMessage);
       changeOrbState('idle');
       isProcessingRef.current = false;
     }
-  }, [ask, speak, changeOrbState, respond, isMobile]);
+  }, [ask, speak, changeOrbState, respond, isMobile, navigate]);
 
   useVoiceInput({
     onInterim: (text: string) => { if (!mutedRef.current) setInterimTranscript(text); },
@@ -222,7 +242,6 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     cancelSpeech: cancel,
   });
 
-  // Fires once after audio is unlocked; the edge function decides if it's morning.
   const maybePlayMorningBrief = useCallback(async () => {
     if (morningBriefDoneRef.current) return;
     morningBriefDoneRef.current = true;
@@ -231,6 +250,7 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
       const { isMorning, brief } = await morningBrief();
       if (!isMorning || !brief) return;
       localStorage.setItem('astra_brief_date', new Date().toDateString());
+      // For morning brief, show text immediately (no flash concern — it's the greeting)
       setLastAiResponse(brief);
       changeOrbState('speaking');
       speak(cleanResponseForSpeech(brief));
@@ -254,7 +274,7 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     void maybePlayMorningBrief();
   }, [isReady, unlockAudio, maybePlayMorningBrief]);
 
-  // ── Command bar handlers ──
+  // ── Command bar handlers ──────────────────────────────────────────────────
   const handleAttach = useCallback((files: FileList | null) => {
     if (!files?.length) return;
     const next: Attachment[] = Array.from(files).map((file) => ({
@@ -285,10 +305,9 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
     setAttachments([]);
     setInputValue('');
 
-    cancel();                        // interrupt any current speech
-    isProcessingRef.current = false; // never let a stuck turn block text
+    cancel();
+    isProcessingRef.current = false;
 
-    // Read images (→ vision) and text files (→ inline) before dispatching.
     let images: string[] = [];
     let fileText = '';
     if (atts.length) {
@@ -307,18 +326,22 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
   const handleToggleMute = useCallback(() => {
     setMuted((m) => {
       const next = !m;
-      if (next) cancel();          // muting → stop any current speech
-      else if (!isReady) void initializeJarvis(); // unmuting → ensure audio is live
+      if (next) cancel();
+      else if (!isReady) void initializeJarvis();
       return next;
     });
   }, [cancel, isReady, initializeJarvis]);
 
-  // ── Derived display ──
+  // ── Display text logic ────────────────────────────────────────────────────
+  // KEY FIX: when orbState === 'speaking', we ONLY show the current spoken
+  // subtitle. We never fall back to lastAiResponse during active speech —
+  // that's what caused the full-paragraph flash. The complete response text
+  // becomes visible in lastAiResponse only AFTER onEnd fires (see above).
   let displayText = '';
   if (orbState === 'thinking') {
     displayText = 'Thinking…';
   } else if (orbState === 'speaking') {
-    displayText = currentSubtitle || lastAiResponse;
+    displayText = currentSubtitle || '…'; // '…' while first audio chunk loads (~0.5s)
   } else if (orbState === 'error') {
     displayText = 'Microphone error. Allow permissions or use text-only mode.';
   } else if (interimTranscript) {
@@ -335,19 +358,13 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
 
   const accent = STATE_ACCENT[orbState];
   const isBusy = orbState === 'thinking' || orbState === 'speaking';
-
-  // Stage is desktop-only. When open, the whole hub shrinks into a live card
-  // in the top-left; tapping the card closes the stage and restores center.
-  const stageOpen = !isMobile && !!visual;
+  const stageOpen = !isMobile && !!visual && (visual as any).kind !== 'navigate';
   const orbSize = stageOpen ? 88 : (isMobile ? 260 : 360);
 
   return (
     <div className="admin-page" style={S.root}>
-      {/* Theme-aware background: clean radial wash + faint grid that reads in
-          both light and dark via the --background / --border variables. */}
       <div style={S.bgWash} />
       <div style={S.bgGrid} />
-      {/* Soft accent glow behind the orb. */}
       <div
         style={{
           ...S.orbGlow,
@@ -355,13 +372,10 @@ export function JarvisHub({ autoStart }: { autoStart?: boolean }) {
         }}
       />
 
-      {/* Desktop visual stage ("Astra's screen") */}
       <AnimatePresence>
         {stageOpen && <VisualStage key="stage" visual={visual!} />}
       </AnimatePresence>
 
-      {/* Hub. When the MacBook stage opens, Astra becomes a small orb that sits
-          in the empty space to the LEFT of the laptop — never over it. */}
       <motion.div
         key={stageOpen ? 'astra-staged' : 'astra-full'}
         style={stageOpen ? S.hubStaged : S.hub}
@@ -425,18 +439,9 @@ const S: Record<string, React.CSSProperties> = {
   },
   hubStaged: {
     position: 'fixed',
-    left: 'calc((100vw - min(76vw, 1200px)) / 4)', // centre of the gap left of the Mac
+    left: 'calc((100vw - min(76vw, 1200px)) / 4)',
     top: '13vh',
     zIndex: 30, background: 'transparent', cursor: 'pointer',
-  },
-  // Card chrome applied while the stage is open (transform handled by framer).
-  hubCard: {
-    background: 'transparent',
-    border: 'none',
-    borderRadius: 0,
-    boxShadow: 'none',
-    overflow: 'visible',
-    cursor: 'pointer',
   },
   contentCol: {
     position: 'absolute', inset: 0,
@@ -478,7 +483,6 @@ const S: Record<string, React.CSSProperties> = {
     maxWidth: 'calc((100vw - min(76vw, 1200px)) / 2 - 24px)',
   },
   transcript: {
-    // Scales down on narrow phones so long greetings never overflow.
     color: 'var(--foreground)', fontSize: 'clamp(1rem, 4.2vw, 1.25rem)', lineHeight: 1.45,
     fontWeight: 300, textTransform: 'none', opacity: 0.92,
   },
