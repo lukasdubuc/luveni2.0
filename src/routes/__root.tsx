@@ -58,6 +58,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "icon", type: "image/x-icon", href: "/favicon.ico" },
+      { rel: "apple-touch-icon", href: "/og-image.png" },
       { rel: "manifest", href: "/site.webmanifest" }
     ],
   }),
@@ -76,7 +77,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
             remove it. Your CSS uses :root.dark {...} not :root.light,
             so adding 'light' as a class was a no-op and .dark should only
             be present when actually in dark mode.
-        ─────────────────────────────────────────────────────────────── */}
+        ──────────────────────────────────────────────────────────────── */}
         <script dangerouslySetInnerHTML={{ __html: `
           (function() {
             try {
