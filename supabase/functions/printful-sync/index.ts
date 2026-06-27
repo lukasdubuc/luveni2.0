@@ -96,6 +96,23 @@ Deno.serve(async (req) => {
       return json({ synced: 0, total: 0, message: "No products found in Printful store" });
     }
 
+    // Preserve the admin's manual publish/draft choices across syncs.
+    // Map existing printful_id -> is_published so we don't re-publish a
+    // product the admin deliberately drafted (the old frontend "restore"
+    // hack did this and accidentally un-did tombstones).
+    const publishedByPid = new Map<string, boolean>();
+    try {
+      const exRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/products?select=printful_id,is_published&printful_id=not.is.null`,
+        { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } },
+      );
+      if (exRes.ok) {
+        for (const r of (await exRes.json()) as any[]) {
+          if (r.printful_id != null) publishedByPid.set(String(r.printful_id), !!r.is_published);
+        }
+      }
+    } catch { /* fall back to default publish for all */ }
+
     let synced = 0;
     const errors: string[] = [];
 
@@ -149,6 +166,11 @@ Deno.serve(async (req) => {
           };
         });
 
+        // Existing products keep the admin's publish choice; brand-new
+        // products default to published. Live in Printful ⇒ never archived.
+        const pid = String(item.id);
+        const isPublished = publishedByPid.has(pid) ? publishedByPid.get(pid)! : true;
+
         const { error } = await dbUpsertProduct({
           title: productName,
           slug,
@@ -156,8 +178,8 @@ Deno.serve(async (req) => {
           price_cents: priceCents,
           image_urls: imageUrls,
           is_archived: false,
-          is_published: true,
-          printful_id: String(item.id),
+          is_published: isPublished,
+          printful_id: pid,
           variants: variants.length > 0 ? variants : null,
           updated_at: new Date().toISOString(),
         });

@@ -362,14 +362,11 @@ function AdminPage() {
   const handleSyncProducts = async () => {
     setIsSyncing(true);
     try {
-      const originalStatuses: Record<string, boolean> = {};
-      products.forEach(p => {
-        originalStatuses[p.id] = p.is_published;
-      });
-
-      // Sync now runs as a Supabase Edge Function (where PRINTFUL_API_KEY
-      // lives as a project secret). invoke() attaches the caller's auth
-      // token + apikey automatically.
+      // Sync runs as a Supabase Edge Function (where PRINTFUL_API_KEY lives
+      // as a project secret). invoke() attaches the caller's auth token +
+      // apikey automatically. The function preserves manual draft/publish
+      // choices and tombstones products removed from Printful — so we no
+      // longer "restore" statuses here (that used to un-do deletions).
       const { data, error } = await supabase.functions.invoke("printful-sync", { body: {} });
       if (error) {
         toast.error(error.message || "Sync failed");
@@ -384,29 +381,8 @@ function AdminPage() {
         return;
       }
 
-      const { data: freshlySynced } = await supabase
-        .from("products")
-        .select("id, is_published");
-
-      if (freshlySynced) {
-        const restorePromises = freshlySynced
-          .filter(p => {
-            return originalStatuses[p.id] !== undefined && p.is_published !== originalStatuses[p.id];
-          })
-          .map(p => {
-            return supabase
-              .from("products")
-              .update({ is_published: originalStatuses[p.id] })
-              .eq("id", p.id);
-          });
-
-        if (restorePromises.length > 0) {
-          await Promise.all(restorePromises);
-        }
-      }
-
-      const apliqMsg = data.apliqSynced ? ` Verified ${data.apliqSynced} Apliq product(s) via database webhook.` : "";
-      toast.success(`Sync complete: ${data.synced || 0}/${data.total || 0} Printful product(s) processed.${apliqMsg}`);
+      const tombMsg = data.tombstoned ? ` Removed ${data.tombstoned} no longer on Printful.` : "";
+      toast.success(`Sync complete: ${data.synced || 0}/${data.total || 0} Printful product(s) processed.${tombMsg}`);
       await fetchData();
     } catch (e: any) {
       toast.error(`Sync error: ${e?.message || "Unknown error"}`);

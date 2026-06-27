@@ -36,8 +36,23 @@ export function useProducts(opts: UseProductsOptions = { onlyPublished: true }) 
   useEffect(() => {
     load();
     const onUpdate = () => load();
+    // Refetch when the visitor returns to the tab/window and on a light
+    // interval, so catalog changes from the live inventory heartbeat show
+    // up without a manual refresh. (Anon realtime is blocked by RLS, so we
+    // poll rather than subscribe for the public shop.)
+    const onVisible = () => { if (document.visibilityState === "visible") load(); };
     window.addEventListener("productsUpdated", onUpdate);
-    return () => window.removeEventListener("productsUpdated", onUpdate);
+    window.addEventListener("focus", onUpdate);
+    document.addEventListener("visibilitychange", onVisible);
+    const poll = setInterval(() => {
+      if (document.visibilityState === "visible") load();
+    }, 30000);
+    return () => {
+      window.removeEventListener("productsUpdated", onUpdate);
+      window.removeEventListener("focus", onUpdate);
+      document.removeEventListener("visibilitychange", onVisible);
+      clearInterval(poll);
+    };
   }, [load]);
 
   return { products, loading, refresh: load } as const;
