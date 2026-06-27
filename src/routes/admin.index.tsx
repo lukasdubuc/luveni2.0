@@ -367,18 +367,19 @@ function AdminPage() {
         originalStatuses[p.id] = p.is_published;
       });
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      const res = await fetch("/api/printful-sync", {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error || data.message || "Sync failed");
+      // Sync now runs as a Supabase Edge Function (where PRINTFUL_API_KEY
+      // lives as a project secret). invoke() attaches the caller's auth
+      // token + apikey automatically.
+      const { data, error } = await supabase.functions.invoke("printful-sync", { body: {} });
+      if (error) {
+        toast.error(error.message || "Sync failed");
         return;
       }
-      if (Array.isArray(data.errors) && data.errors.length > 0) {
+      if (data?.error) {
+        toast.error(data.error);
+        return;
+      }
+      if (Array.isArray(data?.errors) && data.errors.length > 0) {
         toast.error(data.errors[0]);
         return;
       }
