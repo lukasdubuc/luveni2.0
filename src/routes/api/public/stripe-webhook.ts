@@ -103,14 +103,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
           }
 
           if (event.type === "checkout.session.completed") {
-            // Fetch order to see if it requires Printful fulfillment
-            const { data: order } = await supabaseAdmin
-              .from("orders")
-              .select("printful_id")
-              .eq("id", orderId)
-              .single<{ printful_id: string | null }>();
-
-            // Update internal status
+            // Mark paid.
             await supabaseAdmin
               .from("orders")
               .update({ status: "paid", provider_ref: session.id })
@@ -130,10 +123,61 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
               ),
             ]);
 
-            // Conditional Printful Trigger
-            if (order?.printful_id) {
-              console.log(`Triggering Printful fulfillment for order ${orderId}`);
-              // API call logic would go here
+            // ── Real-time supplier fulfillment ──────────────────────
+            // Supplier API keys live in Supabase secrets, so fulfillment
+            // runs in the fulfill-order edge function. A failure here must
+            // never undo the paid status: we log + alert, but still 200.
+            try {
+              const fnUrl = process.env.SUPABASE_URL;
+              const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+              const ship =
+                (session as any).shipping_details ??
+                (session as any).collected_information?.shipping_details ??
+                null;
+              const addr = ship?.address ?? session.customer_details?.address ?? null;
+
+              if (fnUrl && serviceKey && addr) {
+                const recipient = {
+                  name: ship?.name ?? session.customer_details?.name ?? "Customer",
+                  email: session.customer_details?.email ?? undefined,
+                  phone: session.customer_details?.phone ?? undefined,
+                  address1: addr.line1 ?? "",
+                  address2: addr.line2 ?? undefined,
+                  city: addr.city ?? "",
+                  state_code: addr.state ?? undefined,
+                  country_code: addr.country ?? "",
+                  zip: addr.postal_code ?? "",
+                };
+                const fRes = await fetch(`${fnUrl}/functions/v1/fulfill-order`, {
+                  method: "POST",
+                  headers: { Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+                  body: JSON.stringify({ orderId, recipient }),
+                });
+                const fData = await fRes.json().catch(() => ({}));
+                if (!fRes.ok || fData?.ok === false) {
+                  const detail = Array.isArray(fData?.results)
+                    ? fData.results.filter((r: any) => !r.ok).map((r: any) => `${r.provider}: ${r.error}`).join("; ")
+                    : fData?.error || `HTTP ${fRes.status}`;
+                  await sendDiscordAlert(
+                    `${orderId} ⚠️ FULFILLMENT NEEDS ATTENTION — ${detail}`,
+                    session.amount_total ?? 0,
+                    session.customer_details?.email ?? "unknown"
+                  );
+                }
+              } else {
+                await sendDiscordAlert(
+                  `${orderId} ⚠️ PAID but ${!addr ? "no shipping address" : "fulfillment not configured"} — manual fulfillment needed`,
+                  session.amount_total ?? 0,
+                  session.customer_details?.email ?? "unknown"
+                );
+              }
+            } catch (fErr) {
+              console.error(`Fulfillment trigger failed for ${orderId}`, fErr);
+              await sendDiscordAlert(
+                `${orderId} ⚠️ FULFILLMENT EXCEPTION — ${(fErr as Error).message}`,
+                session.amount_total ?? 0,
+                session.customer_details?.email ?? "unknown"
+              );
             }
 
           } else if (
