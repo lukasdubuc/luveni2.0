@@ -23,6 +23,17 @@ export const createCheckout = createServerFn({ method: "POST" })
     if (!stripeKey) return { ok: false as const, error: "Payments not configured." };
 
     const line_items = [];
+    // Per-item supplier routing, persisted on the order so the Stripe
+    // webhook can auto-submit fulfillment without re-deriving anything.
+    const orderItems: {
+      product_id: string;
+      title: string;
+      variant_sku?: string;
+      external_sku?: string;
+      fulfillment_provider?: string;
+      quantity: number;
+      price_cents: number;
+    }[] = [];
     let totalCents = 0;
 
     // --- NEW: INVENTORY VALIDATION ---
@@ -39,12 +50,18 @@ export const createCheckout = createServerFn({ method: "POST" })
       // 2. Determine Price and Stock Level (stock lives per-variant in JSONB)
       let price = product.price_cents;
       let availableStock: number | undefined;
+      let matchedVariant: any = undefined;
 
-      if (item.variantSku && Array.isArray(product.variants)) {
-        const variant = (product.variants as any[]).find((v: any) => v.sku === item.variantSku);
-        if (variant) {
-          if (typeof variant.price_cents === "number") price = variant.price_cents;
-          if (typeof variant.stock === "number") availableStock = variant.stock;
+      if (Array.isArray(product.variants)) {
+        const variants = product.variants as any[];
+        // Match the chosen variant; if none was specified, fall back to the
+        // first variant so single-variant products still route correctly.
+        matchedVariant =
+          (item.variantSku && variants.find((v: any) => v.sku === item.variantSku)) ||
+          (variants.length === 1 ? variants[0] : undefined);
+        if (matchedVariant) {
+          if (typeof matchedVariant.price_cents === "number") price = matchedVariant.price_cents;
+          if (typeof matchedVariant.stock === "number") availableStock = matchedVariant.stock;
         }
       }
 
@@ -54,7 +71,17 @@ export const createCheckout = createServerFn({ method: "POST" })
       }
 
       totalCents += price * item.quantity;
-      
+
+      orderItems.push({
+        product_id: product.id,
+        title: product.title,
+        variant_sku: item.variantSku,
+        external_sku: matchedVariant?.external_sku,
+        fulfillment_provider: matchedVariant?.fulfillment_provider,
+        quantity: item.quantity,
+        price_cents: price,
+      });
+
       line_items.push({
         quantity: item.quantity,
         price_data: {
@@ -80,6 +107,7 @@ export const createCheckout = createServerFn({ method: "POST" })
         amount_cents: totalCents,
         status: "pending",
         provider: "stripe",
+        metadata: { items: orderItems },
       })
       .select("id")
       .single();
@@ -95,6 +123,12 @@ export const createCheckout = createServerFn({ method: "POST" })
         mode: "payment",
         customer_email: data.email,
         line_items,
+        // Collect a shipping destination — required for print-on-demand
+        // fulfillment (Printful / Apliiq) to have somewhere to ship.
+        shipping_address_collection: {
+          allowed_countries: ["US", "CA", "GB", "AU", "DE", "FR", "ES", "IT", "NL", "IE", "SE", "NO", "DK", "FI", "NZ"],
+        },
+        phone_number_collection: { enabled: true },
         success_url: `${origin}/thank-you?order=${order.id}`,
         cancel_url: `${origin}/checkout?canceled=1`,
         metadata: { order_id: order.id },

@@ -103,20 +103,29 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
           }
 
           if (event.type === "checkout.session.completed") {
-            // Fetch order to see if it requires Printful fulfillment
+            // Fetch the order with its stored line-item routing + metadata.
             const { data: order } = await supabaseAdmin
               .from("orders")
-              .select("printful_id")
+              .select("id, status, metadata")
               .eq("id", orderId)
-              .single<{ printful_id: string | null }>();
+              .single<{ id: string; status: string; metadata: any }>();
 
-            // Update internal status
+            const metadata = order?.metadata ?? {};
+
+            // Idempotency: Stripe retries webhooks. If we've already
+            // submitted fulfillment for this order, do nothing further.
+            if (metadata.fulfillment) {
+              console.log(`Order ${orderId} already fulfilled; skipping.`);
+              return new Response(JSON.stringify({ received: true, duplicate: true }), { status: 200 });
+            }
+
+            // Mark paid.
             await supabaseAdmin
               .from("orders")
               .update({ status: "paid", provider_ref: session.id })
               .eq("id", orderId);
 
-            // Fire both notifications simultaneously
+            // Fire notifications (non-blocking on fulfillment).
             await Promise.all([
               sendDiscordAlert(
                 orderId,
@@ -130,10 +139,74 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
               ),
             ]);
 
-            // Conditional Printful Trigger
-            if (order?.printful_id) {
-              console.log(`Triggering Printful fulfillment for order ${orderId}`);
-              // API call logic would go here
+            // ── Real-time supplier fulfillment ──────────────────────
+            // Never let a supplier failure lose the sale: the order is
+            // already paid. We record results + alert on any problem.
+            try {
+              const { fulfillOrder } = await import("@/lib/fulfillment.server");
+
+              const items = Array.isArray(metadata.items) ? metadata.items : [];
+              // Stripe exposes the collected shipping address; fall back to
+              // billing details if shipping wasn't returned.
+              const ship =
+                (session as any).shipping_details ??
+                (session as any).collected_information?.shipping_details ??
+                null;
+              const addr = ship?.address ?? session.customer_details?.address ?? null;
+              const recipientName =
+                ship?.name ?? session.customer_details?.name ?? "Customer";
+
+              if (items.length > 0 && addr) {
+                const recipient = {
+                  name: recipientName,
+                  email: session.customer_details?.email ?? undefined,
+                  phone: session.customer_details?.phone ?? undefined,
+                  address1: addr.line1 ?? "",
+                  address2: addr.line2 ?? undefined,
+                  city: addr.city ?? "",
+                  state_code: addr.state ?? undefined,
+                  country_code: addr.country ?? "",
+                  zip: addr.postal_code ?? "",
+                };
+
+                const results = await fulfillOrder(orderId, recipient, items);
+                const problems = results.filter((r) => !r.ok);
+
+                await supabaseAdmin
+                  .from("orders")
+                  .update({
+                    metadata: {
+                      ...metadata,
+                      fulfillment: { submitted_at: new Date().toISOString(), results },
+                    },
+                  })
+                  .eq("id", orderId);
+
+                if (problems.length > 0) {
+                  const summary = problems
+                    .map((p) => `${p.provider}${p.skipped ? " (manual)" : ""}: ${p.error}`)
+                    .join("; ");
+                  await sendDiscordAlert(
+                    `${orderId} ⚠️ FULFILLMENT NEEDS ATTENTION — ${summary}`,
+                    session.amount_total ?? 0,
+                    session.customer_details?.email ?? "unknown"
+                  );
+                }
+              } else {
+                console.warn(`Order ${orderId}: no items or no shipping address; fulfillment skipped.`);
+                await sendDiscordAlert(
+                  `${orderId} ⚠️ PAID but missing ${items.length === 0 ? "line items" : "shipping address"} — manual fulfillment needed`,
+                  session.amount_total ?? 0,
+                  session.customer_details?.email ?? "unknown"
+                );
+              }
+            } catch (fErr) {
+              console.error(`Fulfillment error for order ${orderId}`, fErr);
+              await sendDiscordAlert(
+                `${orderId} ⚠️ FULFILLMENT EXCEPTION — ${(fErr as Error).message}`,
+                session.amount_total ?? 0,
+                session.customer_details?.email ?? "unknown"
+              );
             }
 
           } else if (

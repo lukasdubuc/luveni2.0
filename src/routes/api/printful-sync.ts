@@ -85,19 +85,35 @@ export const Route = createFileRoute("/api/printful-sync")({
           // ───────────────────────────────────────────────────────────
           // 2. Fetch Product List
           // ───────────────────────────────────────────────────────────
+          // Multi-store accounts must scope requests with a store id.
+          const storeId = process.env.PRINTFUL_STORE_ID;
+          const printfulHeaders: Record<string, string> = {
+            Authorization: `Bearer ${apiKey}`,
+          };
+          if (storeId) printfulHeaders["X-PF-Store-Id"] = storeId;
+
           const listRes = await fetch(
             "https://api.printful.com/sync/products",
-            {
-              headers: {
-                Authorization: `Bearer ${apiKey}`,
-              },
-            }
+            { headers: printfulHeaders }
           );
 
           if (!listRes.ok) {
+            // Surface Printful's own message so the cause is obvious in the
+            // admin toast (e.g. 401 invalid key, 403 store scope required).
+            const bodyText = await listRes.text().catch(() => "");
+            let detail = bodyText;
+            try {
+              detail = JSON.parse(bodyText)?.result || JSON.parse(bodyText)?.error?.message || bodyText;
+            } catch { /* keep raw text */ }
+            const hint =
+              listRes.status === 401
+                ? " — PRINTFUL_API_KEY is missing or invalid (check Cloudflare env)."
+                : listRes.status === 403
+                ? " — token lacks access; multi-store accounts need PRINTFUL_STORE_ID set."
+                : "";
             return new Response(
               JSON.stringify({
-                error: `Printful list error: ${listRes.status} ${listRes.statusText}`,
+                error: `Printful list error ${listRes.status}: ${detail || listRes.statusText}${hint}`,
               }),
               {
                 status: 502,
@@ -143,11 +159,7 @@ export const Route = createFileRoute("/api/printful-sync")({
             try {
               const detailRes = await fetch(
                 `https://api.printful.com/sync/products/${item.id}`,
-                {
-                  headers: {
-                    Authorization: `Bearer ${apiKey}`,
-                  },
-                }
+                { headers: printfulHeaders }
               );
 
               if (!detailRes.ok) {
