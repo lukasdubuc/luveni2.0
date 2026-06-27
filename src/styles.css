@@ -14,6 +14,45 @@
   --color-subtle: var(--subtle);
   --font-sans: "SF Pro Display", "SF Pro Text", "SF Pro", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
   --font-mono: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  /*
+    Custom palette shades. The codebase uses off-step shades (e.g.
+    neutral-555, emerald-555, sky-505) that existed in the project's
+    pre-v4 Tailwind config. Tailwind v4 only generates standard stops,
+    so without these the classes produced NO css — causing dim/low-
+    contrast text on admin pages and invisible green status dots.
+    Values are interpolated from Tailwind's standard scale.
+  */
+  --color-neutral-101: #f4f4f4;
+  --color-neutral-105: #f3f3f3;
+  --color-neutral-150: #ededed;
+  --color-neutral-202: #e5e5e5;
+  --color-neutral-250: #dcdcdc;
+  --color-neutral-303: #d4d4d4;
+  --color-neutral-305: #d2d2d2;
+  --color-neutral-350: #bcbcbc;
+  --color-neutral-355: #bababa;
+  --color-neutral-405: #9f9f9f;
+  --color-neutral-450: #8a8a8a;
+  --color-neutral-455: #888888;
+  --color-neutral-550: #626262;
+  --color-neutral-555: #606060;
+  --color-neutral-655: #494949;
+  --color-neutral-705: #3f3f3f;
+  --color-neutral-750: #333333;
+  --color-neutral-808: #252525;
+  --color-neutral-850: #1f1f1f;
+  --color-neutral-955: #080808;
+  --color-emerald-505: #10b981;
+  --color-emerald-555: #0d9f74;
+  --color-amber-555: #eb9408;
+  --color-purple-450: #b06bf9;
+  --color-rose-450: #f75872;
+  --color-rose-455: #f5506b;
+  --color-rose-505: #f43f5e;
+  --color-rose-655: #d01a44;
+  --color-sky-450: #20b1f0;
+  --color-sky-505: #0ea5e9;
 }
 
 /* Force early background paint */
