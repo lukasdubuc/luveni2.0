@@ -5,21 +5,28 @@
 //  (marquee a space → generate into it). Client-only (Konva needs DOM).
 // ─────────────────────────────────────────────────────────────
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Stage, Layer, Image as KImage, Text as KText, Rect, Group, Transformer } from "react-konva";
+import { Stage, Layer, Image as KImage, Text as KText, Rect, Transformer } from "react-konva";
 import type Konva from "konva";
 import {
   Type, ImagePlus, Sparkles, Trash2, Eye, EyeOff, ArrowUp, ArrowDown,
   Save, Download, Loader2, Wand2, X, RefreshCw, Undo2, Redo2, SquareDashed,
+  Paintbrush, FlipHorizontal2, FlipVertical2, MousePointer2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
+export type BlendMode = "source-over" | "multiply" | "screen" | "overlay" | "darken" | "lighten";
+
 export type StudioLayer = {
-  id: string; type: "image" | "text"; name: string; visible: boolean;
+  id: string; type: "image" | "text" | "paint"; name: string; visible: boolean;
   x: number; y: number; rotation: number; opacity: number;
   src?: string; width?: number; height?: number;
   text?: string; fontSize?: number; fill?: string; fontStyle?: string; fontFamily?: string;
+  blend?: BlendMode;
 };
+
+const BLENDS: BlendMode[] = ["source-over", "multiply", "screen", "overlay", "darken", "lighten"];
+const BLEND_LABEL: Record<BlendMode, string> = { "source-over": "Normal", multiply: "Multiply", screen: "Screen", overlay: "Overlay", darken: "Darken", lighten: "Lighten" };
 
 type Props = {
   projectId: string;
@@ -53,6 +60,7 @@ function ImageNode({ layer, onChange, onSelect, nodeRef, listening }: any) {
       ref={nodeRef} image={img || undefined}
       x={layer.x} y={layer.y} width={layer.width} height={layer.height}
       rotation={layer.rotation} opacity={layer.opacity}
+      globalCompositeOperation={layer.blend || "source-over"}
       draggable={listening} listening={listening}
       onClick={onSelect} onTap={onSelect}
       onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y() })}
@@ -73,6 +81,7 @@ function TextNode({ layer, onChange, onSelect, nodeRef, listening }: any) {
       x={layer.x} y={layer.y} fontSize={layer.fontSize} fill={layer.fill}
       fontStyle={layer.fontStyle} fontFamily={layer.fontFamily || "Space Mono"}
       rotation={layer.rotation} opacity={layer.opacity}
+      globalCompositeOperation={layer.blend || "source-over"}
       draggable={listening} listening={listening}
       onClick={onSelect} onTap={onSelect}
       onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y() })}
@@ -81,6 +90,19 @@ function TextNode({ layer, onChange, onSelect, nodeRef, listening }: any) {
         n.scaleX(1); n.scaleY(1);
         onChange({ x: n.x(), y: n.y(), fontSize: Math.max(6, (layer.fontSize || 48) * sx), rotation: n.rotation() });
       }}
+    />
+  );
+}
+
+// Paint layers render a backing HTMLCanvas as a Konva image. The canvas is
+// painted imperatively (brush strokes); `version` forces a re-render when the
+// blend/opacity changes (live strokes call layer.batchDraw directly).
+function PaintNode({ layer, canvas }: any) {
+  if (!layer.visible || !canvas) return null;
+  return (
+    <KImage
+      image={canvas} x={0} y={0} listening={false}
+      opacity={layer.opacity} globalCompositeOperation={layer.blend || "source-over"}
     />
   );
 }
@@ -94,12 +116,47 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const [regionMode, setRegionMode] = useState(false);
   const [region, setRegion] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
 
+  // Paint engine state
+  const [tool, setTool] = useState<"select" | "brush">("select");
+  const [brushSize, setBrushSize] = useState(120);
+  const [brushColor, setBrushColor] = useState("#000000");
+  const [symmetry, setSymmetry] = useState<"off" | "v" | "h">("off");
+  const [, setPaintVersion] = useState(0);
+
   const stageRef = useRef<Konva.Stage>(null);
   const trRef = useRef<Konva.Transformer>(null);
   const nodeRefs = useRef<Record<string, Konva.Node | null>>({});
   const past = useRef<StudioLayer[][]>([]);
   const future = useRef<StudioLayer[][]>([]);
   const drawing = useRef<{ x: number; y: number } | null>(null);
+  // Backing canvases for paint layers + last brush point + paint undo stacks.
+  const paintCanvases = useRef<Record<string, HTMLCanvasElement>>({});
+  const loadedPaint = useRef<Set<string>>(new Set());
+  const lastPt = useRef<{ x: number; y: number } | null>(null);
+  const painting = useRef(false);
+  const paintUndo = useRef<{ id: string; data: string }[]>([]);
+  const paintRedo = useRef<{ id: string; data: string }[]>([]);
+
+  // Lazily create (and rehydrate from saved src) a paint layer's canvas.
+  const getPaintCanvas = useCallback((l: StudioLayer): HTMLCanvasElement => {
+    let c = paintCanvases.current[l.id];
+    if (!c) {
+      c = document.createElement("canvas");
+      c.width = artboardW; c.height = artboardH;
+      paintCanvases.current[l.id] = c;
+    }
+    if (l.src && !loadedPaint.current.has(l.id)) {
+      loadedPaint.current.add(l.id);
+      const im = new window.Image(); im.crossOrigin = "anonymous"; im.src = l.src;
+      im.onload = () => { c!.getContext("2d")!.drawImage(im, 0, 0); redrawStage(); };
+    }
+    return c;
+  }, [artboardW, artboardH]);
+
+  const redrawStage = useCallback(() => {
+    stageRef.current?.getLayers()?.[0]?.batchDraw();
+    setPaintVersion((v) => v + 1);
+  }, []);
 
   // History — snapshot BEFORE a mutation, then apply.
   const commit = useCallback((updater: (ls: StudioLayer[]) => StudioLayer[]) => {
@@ -121,7 +178,10 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
-        e.shiftKey ? redo() : undo();
+        // Paint strokes have their own (pixel) history; fall back to the
+        // layer history when there are no paint steps left.
+        if (e.shiftKey) { if (!redoPaint()) redo(); }
+        else { if (!undoPaint()) undo(); }
       }
       if (e.key === "Delete" || e.key === "Backspace") {
         if (selectedId) { e.preventDefault(); commit((ls) => ls.filter((l) => l.id !== selectedId)); setSelectedId(null); }
@@ -145,9 +205,9 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   useEffect(() => {
     const tr = trRef.current; if (!tr) return;
     const node = selectedId ? nodeRefs.current[selectedId] : null;
-    tr.nodes(node && !regionMode ? [node] : []);
+    tr.nodes(node && !regionMode && tool === "select" ? [node] : []);
     tr.getLayer()?.batchDraw();
-  }, [selectedId, layers, regionMode]);
+  }, [selectedId, layers, regionMode, tool]);
 
   const patchLayer = useCallback((id: string, patch: Partial<StudioLayer>) => {
     commit((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)));
@@ -176,6 +236,76 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   };
 
   const uploadImage = (file: File) => { const r = new FileReader(); r.onload = () => addImageAt(r.result as string, file.name); r.readAsDataURL(file); };
+
+  // ── Paint engine ───────────────────────────────────────────────
+  const addPaintLayer = () => {
+    const l: StudioLayer = { id: uid(), type: "paint", name: "Paint", visible: true, x: 0, y: 0, rotation: 0, opacity: 1, blend: "source-over" };
+    getPaintCanvas(l);
+    commit((ls) => [...ls, l]); setSelectedId(l.id); setTool("brush");
+  };
+
+  // Ensure there's a paint layer to draw on; returns its id.
+  const ensurePaintTarget = (): string | null => {
+    const sel = layers.find((l) => l.id === selectedId);
+    if (sel?.type === "paint") return sel.id;
+    const anyPaint = [...layers].reverse().find((l) => l.type === "paint");
+    if (anyPaint) { setSelectedId(anyPaint.id); return anyPaint.id; }
+    return null;
+  };
+
+  const snapshotPaint = (id: string) => {
+    const c = paintCanvases.current[id]; if (!c) return;
+    paintUndo.current.push({ id, data: c.toDataURL() });
+    if (paintUndo.current.length > 12) paintUndo.current.shift();
+    paintRedo.current = [];
+  };
+
+  const dab = (id: string, x: number, y: number, pressure: number) => {
+    const c = paintCanvases.current[id]; if (!c) return;
+    const ctx = c.getContext("2d")!;
+    const r = (brushSize / 2) * (0.4 + pressure * 0.6);
+    const draw = (px: number, py: number) => {
+      const g = ctx.createRadialGradient(px, py, 0, px, py, r);
+      g.addColorStop(0, brushColor);
+      g.addColorStop(0.75, brushColor);
+      g.addColorStop(1, brushColor + "00");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+    };
+    draw(x, y);
+    if (symmetry === "v") draw(artboardW - x, y);
+    if (symmetry === "h") draw(x, artboardH - y);
+  };
+
+  // interpolate between last and current point so fast strokes stay continuous
+  const strokeTo = (id: string, x: number, y: number, pressure: number) => {
+    const last = lastPt.current;
+    if (last) {
+      const dist = Math.hypot(x - last.x, y - last.y);
+      const step = Math.max(2, brushSize * 0.18);
+      const n = Math.ceil(dist / step);
+      for (let i = 1; i <= n; i++) dab(id, last.x + ((x - last.x) * i) / n, last.y + ((y - last.y) * i) / n, pressure);
+    } else dab(id, x, y, pressure);
+    lastPt.current = { x, y };
+    redrawStage();
+  };
+
+  const undoPaint = () => {
+    const entry = paintUndo.current.pop(); if (!entry) return false;
+    const c = paintCanvases.current[entry.id]; if (!c) return false;
+    paintRedo.current.push({ id: entry.id, data: c.toDataURL() });
+    const im = new window.Image(); im.src = entry.data;
+    im.onload = () => { const ctx = c.getContext("2d")!; ctx.clearRect(0, 0, c.width, c.height); ctx.drawImage(im, 0, 0); redrawStage(); };
+    return true;
+  };
+  const redoPaint = () => {
+    const entry = paintRedo.current.pop(); if (!entry) return false;
+    const c = paintCanvases.current[entry.id]; if (!c) return false;
+    paintUndo.current.push({ id: entry.id, data: c.toDataURL() });
+    const im = new window.Image(); im.src = entry.data;
+    im.onload = () => { const ctx = c.getContext("2d")!; ctx.clearRect(0, 0, c.width, c.height); ctx.drawImage(im, 0, 0); redrawStage(); };
+    return true;
+  };
 
   const runAi = async (body: any) => {
     const { data, error } = await supabase.functions.invoke("ai-generate-image", { body });
@@ -220,12 +350,16 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     const c = [...ls]; [c[i], c[j]] = [c[j], c[i]]; return c;
   });
 
+  // Bake each paint layer's pixels into its `src` so strokes persist.
+  const serializeLayers = (): StudioLayer[] =>
+    layers.map((l) => (l.type === "paint" && paintCanvases.current[l.id]) ? { ...l, src: paintCanvases.current[l.id].toDataURL() } : l);
+
   const save = async () => {
     setSaving(true);
     try {
       let thumbnail: string | undefined;
       try { thumbnail = stageRef.current?.toDataURL({ pixelRatio: 0.12 }); } catch { /* tainted */ }
-      const { error } = await supabase.from("studio_projects").update({ canvas: { layers }, thumbnail_url: thumbnail, updated_at: new Date().toISOString() }).eq("id", projectId);
+      const { error } = await supabase.from("studio_projects").update({ canvas: { layers: serializeLayers() }, thumbnail_url: thumbnail, updated_at: new Date().toISOString() }).eq("id", projectId);
       if (error) { toast.error(error.message); return; }
       toast.success("Saved.");
     } finally { setSaving(false); }
@@ -284,9 +418,13 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
           <button onClick={undo} className={pill} title="Undo (⌘Z)"><Undo2 size={13} /></button>
           <button onClick={redo} className={pill} title="Redo (⌘⇧Z)"><Redo2 size={13} /></button>
           <span className="w-px h-4 opacity-10 bg-current" />
+          <button onClick={() => { setTool("select"); setRegionMode(false); }} className={pill + (tool === "select" ? (isDark ? " bg-white/15" : " bg-black/10") : "")} title="Select / move"><MousePointer2 size={13} /></button>
+          <button onClick={() => { setTool("brush"); setRegionMode(false); }} className={pill + (tool === "brush" ? (isDark ? " bg-white/15" : " bg-black/10") : "")} title="Brush"><Paintbrush size={13} /></button>
+          <span className="w-px h-4 opacity-10 bg-current" />
           <button onClick={addText} className={pill}><Type size={13} /> Text</button>
           <label className={pill + " cursor-pointer"}><ImagePlus size={13} /> Upload<input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadImage(e.target.files[0])} /></label>
-          <button onClick={() => { setRegionMode((v) => !v); setSelectedId(null); }} className={pill + (regionMode ? (isDark ? " bg-white/15" : " bg-black/10") : "")} title="Draw a region for AI">
+          <button onClick={addPaintLayer} className={pill}><Paintbrush size={13} /> Paint layer</button>
+          <button onClick={() => { setRegionMode((v) => !v); setTool("select"); setSelectedId(null); }} className={pill + (regionMode ? (isDark ? " bg-white/15" : " bg-black/10") : "")} title="Draw a region for AI">
             <SquareDashed size={13} /> Region AI
           </button>
         </div>
@@ -314,6 +452,27 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
         </div>
       </div>
 
+      {/* Brush controls — only while painting */}
+      {tool === "brush" && (
+        <div className="px-4 pb-2">
+          <div className={`flex items-center gap-3 px-3 py-2 rounded-full ${isDark ? "bg-neutral-900/70 backdrop-blur-xl" : "bg-white/90 backdrop-blur-xl shadow-[0_2px_12px_rgba(0,0,0,0.06)]"}`}>
+            <Paintbrush size={13} className="opacity-50 ml-1" />
+            <input type="color" value={brushColor} onChange={(e) => setBrushColor(e.target.value)} className="w-7 h-7 rounded-full bg-transparent border-0 cursor-pointer" title="Brush color" />
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] opacity-50 uppercase tracking-widest">Size</span>
+              <input type="range" min={4} max={600} value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} className="w-40" />
+              <span className="text-[9px] opacity-60 w-8">{brushSize}</span>
+            </div>
+            <span className="w-px h-4 opacity-10 bg-current" />
+            <span className="text-[9px] opacity-50 uppercase tracking-widest">Symmetry</span>
+            <button onClick={() => setSymmetry((s) => (s === "off" ? "v" : s === "v" ? "h" : "off"))}
+              className={pill + (symmetry !== "off" ? (isDark ? " bg-white/15" : " bg-black/10") : "")}>
+              {symmetry === "h" ? <FlipVertical2 size={13} /> : <FlipHorizontal2 size={13} />} {symmetry === "off" ? "Off" : symmetry === "v" ? "Vertical" : "Horizontal"}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 flex overflow-hidden">
         {/* Canvas */}
         <div className="flex-1 flex items-center justify-center overflow-auto p-6">
@@ -321,12 +480,31 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
             <Stage
               ref={stageRef}
               width={artboardW * scale} height={artboardH * scale} scaleX={scale} scaleY={scale}
+              style={{ cursor: tool === "brush" ? "crosshair" : "default" }}
               onMouseDown={(e) => {
+                if (tool === "brush") {
+                  const id = ensurePaintTarget();
+                  if (!id) { toast.error("Add a paint layer first"); return; }
+                  const p = e.target.getStage()!.getRelativePointerPosition()!;
+                  snapshotPaint(id); painting.current = true; lastPt.current = null;
+                  strokeTo(id, p.x, p.y, (e.evt as any).pressure || 0.5);
+                  return;
+                }
                 if (regionMode) { const p = e.target.getStage()!.getRelativePointerPosition()!; drawing.current = { x: p.x, y: p.y }; setRegion({ x: p.x, y: p.y, w: 0, h: 0 }); return; }
                 if (e.target === e.target.getStage() || (e.target as any).attrs?.name === "bg") setSelectedId(null);
               }}
-              onMouseMove={(e) => { if (regionMode && drawing.current) { const p = e.target.getStage()!.getRelativePointerPosition()!; const s = drawing.current; setRegion({ x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), w: Math.abs(p.x - s.x), h: Math.abs(p.y - s.y) }); } }}
-              onMouseUp={() => { if (regionMode && drawing.current && region) { drawing.current = null; finalizeRegion(region); } }}
+              onMouseMove={(e) => {
+                if (tool === "brush" && painting.current) {
+                  const id = layers.find((l) => l.id === selectedId)?.type === "paint" ? selectedId! : ensurePaintTarget();
+                  if (id) { const p = e.target.getStage()!.getRelativePointerPosition()!; strokeTo(id, p.x, p.y, (e.evt as any).pressure || 0.5); }
+                  return;
+                }
+                if (regionMode && drawing.current) { const p = e.target.getStage()!.getRelativePointerPosition()!; const s = drawing.current; setRegion({ x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), w: Math.abs(p.x - s.x), h: Math.abs(p.y - s.y) }); }
+              }}
+              onMouseUp={() => {
+                if (painting.current) { painting.current = false; lastPt.current = null; return; }
+                if (regionMode && drawing.current && region) { drawing.current = null; finalizeRegion(region); }
+              }}
             >
               <Layer>
                 {/* Product blank: tinted body + print-area guide */}
@@ -334,15 +512,21 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
                 <Rect x={artboardW * 0.06} y={artboardH * 0.05} width={artboardW * 0.88} height={artboardH * 0.9} cornerRadius={artboardW * 0.06} fill={isDark ? "#161616" : "#f1f1f3"} listening={false} />
                 <Rect x={artboardW * pa.x} y={artboardH * pa.y} width={artboardW * pa.w} height={artboardH * pa.h} stroke="#9ca3af" strokeWidth={4} dash={[26, 18]} cornerRadius={20} listening={false} />
 
-                {layers.map((l) => l.type === "image" ? (
-                  <ImageNode key={l.id} layer={l} listening={!regionMode}
+                {layers.map((l) => l.type === "paint" ? (
+                  <PaintNode key={l.id} layer={l} canvas={getPaintCanvas(l)} />
+                ) : l.type === "image" ? (
+                  <ImageNode key={l.id} layer={l} listening={!regionMode && tool === "select"}
                     nodeRef={(n: any) => (nodeRefs.current[l.id] = n)}
                     onSelect={() => setSelectedId(l.id)} onChange={(patch: any) => patchLayer(l.id, patch)} />
                 ) : (
-                  <TextNode key={l.id} layer={l} listening={!regionMode}
+                  <TextNode key={l.id} layer={l} listening={!regionMode && tool === "select"}
                     nodeRef={(n: any) => (nodeRefs.current[l.id] = n)}
                     onSelect={() => setSelectedId(l.id)} onChange={(patch: any) => patchLayer(l.id, patch)} />
                 ))}
+
+                {/* Symmetry mirror guide */}
+                {tool === "brush" && symmetry === "v" && <Rect x={artboardW / 2 - 1} y={0} width={2} height={artboardH} fill="#6366f1" opacity={0.5} listening={false} />}
+                {tool === "brush" && symmetry === "h" && <Rect x={0} y={artboardH / 2 - 1} width={artboardW} height={2} fill="#6366f1" opacity={0.5} listening={false} />}
 
                 {region && <Rect x={region.x} y={region.y} width={region.w} height={region.h} stroke="#6366f1" strokeWidth={4} dash={[16, 12]} fill="rgba(99,102,241,0.08)" listening={false} />}
                 <Transformer ref={trRef} rotateEnabled keepRatio={false} anchorCornerRadius={20} borderStroke="#6366f1" anchorStroke="#6366f1" />
@@ -366,6 +550,15 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
                       className={`w-20 bg-transparent border rounded-full px-3 py-1.5 text-[11px] ${isDark ? "border-neutral-800" : "border-[#E2E2E6]"}`} />
                     <button onClick={() => patchLayer(selected.id, { fontStyle: selected.fontStyle === "bold" ? "normal" : "bold" })} className={pill + " !px-3 font-bold"}>B</button>
                   </div>
+                </div>
+              )}
+              {(selected.type === "image" || selected.type === "paint") && (
+                <div className="mt-3">
+                  <p className="text-[8px] uppercase tracking-widest opacity-40 mb-1">Blend mode</p>
+                  <select value={selected.blend || "source-over"} onChange={(e) => patchLayer(selected.id, { blend: e.target.value as BlendMode })}
+                    className={`w-full bg-transparent border rounded-full px-3 py-1.5 text-[10px] ${isDark ? "border-neutral-800" : "border-[#E2E2E6]"}`}>
+                    {BLENDS.map((b) => <option key={b} value={b} className="text-black">{BLEND_LABEL[b]}</option>)}
+                  </select>
                 </div>
               )}
               <div className="mt-3">
