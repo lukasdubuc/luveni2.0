@@ -937,6 +937,16 @@ function AdminPage() {
               </button>
             );
           })}
+          <a
+            href="/admin/studio"
+            className={`w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-[12px] text-[11px] font-mono font-semibold uppercase tracking-wider transition-all duration-150 ${
+              isDark ? "text-neutral-500 hover:text-neutral-202" : "text-neutral-400 hover:text-neutral-900 hover:bg-black/[0.04]"
+            }`}
+          >
+            <span className="text-[13px] w-4 text-center leading-none opacity-80">✦</span>
+            studio
+            <span className={`ml-auto text-[8px] px-1.5 py-0.5 rounded-full ${isDark ? "bg-white/10 text-white/70" : "bg-black/10 text-black/70"}`}>NEW</span>
+          </a>
         </div>
 
         {/* Live KPIs */}

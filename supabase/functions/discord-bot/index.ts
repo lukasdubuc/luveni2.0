@@ -108,39 +108,36 @@ serve(async (req: Request) => {
   const botToken = Deno.env.get('DISCORD_BOT_TOKEN');
   const mistralApiKey = Deno.env.get('MISTRAL_API_KEY');
 
-  // One-Click Slash Command Installer (GET)
+  // One-Click Slash Command Installer (GET): deletes any stale /jarvis,
+  // installs /astra globally. Hit this URL once to apply.
   if (req.method === 'GET') {
     if (!appId || !botToken) {
-      return new Response("Configuration missing. Please check your Environment Variables.", { status: 500 });
+      return new Response("Configuration missing (DISCORD_APP_ID + DISCORD_BOT_TOKEN required).", { status: 500 });
     }
-
     try {
+      const headers = { "Authorization": `Bot ${botToken}`, "Content-Type": "application/json" };
+      // Remove any old /jarvis (and stray /astra so we re-install clean).
+      const listRes = await fetch(`https://discord.com/api/v10/applications/${appId}/commands`, { headers });
+      const existing = listRes.ok ? await listRes.json() : [];
+      for (const cmd of (Array.isArray(existing) ? existing : [])) {
+        if (cmd?.name === "jarvis" || cmd?.name === "astra") {
+          await fetch(`https://discord.com/api/v10/applications/${appId}/commands/${cmd.id}`, { method: "DELETE", headers });
+        }
+      }
       const registerRes = await fetch(`https://discord.com/api/v10/applications/${appId}/commands`, {
         method: "POST",
-        headers: {
-          "Authorization": `Bot ${botToken}`,
-          "Content-Type": "application/json"
-        },
+        headers,
         body: JSON.stringify({
-          "name": "jarvis",
-          "description": "Chat directly with J.A.R.V.I.S.",
-          "options": [
-            {
-              "name": "query",
-              "description": "What is your command, sir?",
-              "type": 3,
-              "required": true
-            }
-          ]
-        })
+          name: "astra",
+          description: "Chat directly with Astra.",
+          options: [{ name: "query", description: "What is your command, sir?", type: 3, required: true }],
+        }),
       });
-
       const data = await registerRes.json();
       if (registerRes.ok) {
-        return new Response("Success! J.A.R.V.I.S. slash command registered globally.", { status: 200 });
-      } else {
-        return new Response(`Registration failed: ${JSON.stringify(data)}`, { status: 400 });
+        return new Response("Success — /astra is registered, /jarvis removed. Discord can take ~1 hour to refresh the picker.", { status: 200 });
       }
+      return new Response(`Registration failed: ${JSON.stringify(data)}`, { status: 400 });
     } catch (err: any) {
       return new Response(`Exception: ${err.message}`, { status: 500 });
     }

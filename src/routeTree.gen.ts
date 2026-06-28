@@ -28,6 +28,7 @@ import { Route as AdminProductsRouteImport } from "./routes/admin.products"
 import { Route as AdminOrdersRouteImport } from "./routes/admin.orders"
 import { Route as AdminLeadsRouteImport } from "./routes/admin.leads"
 import { Route as AdminJarvisRouteImport } from "./routes/admin.jarvis"
+import { Route as AdminStudioRouteImport } from "./routes/admin.studio"
 import { Route as ApiPublicStripeWebhookRouteImport } from "./routes/api/public/stripe-webhook"
 
 // Webhook / API Route Imports (Nested inside /api)
@@ -131,6 +132,11 @@ const AdminJarvisRoute = AdminJarvisRouteImport.update({
   path: "/admin/jarvis",
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminStudioRoute = AdminStudioRouteImport.update({
+  id: "/admin/studio",
+  path: "/admin/studio",
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicStripeWebhookRoute = ApiPublicStripeWebhookRouteImport.update({
   id: "/api/public/stripe-webhook",
   path: "/api/public/stripe-webhook",
@@ -176,6 +182,7 @@ export interface FileRoutesByFullPath {
   "/admin/orders": typeof AdminOrdersRoute
   "/admin/products": typeof AdminProductsRoute
   "/admin/settings": typeof AdminSettingsRoute
+  "/admin/studio": typeof AdminStudioRoute
   "/api/printful-sync": typeof ApiPrintfulSyncRoute
   "/offer/$slug": typeof OfferSlugRoute
   "/admin/": typeof AdminIndexRoute
@@ -202,6 +209,7 @@ export interface FileRoutesByTo {
   "/admin/orders": typeof AdminOrdersRoute
   "/admin/products": typeof AdminProductsRoute
   "/admin/settings": typeof AdminSettingsRoute
+  "/admin/studio": typeof AdminStudioRoute
   "/api/printful-sync": typeof ApiPrintfulSyncRoute
   "/offer/$slug": typeof OfferSlugRoute
   "/admin": typeof AdminIndexRoute
@@ -229,6 +237,7 @@ export interface FileRoutesById {
   "/admin/orders": typeof AdminOrdersRoute
   "/admin/products": typeof AdminProductsRoute
   "/admin/settings": typeof AdminSettingsRoute
+  "/admin/studio": typeof AdminStudioRoute
   "/api/printful-sync": typeof ApiPrintfulSyncRoute
   "/offer/$slug": typeof OfferSlugRoute
   "/admin/": typeof AdminIndexRoute
@@ -257,6 +266,7 @@ export interface FileRouteTypes {
     | "/admin/orders"
     | "/admin/products"
     | "/admin/settings"
+    | "/admin/studio"
     | "/api/printful-sync"
     | "/offer/$slug"
     | "/admin/"
@@ -283,6 +293,7 @@ export interface FileRouteTypes {
     | "/admin/orders"
     | "/admin/products"
     | "/admin/settings"
+    | "/admin/studio"
     | "/api/printful-sync"
     | "/offer/$slug"
     | "/admin"
@@ -309,6 +320,7 @@ export interface FileRouteTypes {
     | "/admin/orders"
     | "/admin/products"
     | "/admin/settings"
+    | "/admin/studio"
     | "/api/printful-sync"
     | "/offer/$slug"
     | "/admin/"
@@ -336,6 +348,7 @@ export interface RootRouteChildren {
   AdminOrdersRoute: typeof AdminOrdersRoute
   AdminProductsRoute: typeof AdminProductsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
+  AdminStudioRoute: typeof AdminStudioRoute
   ApiPrintfulSyncRoute: typeof ApiPrintfulSyncRoute
   OfferSlugRoute: typeof OfferSlugRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -453,6 +466,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AdminSettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    "/admin/studio": {
+      id: "/admin/studio"
+      path: "/admin/studio"
+      fullPath: "/admin/studio"
+      preLoaderRoute: typeof AdminStudioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     "/admin/products": {
       id: "/admin/products"
       path: "/admin/products"
@@ -536,6 +556,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminOrdersRoute: AdminOrdersRoute,
   AdminProductsRoute: AdminProductsRoute,
   AdminSettingsRoute: AdminSettingsRoute,
+  AdminStudioRoute: AdminStudioRoute,
   ApiPrintfulSyncRoute: ApiPrintfulSyncRoute,
   OfferSlugRoute: OfferSlugRoute,
   AdminIndexRoute: AdminIndexRoute,
