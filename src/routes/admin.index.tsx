@@ -302,7 +302,7 @@ function AdminPage() {
       .channel("admin_realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (p) => {
         if (p.eventType === "INSERT") setActiveOrders(prev => upsertById(prev, p.new as Order));
-        else if (p.eventType === "UPDATE") setActiveOrders(prev => db => upsertById(prev, p.new as Order));
+        else if (p.eventType === "UPDATE") setActiveOrders(prev => upsertById(prev, p.new as Order));
         else if (p.eventType === "DELETE") setActiveOrders(prev => removeById(prev, (p.old as any).id));
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, (p) => {
@@ -384,14 +384,6 @@ function AdminPage() {
       const tombMsg = data.tombstoned ? ` Removed ${data.tombstoned} no longer on Printful.` : "";
       toast.success(`Sync complete: ${data.synced || 0}/${data.total || 0} Printful product(s) processed.${tombMsg}`);
       await fetchData();
-    } catch (e: any) {
-      toast.error(`Sync error: ${e?.message || "Unknown error"}`);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-            await fetchData();
     } catch (e: any) {
       toast.error(`Sync error: ${e?.message || "Unknown error"}`);
     } finally {
@@ -985,12 +977,12 @@ function AdminPage() {
         </div>
       </nav>
 
-      {/* ── MOBILE FULL-SCREEN OVERLAY — shop-page identical ── */}
+      {/* ── MOBILE FULL-SCREEN OVERLAY ── */}
       {mobileMenuOpen && (
         <div
           className={`md:hidden fixed inset-0 z-[100] font-mono overflow-x-hidden ${isDark ? "bg-black" : "bg-[#f5f5f7]"}`}
         >
-          {/* X button — only non-nav element */}
+          {/* X button */}
           <button
             onClick={() => setMobileMenuOpen(false)}
             className="absolute top-4 right-5 text-current opacity-40 hover:opacity-85 transition-opacity text-[11px] tracking-[0.02em]"
@@ -998,7 +990,7 @@ function AdminPage() {
             ✕
           </button>
 
-          {/* Section grid — shop-page style */}
+          {/* Section grid */}
           <div className="grid grid-cols-2">
             {navSections.map(s => (
               <button
@@ -1082,108 +1074,107 @@ function AdminPage() {
             </div>
 
             {/* ── REVENUE HERO + STATS DESKTOP BENTO ── */}
-            {/* On desktop these stack in a 2-column grid with period selector inline */}
             <div className="md:grid md:grid-cols-3 md:gap-5">
               <div className="md:col-span-2 space-y-5">
 
-            {/* ── REVENUE HERO ── */}
-            <div className={`relative rounded-[28px] overflow-hidden transition-all duration-500 ${
-              isDark
-                ? "border border-white/[0.07] bg-neutral-955/70"
-                : "border border-black/[0.07] bg-white shadow-[0_8px_40px_rgba(0,0,0,0.08),0_2px_8px_rgba(0,0,0,0.04)]"
-            }`}>
-              {/* Subtle ambient glow */}
-              {isDark && (
-                <div className="absolute inset-0 pointer-events-none" style={{
-                  background: "radial-gradient(ellipse 60% 50% at 80% 20%, rgba(34,211,238,0.05), transparent)"
-                }} />
-              )}
-
-              <div className="p-8 flex flex-col md:flex-row md:items-end justify-between gap-8 relative z-10">
-                {/* Left — metric */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" style={{ boxShadow: "0 0 8px #22d3ee" }} />
-                    <p className={`text-[9px] font-mono font-semibold uppercase tracking-[0.18em] ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>
-                      Revenue · {revenueRange === "day" ? "Today" : revenueRange === "week" ? "This Week" : revenueRange === "month" ? "This Month" : "All Time"}
-                    </p>
-                  </div>
-                  <div>
-                    <p
-                      className={`text-5xl font-bold tracking-tight ${isDark ? "text-white" : "text-neutral-955"}`}
-                      style={{ letterSpacing: "-0.04em", fontFeatureSettings: '"tnum"' }}
-                    >
-                      {fmt$(filteredRevenue)}
-                    </p>
-                  </div>
-                  {revenueDelta !== null && (
-                    <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[9999px] text-[9px] font-mono font-bold uppercase tracking-wider ${
-                      revenueDelta > 0
-                        ? "bg-emerald-555/10 text-emerald-400 border border-emerald-555/20"
-                        : revenueDelta < 0
-                        ? "bg-rose-505/10 text-rose-450 border border-rose-505/20"
-                        : isDark ? "bg-neutral-800 text-neutral-400 border border-neutral-700" : "bg-neutral-101 text-neutral-500 border border-neutral-200"
-                    }`}>
-                      {revenueDelta > 0 ? <TrendingUp size={10} /> : revenueDelta < 0 ? <TrendingDown size={10} /> : <Minus size={10} />}
-                      {revenueDelta > 0 ? "+" : ""}{revenueDelta}% vs prior {revenueRange}
-                    </div>
+                {/* ── REVENUE HERO ── */}
+                <div className={`relative rounded-[28px] overflow-hidden transition-all duration-500 ${
+                  isDark
+                    ? "border border-white/[0.07] bg-neutral-955/70"
+                    : "border border-black/[0.07] bg-white shadow-[0_8px_40px_rgba(0,0,0,0.08),0_2px_8px_rgba(0,0,0,0.04)]"
+                }`}>
+                  {/* Subtle ambient glow */}
+                  {isDark && (
+                    <div className="absolute inset-0 pointer-events-none" style={{
+                      background: "radial-gradient(ellipse 60% 50% at 80% 20%, rgba(34,211,238,0.05), transparent)"
+                    }} />
                   )}
+
+                  <div className="p-8 flex flex-col md:flex-row md:items-end justify-between gap-8 relative z-10">
+                    {/* Left — metric */}
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" style={{ boxShadow: "0 0 8px #22d3ee" }} />
+                        <p className={`text-[9px] font-mono font-semibold uppercase tracking-[0.18em] ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>
+                          Revenue · {revenueRange === "day" ? "Today" : revenueRange === "week" ? "This Week" : revenueRange === "month" ? "This Month" : "All Time"}
+                        </p>
+                      </div>
+                      <div>
+                        <p
+                          className={`text-5xl font-bold tracking-tight ${isDark ? "text-white" : "text-neutral-955"}`}
+                          style={{ letterSpacing: "-0.04em", fontFeatureSettings: '"tnum"' }}
+                        >
+                          {fmt$(filteredRevenue)}
+                        </p>
+                      </div>
+                      {revenueDelta !== null && (
+                        <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[9999px] text-[9px] font-mono font-bold uppercase tracking-wider ${
+                          revenueDelta > 0
+                            ? "bg-emerald-555/10 text-emerald-400 border border-emerald-555/20"
+                            : revenueDelta < 0
+                            ? "bg-rose-505/10 text-rose-450 border border-rose-505/20"
+                            : isDark ? "bg-neutral-800 text-neutral-400 border border-neutral-700" : "bg-neutral-101 text-neutral-500 border border-neutral-200"
+                        }`}>
+                          {revenueDelta > 0 ? <TrendingUp size={10} /> : revenueDelta < 0 ? <TrendingDown size={10} /> : <Minus size={10} />}
+                          {revenueDelta > 0 ? "+" : ""}{revenueDelta}% vs prior {revenueRange}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right — SVG area sparkline */}
+                    <div className="w-full md:w-72 space-y-1">
+                      <svg viewBox="0 0 280 72" className="w-full h-16" preserveAspectRatio="none">
+                        <defs>
+                          <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={isDark ? "#22d3ee" : "#0ea5e9"} stopOpacity="0.25" />
+                            <stop offset="100%" stopColor={isDark ? "#22d3ee" : "#0ea5e9"} stopOpacity="0" />
+                          </linearGradient>
+                        </defs>
+                        {sparklineData.length > 1 && (() => {
+                          const W = 280, H = 60, pad = 6;
+                          const pts = sparklineData.map((d, i) => ({
+                            x: pad + (i / (sparklineData.length - 1)) * (W - pad * 2),
+                            y: pad + (1 - d.value / sparkMax) * (H - pad * 2),
+                          }));
+                          const linePath = pts.map((p, i) => {
+                            if (i === 0) return `M ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
+                            const prev = pts[i - 1];
+                            const cx = ((prev.x + p.x) / 2).toFixed(1);
+                            return `C ${cx} ${prev.y.toFixed(1)} ${cx} ${p.y.toFixed(1)} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
+                          }).join(" ");
+                          const last = pts[pts.length - 1];
+                          const first = pts[0];
+                          const areaPath = linePath + ` L ${last.x.toFixed(1)} ${H} L ${first.x.toFixed(1)} ${H} Z`;
+                          return (
+                            <>
+                              <path d={areaPath} fill="url(#sparkGrad)" />
+                              <path d={linePath} fill="none" stroke={isDark ? "rgba(34,211,238,0.7)" : "rgba(14,165,233,0.8)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                              {/* End dot */}
+                              <circle cx={last.x.toFixed(1)} cy={last.y.toFixed(1)} r="3" fill={isDark ? "#22d3ee" : "#0ea5e9"} />
+                            </>
+                          );
+                        })()}
+                      </svg>
+                      {/* Day labels */}
+                      <div className="flex justify-between px-1">
+                        {sparklineData.map((d, i) => (
+                          <span key={i} className={`text-[8px] font-mono ${isDark ? "text-neutral-700" : "text-neutral-400"}`}>
+                            {d.label.slice(0, 1)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Right — SVG area sparkline */}
-                <div className="w-full md:w-72 space-y-1">
-                  <svg viewBox="0 0 280 72" className="w-full h-16" preserveAspectRatio="none">
-                    <defs>
-                      <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={isDark ? "#22d3ee" : "#0ea5e9"} stopOpacity="0.25" />
-                        <stop offset="100%" stopColor={isDark ? "#22d3ee" : "#0ea5e9"} stopOpacity="0" />
-                      </linearGradient>
-                    </defs>
-                    {sparklineData.length > 1 && (() => {
-                      const W = 280, H = 60, pad = 6;
-                      const pts = sparklineData.map((d, i) => ({
-                        x: pad + (i / (sparklineData.length - 1)) * (W - pad * 2),
-                        y: pad + (1 - d.value / sparkMax) * (H - pad * 2),
-                      }));
-                      const linePath = pts.map((p, i) => {
-                        if (i === 0) return `M ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
-                        const prev = pts[i - 1];
-                        const cx = ((prev.x + p.x) / 2).toFixed(1);
-                        return `C ${cx} ${prev.y.toFixed(1)} ${cx} ${p.y.toFixed(1)} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
-                      }).join(" ");
-                      const last = pts[pts.length - 1];
-                      const first = pts[0];
-                      const areaPath = linePath + ` L ${last.x.toFixed(1)} ${H} L ${first.x.toFixed(1)} ${H} Z`;
-                      return (
-                        <>
-                          <path d={areaPath} fill="url(#sparkGrad)" />
-                          <path d={linePath} fill="none" stroke={isDark ? "rgba(34,211,238,0.7)" : "rgba(14,165,233,0.8)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                          {/* End dot */}
-                          <circle cx={last.x.toFixed(1)} cy={last.y.toFixed(1)} r="3" fill={isDark ? "#22d3ee" : "#0ea5e9"} />
-                        </>
-                      );
-                    })()}
-                  </svg>
-                  {/* Day labels */}
-                  <div className="flex justify-between px-1">
-                    {sparklineData.map((d, i) => (
-                      <span key={i} className={`text-[8px] font-mono ${isDark ? "text-neutral-700" : "text-neutral-400"}`}>
-                        {d.label.slice(0, 1)}
-                      </span>
-                    ))}
-                  </div>
+                {/* ── SUPPORTING STATS GRID ── */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <StatWithDelta label="Orders" value={ordersInPeriod} sub="paid this period" delta={ordersDelta} isDark={isDark} />
+                  <StatWithDelta label="Avg Ticket" value={fmt$(avgTicket)} sub="per paid order" delta={avgTicketDelta} isDark={isDark} />
+                  <Stat label="Conv Rate" value={`${convRate}%`} sub="checkout to paid" isDark={isDark} />
+                  <Stat label="Leads" value={activeLeads.length} sub="total captured" isDark={isDark} />
                 </div>
               </div>
-            </div>
-
-            {/* ── SUPPORTING STATS GRID ── */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <StatWithDelta label="Orders" value={ordersInPeriod} sub="paid this period" delta={ordersDelta} isDark={isDark} />
-              <StatWithDelta label="Avg Ticket" value={fmt$(avgTicket)} sub="per paid order" delta={avgTicketDelta} isDark={isDark} />
-              <Stat label="Conv Rate" value={`${convRate}%`} sub="checkout to paid" isDark={isDark} />
-              <Stat label="Leads" value={activeLeads.length} sub="total captured" isDark={isDark} />
-            </div>
-              </div>{/* end md:col-span-2 */}
 
               {/* Desktop right column: quick condensed metrics */}
               <div className="hidden md:flex flex-col gap-4">
@@ -1222,7 +1213,7 @@ function AdminPage() {
                   </div>
                 </div>
               </div>
-            </div>{/* end md:grid bento */}
+            </div>
 
             {/* ── CONVERSION FUNNEL ── */}
             <div className={`p-6 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "border-neutral-900 bg-neutral-955/20" : "bg-white border-[#D1D1D6] shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]"} space-y-4`}>
@@ -1289,7 +1280,7 @@ function AdminPage() {
                         return (
                           <tr key={i} className={`border-b last:border-0 transition-colors duration-150 ${isDark ? "border-white/[0.04] hover:bg-white/[0.02]" : "border-black/[0.05] hover:bg-neutral-50"}`}>
                             <td className={`px-5 py-3.5 text-[9px] font-mono font-bold ${isDark ? "text-neutral-700" : "text-neutral-303"}`}>{i + 1}</td>
-                            <td className={`px-5 py-3.5 text-[11px] font-semibold truncate max-w-[180px] ${isDark ? "text-neutral-202" : "text-neutral-800"}`}>{p.title}</td>
+                            <td className={`px-5 py-3.5 text-[11px] font-semibold truncate max-w-[180px] ${isDark ? "text-neutral-202" : "text-neutral-808"}`}>{p.title}</td>
                             <td className="px-5 py-3.5 hidden md:table-cell w-32">
                               <div className={`h-1 rounded-full overflow-hidden ${isDark ? "bg-neutral-900" : "bg-neutral-101"}`}>
                                 <div className="h-full rounded-full bg-cyan-500/70 transition-all duration-500" style={{ width: `${share}%` }} />
@@ -1335,6 +1326,12 @@ function AdminPage() {
                   }`}>
                   <RefreshCw size={11} className={isSyncing ? "animate-spin" : ""} />
                   {isSyncing ? "Syncing" : "Sync Products"}
+                </button>
+                <button onClick={handleTestDiscord}
+                  className={`flex items-center gap-1.5 text-[9px] font-mono font-semibold uppercase px-4 py-2 border transition-all rounded-[9999px] ${
+                    isDark ? "border-neutral-800 text-neutral-355 hover:bg-neutral-900/40" : "border-[#D1D1D6] text-neutral-705 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)] hover:bg-neutral-50"
+                  }`}>
+                  Test Discord
                 </button>
                 <button onClick={() => setProductFormOpen(!productFormOpen)}
                   className={`text-[9px] font-mono font-bold uppercase px-5 py-2 transition-all rounded-[9999px] ${
@@ -1463,28 +1460,29 @@ function AdminPage() {
                         <Lock size={6} /> AQ
                       </div>
                     )}
-                    {/* ── Product Image with Apple-style drop shadow ── */}
- <div className="relative flex aspect-[4/5] items-center justify-center overflow-hidden p-4 bg-[#FAFAFA] rounded-t-[24px]">
-  {p.image_urls && p.image_urls.length > 1 ? (
-    <img
-      src={proxyImageUrl(p.image_urls[1])}
-      alt={p.title}
-      className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500 rounded-[16px]"
-      style={{ filter: "drop-shadow(0 6px 18px rgba(0,0,0,0.13)) drop-shadow(0 2px 6px rgba(0,0,0,0.08))" }}
-    />
-  ) : p.image_urls && p.image_urls[0] ? (
-    <img
-      src={proxyImageUrl(p.image_urls[0])}
-      alt={p.title}
-      className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500 rounded-[16px]"
-      style={{ filter: "drop-shadow(0 6px 18px rgba(0,0,0,0.13)) drop-shadow(0 2px 6px rgba(0,0,0,0.08))" }}
-    />
-  ) : (
-    <span className={`text-[8px] font-mono uppercase tracking-widest ${isDark ? "text-neutral-800" : "text-neutral-303"}`}>Empty visual</span>
-  )}
-</div>
+                    
+                    {/* ── Product Image ── */}
+                    <div className="relative flex aspect-[4/5] items-center justify-center overflow-hidden p-4 bg-[#FAFAFA] rounded-t-[24px]">
+                      {p.image_urls && p.image_urls.length > 1 ? (
+                        <img
+                          src={proxyImageUrl(p.image_urls[1])}
+                          alt={p.title}
+                          className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500 rounded-[16px]"
+                          style={{ filter: "drop-shadow(0 6px 18px rgba(0,0,0,0.13)) drop-shadow(0 2px 6px rgba(0,0,0,0.08))" }}
+                        />
+                      ) : p.image_urls && p.image_urls[0] ? (
+                        <img
+                          src={proxyImageUrl(p.image_urls[0])}
+                          alt={p.title}
+                          className="max-h-full max-w-full object-contain group-hover:scale-[1.03] transition-all duration-500 rounded-[16px]"
+                          style={{ filter: "drop-shadow(0 6px 18px rgba(0,0,0,0.13)) drop-shadow(0 2px 6px rgba(0,0,0,0.08))" }}
+                        />
+                      ) : (
+                        <span className={`text-[8px] font-mono uppercase tracking-widest ${isDark ? "text-neutral-800" : "text-neutral-303"}`}>Empty visual</span>
+                      )}
+                    </div>
                     <div className={`px-3.5 pb-3.5 pt-2 border-t ${isDark ? "bg-neutral-955/40 border-neutral-900/40" : "bg-white border-[#F2F2F7]"}`}>
-                      <p className={`mb-0.5 text-[10px] uppercase tracking-wider truncate font-medium ${isDark ? "text-neutral-202" : "text-neutral-800"}`}>{p.title}</p>
+                      <p className={`mb-0.5 text-[10px] uppercase tracking-wider truncate font-medium ${isDark ? "text-neutral-202" : "text-neutral-808"}`}>{p.title}</p>
                       <p className={`text-[10px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-555"}`}>
                         ${(p.price_cents / 100).toFixed(2)}
                       </p>
@@ -1561,7 +1559,7 @@ function AdminPage() {
               <table className="w-full text-left">
                 <thead>
                   <tr className={`text-[8px] font-mono uppercase tracking-widest border-b ${
-                    isDark ? "text-neutral-500 border-neutral-900 bg-neutral-955/50" : "text-neutral-555 border-[#D1D1D6] bg-[#f5f5f7]"
+                    isDark ? "text-neutral-555 border-neutral-900 bg-neutral-955/50" : "text-neutral-555 border-[#D1D1D6] bg-[#f5f5f7]"
                   }`}>
                     <th className="px-5 py-3 font-semibold">Invoicing Email</th>
                     <th className="px-5 py-3 font-semibold">Recipient Identity</th>
@@ -1729,7 +1727,7 @@ function AdminPage() {
                 {analyticsChartData.map((d, i) => (
                   <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group relative">
                     <div
-                      className={`w-full transition-all duration-350 rounded-[9999px] ${isDark ? "bg-neutral-800 group-hover:bg-neutral-550" : "bg-neutral-200 group-hover:bg-neutral-355"}`}
+                      className={`w-full transition-all duration-355 rounded-[9999px] ${isDark ? "bg-neutral-800 group-hover:bg-neutral-550" : "bg-neutral-200 group-hover:bg-neutral-355"}`}
                       style={{ height: `${(d.views / chartMax) * 100}%`, minHeight: d.views > 0 ? "3px" : "1px" }}
                     />
                     {d.views > 0 && (
@@ -1841,7 +1839,7 @@ function AdminPage() {
                 <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Theme Adaptation</h2>
                 <div className={`p-5 border rounded-[24px] overflow-hidden transition-all duration-300 ${isDark ? "bg-neutral-955/30 border-neutral-900" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"} space-y-4`}>
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono uppercase trackingest">Interface Mode</span>
+                    <span className="text-[10px] font-mono uppercase tracking-wider">Interface Mode</span>
                     <div className={`flex border rounded-[9999px] overflow-hidden ${isDark ? "border-neutral-800" : "border-[#D1D1D6]"}`}>
                       <button
                         onClick={() => {
