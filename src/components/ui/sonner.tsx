@@ -3,34 +3,38 @@ import { Toaster as Sonner } from "sonner";
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
 /**
- * Capsule-style toasts that match the site theme: pill-shaped, monospace,
- * theme-aware, low-obstruction. Status is shown with a small accent dot
- * (emerald/rose/amber) rather than a full coloured box.
+ * Apple-lock-screen-style toast: small floating capsule at the bottom,
+ * blur backdrop, theme-aware, short-lived, low-obstruction. Status only
+ * shows as a tiny accent dot on the left — no green/red boxes.
  */
 const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
       position="bottom-center"
-      gap={8}
+      gap={6}
+      visibleToasts={3}
+      offset={24}
       toastOptions={{
         unstyled: true,
-        duration: 3500,
+        duration: 2200,
         classNames: {
           toast:
-            "flex items-center gap-2.5 w-fit max-w-[92vw] mx-auto px-4 py-2.5 rounded-full " +
-            "bg-background/85 backdrop-blur-xl border border-border " +
-            "shadow-[0_8px_30px_rgba(0,0,0,0.18)] text-foreground " +
-            "font-mono text-[11px] tracking-wide",
-          title: "font-medium leading-tight",
-          description: "text-muted-foreground text-[10px]",
-          icon: "shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5",
-          success: "[&_[data-icon]>svg]:text-emerald-500",
-          error: "[&_[data-icon]>svg]:text-rose-500",
-          warning: "[&_[data-icon]>svg]:text-amber-500",
+            "luveni-toast group flex items-center gap-2 w-fit max-w-[88vw] mx-auto " +
+            "px-4 py-2 rounded-full font-mono text-[11px] tracking-wide leading-tight " +
+            "border shadow-[0_10px_30px_-6px_rgba(0,0,0,0.18),0_1px_2px_rgba(0,0,0,0.04)] " +
+            "transition-all backdrop-blur-2xl",
+          title: "font-medium",
+          description: "opacity-70 text-[10px]",
+          icon: "hidden",
           actionButton:
-            "ml-1 px-2.5 py-1 rounded-full bg-primary text-background text-[10px] font-medium",
+            "ml-2 px-2.5 py-[3px] rounded-full bg-foreground text-background text-[10px] font-medium",
           cancelButton:
-            "ml-1 px-2.5 py-1 rounded-full bg-muted text-muted-foreground text-[10px]",
+            "ml-2 px-2.5 py-[3px] rounded-full bg-muted text-muted-foreground text-[10px]",
+        },
+        style: {
+          background: "color-mix(in srgb, var(--background) 80%, transparent)",
+          color: "var(--foreground)",
+          borderColor: "var(--border)",
         },
       }}
       {...props}

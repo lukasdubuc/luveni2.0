@@ -137,18 +137,24 @@ Deno.serve(async (req) => {
         break;
 
       case "product_deleted":
+        // Hard-delete so the admin list stays clean. FK on page_events is
+        // ON DELETE SET NULL so analytics history survives.
         if (syncProductId) {
-          await patchByPrintfulId(String(syncProductId), {
-            is_published: false,
-            is_archived: true,
-            updated_at: new Date().toISOString(),
+          await fetch(`${SUPABASE_URL}/rest/v1/products?printful_id=eq.${syncProductId}`, {
+            method: "DELETE",
+            headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, Prefer: "return=minimal" },
           });
         }
         break;
 
       case "stock_updated":
-        // Catalog-level stock change. Re-sync any affected sync product so
-        // variant availability_status (and thus stock) reflects instantly.
+      case "variant_stock_updated":
+        // Stock change: re-sync the product so each variant's
+        // availability_status + stock fields reflect Printful instantly.
+        // Crucially we do NOT unpublish — the product stays live, only the
+        // out-of-stock SIZES grey out on the offer page (variant picker
+        // already gates on stock <= 0). If ALL variants are out, the offer
+        // page shows "Sold out".
         if (syncProductId) await resyncProduct(String(syncProductId));
         break;
 

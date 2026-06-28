@@ -193,7 +193,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Tombstone products no longer in the live Printful catalog.
+    // Products no longer in Printful are HARD-DELETED so the admin list
+    // stays clean (no orphan archived rows blocking a re-add). The FK on
+    // page_events is ON DELETE SET NULL so analytics history survives.
     const liveIds = result.map((i: any) => String(i.id));
     let tombstoned = 0;
     try {
@@ -204,17 +206,15 @@ Deno.serve(async (req) => {
       const existing = existingRes.ok ? await existingRes.json() : [];
       const stale = (existing as any[]).filter((p) => !liveIds.includes(p.printful_id));
       for (const p of stale) {
-        const upd = await fetch(`${SUPABASE_URL}/rest/v1/products?id=eq.${p.id}`, {
-          method: "PATCH",
+        const del = await fetch(`${SUPABASE_URL}/rest/v1/products?id=eq.${p.id}`, {
+          method: "DELETE",
           headers: {
             apikey: SERVICE_KEY,
             Authorization: `Bearer ${SERVICE_KEY}`,
-            "Content-Type": "application/json",
             Prefer: "return=minimal",
           },
-          body: JSON.stringify({ is_published: false, is_archived: true, updated_at: new Date().toISOString() }),
         });
-        if (upd.ok) tombstoned++;
+        if (del.ok) tombstoned++;
       }
     } catch { /* non-fatal */ }
 

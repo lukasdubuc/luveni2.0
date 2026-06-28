@@ -401,10 +401,19 @@ function AdminPage() {
           source: "test",
         },
       });
-      if (error || data?.error) {
-        toast.error(data?.error || error?.message || "Discord test failed");
+      // supabase-js wraps non-2xx as a generic "non-2xx" message; the real
+      // reason is in error.context (a Response). Dig it out.
+      if (error) {
+        let detail = error.message || "Discord test failed";
+        const ctx = (error as any).context;
+        if (ctx && typeof ctx.json === "function") {
+          try { const body = await ctx.json(); if (body?.error) detail = body.error; }
+          catch { try { detail = await ctx.text(); } catch {} }
+        }
+        toast.error(detail);
         return;
       }
+      if (data?.error) { toast.error(data.error); return; }
       toast.success("Test alert sent — check Discord.");
     } catch (e: any) {
       toast.error(`Discord test error: ${e?.message || "Unknown error"}`);
