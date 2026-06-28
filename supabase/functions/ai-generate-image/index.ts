@@ -50,7 +50,12 @@ Deno.serve(async (req) => {
   const auth = await requireAdmin(req);
   if (!auth.ok) return auth.res;
 
-  const { prompt, width = 1024, height = 1024, model = "flux", title } = await req.json().catch(() => ({}));
+  // `image` (optional): a source image URL for img2img — used by the editor's
+  // "regenerate this region / whole canvas based on the original" magic.
+  // `persist` (optional, default true): when false we just return the image
+  // URL without saving a designs row (transient editor layers).
+  const { prompt, width = 1024, height = 1024, model = "flux", title, image, persist = true } =
+    await req.json().catch(() => ({}));
   if (!prompt || typeof prompt !== "string" || prompt.length < 3) {
     return json({ error: "prompt must be at least 3 chars" }, 400);
   }
@@ -62,8 +67,12 @@ Deno.serve(async (req) => {
 
   // Pollinations.ai — free, no key, returns raw PNG/JPEG bytes.
   // `nologo=true` strips their footer. seed is auto-random server-side.
+  // When `image` is supplied, Pollinations runs image-to-image.
   const seed = Math.floor(Math.random() * 9_999_999);
-  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${W}&height=${H}&model=${M}&nologo=true&seed=${seed}`;
+  let url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${W}&height=${H}&model=${M}&nologo=true&seed=${seed}`;
+  if (typeof image === "string" && /^https?:\/\//.test(image)) {
+    url += `&image=${encodeURIComponent(image)}`;
+  }
 
   let imgRes: Response;
   try {
@@ -92,6 +101,11 @@ Deno.serve(async (req) => {
   if (!upRes.ok) return json({ error: `Storage upload failed: ${await upRes.text().catch(() => "")}` }, 502);
 
   const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/designs/${objectPath}`;
+
+  // Transient editor layers (persist:false) skip the designs gallery row.
+  if (persist === false) {
+    return json({ ok: true, image_url: publicUrl });
+  }
 
   // Insert metadata row.
   const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/designs`, {
