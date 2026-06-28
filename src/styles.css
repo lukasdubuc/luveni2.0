@@ -128,6 +128,33 @@ html { background-color: var(--background); }
   button { cursor: pointer; font-family: inherit; }
 }
 
+/*
+  Sonner toast — pill capsule, theme-aware, low-obstruction.
+  Sonner's own DOM wrappers win over Tailwind utility classes, so the
+  shape and sizing has to be enforced here at the data-attribute level.
+*/
+[data-sonner-toaster] {
+  --width: auto !important;
+}
+[data-sonner-toast] {
+  border-radius: 9999px !important;
+  padding: 8px 16px 8px 14px !important;
+  min-height: 0 !important;
+  width: auto !important;
+  max-width: 88vw !important;
+  font-family: var(--font-mono) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.01em !important;
+  line-height: 1.25 !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.22), 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+}
+[data-sonner-toast] [data-title] { font-weight: 500 !important; }
+[data-sonner-toast] [data-description] { opacity: 0.7 !important; font-size: 10px !important; }
+[data-sonner-toast] [data-icon] svg { width: 14px !important; height: 14px !important; }
+
 /* ── Mobile-only: zoom-in transition shop → offer/$slug only ── */
 @media (max-width: 767px) {
   @keyframes vt-zoom-in {
