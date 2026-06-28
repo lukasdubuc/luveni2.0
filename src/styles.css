@@ -130,30 +130,39 @@ html { background-color: var(--background); }
 
 /*
   Sonner toast — pill capsule, theme-aware, low-obstruction.
-  Sonner's own DOM wrappers win over Tailwind utility classes, so the
-  shape and sizing has to be enforced here at the data-attribute level.
+  Sonner v2 injects its own runtime <style> tag with high-specificity
+  selectors. We win with html-prefixed selectors + !important.
+  Per-toast horizontal margin auto so it stays centred at any width.
 */
-[data-sonner-toaster] {
+html [data-sonner-toaster] {
   --width: auto !important;
 }
-[data-sonner-toast] {
+html [data-sonner-toaster] li[data-sonner-toast],
+html [data-sonner-toast] {
   border-radius: 9999px !important;
-  padding: 8px 16px 8px 14px !important;
+  padding: 9px 18px !important;
   min-height: 0 !important;
   width: auto !important;
   max-width: 88vw !important;
-  font-family: var(--font-mono) !important;
+  margin: 0 auto !important;
+  font-family: var(--font-mono), ui-monospace, monospace !important;
   font-size: 11px !important;
-  letter-spacing: 0.01em !important;
-  line-height: 1.25 !important;
+  letter-spacing: 0.02em !important;
+  line-height: 1.3 !important;
   border: 1px solid var(--border) !important;
-  box-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.22), 0 1px 2px rgba(0, 0, 0, 0.05) !important;
-  backdrop-filter: blur(20px) !important;
-  -webkit-backdrop-filter: blur(20px) !important;
+  box-shadow: 0 10px 28px -10px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.06) !important;
+  backdrop-filter: blur(22px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(140%) !important;
+  gap: 8px !important;
+  display: flex !important;
+  align-items: center !important;
 }
-[data-sonner-toast] [data-title] { font-weight: 500 !important; }
-[data-sonner-toast] [data-description] { opacity: 0.7 !important; font-size: 10px !important; }
-[data-sonner-toast] [data-icon] svg { width: 14px !important; height: 14px !important; }
+html [data-sonner-toast] [data-content] { gap: 2px !important; }
+html [data-sonner-toast] [data-title] { font-weight: 500 !important; line-height: 1.25 !important; }
+html [data-sonner-toast] [data-description] { opacity: 0.72 !important; font-size: 10px !important; }
+html [data-sonner-toast] [data-icon] { width: 14px !important; height: 14px !important; margin: 0 !important; }
+html [data-sonner-toast] [data-icon] svg { width: 14px !important; height: 14px !important; }
+html [data-sonner-toast] [data-close-button] { display: none !important; }
 
 /* ── Mobile-only: zoom-in transition shop → offer/$slug only ── */
 @media (max-width: 767px) {

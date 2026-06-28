@@ -146,9 +146,12 @@ serve(async (req: Request) => {
     }
   }
 
-  // Discord Interaction Validator
-  if (!publicKey || !botToken || !mistralApiKey) {
-    return new Response('Configuration missing', { status: 500 });
+  // Discord verifies the endpoint by sending a signed PING (type 1).
+  // PING only needs DISCORD_PUBLIC_KEY to verify; other secrets are only
+  // needed for actually answering commands. Requiring all three up-front
+  // makes Discord's endpoint validation fail with "could not be verified".
+  if (!publicKey) {
+    return new Response('Configuration missing (DISCORD_PUBLIC_KEY)', { status: 500 });
   }
 
   // 1. Read the request body as text exactly once
@@ -170,11 +173,17 @@ serve(async (req: Request) => {
     });
   }
 
-  // Handle Command (Type 2)
+  // Handle Command (Type 2) — for command execution we DO need bot/mistral.
   if (interaction.type === 2) {
+    if (!botToken || !mistralApiKey) {
+      return new Response(
+        JSON.stringify({ type: 4, data: { content: "I am offline (server config missing), sir.", flags: 64 } }),
+        { headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } },
+      );
+    }
     const commandName = interaction.data?.name;
 
-    if (commandName === 'jarvis') {
+    if (commandName === 'jarvis' || commandName === 'astra') {
       const userQuery = interaction.data.options?.[0]?.value || '';
       const username = interaction.member?.user?.username || 'sir';
 
