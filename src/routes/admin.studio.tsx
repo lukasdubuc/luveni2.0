@@ -89,7 +89,7 @@ function StudioPage() {
   const sub = isDark ? "text-neutral-500" : "text-neutral-555";
 
   return (
-    <div className={`min-h-screen ${isDark ? "bg-black text-white" : "bg-[#f5f5f7] text-black"} font-mono`}>
+    <div className={`admin-page min-h-screen ${isDark ? "bg-black text-white" : "bg-[#f5f5f7] text-black"} font-mono`}>
       <div className="max-w-7xl mx-auto px-6 md:px-10 py-8">
         <Link to="/admin" className={`inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest mb-3 ${sub} hover:opacity-70`}>
           <ArrowLeft size={11} /> Back to Admin

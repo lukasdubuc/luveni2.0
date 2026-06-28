@@ -247,7 +247,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const pa = isHat ? { x: 0.28, y: 0.32, w: 0.44, h: 0.36 } : isPoster ? { x: 0.06, y: 0.05, w: 0.88, h: 0.9 } : { x: 0.2, y: 0.14, w: 0.6, h: 0.62 };
 
   return (
-    <div className={`fixed inset-0 z-50 flex flex-col ${isDark ? "bg-neutral-950 text-white" : "bg-[#f5f5f7] text-black"} font-mono`}>
+    <div className={`admin-page fixed inset-0 z-50 flex flex-col ${isDark ? "bg-neutral-950 text-white" : "bg-[#f5f5f7] text-black"} font-mono`}>
       {/* Toolbar — floating pill cluster */}
       <div className="flex items-center gap-2 px-4 py-3">
         <div className={`flex items-center gap-1 p-1 rounded-full ${isDark ? "bg-neutral-900/80 backdrop-blur-xl" : "bg-white/90 backdrop-blur-xl shadow-[0_4px_20px_rgba(0,0,0,0.08)]"}`}>
