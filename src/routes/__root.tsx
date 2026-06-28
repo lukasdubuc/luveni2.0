@@ -3,7 +3,7 @@ import {
   Outlet, createRootRouteWithContext, useRouter, useRouterState,
   HeadContent, Scripts, Link,
 } from "@tanstack/react-router";
-import { Toaster } from "sonner";
+import { Toaster } from "@/components/ui/sonner";
 import { useEffect, useState } from "react";
 import { CartProvider } from "@/context/CartContext";
 import appCss from "../styles.css?url";
@@ -166,7 +166,7 @@ function RootComponent() {
           {isBare ? <Outlet /> : <SiteShell footerDescription={footerDescription} theme={theme}><Outlet /></SiteShell>}
         </div>
         {!isBare && <ContactPopup />}
-        <Toaster position="top-center" richColors theme={theme} />
+        <Toaster theme={theme} />
       </CartProvider>
     </QueryClientProvider>
   );
