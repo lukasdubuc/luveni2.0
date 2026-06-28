@@ -391,6 +391,34 @@ function AdminPage() {
     }
   };
 
+            await fetchData();
+    } catch (e: any) {
+      toast.error(`Sync error: ${e?.message || "Unknown error"}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleTestDiscord = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke("discord-notify", {
+        body: {
+          title: "✅ Discord connected",
+          message: "Astra can reach this channel. Alerts for orders, fulfillment and inventory will arrive here, sir.",
+          level: "success",
+          source: "test",
+        },
+      });
+      if (error || data?.error) {
+        toast.error(data?.error || error?.message || "Discord test failed");
+        return;
+      }
+      toast.success("Test alert sent — check Discord.");
+    } catch (e: any) {
+      toast.error(`Discord test error: ${e?.message || "Unknown error"}`);
+    }
+  };
+
   const saveProduct = async () => {
     try {
       const imageUrls = productForm.image_url
