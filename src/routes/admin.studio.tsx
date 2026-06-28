@@ -58,6 +58,17 @@ function StudioPage() {
   };
   useEffect(() => { loadProjects(); loadDesigns(); }, []);
 
+  // Deep-link: /admin/studio?open=<projectId> opens that project (used by the
+  // Compare page's "Modify in Studio").
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("open");
+    if (!id) return;
+    (async () => {
+      const { data } = await supabase.from("studio_projects").select("*").eq("id", id).maybeSingle();
+      if (data) setEditing(data as Project);
+    })();
+  }, []);
+
   const createProject = async (tpl: typeof TEMPLATES[number]) => {
     const { data, error } = await supabase
       .from("studio_projects")

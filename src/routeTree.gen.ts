@@ -29,6 +29,7 @@ import { Route as AdminOrdersRouteImport } from "./routes/admin.orders"
 import { Route as AdminLeadsRouteImport } from "./routes/admin.leads"
 import { Route as AdminJarvisRouteImport } from "./routes/admin.jarvis"
 import { Route as AdminStudioRouteImport } from "./routes/admin.studio"
+import { Route as AdminCompareRouteImport } from "./routes/admin.compare"
 import { Route as ApiPublicStripeWebhookRouteImport } from "./routes/api/public/stripe-webhook"
 
 // Webhook / API Route Imports (Nested inside /api)
@@ -137,6 +138,11 @@ const AdminStudioRoute = AdminStudioRouteImport.update({
   path: "/admin/studio",
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminCompareRoute = AdminCompareRouteImport.update({
+  id: "/admin/compare",
+  path: "/admin/compare",
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicStripeWebhookRoute = ApiPublicStripeWebhookRouteImport.update({
   id: "/api/public/stripe-webhook",
   path: "/api/public/stripe-webhook",
@@ -183,6 +189,7 @@ export interface FileRoutesByFullPath {
   "/admin/products": typeof AdminProductsRoute
   "/admin/settings": typeof AdminSettingsRoute
   "/admin/studio": typeof AdminStudioRoute
+  "/admin/compare": typeof AdminCompareRoute
   "/api/printful-sync": typeof ApiPrintfulSyncRoute
   "/offer/$slug": typeof OfferSlugRoute
   "/admin/": typeof AdminIndexRoute
@@ -210,6 +217,7 @@ export interface FileRoutesByTo {
   "/admin/products": typeof AdminProductsRoute
   "/admin/settings": typeof AdminSettingsRoute
   "/admin/studio": typeof AdminStudioRoute
+  "/admin/compare": typeof AdminCompareRoute
   "/api/printful-sync": typeof ApiPrintfulSyncRoute
   "/offer/$slug": typeof OfferSlugRoute
   "/admin": typeof AdminIndexRoute
@@ -238,6 +246,7 @@ export interface FileRoutesById {
   "/admin/products": typeof AdminProductsRoute
   "/admin/settings": typeof AdminSettingsRoute
   "/admin/studio": typeof AdminStudioRoute
+  "/admin/compare": typeof AdminCompareRoute
   "/api/printful-sync": typeof ApiPrintfulSyncRoute
   "/offer/$slug": typeof OfferSlugRoute
   "/admin/": typeof AdminIndexRoute
@@ -267,6 +276,7 @@ export interface FileRouteTypes {
     | "/admin/products"
     | "/admin/settings"
     | "/admin/studio"
+    | "/admin/compare"
     | "/api/printful-sync"
     | "/offer/$slug"
     | "/admin/"
@@ -294,6 +304,7 @@ export interface FileRouteTypes {
     | "/admin/products"
     | "/admin/settings"
     | "/admin/studio"
+    | "/admin/compare"
     | "/api/printful-sync"
     | "/offer/$slug"
     | "/admin"
@@ -321,6 +332,7 @@ export interface FileRouteTypes {
     | "/admin/products"
     | "/admin/settings"
     | "/admin/studio"
+    | "/admin/compare"
     | "/api/printful-sync"
     | "/offer/$slug"
     | "/admin/"
@@ -349,6 +361,7 @@ export interface RootRouteChildren {
   AdminProductsRoute: typeof AdminProductsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminStudioRoute: typeof AdminStudioRoute
+  AdminCompareRoute: typeof AdminCompareRoute
   ApiPrintfulSyncRoute: typeof ApiPrintfulSyncRoute
   OfferSlugRoute: typeof OfferSlugRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -473,6 +486,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AdminStudioRouteImport
       parentRoute: typeof rootRouteImport
     }
+    "/admin/compare": {
+      id: "/admin/compare"
+      path: "/admin/compare"
+      fullPath: "/admin/compare"
+      preLoaderRoute: typeof AdminCompareRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     "/admin/products": {
       id: "/admin/products"
       path: "/admin/products"
@@ -557,6 +577,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminProductsRoute: AdminProductsRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminStudioRoute: AdminStudioRoute,
+  AdminCompareRoute: AdminCompareRoute,
   ApiPrintfulSyncRoute: ApiPrintfulSyncRoute,
   OfferSlugRoute: OfferSlugRoute,
   AdminIndexRoute: AdminIndexRoute,
