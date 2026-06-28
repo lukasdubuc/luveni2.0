@@ -25,6 +25,7 @@ type Props = {
   projectId: string;
   initialCanvas: { layers?: StudioLayer[] } | null;
   artboardW: number; artboardH: number; templateKey: string;
+  projectName: string; priceCents: number;
   onClose: () => void; isDark: boolean;
 };
 
@@ -84,7 +85,7 @@ function TextNode({ layer, onChange, onSelect, nodeRef, listening }: any) {
   );
 }
 
-export default function StudioEditor({ projectId, initialCanvas, artboardW, artboardH, templateKey, onClose, isDark }: Props) {
+export default function StudioEditor({ projectId, initialCanvas, artboardW, artboardH, templateKey, projectName, priceCents, onClose, isDark }: Props) {
   const [layers, setLayers] = useState<StudioLayer[]>(initialCanvas?.layers ?? []);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -230,6 +231,33 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     } finally { setSaving(false); }
   };
 
+  const [publishing, setPublishing] = useState(false);
+  const publish = async () => {
+    if (layers.length === 0) { toast.error("Design something first"); return; }
+    setPublishing(true);
+    setSelectedId(null);
+    try {
+      // Flatten the artboard at full resolution -> blob.
+      await new Promise((r) => setTimeout(r, 60));
+      const dataUrl = stageRef.current?.toDataURL({ pixelRatio: 1 });
+      if (!dataUrl) { toast.error("Could not render the design"); return; }
+      const blob = await (await fetch(dataUrl)).blob();
+      const path = `published/${projectId}-${Date.now()}.png`;
+      const up = await supabase.storage.from("designs").upload(path, blob, { contentType: "image/png", upsert: true });
+      if (up.error) { toast.error(`Upload failed: ${up.error.message}`); return; }
+      const { data: pub } = supabase.storage.from("designs").getPublicUrl(path);
+
+      const { data, error } = await supabase.functions.invoke("publish-design", {
+        body: { projectId, imageUrl: pub.publicUrl, title: projectName, retailPriceCents: priceCents, templateKey },
+      });
+      const msg = await extractFnError(error, data);
+      if (msg) { toast.error(msg); return; }
+      toast.success("Published to Printful — run Sync (or wait for the heartbeat) to see it in the shop.");
+    } finally {
+      setPublishing(false);
+    }
+  };
+
   const exportPng = () => {
     setSelectedId(null);
     setTimeout(() => {
@@ -264,8 +292,11 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
         </div>
         <div className="ml-auto flex items-center gap-2">
           <button onClick={exportPng} className={`${pill} ${isDark ? "bg-neutral-900/80" : "bg-white/90 shadow"}`}><Download size={13} /> Export</button>
-          <button onClick={save} disabled={saving} className={`flex items-center gap-1.5 text-[10px] font-semibold px-4 py-2.5 rounded-full ${isDark ? "bg-white text-black" : "bg-black text-white"}`}>
+          <button onClick={save} disabled={saving} className={`${pill} ${isDark ? "bg-neutral-900/80" : "bg-white/90 shadow"}`}>
             {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save
+          </button>
+          <button onClick={publish} disabled={publishing} className={`flex items-center gap-1.5 text-[10px] font-semibold px-4 py-2.5 rounded-full ${isDark ? "bg-white text-black" : "bg-black text-white"}`}>
+            {publishing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} Publish
           </button>
         </div>
       </div>

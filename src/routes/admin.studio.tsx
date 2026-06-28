@@ -179,6 +179,8 @@ function StudioPage() {
             artboardW={editing.artboard_w}
             artboardH={editing.artboard_h}
             templateKey={editing.template_key}
+            projectName={editing.name}
+            priceCents={editing.price_cents}
             isDark={isDark}
             onClose={() => { setEditing(null); loadProjects(); }}
           />
