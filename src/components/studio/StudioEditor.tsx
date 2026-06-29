@@ -795,16 +795,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const defaultPa = isHat ? { x: 0.28, y: 0.32, w: 0.44, h: 0.36 } : isPoster ? { x: 0.06, y: 0.05, w: 0.88, h: 0.9 } : { x: 0.2, y: 0.14, w: 0.6, h: 0.62 };
   const pa = printArea || defaultPa;
 
-  // Fit the product template into the artboard preserving its aspect ratio
-  // (object-fit: contain), so the garment photo is never stretched/warped.
-  const garmentFit = (() => {
-    const iw = garment?.naturalWidth || garment?.width || artboardW;
-    const ih = garment?.naturalHeight || garment?.height || artboardH;
-    const s = Math.min(artboardW / iw, artboardH / ih);
-    const w = iw * s, h = ih * s;
-    return { x: (artboardW - w) / 2, y: (artboardH - h) / 2, width: w, height: h };
-  })();
-
   return (
     <div className={`admin-page fixed inset-0 z-50 flex flex-col font-mono select-none ${isDark ? "bg-black text-neutral-105" : "bg-white text-neutral-900"}`}>
       
@@ -1057,17 +1047,12 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
                 }}
               >
                 <Layer>
-                  {/* Background Group — hidden cleanly during hi-res transparent exports.
-                      • Blank canvas: a white artboard.
-                      • Product: the product template IS the canvas (aspect-correct,
-                        no warp, no white sheet behind it). */}
+                  {/* Background Group — can be hidden cleanly during hi-res transparent exports */}
                   <Group name="background-group">
-                    {canvasKind === "canvas" ? (
-                      <Rect name="bg" x={0} y={0} width={artboardW} height={artboardH} fill="#ffffff" listening />
-                    ) : garment ? (
+                    <Rect name="bg" x={0} y={0} width={artboardW} height={artboardH} fill="#ffffff" listening />
+                    {canvasKind === "canvas" ? null : garment ? (
                       <>
-                        {/* Contain the product image so it keeps its real aspect ratio. */}
-                        <KImage name="garment" image={garment} {...garmentFit} listening={false} />
+                        <KImage name="garment" image={garment} x={0} y={0} width={artboardW} height={artboardH} listening={false} />
                         <Rect name="guide" x={artboardW * pa.x} y={artboardH * pa.y} width={artboardW * pa.w} height={artboardH * pa.h} stroke="#6366f1" strokeWidth={4} dash={[26, 18]} cornerRadius={20} listening={false} opacity={0.6} />
                       </>
                     ) : (

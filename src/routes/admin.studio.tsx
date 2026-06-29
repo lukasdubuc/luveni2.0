@@ -146,18 +146,17 @@ function StudioPage() {
       // the raw blank cost is preserved on the product ref for the live calculator.
       const costCents = d.min_cost_cents || 0;
       const retailCents = computeRetailCents(costCents);
-      // Use the real print-file dimensions for the artboard so the canvas is
-      // true-to-print; fall back to the standard tee/square ratio otherwise.
+      // Standard tee/square artboard so the product template renders at the
+      // ratio it was designed for. The real print dimensions still flow through
+      // on the product ref (below) to drive the true-to-size 3D decal.
       const pa = d.print_area;
-      const artboardW = pa?.width_px || (tee ? 4500 : 5400);
-      const artboardH = pa?.height_px || 5400;
       const { data, error } = await supabase.from("studio_projects").insert({
         name: `${color ? color.name + " " : ""}${d.label}`,
         manufacturer: d.mfr,
         template_key: d.key,
         price_cents: retailCents,
-        artboard_w: artboardW,
-        artboard_h: artboardH,
+        artboard_w: tee ? 4500 : 5400,
+        artboard_h: 5400,
         template_image: color?.image || d.image,
         canvas_kind: "product",
         print_area: null,
