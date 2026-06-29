@@ -583,6 +583,26 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const serializeLayers = (): StudioLayer[] =>
     layers.map((l) => (l.type === "paint" && paintCanvases.current[l.id]) ? { ...l, src: paintCanvases.current[l.id].toDataURL() } : l);
 
+  // Capture the artboard at a TRUE target pixel width. Konva's pixelRatio
+  // multiplies the current (scaled-down) stage size, so we divide the target
+  // by the live stage width. `hideChrome` strips the garment/guides/handles
+  // for a transparent print file; thumbnails keep the garment composited.
+  const captureStage = (targetWidth: number, hideChrome: boolean): string | undefined => {
+    const stage = stageRef.current; if (!stage) return undefined;
+    const sw = stage.width() || 1;
+    const pixelRatio = Math.max(0.05, targetWidth / sw);
+    const hidden: any[] = [];
+    const hide = (sel: string) => stage.find(sel).forEach((n: any) => { if (n.visible()) { n.visible(false); hidden.push(n); } });
+    hide(".symmetry-guide"); hide(".align-guide"); hide("Transformer");
+    if (hideChrome) hide(".background-group");
+    stage.getLayers()[0]?.batchDraw();
+    let url: string | undefined;
+    try { url = stage.toDataURL({ pixelRatio, mimeType: hideChrome ? "image/png" : "image/jpeg", quality: 0.9 }); }
+    catch { url = undefined; }
+    if (hidden.length) { hidden.forEach((n) => n.visible(true)); stage.getLayers()[0]?.batchDraw(); }
+    return url;
+  };
+
   const save = async () => {
     setSaving(true);
     try {

@@ -14,7 +14,7 @@ export const Route = createFileRoute("/admin/studio")({
 // Editor pulls in Konva (DOM-only) — load it lazily so it never runs on SSR.
 const StudioEditor = lazy(() => import("@/components/studio/StudioEditor"));
 
-type Blank = { key: string; label: string; mfr: string; catalog_id: number; image: string | null; cost_cents: number; variant_count: number; error?: string; artboard_w?: number; artboard_h?: number; print_area?: { x: number; y: number; w: number; h: number } | null };
+type Blank = { key: string; label: string; mfr: string; catalog_id: number; image: string | null; template_image?: string | null; thumb?: string | null; cost_cents: number; variant_count: number; error?: string; artboard_w?: number; artboard_h?: number; print_area?: { x: number; y: number; w: number; h: number } | null };
 
 type Project = {
   id: string; name: string; manufacturer: string; template_key: string;
