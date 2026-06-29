@@ -159,7 +159,10 @@ function PaintNode({ layer, canvas }: any) {
 }
 
 export default function StudioEditor({ projectId, initialCanvas, artboardW, artboardH, templateKey, templateImage, canvasKind, projectName, priceCents, printArea, onClose, isDark }: Props) {
-  const garment = useHtmlImage(templateImage || undefined);
+  // Proxy the product/template image so it loads CORS-clean into Konva (raw
+  // Printful/Apliiq CDN URLs don't send Access-Control headers, which would
+  // leave the garment template blank).
+  const garment = useHtmlImage(getProxyImageUrl(templateImage || null) || undefined);
   const [layers, setLayers] = useState<StudioLayer[]>(initialCanvas?.layers ?? []);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
