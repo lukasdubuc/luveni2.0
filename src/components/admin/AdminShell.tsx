@@ -1,5 +1,6 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import { LayoutDashboard, ShoppingCart, Users, Package, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, ShoppingCart, Users, Package, Settings, LogOut, Menu, X } from "lucide-react";
+import { useState } from "react";
 import type { ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -14,6 +15,7 @@ const nav: { to: string; label: string; icon: typeof LayoutDashboard; exact?: bo
 export function AdminShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const [open, setOpen] = useState(false);
 
   async function logout() {
     await supabase.auth.signOut();
@@ -54,29 +56,74 @@ export function AdminShell({ children }: { children: ReactNode }) {
         </nav>
       </aside>
       <main className="flex-1 overflow-x-hidden">
-        {/* Mobile top bar */}
-        <div className="flex h-14 items-center justify-between border-b border-border bg-card px-4 md:hidden">
-          <span className="text-sm font-semibold">Owner portal</span>
-          <button onClick={logout} className="text-xs text-muted-foreground">
-            Sign out
-          </button>
-        </div>
-        <div className="flex gap-1 overflow-x-auto border-b border-border bg-card px-2 md:hidden">
-          {nav.map((item) => {
-            const active = item.exact ? path === item.to : path.startsWith(item.to);
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={`whitespace-nowrap px-3 py-2 text-xs ${
-                  active ? "border-b-2 border-primary font-medium" : "text-muted-foreground"
-                }`}
+        {/* ── Mobile nav bar — mirrors the shop Header format ── */}
+        <header className="sticky top-0 z-50 border-b border-border bg-card text-foreground md:hidden">
+          <div className="flex h-14 w-full items-center justify-between px-6">
+            {/* Left: burger */}
+            <div className="flex flex-1 items-center">
+              <button
+                onClick={() => setOpen((v) => !v)}
+                aria-label="Toggle navigation"
+                className="flex items-center text-foreground"
               >
-                {item.label}
-              </Link>
-            );
-          })}
-        </div>
+                {open ? <X size={18} /> : <Menu size={18} />}
+              </button>
+            </div>
+
+            {/* Center: title */}
+            <span className="absolute left-1/2 -translate-x-1/2 text-[13px] font-semibold tracking-[0em]">
+              Owner portal
+            </span>
+
+            {/* Right: sign out */}
+            <div className="flex flex-1 justify-end">
+              <button
+                onClick={logout}
+                aria-label="Sign out"
+                className="flex items-center text-foreground transition-opacity hover:opacity-60"
+              >
+                <LogOut className="h-[18px] w-[18px]" />
+              </button>
+            </div>
+          </div>
+
+          {/* Fullscreen overlay */}
+          {open && (
+            <div className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-8 bg-card">
+              {nav.map((item) => {
+                const active = item.exact ? path === item.to : path.startsWith(item.to);
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => setOpen(false)}
+                    className={`text-[13px] font-normal tracking-[0em] transition-colors ${
+                      active ? "text-foreground" : "text-foreground/40"
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+              <button
+                onClick={() => {
+                  setOpen(false);
+                  logout();
+                }}
+                className="text-[13px] font-normal tracking-[0em] text-foreground/40 transition-colors hover:text-foreground"
+              >
+                Sign out
+              </button>
+              <button
+                onClick={() => setOpen(false)}
+                aria-label="Close navigation"
+                className="absolute right-6 top-4 text-foreground"
+              >
+                <X size={20} />
+              </button>
+            </div>
+          )}
+        </header>
         <div className="p-4 md:p-8">{children}</div>
       </main>
     </div>

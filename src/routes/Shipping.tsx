@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { Mail } from "lucide-react";
 import { site } from "@/config/site";
 
-export const Route = createFileRoute("/shipping")({
+export const Route = createFileRoute("/Shipping")({
   head: () => ({
     meta: [
       { title: `Shipping — ${site.brand || "Luveni"}` },

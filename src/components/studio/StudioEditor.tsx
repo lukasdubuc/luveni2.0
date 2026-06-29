@@ -4,7 +4,7 @@
 //  transform, undo/redo, AI new-layer, and region-select AI
 //  (marquee a space → generate into it). Client-only (Konva needs DOM).
 // ─────────────────────────────────────────────────────────────
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, lazy, Suspense } from "react";
 import { Stage, Layer, Image as KImage, Text as KText, Rect, Transformer, Group } from "react-konva";
 import Konva from "konva";
 import {
@@ -12,10 +12,13 @@ import {
   Save, Download, Loader2, Wand2, X, RefreshCw, Undo2, Redo2, SquareDashed,
   Paintbrush, FlipHorizontal2, FlipVertical2, MousePointer2, PaintBucket,
   AlignCenterHorizontal, AlignCenterVertical, AlignVerticalJustifyCenter, Layers, Plus,
-  Maximize2, Minimize2
+  Maximize2, Minimize2, Box
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+
+// Three.js 3D garment preview — DOM-only, loaded lazily so SSR never touches it.
+const Garment3DPreview = lazy(() => import("./Garment3DPreview"));
 
 export type BlendMode = "source-over" | "multiply" | "screen" | "overlay" | "darken" | "lighten";
 
@@ -147,11 +150,17 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const [saving, setSaving] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
+  // Apparel-tuned generation preset (mirrors edge-function APPAREL_STYLES).
+  const [aiStyle, setAiStyle] = useState<"apparel" | "streetwear" | "vintage" | "lineart" | "embroidery" | "none">("apparel");
   const [regionMode, setRegionMode] = useState(false);
   const [region, setRegion] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
 
   // Tablet/Desktop clean mode: collapses panels to give maximum drawing space
   const [fullScreenCanvas, setFullScreenCanvas] = useState(false);
+
+  // 3D garment preview (CLO-3D-style live view). Holds the flattened
+  // transparent design PNG; null when the modal is closed.
+  const [preview3d, setPreview3d] = useState<string | null>(null);
 
   // Mobile Sheets manager: "none" | "layers" | "ai" | "export" | "add"
   const [mobileSheet, setMobileSheet] = useState<"none" | "layers" | "ai" | "export" | "add">("none");
@@ -555,7 +564,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const aiNewLayer = async () => {
     if (aiPrompt.trim().length < 3) { toast.error("Prompt too short"); return; }
     setAiBusy(true);
-    try { const url = await runAi({ prompt: aiPrompt.trim(), width: 1024, height: 1024, persist: true }); if (url) { addImageAt(url, aiPrompt.slice(0, 24)); setAiPrompt(""); toast.success("AI layer added."); } }
+    try { const url = await runAi({ prompt: aiPrompt.trim(), width: 1024, height: 1024, persist: true, style: aiStyle }); if (url) { addImageAt(url, aiPrompt.slice(0, 24)); setAiPrompt(""); toast.success("AI layer added."); } }
     finally { setAiBusy(false); }
   };
 
@@ -575,7 +584,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     try {
       const longest = Math.max(r.w, r.h); const k = Math.min(1, 1024 / longest);
       const gw = Math.round(r.w * k); const gh = Math.round(r.h * k);
-      const url = await runAi({ prompt: aiPrompt.trim(), width: gw, height: gh, persist: false });
+      const url = await runAi({ prompt: aiPrompt.trim(), width: gw, height: gh, persist: false, style: aiStyle });
       if (url) { addImageAt(url, aiPrompt.slice(0, 24), r); setAiPrompt(""); toast.success("Generated into region."); }
     } finally { setAiBusy(false); setRegion(null); setRegionMode(false); }
   };
@@ -651,6 +660,18 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     a.click();
   };
 
+  // Capture the design as a transparent print PNG and open the 3D garment view.
+  const open3d = () => {
+    if (layers.length === 0) { toast.error("Design something first"); return; }
+    setSelectedId(null);
+    // Defer a frame so the transformer/handles are gone before capture.
+    requestAnimationFrame(() => {
+      const uri = captureStage(1024, true);
+      if (!uri) { toast.error("Could not render the design"); return; }
+      setPreview3d(uri);
+    });
+  };
+
   const selected = layers.find((l) => l.id === selectedId);
   const pill = `flex items-center gap-1.5 text-[10px] font-medium px-3.5 py-2 rounded-full transition-all ${isDark ? "text-neutral-300 hover:bg-white/10" : "text-neutral-700 hover:bg-black/[0.06]"}`;
   const isHat = templateKey?.startsWith("hat");
@@ -700,6 +721,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
             {fullScreenCanvas ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
             <span className="hidden sm:inline">{fullScreenCanvas ? "Show Sidebars" : "Full Canvas"}</span>
           </button>
+          <button onClick={open3d} className={`${pill} ${isDark ? "bg-neutral-900/80" : "bg-[#f5f5f7]/90 shadow-sm"}`} title="Live 3D garment view"><Box size={13} /> 3D View</button>
           <button onClick={exportPng} className={`${pill} ${isDark ? "bg-neutral-900/80" : "bg-[#f5f5f7]/90 shadow-sm"}`}><Download size={13} /> Export</button>
           <button onClick={save} disabled={saving} className={`${pill} ${isDark ? "bg-neutral-900/80" : "bg-[#f5f5f7]/90 shadow-sm"}`}>
             {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save
@@ -732,6 +754,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
           <button onClick={() => setMobileSheet("add")} className="p-2 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white" title="Add Assets"><Plus size={16} /></button>
           <button onClick={() => setMobileSheet("ai")} className="p-2 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white" title="AI Magic"><Sparkles size={16} /></button>
           <button onClick={() => setMobileSheet("layers")} className="p-2 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white" title="Layers"><Layers size={16} /></button>
+          <button onClick={open3d} className="p-2 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white" title="3D View"><Box size={16} /></button>
           <button onClick={() => setMobileSheet("export")} className="p-2 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white" title="Export Menu"><Download size={16} /></button>
         </div>
       </div>
@@ -749,6 +772,20 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
           {aiBusy && <Loader2 size={14} className="animate-spin opacity-60" />}
           <button onClick={aiNewLayer} disabled={aiBusy} className={pill}><Sparkles size={12} /> New layer</button>
           {selected?.type === "image" && <button onClick={aiRegenerateSelected} disabled={aiBusy} className={pill}><RefreshCw size={12} /> Reimagine</button>}
+        </div>
+        {/* Apparel style presets — print-ready tuning for the generator */}
+        <div className="flex items-center gap-1.5 mt-2 px-2 flex-wrap">
+          <span className="text-[8px] uppercase tracking-widest opacity-40">Print style</span>
+          {(["apparel", "streetwear", "vintage", "lineart", "embroidery", "none"] as const).map((s) => (
+            <button key={s} onClick={() => setAiStyle(s)}
+              className={`text-[9px] px-2.5 py-1 rounded-full uppercase tracking-wider transition-all ${
+                aiStyle === s
+                  ? (isDark ? "bg-white text-black" : "bg-black text-white")
+                  : (isDark ? "text-neutral-400 hover:bg-white/10" : "text-neutral-600 hover:bg-black/[0.06]")
+              }`}>
+              {s === "none" ? "Raw" : s}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -802,7 +839,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
       <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden relative">
         
         {/* Stage Canvas Area — canvas-scroll-container enables drawing panning */}
-        <div ref={scrollOuterRef} className="flex-1 overflow-auto p-4 min-h-[380px] lg:min-h-0 bg-[#f5f5f7] dark:bg-[#111111] relative canvas-scroll-container">
+        <div ref={scrollOuterRef} className="flex-1 overflow-auto p-4 min-h-[380px] lg:min-h-0 relative canvas-scroll-container bg-[radial-gradient(ellipse_at_center,#fbfbfd_0%,#ececed_70%,#e2e2e6_100%)] dark:bg-[radial-gradient(ellipse_at_center,#161617_0%,#101011_65%,#070708_100%)]">
           {/* Centering Wrapper — mathematically centers smaller canvas, enables seamless scrollable space when zoomed in */}
           <div 
             className="relative block animate-fade-in"
@@ -1112,6 +1149,13 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
             )}
           </div>
         </div>
+      )}
+
+      {/* 3D garment preview (Three.js, lazy/client-only) */}
+      {preview3d && (
+        <Suspense fallback={<div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/95 text-white"><Loader2 className="animate-spin" /></div>}>
+          <Garment3DPreview design={preview3d} isDark={isDark} onClose={() => setPreview3d(null)} />
+        </Suspense>
       )}
 
     </div>

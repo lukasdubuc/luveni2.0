@@ -54,7 +54,9 @@ Deno.serve(async (req) => {
   // "regenerate this region / whole canvas based on the original" magic.
   // `persist` (optional, default true): when false we just return the image
   // URL without saving a designs row (transient editor layers).
-  const { prompt, width = 1024, height = 1024, model = "flux", title, image, persist = true } =
+  // `style` (optional): an apparel-tuned preset that wraps the prompt with
+  // print-production cues so output is shop-ready, not a generic illustration.
+  const { prompt, width = 1024, height = 1024, model = "flux", title, image, persist = true, style = "apparel" } =
     await req.json().catch(() => ({}));
   if (!prompt || typeof prompt !== "string" || prompt.length < 3) {
     return json({ error: "prompt must be at least 3 chars" }, 400);
@@ -65,11 +67,33 @@ Deno.serve(async (req) => {
   const allowedModels = ["flux", "flux-realism", "flux-anime", "flux-3d", "turbo"];
   const M = allowedModels.includes(model) ? model : "flux";
 
+  // ── Apparel prompt engineering ─────────────────────────────────────────
+  // Tuned for Printful-style print-on-demand: isolated, centered, screen-print
+  // ready graphics on a clean background (no garment mockup) so the artwork
+  // drops straight onto a product. Each preset appends production cues.
+  const APPAREL_STYLES: Record<string, string> = {
+    apparel:
+      "professional apparel graphic design, centered composition, bold high-contrast, screen-print ready, clean flat colors, isolated on plain solid white background, no mockup, no t-shirt, no garment, sticker die-cut style, crisp sharp edges, merch print quality",
+    streetwear:
+      "modern streetwear graphic, bold typography-friendly, high-contrast, screen-print ready, isolated on plain solid white background, no mockup, hypebeast aesthetic, crisp sharp edges, merch print quality",
+    vintage:
+      "vintage retro apparel print, distressed texture, muted halftone palette, centered composition, isolated on plain solid white background, no mockup, classic band-tee aesthetic, screen-print ready",
+    lineart:
+      "clean minimal line art illustration, single weight black lines, centered, isolated on plain solid white background, no mockup, tattoo-flash style, vector-crisp, screen-print ready",
+    embroidery:
+      "embroidery-ready patch design, bold thick outlines, limited flat color blocks, centered, isolated on plain solid white background, no small details, no gradients, merch patch quality",
+    none: "",
+  };
+  const styleSuffix = typeof style === "string" && style in APPAREL_STYLES ? APPAREL_STYLES[style] : APPAREL_STYLES.apparel;
+  // img2img reimagine passes already have a base image; keep their prompt lean.
+  const enhanced = image || !styleSuffix ? prompt : `${prompt}, ${styleSuffix}`;
+
   // Pollinations.ai — free, no key, returns raw PNG/JPEG bytes.
   // `nologo=true` strips their footer. seed is auto-random server-side.
+  // `enhance=true` runs Pollinations' own prompt upsampler for richer detail.
   // When `image` is supplied, Pollinations runs image-to-image.
   const seed = Math.floor(Math.random() * 9_999_999);
-  let url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${W}&height=${H}&model=${M}&nologo=true&seed=${seed}`;
+  let url = `https://image.pollinations.ai/prompt/${encodeURIComponent(enhanced)}?width=${W}&height=${H}&model=${M}&nologo=true&enhance=true&seed=${seed}`;
   if (typeof image === "string" && /^https?:\/\//.test(image)) {
     url += `&image=${encodeURIComponent(image)}`;
   }
@@ -126,7 +150,7 @@ Deno.serve(async (req) => {
       model: M,
       status: "draft",
       created_by: auth.userId,
-      metadata: { source: "pollinations", seed },
+      metadata: { source: "pollinations", seed, style: styleSuffix ? style : "none", enhanced },
     }),
   });
   const row = insertRes.ok ? (await insertRes.json())?.[0] : null;

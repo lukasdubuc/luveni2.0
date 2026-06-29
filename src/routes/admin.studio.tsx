@@ -290,7 +290,7 @@ function AssetsTab({ isDark, designs, reload, onRemove }: { isDark: boolean; des
     if (prompt.trim().length < 3) { toast.error("Prompt too short"); return; }
     setBusy(true);
     try {
-      const { data, error } = await supabase.functions.invoke("ai-generate-image", { body: { prompt: prompt.trim(), width: 1024, height: 1024 } });
+      const { data, error } = await supabase.functions.invoke("ai-generate-image", { body: { prompt: prompt.trim(), width: 1024, height: 1024, style: "apparel" } });
       let msg = data?.error as string | undefined;
       if (!msg && error) { const ctx = (error as any).context; if (ctx?.json) { try { msg = (await ctx.json())?.error; } catch {} } msg = msg || error.message; }
       if (msg) { toast.error(msg); return; }
