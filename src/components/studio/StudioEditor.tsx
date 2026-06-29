@@ -219,6 +219,36 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     setSelectedId(null);
   }, []);
 
+  const undoPaint = (): boolean => {
+    const entry = paintUndo.current.pop(); if (!entry) return false;
+    const c = paintCanvases.current[entry.id]; if (!c) return false;
+    paintRedo.current.push({ id: entry.id, data: c.toDataURL() });
+    const im = new window.Image(); im.src = entry.data;
+    im.onload = () => { const ctx = c.getContext("2d")!; ctx.clearRect(0, 0, c.width, c.height); ctx.drawImage(im, 0, 0); redrawStage(); };
+    return true;
+  };
+  const redoPaint = (): boolean => {
+    const entry = paintRedo.current.pop(); if (!entry) return false;
+    const c = paintCanvases.current[entry.id]; if (!c) return false;
+    paintUndo.current.push({ id: entry.id, data: c.toDataURL() });
+    const im = new window.Image(); im.src = entry.data;
+    im.onload = () => { const ctx = c.getContext("2d")!; ctx.clearRect(0, 0, c.width, c.height); ctx.drawImage(im, 0, 0); redrawStage(); };
+    return true;
+  };
+
+  // Cohesive Handlers: prioritize paint stroke history, fallback to layers
+  const handleUndo = useCallback(() => {
+    const paintUndone = undoPaint();
+    if (paintUndone) return;
+    undo();
+  }, [undo]);
+
+  const handleRedo = useCallback(() => {
+    const paintRedone = redoPaint();
+    if (paintRedone) return;
+    redo();
+  }, [redo]);
+
   // Keyboard: Cmd/Ctrl+Z undo, +Shift redo. Ignore while typing in fields.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -226,10 +256,8 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
-        // Paint strokes have their own (pixel) history; fall back to the
-        // layer history when there are no paint steps left.
-        if (e.shiftKey) { if (!redoPaint()) redo(); }
-        else { if (!undoPaint()) undo(); }
+        if (e.shiftKey) handleRedo();
+        else handleUndo();
       }
       if (e.key === "Delete" || e.key === "Backspace") {
         if (selectedId) { e.preventDefault(); commit((ls) => ls.filter((l) => l.id !== selectedId)); setSelectedId(null); }
@@ -237,7 +265,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [undo, redo, commit, selectedId]);
+  }, [handleUndo, handleRedo, commit, selectedId]);
 
   // Lock browser viewport to completely prevent horizontal and vertical page swiping/sliding
   useEffect(() => {
@@ -314,21 +342,24 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     return () => window.removeEventListener("resize", fit);
   }, [artboardW, artboardH, fullScreenCanvas]);
 
-  // Handle dynamic scroll coordinates to keep the canvas centered inside viewport during zoom transitions
+  // Handle dynamic scroll coordinates in a requestAnimationFrame tick to keep the canvas centered inside viewport during zoom transitions
   useEffect(() => {
     const outer = scrollOuterRef.current;
     if (!outer) return;
 
-    const rect = outer.getBoundingClientRect();
-    const viewW = rect.width;
-    const viewH = rect.height;
+    const handle = requestAnimationFrame(() => {
+      const viewW = outer.clientWidth;
+      const viewH = outer.clientHeight;
 
-    const stageW = artboardW * scale;
-    const stageH = artboardH * scale;
+      const stageW = artboardW * scale;
+      const stageH = artboardH * scale;
 
-    // Center scroll offsets
-    outer.scrollLeft = (stageW - viewW) / 2;
-    outer.scrollTop = (stageH - viewH) / 2;
+      // Center scroll offsets
+      outer.scrollLeft = (stageW - viewW) / 2;
+      outer.scrollTop = (stageH - viewH) / 2;
+    });
+
+    return () => cancelAnimationFrame(handle);
   }, [scale, artboardW, artboardH]);
 
   useEffect(() => {
@@ -513,23 +544,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     redrawStage();
   };
 
-  const undoPaint = () => {
-    const entry = paintUndo.current.pop(); if (!entry) return false;
-    const c = paintCanvases.current[entry.id]; if (!c) return false;
-    paintRedo.current.push({ id: entry.id, data: c.toDataURL() });
-    const im = new window.Image(); im.src = entry.data;
-    im.onload = () => { const ctx = c.getContext("2d")!; ctx.clearRect(0, 0, c.width, c.height); ctx.drawImage(im, 0, 0); redrawStage(); };
-    return true;
-  };
-  const redoPaint = () => {
-    const entry = paintRedo.current.pop(); if (!entry) return false;
-    const c = paintCanvases.current[entry.id]; if (!c) return false;
-    paintUndo.current.push({ id: entry.id, data: c.toDataURL() });
-    const im = new window.Image(); im.src = entry.data;
-    im.onload = () => { const ctx = c.getContext("2d")!; ctx.clearRect(0, 0, c.width, c.height); ctx.drawImage(im, 0, 0); redrawStage(); };
-    return true;
-  };
-
   const runAi = async (body: any) => {
     const { data, error } = await supabase.functions.invoke("ai-generate-image", { body });
     const msg = await extractFnError(error, data);
@@ -643,8 +657,8 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
         <div className={`flex flex-wrap items-center gap-1 p-1 rounded-full ${isDark ? "bg-neutral-900/80 backdrop-blur-xl" : "bg-[#f5f5f7]/90 backdrop-blur-xl shadow-sm"}`}>
           <button onClick={onClose} className={pill}><X size={13} /> Close</button>
           <span className="w-px h-4 opacity-10 bg-current" />
-          <button onClick={undo} className={pill} title="Undo (⌘Z)"><Undo2 size={13} /></button>
-          <button onClick={redo} className={pill} title="Redo (⌘⇧Z)"><Redo2 size={13} /></button>
+          <button onClick={handleUndo} className={pill} title="Undo (⌘Z)"><Undo2 size={13} /></button>
+          <button onClick={handleRedo} className={pill} title="Redo (⌘⇧Z)"><Redo2 size={13} /></button>
           <span className="w-px h-4 opacity-10 bg-current" />
           <button onClick={() => { setTool("select"); setRegionMode(false); }} className={pill + (tool === "select" ? (isDark ? " bg-white/15" : " bg-black/10") : "")} title="Select / move"><MousePointer2 size={13} /></button>
           <button onClick={() => { setTool("brush"); setRegionMode(false); }} className={pill + (tool === "brush" ? (isDark ? " bg-white/15" : " bg-black/10") : "")} title="Brush"><Paintbrush size={13} /></button>
@@ -682,8 +696,8 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
           <button onClick={onClose} className="p-2 -ml-2 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white transition-colors">
             <X size={18} />
           </button>
-          <button onClick={undo} className="p-2 text-neutral-600 dark:text-neutral-400" title="Undo"><Undo2 size={16} /></button>
-          <button onClick={redo} className="p-2 text-neutral-600 dark:text-neutral-400" title="Redo"><Redo2 size={16} /></button>
+          <button onClick={handleUndo} className="p-2 text-neutral-600 dark:text-neutral-400" title="Undo"><Undo2 size={16} /></button>
+          <button onClick={handleRedo} className="p-2 text-neutral-600 dark:text-neutral-400" title="Redo"><Redo2 size={16} /></button>
         </div>
 
         <span className="text-[10px] uppercase font-bold tracking-widest truncate max-w-[140px] text-neutral-400 dark:text-neutral-500">{projectName}</span>
@@ -754,19 +768,19 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
         {/* Canvas Zoom Slider Dock (100% to 800% Precision scaling) */}
         <div className="flex flex-col items-center gap-1 bg-white/85 dark:bg-black/80 backdrop-blur-md p-1.5 py-4 rounded-full shadow-lg border border-neutral-200/40 dark:border-neutral-800/40 select-none">
           <span className="text-[7px] font-bold opacity-50 uppercase tracking-wider select-none">Zoom</span>
-          {/* Re-designed as standard range slider rotated -90deg to bypass all mobile web touch bugs */}
+          {/* Custom native vertical rendering (bypasses browser CSS transform bugs completely for buttery-smooth stylus sliding) */}
           <div className="h-28 w-6 flex items-center justify-center relative select-none">
             <input 
               type="range" min={100} max={800} step={10} value={zoomPercent} 
               onChange={(e) => setZoomPercent(parseInt(e.target.value))} 
               className="accent-[#6366f1] cursor-pointer"
               style={{
-                transform: "rotate(-90deg)",
-                width: "112px",
-                position: "absolute",
-                margin: 0,
-                padding: 0
+                writingMode: "vertical-lr",
+                WebkitAppearance: "slider-vertical",
+                height: "100%",
+                width: "4px"
               }} 
+              {...{ orient: "vertical" }}
             />
           </div>
           <span className="text-[7px] font-bold opacity-60 select-none">{zoomPercent}%</span>
@@ -779,106 +793,109 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
       <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden relative">
         
         {/* Stage Canvas Area — canvas-scroll-container enables drawing panning */}
-        <div ref={scrollOuterRef} className="flex-1 flex items-center justify-center overflow-auto p-4 min-h-[380px] lg:min-h-0 bg-[#f5f5f7] dark:bg-[#111111] relative canvas-scroll-container">
-          <div className="rounded-[28px] overflow-hidden shadow-2xl">
-            <Stage
-              ref={stageRef}
-              width={artboardW * scale} height={artboardH * scale} scaleX={scale} scaleY={scale}
-              style={{ cursor: tool === "brush" ? "crosshair" : "default" }}
-              onMouseDown={(e) => {
-                if (tool === "fill") {
-                  const p = e.target.getStage()!.getRelativePointerPosition()!;
-                  floodFill(p.x, p.y);
-                  return;
-                }
-                if (tool === "brush") {
-                  const id = ensurePaintTarget();
-                  if (!id) { toast.error("Add a paint layer first"); return; }
-                  const p = e.target.getStage()!.getRelativePointerPosition()!;
-                  snapshotPaint(id); painting.current = true; lastPt.current = null;
-                  strokeTo(id, p.x, p.y, (e.evt as any).pressure || 0.5);
-                  return;
-                }
-                if (regionMode) { const p = e.target.getStage()!.getRelativePointerPosition()!; drawing.current = { x: p.x, y: p.y }; setRegion({ x: p.x, y: p.y, w: 0, h: 0 }); return; }
-                if (e.target === e.target.getStage() || (e.target as any).attrs?.name === "bg") setSelectedId(null);
-              }}
-              onMouseMove={(e) => {
-                if (tool === "brush" && painting.current) {
-                  const id = layers.find((l) => l.id === selectedId)?.type === "paint" ? selectedId! : ensurePaintTarget();
-                  if (id) { const p = e.target.getStage()!.getRelativePointerPosition()!; strokeTo(id, p.x, p.y, (e.evt as any).pressure || 0.5); }
-                  return;
-                }
-                if (regionMode && drawing.current) { const p = e.target.getStage()!.getRelativePointerPosition()!; const s = drawing.current; setRegion({ x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), w: Math.abs(p.x - s.x), h: Math.abs(p.y - s.y) }); }
-              }}
-              onMouseUp={() => {
-                if (painting.current) { painting.current = false; lastPt.current = null; return; }
-                if (regionMode && drawing.current && region) { drawing.current = null; finalizeRegion(region); }
-              }}
-              onTouchStart={(e) => {
-                if (tool === "brush") {
-                  const id = ensurePaintTarget();
-                  if (!id) return;
-                  const p = e.target.getStage()!.getRelativePointerPosition()!;
-                  snapshotPaint(id); painting.current = true; lastPt.current = null;
-                  strokeTo(id, p.x, p.y, 0.5);
-                }
-              }}
-              onTouchMove={(e) => {
-                if (tool === "brush" && painting.current) {
-                  const id = layers.find((l) => l.id === selectedId)?.type === "paint" ? selectedId! : ensurePaintTarget();
-                  if (id) { const p = e.target.getStage()!.getRelativePointerPosition()!; strokeTo(id, p.x, p.y, 0.5); }
-                }
-              }}
-              onTouchEnd={() => {
-                if (painting.current) { painting.current = false; lastPt.current = null; }
-              }}
-            >
-              <Layer>
-                {/* Background Group — can be hidden cleanly during hi-res transparent exports */}
-                <Group name="background-group">
-                  <Rect name="bg" x={0} y={0} width={artboardW} height={artboardH} fill="#ffffff" listening />
-                  {canvasKind === "canvas" ? null : garment ? (
-                    <>
-                      <KImage name="garment" image={garment} x={0} y={0} width={artboardW} height={artboardH} listening={false} />
-                      <Rect name="guide" x={artboardW * pa.x} y={artboardH * pa.y} width={artboardW * pa.w} height={artboardH * pa.h} stroke="#6366f1" strokeWidth={4} dash={[26, 18]} cornerRadius={20} listening={false} opacity={0.6} />
-                    </>
+        <div ref={scrollOuterRef} className="flex-1 overflow-auto p-4 min-h-[380px] lg:min-h-0 bg-[#f5f5f7] dark:bg-[#111111] relative canvas-scroll-container">
+          {/* Centering Wrapper — symmetrically locks canvas center position during scale changes */}
+          <div className="min-w-full min-h-full flex items-center justify-center">
+            <div className="rounded-[28px] overflow-hidden shadow-2xl">
+              <Stage
+                ref={stageRef}
+                width={artboardW * scale} height={artboardH * scale} scaleX={scale} scaleY={scale}
+                style={{ cursor: tool === "brush" ? "crosshair" : "default" }}
+                onMouseDown={(e) => {
+                  if (tool === "fill") {
+                    const p = e.target.getStage()!.getRelativePointerPosition()!;
+                    floodFill(p.x, p.y);
+                    return;
+                  }
+                  if (tool === "brush") {
+                    const id = ensurePaintTarget();
+                    if (!id) { toast.error("Add a paint layer first"); return; }
+                    const p = e.target.getStage()!.getRelativePointerPosition()!;
+                    snapshotPaint(id); painting.current = true; lastPt.current = null;
+                    strokeTo(id, p.x, p.y, (e.evt as any).pressure || 0.5);
+                    return;
+                  }
+                  if (regionMode) { const p = e.target.getStage()!.getRelativePointerPosition()!; drawing.current = { x: p.x, y: p.y }; setRegion({ x: p.x, y: p.y, w: 0, h: 0 }); return; }
+                  if (e.target === e.target.getStage() || (e.target as any).attrs?.name === "bg") setSelectedId(null);
+                }}
+                onMouseMove={(e) => {
+                  if (tool === "brush" && painting.current) {
+                    const id = layers.find((l) => l.id === selectedId)?.type === "paint" ? selectedId! : ensurePaintTarget();
+                    if (id) { const p = e.target.getStage()!.getRelativePointerPosition()!; strokeTo(id, p.x, p.y, (e.evt as any).pressure || 0.5); }
+                    return;
+                  }
+                  if (regionMode && drawing.current) { const p = e.target.getStage()!.getRelativePointerPosition()!; const s = drawing.current; setRegion({ x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), w: Math.abs(p.x - s.x), h: Math.abs(p.y - s.y) }); }
+                }}
+                onMouseUp={() => {
+                  if (painting.current) { painting.current = false; lastPt.current = null; return; }
+                  if (regionMode && drawing.current && region) { drawing.current = null; finalizeRegion(region); }
+                }}
+                onTouchStart={(e) => {
+                  if (tool === "brush") {
+                    const id = ensurePaintTarget();
+                    if (!id) return;
+                    const p = e.target.getStage()!.getRelativePointerPosition()!;
+                    snapshotPaint(id); painting.current = true; lastPt.current = null;
+                    strokeTo(id, p.x, p.y, 0.5);
+                  }
+                }}
+                onTouchMove={(e) => {
+                  if (tool === "brush" && painting.current) {
+                    const id = layers.find((l) => l.id === selectedId)?.type === "paint" ? selectedId! : ensurePaintTarget();
+                    if (id) { const p = e.target.getStage()!.getRelativePointerPosition()!; strokeTo(id, p.x, p.y, 0.5); }
+                  }
+                }}
+                onTouchEnd={() => {
+                  if (painting.current) { painting.current = false; lastPt.current = null; }
+                }}
+              >
+                <Layer>
+                  {/* Background Group — can be hidden cleanly during hi-res transparent exports */}
+                  <Group name="background-group">
+                    <Rect name="bg" x={0} y={0} width={artboardW} height={artboardH} fill="#ffffff" listening />
+                    {canvasKind === "canvas" ? null : garment ? (
+                      <>
+                        <KImage name="garment" image={garment} x={0} y={0} width={artboardW} height={artboardH} listening={false} />
+                        <Rect name="guide" x={artboardW * pa.x} y={artboardH * pa.y} width={artboardW * pa.w} height={artboardH * pa.h} stroke="#6366f1" strokeWidth={4} dash={[26, 18]} cornerRadius={20} listening={false} opacity={0.6} />
+                      </>
+                    ) : (
+                      <>
+                        <Rect name="garment" x={artboardW * 0.06} y={artboardH * 0.05} width={artboardW * 0.88} height={artboardH * 0.9} cornerRadius={artboardW * 0.06} fill={isDark ? "#161616" : "#f1f1f3"} listening={false} />
+                        <Rect name="guide" x={artboardW * pa.x} y={artboardH * pa.y} width={artboardW * pa.w} height={artboardH * pa.h} stroke="#9ca3af" strokeWidth={4} dash={[26, 18]} cornerRadius={20} listening={false} />
+                      </>
+                    )}
+                  </Group>
+
+                  {layers.map((l) => l.type === "paint" ? (
+                    <PaintNode key={l.id} layer={l} canvas={getPaintCanvas(l)} />
+                  ) : l.type === "image" ? (
+                    <ImageNode key={l.id} layer={l} listening={!regionMode && tool === "select"}
+                      nodeRef={(n: any) => (nodeRefs.current[l.id] = n)} onDragMove={snapDrag}
+                      onSelect={() => setSelectedId(l.id)} onChange={(patch: any) => { patchLayer(l.id, patch); setGuides({ v: false, h: false }); }} />
                   ) : (
-                    <>
-                      <Rect name="garment" x={artboardW * 0.06} y={artboardH * 0.05} width={artboardW * 0.88} height={artboardH * 0.9} cornerRadius={artboardW * 0.06} fill={isDark ? "#161616" : "#f1f1f3"} listening={false} />
-                      <Rect name="guide" x={artboardW * pa.x} y={artboardH * pa.y} width={artboardW * pa.w} height={artboardH * pa.h} stroke="#9ca3af" strokeWidth={4} dash={[26, 18]} cornerRadius={20} listening={false} />
-                    </>
-                  )}
-                </Group>
+                    <TextNode key={l.id} layer={l} listening={!regionMode && tool === "select"}
+                      nodeRef={(n: any) => (nodeRefs.current[l.id] = n)} onDragMove={snapDrag}
+                      onSelect={() => setSelectedId(l.id)} onChange={(patch: any) => { patchLayer(l.id, patch); setGuides({ v: false, h: false }); }} />
+                  ))}
 
-                {layers.map((l) => l.type === "paint" ? (
-                  <PaintNode key={l.id} layer={l} canvas={getPaintCanvas(l)} />
-                ) : l.type === "image" ? (
-                  <ImageNode key={l.id} layer={l} listening={!regionMode && tool === "select"}
-                    nodeRef={(n: any) => (nodeRefs.current[l.id] = n)} onDragMove={snapDrag}
-                    onSelect={() => setSelectedId(l.id)} onChange={(patch: any) => { patchLayer(l.id, patch); setGuides({ v: false, h: false }); }} />
-                ) : (
-                  <TextNode key={l.id} layer={l} listening={!regionMode && tool === "select"}
-                    nodeRef={(n: any) => (nodeRefs.current[l.id] = n)} onDragMove={snapDrag}
-                    onSelect={() => setSelectedId(l.id)} onChange={(patch: any) => { patchLayer(l.id, patch); setGuides({ v: false, h: false }); }} />
-                ))}
+                  {/* Symmetry mirror guides */}
+                  {tool === "brush" && symmetry === "v" && <Rect name="symmetry-guide" x={artboardW / 2 - 1} y={0} width={2} height={artboardH} fill="#6366f1" opacity={0.5} listening={false} />}
+                  {tool === "brush" && symmetry === "h" && <Rect name="symmetry-guide" x={0} y={artboardH / 2 - 1} width={artboardW} height={2} fill="#6366f1" opacity={0.5} listening={false} />}
 
-                {/* Symmetry mirror guides */}
-                {tool === "brush" && symmetry === "v" && <Rect name="symmetry-guide" x={artboardW / 2 - 1} y={0} width={2} height={artboardH} fill="#6366f1" opacity={0.5} listening={false} />}
-                {tool === "brush" && symmetry === "h" && <Rect name="symmetry-guide" x={0} y={artboardH / 2 - 1} width={artboardW} height={2} fill="#6366f1" opacity={0.5} listening={false} />}
+                  {/* Center alignment guides (while dragging) */}
+                  {guides.v && <Rect name="align-guide" x={artboardW / 2 - 1} y={0} width={2} height={artboardH} fill="#22d3ee" listening={false} />}
+                  {guides.h && <Rect name="align-guide" x={0} y={artboardH / 2 - 1} width={artboardW} height={2} fill="#22d3ee" listening={false} />}
 
-                {/* Center alignment guides (while dragging) */}
-                {guides.v && <Rect name="align-guide" x={artboardW / 2 - 1} y={0} width={2} height={artboardH} fill="#22d3ee" listening={false} />}
-                {guides.h && <Rect name="align-guide" x={0} y={artboardH / 2 - 1} width={artboardW} height={2} fill="#22d3ee" listening={false} />}
-
-                {region && <Rect x={region.x} y={region.y} width={region.w} height={region.h} stroke="#6366f1" strokeWidth={4} dash={[16, 12]} fill="rgba(99,102,241,0.08)" listening={false} />}
-                <Transformer
-                  ref={trRef} rotateEnabled keepRatio
-                  enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right", "middle-left", "middle-right", "top-center", "bottom-center"]}
-                  anchorCornerRadius={20} borderStroke="#6366f1" anchorStroke="#6366f1" anchorSize={14}
-                  boundBoxFunc={(oldBox, newBox) => (newBox.width < 10 || newBox.height < 10 ? oldBox : newBox)}
-                />
-              </Layer>
-            </Stage>
+                  {region && <Rect x={region.x} y={region.y} width={region.w} height={region.h} stroke="#6366f1" strokeWidth={4} dash={[16, 12]} fill="rgba(99,102,241,0.08)" listening={false} />}
+                  <Transformer
+                    ref={trRef} rotateEnabled keepRatio
+                    enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right", "middle-left", "middle-right", "top-center", "bottom-center"]}
+                    anchorCornerRadius={20} borderStroke="#6366f1" anchorStroke="#6366f1" anchorSize={14}
+                    boundBoxFunc={(oldBox, newBox) => (newBox.width < 10 || newBox.height < 10 ? oldBox : newBox)}
+                  />
+                </Layer>
+              </Stage>
+            </div>
           </div>
         </div>
 
