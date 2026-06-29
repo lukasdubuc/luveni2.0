@@ -17,7 +17,8 @@ const StudioEditor = lazy(() => import("@/components/studio/StudioEditor"));
 
 type Blank = { id: number | string; key: string; label: string; mfr: string; type?: string; brand?: string | null; image: string | null; variant_count?: number; error?: string };
 type BlankColor = { name: string; code: string | null; image: string | null; variant_id?: number | null };
-type BlankDetail = { id: number | string; key: string; label: string; mfr: string; type?: string; image: string | null; min_cost_cents: number; max_cost_cents: number; colors: BlankColor[]; sizes: string[]; variant_count: number };
+type PrintArea = { placement: string; width_px: number; height_px: number; dpi: number; width_in: number; height_in: number };
+type BlankDetail = { id: number | string; key: string; label: string; mfr: string; type?: string; image: string | null; min_cost_cents: number; max_cost_cents: number; colors: BlankColor[]; sizes: string[]; variant_count: number; print_area?: PrintArea | null };
 type MfrStatus = { available: boolean; error: string | null; count: number };
 
 type Project = {
@@ -145,17 +146,22 @@ function StudioPage() {
       // the raw blank cost is preserved on the product ref for the live calculator.
       const costCents = d.min_cost_cents || 0;
       const retailCents = computeRetailCents(costCents);
+      // Use the real print-file dimensions for the artboard so the canvas is
+      // true-to-print; fall back to the standard tee/square ratio otherwise.
+      const pa = d.print_area;
+      const artboardW = pa?.width_px || (tee ? 4500 : 5400);
+      const artboardH = pa?.height_px || 5400;
       const { data, error } = await supabase.from("studio_projects").insert({
         name: `${color ? color.name + " " : ""}${d.label}`,
         manufacturer: d.mfr,
         template_key: d.key,
         price_cents: retailCents,
-        artboard_w: tee ? 4500 : 5400, // standard t-shirt aspect ratio, otherwise square
-        artboard_h: tee ? 5400 : 5400,
+        artboard_w: artboardW,
+        artboard_h: artboardH,
         template_image: color?.image || d.image,
         canvas_kind: "product",
         print_area: null,
-        canvas: { layers: [], product: { id: d.id, mfr: d.mfr, color: color?.name || null, variant_id: color?.variant_id ?? null, sizes: d.sizes, cost_cents: costCents } },
+        canvas: { layers: [], product: { id: d.id, mfr: d.mfr, color: color?.name || null, variant_id: color?.variant_id ?? null, sizes: d.sizes, cost_cents: costCents, print: pa || null } },
       }).select("*").single();
       if (error || !data) { toast.error(error?.message || "Could not create project"); return; }
       setNewOpen(false); setDetail(null); await loadProjects(); handleSetEditing(data as Project);

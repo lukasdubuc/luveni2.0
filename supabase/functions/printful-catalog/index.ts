@@ -79,6 +79,34 @@ async function printfulList(): Promise<any[]> {
   }));
 }
 
+// Real print-area dimensions for the front placement, so the studio artboard
+// and the 3D decal are true-to-print (px @ dpi → inches). Best-effort: returns
+// null if Printful has no printfiles for this product.
+async function printfulPrintArea(id: number | string): Promise<any> {
+  try {
+    const r = await fetch(`https://api.printful.com/mockup-generator/printfiles/${id}`, { headers: pfHeaders() });
+    if (!r.ok) return null;
+    const res = (await r.json())?.result;
+    const printfiles: any[] = res?.printfiles || [];
+    if (!printfiles.length) return null;
+    // Prefer the "front" placement; fall back to the first available placement.
+    const vp = (res?.variant_printfiles || [])[0]?.placements || {};
+    const placement = vp.front != null ? "front" : Object.keys(vp)[0];
+    const pfId = placement != null ? vp[placement] : null;
+    const pf = printfiles.find((p) => p.printfile_id === pfId) || printfiles[0];
+    if (!pf?.width || !pf?.height) return null;
+    const dpi = pf.dpi || 150;
+    return {
+      placement: placement || "front",
+      width_px: pf.width,
+      height_px: pf.height,
+      dpi,
+      width_in: +(pf.width / dpi).toFixed(2),
+      height_in: +(pf.height / dpi).toFixed(2),
+    };
+  } catch { return null; }
+}
+
 async function printfulDetail(id: number | string): Promise<any> {
   if (!PRINTFUL_API_KEY) throw new Error("PRINTFUL_API_KEY not set");
   const r = await fetch(`https://api.printful.com/products/${id}`, { headers: pfHeaders() });
@@ -94,6 +122,7 @@ async function printfulDetail(id: number | string): Promise<any> {
     if (v.color && !colorMap.has(v.color)) colorMap.set(v.color, { name: v.color, code: v.color_code || null, image: v.image || null, variant_id: v.id ?? null });
     if (v.size) sizeSet.add(v.size);
   }
+  const print_area = await printfulPrintArea(id);
   return {
     id, mfr: "printful",
     key: slugKey("printful", product.type, id),
@@ -105,6 +134,7 @@ async function printfulDetail(id: number | string): Promise<any> {
     colors: [...colorMap.values()],
     sizes: [...sizeSet],
     variant_count: variants.length,
+    print_area, // { placement, width_px, height_px, dpi, width_in, height_in } | null
   };
 }
 
@@ -273,6 +303,30 @@ Deno.serve(async (req) => {
         if (res?.status === "failed") return json({ error: "Printful mockup render failed" }, 502);
       }
       return json({ error: "Mockup render timed out" }, 504);
+    } catch (e: any) { return json({ error: e.message }, 502); }
+  }
+
+  // ── edm-nonce: mint a Printful Embedded Design Maker session token ───────────
+  // The nonce is generated server-side (keeps the access token private) and used
+  // by the browser to authenticate the EDM iframe. Requires the "Embedded
+  // Designer" extension enabled on the Printful account.
+  if (action === "edm-nonce") {
+    if (!PRINTFUL_API_KEY) return json({ error: "PRINTFUL_API_KEY not set" }, 500);
+    const externalProductId = String(body.externalProductId || `luveni-${body.productId || Date.now()}`);
+    try {
+      const r = await fetch("https://api.printful.com/embedded-designer/nonces", {
+        method: "POST",
+        headers: { ...pfHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          external_product_id: externalProductId,
+          ...(body.productId ? { product_id: body.productId } : {}),
+          ...(body.productTemplateId ? { product_template_id: body.productTemplateId } : {}),
+        }),
+      });
+      const txt = await r.text().catch(() => "");
+      if (!r.ok) return json({ error: `Printful EDM HTTP ${r.status}: ${txt.slice(0, 200)}` }, 502);
+      const data = txt ? JSON.parse(txt) : {};
+      return json({ ok: true, nonce: data?.result?.nonce ?? null, expires_at: data?.result?.expires_at ?? null, externalProductId });
     } catch (e: any) { return json({ error: e.message }, 502); }
   }
 

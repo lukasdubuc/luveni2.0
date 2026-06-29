@@ -20,6 +20,8 @@ import { computeRetailCents } from "@/lib/pricing";
 
 // Three.js 3D garment preview — DOM-only, loaded lazily so SSR never touches it.
 const Garment3DPreview = lazy(() => import("./Garment3DPreview"));
+// Printful Embedded Design Maker — loaded lazily (pulls in Printful's embed.js).
+const PrintfulDesignMaker = lazy(() => import("./PrintfulDesignMaker"));
 
 export type BlendMode = "source-over" | "multiply" | "screen" | "overlay" | "darken" | "lighten";
 
@@ -179,10 +181,13 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   // 3D garment preview (CLO-3D-style live view). Holds the flattened
   // transparent design PNG; null when the modal is closed.
   const [preview3d, setPreview3d] = useState<string | null>(null);
+  // Printful Embedded Design Maker modal (hybrid: alongside our own AI/paint).
+  const [edmOpen, setEdmOpen] = useState(false);
   // Manufacturer product the project was created from (id/variant/color),
   // used to render photoreal on-model mockups of the exact print. Stateful so
   // a traced/custom canvas can be matched & attached to a real blank.
-  type ProductRef = { id?: number | string; mfr?: string; variant_id?: number | null; color?: string | null };
+  type PrintDims = { placement: string; width_px: number; height_px: number; dpi: number; width_in: number; height_in: number };
+  type ProductRef = { id?: number | string; mfr?: string; variant_id?: number | null; color?: string | null; print?: PrintDims | null };
   const [product, setProduct] = useState<ProductRef | undefined>((initialCanvas as any)?.product);
 
   // Blank-matching (for traced/custom canvases): find the closest real blank
@@ -823,6 +828,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
           </button>
           {!product?.id && <button onClick={() => setMatchOpen(true)} className={`${pill} ${isDark ? "bg-neutral-900/80" : "bg-[#f5f5f7]/90 shadow-sm"}`} title="Match this design to the cheapest real blank"><Shirt size={13} /> Match blank</button>}
           <button onClick={open3d} className={`${pill} ${isDark ? "bg-neutral-900/80" : "bg-[#f5f5f7]/90 shadow-sm"}`} title="Live 3D garment view"><Box size={13} /> 3D View</button>
+          {product?.mfr === "printful" && <button onClick={() => setEdmOpen(true)} className={`${pill} ${isDark ? "bg-neutral-900/80" : "bg-[#f5f5f7]/90 shadow-sm"}`} title="Design with Printful's Design Maker"><Wand2 size={13} /> Printful Maker</button>}
           <button onClick={exportPng} className={`${pill} ${isDark ? "bg-neutral-900/80" : "bg-[#f5f5f7]/90 shadow-sm"}`}><Download size={13} /> Export</button>
           <button onClick={save} disabled={saving} className={`${pill} ${isDark ? "bg-neutral-900/80" : "bg-[#f5f5f7]/90 shadow-sm"}`}>
             {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save
@@ -1296,7 +1302,19 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
         <Suspense fallback={<div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 text-white"><Loader2 className="animate-spin" /></div>}>
           <Garment3DPreview design={preview3d} isDark={isDark} onClose={() => setPreview3d(null)}
             canMockup={product?.mfr === "printful" && !!product?.variant_id}
+            printWidthIn={product?.print?.width_in ?? null}
+            printHeightIn={product?.print?.height_in ?? null}
             fetchMockups={fetchMockups} />
+        </Suspense>
+      )}
+
+      {/* Printful Embedded Design Maker (hybrid alongside our own AI/paint) */}
+      {edmOpen && (
+        <Suspense fallback={<div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 text-white"><Loader2 className="animate-spin" /></div>}>
+          <PrintfulDesignMaker
+            productId={product?.id}
+            onDesign={(url, name) => addImageAt(url, name)}
+            onClose={() => setEdmOpen(false)} />
         </Suspense>
       )}
 

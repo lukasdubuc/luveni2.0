@@ -92,10 +92,18 @@ class BodyBoundary extends Component<{ fallback: ReactNode; children: ReactNode 
   render() { return this.state.failed ? this.props.fallback : this.props.children; }
 }
 
+// Calibration: a standard 12" front print maps to this decal width on the
+// chest mesh. Real print widths scale linearly from here, so a 14" print reads
+// proportionally larger and a 4" pocket print proportionally smaller.
+const REF_PRINT_W_IN = 12;
+const REF_DECAL_W = 0.55;
+
 // The tailored t-shirt garment + chest decal. Always rendered on top of the
 // body so the print mapping and colour swatches behave identically regardless
-// of which body (GLB or procedural) is underneath.
-function Shirt({ color, design }: { color: string; design: string }) {
+// of which body (GLB or procedural) is underneath. When real print dimensions
+// are known the decal is sized true-to-print (width fraction of chest + exact
+// aspect ratio); otherwise it falls back to the default placement.
+function Shirt({ color, design, printWidthIn, printHeightIn }: { color: string; design: string; printWidthIn?: number | null; printHeightIn?: number | null }) {
   const texture = useTexture(design);
   texture.anisotropy = 8;
 
@@ -104,12 +112,28 @@ function Shirt({ color, design }: { color: string; design: string }) {
     [color],
   );
 
+  // True-to-print decal scale. Width from the real print width; height from the
+  // real print aspect ratio (falls back to the texture's own aspect, then 0.75).
+  const decalScale = useMemo<[number, number, number]>(() => {
+    if (printWidthIn && printWidthIn > 0) {
+      const w = (printWidthIn / REF_PRINT_W_IN) * REF_DECAL_W;
+      const aspect = printHeightIn && printHeightIn > 0
+        ? printHeightIn / printWidthIn
+        : (texture.image ? (texture.image as any).height / (texture.image as any).width : 0.75 / 0.55);
+      return [w, w * aspect, 0.5];
+    }
+    return [REF_DECAL_W, 0.75, 0.5];
+  }, [printWidthIn, printHeightIn, texture]);
+
+  // Keep the print top-anchored near the chest as it grows/shrinks.
+  const decalY = 0.28 + (decalScale[1] - 0.75) * 0.5;
+
   return (
     <group>
       {/* Torso shirt body — carries the chest decal */}
       <mesh position={[0, 0.78, 0.01]} material={shirtMaterial}>
         <cylinderGeometry args={[0.39, 0.34, 1.25, 64, 1, true]} />
-        <Decal position={[0, 0.28, 0.39]} rotation={[0, 0, 0]} scale={[0.55, 0.75, 0.5]}>
+        <Decal position={[0, decalY, 0.39]} rotation={[0, 0, 0]} scale={decalScale}>
           <meshStandardMaterial map={texture} transparent polygonOffset polygonOffsetFactor={-4} roughness={0.85} depthTest />
         </Decal>
       </mesh>
@@ -125,7 +149,7 @@ function Shirt({ color, design }: { color: string; design: string }) {
 }
 
 // Composes the body (GLB → procedural fallback) with the shirt + decal.
-function Figure({ color, design, isDark }: { color: string; design: string; isDark: boolean }) {
+function Figure({ color, design, isDark, printWidthIn, printHeightIn }: { color: string; design: string; isDark: boolean; printWidthIn?: number | null; printHeightIn?: number | null }) {
   return (
     <Center>
       <group position={[0, -0.6, 0]}>
@@ -134,7 +158,7 @@ function Figure({ color, design, isDark }: { color: string; design: string; isDa
             <HumanBody isDark={isDark} />
           </Suspense>
         </BodyBoundary>
-        <Shirt color={color} design={design} />
+        <Shirt color={color} design={design} printWidthIn={printWidthIn} printHeightIn={printHeightIn} />
       </group>
     </Center>
   );
@@ -145,12 +169,16 @@ export default function Garment3DPreview({
   onClose,
   isDark = true,
   canMockup = false,
+  printWidthIn = null,
+  printHeightIn = null,
   fetchMockups,
 }: {
   design: string; // transparent PNG data URL of the flattened artboard
   onClose: () => void;
   isDark?: boolean;
   canMockup?: boolean; // true when a Printful product variant is available
+  printWidthIn?: number | null;  // real front-print width (inches) for true-to-size decal
+  printHeightIn?: number | null; // real front-print height (inches)
   fetchMockups?: () => Promise<string[]>;
 }) {
   const [color, setColor] = useState(GARMENT_COLORS[0].hex);
@@ -192,7 +220,11 @@ export default function Garment3DPreview({
             )}
           </div>
           <span className="hidden sm:inline text-[9px] uppercase tracking-widest text-white/40">
-            {tab === "3d" ? "drag to rotate · scroll to zoom" : "photoreal on-model · exact print"}
+            {tab === "3d"
+              ? (printWidthIn && printHeightIn
+                  ? `drag to rotate · print ${printWidthIn}″ × ${printHeightIn}″ true-to-size`
+                  : "drag to rotate · scroll to zoom")
+              : "photoreal on-model · exact print"}
           </span>
         </div>
         <button
@@ -249,7 +281,7 @@ export default function Garment3DPreview({
               </div>
             </Html>
           }>
-            <Figure color={color} design={design} isDark={isDark} />
+            <Figure color={color} design={design} isDark={isDark} printWidthIn={printWidthIn} printHeightIn={printHeightIn} />
           </Suspense>
           <ContactShadows position={[0, -1.95, 0]} opacity={0.4} scale={9} blur={2.6} far={3.5} />
           <OrbitControls
