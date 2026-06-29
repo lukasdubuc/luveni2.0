@@ -11,7 +11,8 @@ import {
   Type, ImagePlus, Sparkles, Trash2, Eye, EyeOff, ArrowUp, ArrowDown,
   Save, Download, Loader2, Wand2, X, RefreshCw, Undo2, Redo2, SquareDashed,
   Paintbrush, FlipHorizontal2, FlipVertical2, MousePointer2, PaintBucket,
-  AlignCenterHorizontal, AlignCenterVertical, AlignVerticalJustifyCenter, Layers, Plus
+  AlignCenterHorizontal, AlignCenterVertical, AlignVerticalJustifyCenter, Layers, Plus,
+  Maximize2, Minimize2
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -149,6 +150,9 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const [regionMode, setRegionMode] = useState(false);
   const [region, setRegion] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
 
+  // Tablet/Desktop clean mode: collapses panels to give maximum drawing space
+  const [fullScreenCanvas, setFullScreenCanvas] = useState(false);
+
   // Mobile Sheets manager: "none" | "layers" | "ai" | "export"
   const [mobileSheet, setMobileSheet] = useState<"none" | "layers" | "ai" | "export">("none");
 
@@ -232,15 +236,16 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   useEffect(() => {
     const fit = () => {
       const isMobile = window.innerWidth < 1024;
-      const padW = isMobile ? 32 : 420;
-      const padH = isMobile ? 180 : 220;
+      // If mobile OR clean fullscreen is active, maximize drawing proportions
+      const padW = (isMobile || fullScreenCanvas) ? 32 : 420;
+      const padH = (isMobile || fullScreenCanvas) ? 140 : 220;
       const availW = Math.max(280, window.innerWidth - padW);
       const availH = Math.max(280, window.innerHeight - padH);
       setScale(Math.min(availW / artboardW, availH / artboardH, 1));
     };
     fit(); window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
-  }, [artboardW, artboardH]);
+  }, [artboardW, artboardH, fullScreenCanvas]);
 
   useEffect(() => {
     const tr = trRef.current; if (!tr) return;
@@ -590,7 +595,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const pa = printArea || defaultPa;
 
   return (
-    <div className={`admin-page fixed inset-0 z-50 flex flex-col font-mono relative select-none ${isDark ? "bg-black text-neutral-105" : "bg-white text-neutral-900"}`}>
+    <div className={`admin-page fixed inset-0 z-50 flex flex-col font-mono select-none ${isDark ? "bg-black text-neutral-105" : "bg-white text-neutral-900"}`}>
       
       {/* ─────────────────────────────────────────────────────────────
          DESKTOP WORKSPACE HEADER (Hidden on mobile)
@@ -615,6 +620,11 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
           </button>
         </div>
         <div className="ml-auto flex items-center justify-end gap-2">
+          {/* Tablet/Stylus Maximizer Button */}
+          <button onClick={() => setFullScreenCanvas(!fullScreenCanvas)} className={pill} title="Toggle Clean Canvas Mode">
+            {fullScreenCanvas ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+            <span className="hidden sm:inline">{fullScreenCanvas ? "Show Sidebars" : "Full Canvas"}</span>
+          </button>
           <button onClick={exportPng} className={`${pill} ${isDark ? "bg-neutral-900/80" : "bg-[#f5f5f7]/90 shadow-sm"}`}><Download size={13} /> Export</button>
           <button onClick={save} disabled={saving} className={`${pill} ${isDark ? "bg-neutral-900/80" : "bg-[#f5f5f7]/90 shadow-sm"}`}>
             {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save
@@ -651,10 +661,10 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
-         DESKTOP FLOATING CONTROLS
+         DESKTOP FLOATING CONTROLS (Hidden if Clean Canvas is active)
          ───────────────────────────────────────────────────────────── */}
       {/* AI prompt bar — always visible capsule on desktop */}
-      <div className="hidden lg:block px-4 pb-2 shrink-0 mt-3">
+      <div className={`hidden lg:block px-4 pb-2 shrink-0 mt-3 transition-all ${fullScreenCanvas ? "lg:hidden" : ""}`}>
         <div className={`flex items-center gap-2 px-2 py-2 rounded-full ${isDark ? "bg-neutral-900/70 backdrop-blur-xl" : "bg-[#f5f5f7]/90 backdrop-blur-xl shadow-sm border border-neutral-200/40"}`}>
           <Sparkles size={14} className="opacity-50 ml-2" />
           <input value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)}
@@ -668,7 +678,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
 
       {/* Brush controls — only while painting on desktop */}
       {tool === "brush" && (
-        <div className="hidden lg:block px-4 pb-2 shrink-0">
+        <div className={`hidden lg:block px-4 pb-2 shrink-0 transition-all ${fullScreenCanvas ? "lg:hidden" : ""}`}>
           <div className={`flex items-center gap-3 px-3 py-2 rounded-full ${isDark ? "bg-neutral-900/70 backdrop-blur-xl" : "bg-[#f5f5f7]/90 backdrop-blur-xl shadow-sm border border-neutral-200/40"}`}>
             <Paintbrush size={13} className="opacity-50 ml-1" />
             <input type="color" value={brushColor} onChange={(e) => setBrushColor(e.target.value)} className="w-7 h-7 rounded-full bg-transparent border-0 cursor-pointer" title="Brush color" />
@@ -688,7 +698,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-         MOBILE PROCREATE SIDEBAR (Sleek Vertical Sliders)
+         MOBILE & STYLUS PROCREATE SIDEBAR (Sleek Vertical Sliders)
          ───────────────────────────────────────────────────────────── */}
       <div className="absolute left-3 top-[42%] -translate-y-1/2 flex flex-col items-center gap-6 z-30 lg:hidden pointer-events-auto">
         {/* Brush Size Dock */}
@@ -731,11 +741,11 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
-         MAIN EDITING AREA
+         MAIN WORKSPACE AREA
          ───────────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden relative">
         
-        {/* Stage Wrapper */}
+        {/* Stage Canvas Area */}
         <div className="flex-1 flex items-center justify-center overflow-auto p-4 min-h-[380px] lg:min-h-0 bg-[#f5f5f7] dark:bg-[#111111] relative">
           <div className="rounded-[28px] overflow-hidden shadow-2xl">
             <Stage
@@ -840,9 +850,11 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
         </div>
 
         {/* ─────────────────────────────────────────────────────────────
-           DESKTOP ONLY LAYER / PROPERTIES PANEL
+           DESKTOP LAYER / PROPERTIES PANEL (Collapses in Full Canvas Mode)
            ───────────────────────────────────────────────────────────── */}
-        <div className="hidden lg:block w-[300px] p-3 overflow-y-auto shrink-0 border-l border-neutral-100 dark:border-neutral-900 bg-white dark:bg-black">
+        <div className={`w-full lg:w-[300px] p-3 overflow-y-auto shrink-0 border-l border-neutral-100 dark:border-neutral-900 bg-white dark:bg-black transition-all ${
+          fullScreenCanvas ? "lg:hidden" : "hidden lg:block"
+        }`}>
           {selected && (
             <div className={`rounded-[20px] p-4 mb-3 ${isDark ? "bg-neutral-900/60" : "bg-neutral-50/70 border border-neutral-100 shadow-sm"}`}>
               <p className="text-[9px] uppercase tracking-widest opacity-50 mb-3">Properties</p>
