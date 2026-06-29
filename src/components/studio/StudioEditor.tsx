@@ -228,8 +228,12 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const [scale, setScale] = useState(0.15);
   useEffect(() => {
     const fit = () => {
-      const availW = Math.min(window.innerWidth - 420, 920);
-      const availH = window.innerHeight - 220;
+      const isMobile = window.innerWidth < 1024;
+      // Adapt horizontal/vertical offsets dynamically for mobile stack view
+      const padW = isMobile ? 32 : 420;
+      const padH = isMobile ? 360 : 220;
+      const availW = Math.max(280, window.innerWidth - padW);
+      const availH = Math.max(280, window.innerHeight - padH);
       setScale(Math.min(availW / artboardW, availH / artboardH, 1));
     };
     fit(); window.addEventListener("resize", fit);
@@ -483,21 +487,18 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     layers.map((l) => (l.type === "paint" && paintCanvases.current[l.id]) ? { ...l, src: paintCanvases.current[l.id].toDataURL() } : l);
 
   // A comprehensive helper to temporarily hide UI helpers, guides, and backdrops
-  // to run a crisp, clean toDataURL call at exact proportions.
+  // to run a clean, full-resolution capture.
   const captureStage = useCallback((targetWidth: number, hideBg = false) => {
     const stage = stageRef.current;
     if (!stage) return null;
 
-    // Temporarily deselect layer to hide bounding boxes and anchors
     const prevSelectedId = selectedId;
     setSelectedId(null);
     stage.batchDraw();
 
-    // Toggle background group (garments, printable outline, fallback, etc.)
     const bgGroup = stage.findOne(".background-group");
     const originalBgVis = bgGroup?.visible();
 
-    // Toggle symmetry/alignment lines
     const symGuides = stage.find(".symmetry-guide");
     const alignGuides = stage.find(".align-guide");
     const originalSymVis = symGuides.map((g) => g.visible());
@@ -510,7 +511,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     alignGuides.forEach((g) => g.visible(false));
     stage.batchDraw();
 
-    // Dynamic resolution multiplier based on live scaled stage size
     const pixelRatio = targetWidth / stage.width();
     let dataUrl: string | undefined;
     try {
@@ -519,7 +519,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
       console.error("Failed to capture stage:", err);
     }
 
-    // Restore visible helper state
     if (hideBg) {
       bgGroup?.visible(originalBgVis ?? true);
     }
@@ -535,7 +534,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const save = async () => {
     setSaving(true);
     try {
-      // Crisp ~720px-wide thumbnail (without hiding the garment photo background, but removing helpers)
       const thumbnail = captureStage(720, false);
       const { error } = await supabase.from("studio_projects").update({ canvas: { layers: serializeLayers() }, thumbnail_url: thumbnail, updated_at: new Date().toISOString() }).eq("id", projectId);
       if (error) { toast.error(error.message); return; }
@@ -549,9 +547,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     setPublishing(true);
     setSelectedId(null);
     try {
-      // Flatten the artboard at full resolution -> blob.
       await new Promise((r) => setTimeout(r, 60));
-      // HIDE the background group so it generates design elements only on transparency
       const dataUrl = captureStage(artboardW, true);
       if (!dataUrl) { toast.error("Could not render the design"); return; }
       const blob = await (await fetch(dataUrl)).blob();
@@ -572,7 +568,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   };
 
   const exportPng = () => {
-    // Hide background for a clean transparent design PNG download
     const uri = captureStage(artboardW, true);
     if (!uri) {
       toast.error("Could not render the design");
@@ -589,15 +584,14 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const isHat = templateKey?.startsWith("hat");
   const isPoster = templateKey?.startsWith("poster");
 
-  // Print-area guide proportions. Fall back gracefully to hardcoded defaults if no printArea is returned
   const defaultPa = isHat ? { x: 0.28, y: 0.32, w: 0.44, h: 0.36 } : isPoster ? { x: 0.06, y: 0.05, w: 0.88, h: 0.9 } : { x: 0.2, y: 0.14, w: 0.6, h: 0.62 };
   const pa = printArea || defaultPa;
 
   return (
-    <div className={`admin-page fixed inset-0 z-50 flex flex-col font-mono ${isDark ? "bg-black text-neutral-105" : "bg-[#f5f5f7] text-neutral-900"}`}>
-      {/* Toolbar — floating pill cluster */}
-      <div className="flex items-center gap-2 px-4 py-3">
-        <div className={`flex items-center gap-1 p-1 rounded-full ${isDark ? "bg-neutral-900/80 backdrop-blur-xl" : "bg-white/90 backdrop-blur-xl shadow-[0_4px_20px_rgba(0,0,0,0.08)]"}`}>
+    <div className={`admin-page fixed inset-0 z-50 flex flex-col font-mono overflow-y-auto lg:overflow-hidden ${isDark ? "bg-black text-neutral-105" : "bg-[#f5f5f7] text-neutral-900"}`}>
+      {/* Toolbar — responsive flex-wrap cluster */}
+      <div className="flex flex-col lg:flex-row items-start lg:items-center gap-2 px-4 py-3 shrink-0">
+        <div className={`flex flex-wrap items-center gap-1 p-1 rounded-2xl lg:rounded-full ${isDark ? "bg-neutral-900/80 backdrop-blur-xl" : "bg-white/90 backdrop-blur-xl shadow-[0_4px_20px_rgba(0,0,0,0.08)]"}`}>
           <button onClick={onClose} className={pill}><X size={13} /> Close</button>
           <span className="w-px h-4 opacity-10 bg-current" />
           <button onClick={undo} className={pill} title="Undo (⌘Z)"><Undo2 size={13} /></button>
@@ -615,7 +609,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
             <SquareDashed size={13} /> Region AI
           </button>
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="w-full lg:w-auto ml-auto flex items-center justify-end gap-2 flex-wrap mt-2 lg:mt-0">
           <button onClick={exportPng} className={`${pill} ${isDark ? "bg-neutral-900/80" : "bg-white/90 shadow"}`}><Download size={13} /> Export</button>
           <button onClick={save} disabled={saving} className={`${pill} ${isDark ? "bg-neutral-900/80" : "bg-white/90 shadow"}`}>
             {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save
@@ -626,43 +620,52 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
         </div>
       </div>
 
-      {/* AI prompt bar — always visible capsule */}
-      <div className="px-4 pb-2">
-        <div className={`flex items-center gap-2 px-2 py-2 rounded-full ${isDark ? "bg-neutral-900/70 backdrop-blur-xl" : "bg-white/90 backdrop-blur-xl shadow-[0_2px_12px_rgba(0,0,0,0.06)]"}`}>
-          <Sparkles size={14} className="opacity-50 ml-2" />
-          <input value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)}
-            placeholder={regionMode ? "Type a prompt, then drag a region on the canvas…" : selected?.type === "image" ? "Reimagine the selected layer, or add a new one…" : "Describe an image to generate…"}
-            className="flex-1 bg-transparent text-[11px] px-2 focus:outline-none" />
-          {aiBusy && <Loader2 size={14} className="animate-spin opacity-60" />}
-          <button onClick={aiNewLayer} disabled={aiBusy} className={pill}><Sparkles size={12} /> New layer</button>
-          {selected?.type === "image" && <button onClick={aiRegenerateSelected} disabled={aiBusy} className={pill}><RefreshCw size={12} /> Reimagine</button>}
+      {/* AI prompt bar — stacks on tiny viewports */}
+      <div className="px-4 pb-2 shrink-0">
+        <div className={`flex flex-col sm:flex-row items-stretch sm:items-center gap-2 px-3 py-2 rounded-2xl sm:rounded-full ${isDark ? "bg-neutral-900/70 backdrop-blur-xl" : "bg-white/90 backdrop-blur-xl shadow-[0_2px_12px_rgba(0,0,0,0.06)]"}`}>
+          <div className="flex items-center flex-1 min-w-0">
+            <Sparkles size={14} className="opacity-50 ml-1 shrink-0" />
+            <input value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)}
+              placeholder={regionMode ? "Type a prompt, then drag a region on the canvas…" : selected?.type === "image" ? "Reimagine the selected layer, or add a new one…" : "Describe an image to generate…"}
+              className="flex-1 bg-transparent text-[11px] px-2 focus:outline-none min-w-0" />
+            {aiBusy && <Loader2 size={14} className="animate-spin opacity-60 shrink-0" />}
+          </div>
+          <div className="flex items-center gap-1.5 justify-end mt-2 sm:mt-0">
+            <button onClick={aiNewLayer} disabled={aiBusy} className={pill}><Sparkles size={12} /> New layer</button>
+            {selected?.type === "image" && <button onClick={aiRegenerateSelected} disabled={aiBusy} className={pill}><RefreshCw size={12} /> Reimagine</button>}
+          </div>
         </div>
       </div>
 
-      {/* Brush controls — only while painting */}
+      {/* Brush controls — optimized for smaller viewports */}
       {tool === "brush" && (
-        <div className="px-4 pb-2">
-          <div className={`flex items-center gap-3 px-3 py-2 rounded-full ${isDark ? "bg-neutral-900/70 backdrop-blur-xl" : "bg-white/90 backdrop-blur-xl shadow-[0_2px_12px_rgba(0,0,0,0.06)]"}`}>
-            <Paintbrush size={13} className="opacity-50 ml-1" />
-            <input type="color" value={brushColor} onChange={(e) => setBrushColor(e.target.value)} className="w-7 h-7 rounded-full bg-transparent border-0 cursor-pointer" title="Brush color" />
-            <div className="flex items-center gap-2">
-              <span className="text-[9px] opacity-50 uppercase tracking-widest">Size</span>
-              <input type="range" min={4} max={600} value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} className="w-40" />
-              <span className="text-[9px] opacity-60 w-8">{brushSize}</span>
+        <div className="px-4 pb-2 shrink-0">
+          <div className={`flex flex-col md:flex-row items-stretch md:items-center gap-3 px-3 py-2 rounded-2xl md:rounded-full ${isDark ? "bg-neutral-900/70 backdrop-blur-xl" : "bg-white/90 backdrop-blur-xl shadow-[0_2px_12px_rgba(0,0,0,0.06)]"}`}>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Paintbrush size={13} className="opacity-50 ml-1" />
+              <input type="color" value={brushColor} onChange={(e) => setBrushColor(e.target.value)} className="w-7 h-7 rounded-full bg-transparent border-0 cursor-pointer shrink-0" title="Brush color" />
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] opacity-50 uppercase tracking-widest">Size</span>
+                <input type="range" min={4} max={600} value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} className="w-32 sm:w-40" />
+                <span className="text-[9px] opacity-60 w-8">{brushSize}</span>
+              </div>
             </div>
-            <span className="w-px h-4 opacity-10 bg-current" />
-            <span className="text-[9px] opacity-50 uppercase tracking-widest">Symmetry</span>
-            <button onClick={() => setSymmetry((s) => (s === "off" ? "v" : s === "v" ? "h" : "off"))}
-              className={pill + (symmetry !== "off" ? (isDark ? " bg-white/15" : " bg-black/10") : "")}>
-              {symmetry === "h" ? <FlipVertical2 size={13} /> : <FlipHorizontal2 size={13} />} {symmetry === "off" ? "Off" : symmetry === "v" ? "Vertical" : "Horizontal"}
-            </button>
+            <span className="hidden md:block w-px h-4 opacity-10 bg-current" />
+            <div className="flex items-center gap-2 justify-between md:justify-start mt-2 md:mt-0">
+              <span className="text-[9px] opacity-50 uppercase tracking-widest">Symmetry</span>
+              <button onClick={() => setSymmetry((s) => (s === "off" ? "v" : s === "v" ? "h" : "off"))}
+                className={pill + (symmetry !== "off" ? (isDark ? " bg-white/15" : " bg-black/10") : "")}>
+                {symmetry === "h" ? <FlipVertical2 size={13} /> : <FlipHorizontal2 size={13} />} {symmetry === "off" ? "Off" : symmetry === "v" ? "Vertical" : "Horizontal"}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      <div className="flex-1 flex overflow-hidden">
-        {/* Canvas */}
-        <div className="flex-1 flex items-center justify-center overflow-auto p-6">
+      {/* Main Workspace — flex-col on mobile, flex-row on desktop */}
+      <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
+        {/* Canvas Area */}
+        <div className="flex-1 flex items-center justify-center overflow-auto p-4 min-h-[360px] lg:min-h-0">
           <div className="rounded-[28px] overflow-hidden" style={{ boxShadow: "0 30px 80px rgba(0,0,0,0.28)" }}>
             <Stage
               ref={stageRef}
@@ -697,11 +700,28 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
                 if (painting.current) { painting.current = false; lastPt.current = null; return; }
                 if (regionMode && drawing.current && region) { drawing.current = null; finalizeRegion(region); }
               }}
+              onTouchStart={(e) => {
+                if (tool === "brush") {
+                  const id = ensurePaintTarget();
+                  if (!id) return;
+                  const p = e.target.getStage()!.getRelativePointerPosition()!;
+                  snapshotPaint(id); painting.current = true; lastPt.current = null;
+                  strokeTo(id, p.x, p.y, 0.5);
+                }
+              }}
+              onTouchMove={(e) => {
+                if (tool === "brush" && painting.current) {
+                  const id = layers.find((l) => l.id === selectedId)?.type === "paint" ? selectedId! : ensurePaintTarget();
+                  if (id) { const p = e.target.getStage()!.getRelativePointerPosition()!; strokeTo(id, p.x, p.y, 0.5); }
+                }
+              }}
+              onTouchEnd={() => {
+                if (painting.current) { painting.current = false; lastPt.current = null; }
+              }}
             >
               <Layer>
-                {/* Background Group — can be hidden cleanly during hi-res transparent exports */}
+                {/* Background Group */}
                 <Group name="background-group">
-                  {/* Background: real garment image (product) · white (canvas) · synthetic fallback */}
                   <Rect name="bg" x={0} y={0} width={artboardW} height={artboardH} fill="#ffffff" listening />
                   {canvasKind === "canvas" ? null : garment ? (
                     <>
@@ -737,9 +757,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
                 {guides.h && <Rect name="align-guide" x={0} y={artboardH / 2 - 1} width={artboardW} height={2} fill="#22d3ee" listening={false} />}
 
                 {region && <Rect x={region.x} y={region.y} width={region.w} height={region.h} stroke="#6366f1" strokeWidth={4} dash={[16, 12]} fill="rgba(99,102,241,0.08)" listening={false} />}
-                {/* keepRatio locks corner anchors to proportional scaling; the
-                    side anchors still free-scale a single axis. enabledAnchors
-                    lists corners + sides so behavior matches pro editors. */}
                 <Transformer
                   ref={trRef} rotateEnabled keepRatio
                   enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right", "middle-left", "middle-right", "top-center", "bottom-center"]}
@@ -751,8 +768,8 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
           </div>
         </div>
 
-        {/* Right rail */}
-        <div className="w-[300px] p-3 overflow-y-auto">
+        {/* Right Rail Panel — stacks below the canvas on mobile */}
+        <div className="w-full lg:w-[300px] p-3 overflow-y-auto shrink-0 border-t lg:border-t-0 lg:border-l border-current/10">
           {selected && (
             <div className={`rounded-[20px] p-4 mb-3 ${isDark ? "bg-neutral-900/60" : "bg-white shadow-[0_2px_12px_rgba(0,0,0,0.05)]"}`}>
               <p className="text-[9px] uppercase tracking-widest opacity-50 mb-3">Properties</p>
