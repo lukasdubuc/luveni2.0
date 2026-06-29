@@ -10,7 +10,7 @@ import Konva from "konva";
 import {
   Type, ImagePlus, Sparkles, Trash2, Eye, EyeOff, ArrowUp, ArrowDown,
   Save, Download, Loader2, Wand2, X, RefreshCw, Undo2, Redo2, SquareDashed,
-  Paintbrush, FlipHorizontal2, FlipVertical2, MousePointer2,
+  Paintbrush, FlipHorizontal2, FlipVertical2, MousePointer2, PaintBucket,
   AlignCenterHorizontal, AlignCenterVertical, AlignVerticalJustifyCenter,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -26,6 +26,7 @@ export type StudioLayer = {
   blend?: BlendMode;
   clip?: boolean;   // clip to the layers below (Procreate clipping mask)
   blur?: number;    // 0–100 gaussian blur
+  reference?: boolean; // boundary source for the flood-fill bucket
 };
 
 // Non-destructive Konva blur via node caching. Re-caches when radius or the
@@ -146,7 +147,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const [region, setRegion] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
 
   // Paint engine state
-  const [tool, setTool] = useState<"select" | "brush">("select");
+  const [tool, setTool] = useState<"select" | "brush" | "fill">("select");
   const [brushSize, setBrushSize] = useState(120);
   const [brushColor, setBrushColor] = useState("#000000");
   const [symmetry, setSymmetry] = useState<"off" | "v" | "h">("off");
@@ -365,6 +366,55 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     redrawStage();
   };
 
+  // Reference-layer flood fill (bucket). Boundaries come from the layer
+  // flagged "reference" (its drawn lines); the fill paints into the active
+  // paint layer. Falls back to the active layer's own pixels.
+  const floodFill = (startX: number, startY: number) => {
+    const destId = ensurePaintTarget();
+    if (!destId) { toast.error("Add a paint layer to fill into"); return; }
+    const dest = paintCanvases.current[destId]; if (!dest) return;
+    const refLayer = layers.find((l) => l.reference && l.type === "paint" && paintCanvases.current[l.id]);
+    const src = refLayer ? paintCanvases.current[refLayer.id] : dest;
+    const W = dest.width, H = dest.height;
+    const x = Math.round(startX), y = Math.round(startY);
+    if (x < 0 || y < 0 || x >= W || y >= H) return;
+
+    const sctx = src.getContext("2d", { willReadFrequently: true })!;
+    const dctx = dest.getContext("2d")!;
+    const sd = sctx.getImageData(0, 0, W, H);
+    const dd = dctx.getImageData(0, 0, W, H);
+    const sp = sd.data, dp = dd.data;
+    const idx = (px: number, py: number) => (py * W + px) * 4;
+
+    const si = idx(x, y);
+    const tr = sp[si], tg = sp[si + 1], tb = sp[si + 2], ta = sp[si + 3];
+    const fill = hexToRgb(brushColor);
+    const tol = 48 * 48 * 3; // squared tolerance
+    const match = (i: number) => {
+      const dr = sp[i] - tr, dg = sp[i + 1] - tg, db = sp[i + 2] - tb, da = sp[i + 3] - ta;
+      return dr * dr + dg * dg + db * db + da * da <= tol;
+    };
+
+    snapshotPaint(destId);
+    const stack = [[x, y]];
+    const seen = new Uint8Array(W * H);
+    while (stack.length) {
+      const [cx, cy] = stack.pop()!;
+      const fi = cy * W + cx;
+      if (seen[fi]) continue;
+      seen[fi] = 1;
+      const i = fi * 4;
+      if (!match(i)) continue;
+      dp[i] = fill.r; dp[i + 1] = fill.g; dp[i + 2] = fill.b; dp[i + 3] = 255;
+      if (cx > 0) stack.push([cx - 1, cy]);
+      if (cx < W - 1) stack.push([cx + 1, cy]);
+      if (cy > 0) stack.push([cx, cy - 1]);
+      if (cy < H - 1) stack.push([cx, cy + 1]);
+    }
+    dctx.putImageData(dd, 0, 0);
+    redrawStage();
+  };
+
   const undoPaint = () => {
     const entry = paintUndo.current.pop(); if (!entry) return false;
     const c = paintCanvases.current[entry.id]; if (!c) return false;
@@ -496,6 +546,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
           <span className="w-px h-4 opacity-10 bg-current" />
           <button onClick={() => { setTool("select"); setRegionMode(false); }} className={pill + (tool === "select" ? (isDark ? " bg-white/15" : " bg-black/10") : "")} title="Select / move"><MousePointer2 size={13} /></button>
           <button onClick={() => { setTool("brush"); setRegionMode(false); }} className={pill + (tool === "brush" ? (isDark ? " bg-white/15" : " bg-black/10") : "")} title="Brush"><Paintbrush size={13} /></button>
+          <button onClick={() => { setTool("fill"); setRegionMode(false); }} className={pill + (tool === "fill" ? (isDark ? " bg-white/15" : " bg-black/10") : "")} title="Flood fill (bucket)"><PaintBucket size={13} /></button>
           <span className="w-px h-4 opacity-10 bg-current" />
           <button onClick={addText} className={pill}><Type size={13} /> Text</button>
           <label className={pill + " cursor-pointer"}><ImagePlus size={13} /> Upload<input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadImage(e.target.files[0])} /></label>
@@ -559,6 +610,11 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
               width={artboardW * scale} height={artboardH * scale} scaleX={scale} scaleY={scale}
               style={{ cursor: tool === "brush" ? "crosshair" : "default" }}
               onMouseDown={(e) => {
+                if (tool === "fill") {
+                  const p = e.target.getStage()!.getRelativePointerPosition()!;
+                  floodFill(p.x, p.y);
+                  return;
+                }
                 if (tool === "brush") {
                   const id = ensurePaintTarget();
                   if (!id) { toast.error("Add a paint layer first"); return; }
@@ -661,6 +717,13 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
                     <input type="checkbox" checked={!!selected.clip} onChange={(e) => patchLayer(selected.id, { clip: e.target.checked })} />
                     Clip to layers below
                   </label>
+                  {selected.type === "paint" && (
+                    <label className="mt-2 flex items-center gap-2 text-[10px] cursor-pointer select-none">
+                      <input type="checkbox" checked={!!selected.reference}
+                        onChange={(e) => { const on = e.target.checked; commit((ls) => ls.map((l) => l.type === "paint" ? { ...l, reference: l.id === selected.id ? on : false } : l)); }} />
+                      Reference (bucket boundary)
+                    </label>
+                  )}
                   <div className="mt-3">
                     <p className="text-[8px] uppercase tracking-widest opacity-40 mb-1">Gaussian blur · {selected.blur || 0}</p>
                     <input type="range" min={0} max={100} value={selected.blur || 0}
@@ -698,6 +761,11 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
       </div>
     </div>
   );
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex.trim());
+  return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : { r: 0, g: 0, b: 0 };
 }
 
 async function extractFnError(error: any, data: any): Promise<string | null> {
