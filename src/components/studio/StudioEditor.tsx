@@ -11,6 +11,7 @@ import {
   Type, ImagePlus, Sparkles, Trash2, Eye, EyeOff, ArrowUp, ArrowDown,
   Save, Download, Loader2, Wand2, X, RefreshCw, Undo2, Redo2, SquareDashed,
   Paintbrush, FlipHorizontal2, FlipVertical2, MousePointer2,
+  AlignCenterHorizontal, AlignCenterVertical, AlignVerticalJustifyCenter,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,7 +53,7 @@ function useHtmlImage(src?: string) {
   return img;
 }
 
-function ImageNode({ layer, onChange, onSelect, nodeRef, listening }: any) {
+function ImageNode({ layer, onChange, onSelect, onDragMove, nodeRef, listening }: any) {
   const img = useHtmlImage(layer.src);
   if (!layer.visible) return null;
   return (
@@ -63,6 +64,7 @@ function ImageNode({ layer, onChange, onSelect, nodeRef, listening }: any) {
       globalCompositeOperation={layer.blend || "source-over"}
       draggable={listening} listening={listening}
       onClick={onSelect} onTap={onSelect}
+      onDragMove={onDragMove}
       onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y() })}
       onTransformEnd={(e) => {
         const n = e.target as Konva.Image; const sx = n.scaleX(); const sy = n.scaleY();
@@ -73,7 +75,7 @@ function ImageNode({ layer, onChange, onSelect, nodeRef, listening }: any) {
   );
 }
 
-function TextNode({ layer, onChange, onSelect, nodeRef, listening }: any) {
+function TextNode({ layer, onChange, onSelect, onDragMove, nodeRef, listening }: any) {
   if (!layer.visible) return null;
   return (
     <KText
@@ -84,6 +86,7 @@ function TextNode({ layer, onChange, onSelect, nodeRef, listening }: any) {
       globalCompositeOperation={layer.blend || "source-over"}
       draggable={listening} listening={listening}
       onClick={onSelect} onTap={onSelect}
+      onDragMove={onDragMove}
       onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y() })}
       onTransformEnd={(e) => {
         const n = e.target as Konva.Text; const sx = n.scaleX();
@@ -122,6 +125,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const [brushColor, setBrushColor] = useState("#000000");
   const [symmetry, setSymmetry] = useState<"off" | "v" | "h">("off");
   const [, setPaintVersion] = useState(0);
+  const [guides, setGuides] = useState<{ v: boolean; h: boolean }>({ v: false, h: false });
 
   const stageRef = useRef<Konva.Stage>(null);
   const trRef = useRef<Konva.Transformer>(null);
@@ -216,6 +220,31 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const livePatch = useCallback((id: string, patch: Partial<StudioLayer>) => {
     setLayers((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)));
   }, []);
+
+  // Snap to artboard center while dragging + show alignment guides.
+  const SNAP = 40;
+  const snapDrag = useCallback((e: any) => {
+    const n = e.target;
+    const w = n.width() * n.scaleX(); const h = n.height() * n.scaleY();
+    const cx = n.x() + w / 2; const cy = n.y() + h / 2;
+    const v = Math.abs(cx - artboardW / 2) < SNAP;
+    const hh = Math.abs(cy - artboardH / 2) < SNAP;
+    if (v) n.x(artboardW / 2 - w / 2);
+    if (hh) n.y(artboardH / 2 - h / 2);
+    setGuides({ v, h: hh });
+  }, [artboardW, artboardH]);
+
+  // Centering: align the selected node to artboard center on an axis.
+  const align = (axis: "h" | "v" | "both") => {
+    if (!selectedId) return;
+    const node = nodeRefs.current[selectedId];
+    if (!node) return;
+    const w = node.width() * node.scaleX(); const h = node.height() * node.scaleY();
+    const patch: Partial<StudioLayer> = {};
+    if (axis === "h" || axis === "both") patch.x = artboardW / 2 - w / 2;
+    if (axis === "v" || axis === "both") patch.y = artboardH / 2 - h / 2;
+    patchLayer(selectedId, patch);
+  };
 
   const addText = () => {
     const l: StudioLayer = { id: uid(), type: "text", name: "Text", visible: true, x: artboardW / 2 - 400, y: artboardH / 2, rotation: 0, opacity: 1, text: "Your text", fontSize: 200, fill: "#000000", fontStyle: "bold", fontFamily: "Space Mono" };
@@ -357,8 +386,9 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const save = async () => {
     setSaving(true);
     try {
+      // Crisp ~720px-wide thumbnail (was 0.12 → blurry on the cards).
       let thumbnail: string | undefined;
-      try { thumbnail = stageRef.current?.toDataURL({ pixelRatio: 0.12 }); } catch { /* tainted */ }
+      try { thumbnail = stageRef.current?.toDataURL({ pixelRatio: Math.min(1, 720 / artboardW), mimeType: "image/jpeg", quality: 0.85 }); } catch { /* tainted */ }
       const { error } = await supabase.from("studio_projects").update({ canvas: { layers: serializeLayers() }, thumbnail_url: thumbnail, updated_at: new Date().toISOString() }).eq("id", projectId);
       if (error) { toast.error(error.message); return; }
       toast.success("Saved.");
@@ -516,20 +546,32 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
                   <PaintNode key={l.id} layer={l} canvas={getPaintCanvas(l)} />
                 ) : l.type === "image" ? (
                   <ImageNode key={l.id} layer={l} listening={!regionMode && tool === "select"}
-                    nodeRef={(n: any) => (nodeRefs.current[l.id] = n)}
-                    onSelect={() => setSelectedId(l.id)} onChange={(patch: any) => patchLayer(l.id, patch)} />
+                    nodeRef={(n: any) => (nodeRefs.current[l.id] = n)} onDragMove={snapDrag}
+                    onSelect={() => setSelectedId(l.id)} onChange={(patch: any) => { patchLayer(l.id, patch); setGuides({ v: false, h: false }); }} />
                 ) : (
                   <TextNode key={l.id} layer={l} listening={!regionMode && tool === "select"}
-                    nodeRef={(n: any) => (nodeRefs.current[l.id] = n)}
-                    onSelect={() => setSelectedId(l.id)} onChange={(patch: any) => patchLayer(l.id, patch)} />
+                    nodeRef={(n: any) => (nodeRefs.current[l.id] = n)} onDragMove={snapDrag}
+                    onSelect={() => setSelectedId(l.id)} onChange={(patch: any) => { patchLayer(l.id, patch); setGuides({ v: false, h: false }); }} />
                 ))}
 
                 {/* Symmetry mirror guide */}
                 {tool === "brush" && symmetry === "v" && <Rect x={artboardW / 2 - 1} y={0} width={2} height={artboardH} fill="#6366f1" opacity={0.5} listening={false} />}
                 {tool === "brush" && symmetry === "h" && <Rect x={0} y={artboardH / 2 - 1} width={artboardW} height={2} fill="#6366f1" opacity={0.5} listening={false} />}
 
+                {/* Center alignment guides (while dragging) */}
+                {guides.v && <Rect x={artboardW / 2 - 1} y={0} width={2} height={artboardH} fill="#22d3ee" listening={false} />}
+                {guides.h && <Rect x={0} y={artboardH / 2 - 1} width={artboardW} height={2} fill="#22d3ee" listening={false} />}
+
                 {region && <Rect x={region.x} y={region.y} width={region.w} height={region.h} stroke="#6366f1" strokeWidth={4} dash={[16, 12]} fill="rgba(99,102,241,0.08)" listening={false} />}
-                <Transformer ref={trRef} rotateEnabled keepRatio={false} anchorCornerRadius={20} borderStroke="#6366f1" anchorStroke="#6366f1" />
+                {/* keepRatio locks corner anchors to proportional scaling; the
+                    side anchors still free-scale a single axis. enabledAnchors
+                    lists corners + sides so behavior matches pro editors. */}
+                <Transformer
+                  ref={trRef} rotateEnabled keepRatio
+                  enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right", "middle-left", "middle-right", "top-center", "bottom-center"]}
+                  anchorCornerRadius={20} borderStroke="#6366f1" anchorStroke="#6366f1" anchorSize={14}
+                  boundBoxFunc={(oldBox, newBox) => (newBox.width < 10 || newBox.height < 10 ? oldBox : newBox)}
+                />
               </Layer>
             </Stage>
           </div>
@@ -540,6 +582,13 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
           {selected && (
             <div className={`rounded-[20px] p-4 mb-3 ${isDark ? "bg-neutral-900/60" : "bg-white shadow-[0_2px_12px_rgba(0,0,0,0.05)]"}`}>
               <p className="text-[9px] uppercase tracking-widest opacity-50 mb-3">Properties</p>
+              {/* Centering / alignment */}
+              <div className="flex items-center gap-1.5 mb-3">
+                <span className="text-[8px] uppercase tracking-widest opacity-40 mr-1">Align</span>
+                <button onClick={() => align("h")} title="Center horizontally" className={pill + " !px-2.5"}><AlignCenterVertical size={13} /></button>
+                <button onClick={() => align("v")} title="Center vertically" className={pill + " !px-2.5"}><AlignCenterHorizontal size={13} /></button>
+                <button onClick={() => align("both")} title="Center on artboard" className={pill + " !px-2.5"}><AlignVerticalJustifyCenter size={13} /></button>
+              </div>
               {selected.type === "text" && (
                 <div className="space-y-2.5">
                   <input value={selected.text} onChange={(e) => patchLayer(selected.id, { text: e.target.value })}
