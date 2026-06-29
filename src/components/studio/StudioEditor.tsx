@@ -181,7 +181,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   // Zoom management states for stylus/tablet precision controls
   const [zoomPercent, setZoomPercent] = useState(100); // 100% (exact fit) to 800%
   const [fitScale, setFitScale] = useState(0.15);
-  const [viewDims, setViewDims] = useState({ w: 800, h: 600 });
+  const [workspaceSize, setWorkspaceSize] = useState({ w: 800, h: 600 });
   const scrollOuterRef = useRef<HTMLDivElement>(null);
 
   const scale = fitScale * (zoomPercent / 100);
@@ -331,24 +331,14 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
 
   useEffect(() => {
     const fit = () => {
-      const outer = scrollOuterRef.current;
       const isMobile = window.innerWidth < 1024;
       const padW = (isMobile || fullScreenCanvas) ? 32 : 420;
       const padH = (isMobile || fullScreenCanvas) ? 140 : 220;
       const availW = Math.max(280, window.innerWidth - padW);
       const availH = Math.max(280, window.innerHeight - padH);
       
-      if (outer) {
-        setViewDims({
-          w: outer.clientWidth || availW,
-          h: outer.clientHeight || availH
-        });
-      } else {
-        setViewDims({ w: availW, h: availH });
-      }
-
-      const calculatedFit = Math.min(availW / artboardW, availH / artboardH, 1);
-      setFitScale(calculatedFit);
+      setWorkspaceSize({ w: availW, h: availH });
+      setFitScale(Math.min(availW / artboardW, availH / artboardH, 1));
     };
     fit(); window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
@@ -555,48 +545,43 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     redrawStage();
   };
 
-  const captureStage = useCallback((targetWidth: number, hideBg = false) => {
-    const stage = stageRef.current;
-    if (!stage) return null;
+  const runAi = async (body: any) => {
+    const { data, error } = await supabase.functions.invoke("ai-generate-image", { body });
+    const msg = await extractFnError(error, data);
+    if (msg) { toast.error(msg); return null; }
+    return data.image_url as string;
+  };
 
-    const prevSelectedId = selectedId;
-    setSelectedId(null);
-    stage.batchDraw();
+  const aiNewLayer = async () => {
+    if (aiPrompt.trim().length < 3) { toast.error("Prompt too short"); return; }
+    setAiBusy(true);
+    try { const url = await runAi({ prompt: aiPrompt.trim(), width: 1024, height: 1024, persist: true }); if (url) { addImageAt(url, aiPrompt.slice(0, 24)); setAiPrompt(""); toast.success("AI layer added."); } }
+    finally { setAiBusy(false); }
+  };
 
-    const bgGroup = stage.findOne(".background-group");
-    const originalBgVis = bgGroup?.visible();
+  const aiRegenerateSelected = async () => {
+    const sel = layers.find((l) => l.id === selectedId);
+    if (!sel || sel.type !== "image" || !sel.src) { toast.error("Select an image layer first"); return; }
+    if (aiPrompt.trim().length < 3) { toast.error("Enter a prompt"); return; }
+    setAiBusy(true);
+    try { const url = await runAi({ prompt: aiPrompt.trim(), image: sel.src, width: 1024, height: 1024, persist: false }); if (url) { patchLayer(sel.id, { src: url }); setAiPrompt(""); toast.success("Layer reimagined."); } }
+    finally { setAiBusy(false); }
+  };
 
-    const symGuides = stage.find(".symmetry-guide");
-    const alignGuides = stage.find(".align-guide");
-    const originalSymVis = symGuides.map((g) => g.visible());
-    const originalAlignVis = alignGuides.map((g) => g.visible());
-
-    if (hideBg) {
-      bgGroup?.visible(false);
-    }
-    symGuides.forEach((g) => g.visible(false));
-    alignGuides.forEach((g) => g.visible(false));
-    stage.batchDraw();
-
-    const pixelRatio = targetWidth / stage.width();
-    let dataUrl: string | undefined;
+  const finalizeRegion = async (r: { x: number; y: number; w: number; h: number }) => {
+    if (r.w < 40 || r.h < 40) { setRegion(null); return; }
+    if (aiPrompt.trim().length < 3) { toast.error("Type a prompt first, then draw the region"); setRegion(null); return; }
+    setAiBusy(true);
     try {
-      dataUrl = stage.toDataURL({ pixelRatio });
-    } catch (err) {
-      console.error("Failed to capture stage:", err);
-    }
+      const longest = Math.max(r.w, r.h); const k = Math.min(1, 1024 / longest);
+      const gw = Math.round(r.w * k); const gh = Math.round(r.h * k);
+      const url = await runAi({ prompt: aiPrompt.trim(), width: gw, height: gh, persist: false });
+      if (url) { addImageAt(url, aiPrompt.slice(0, 24), r); setAiPrompt(""); toast.success("Generated into region."); }
+    } finally { setAiBusy(false); setRegion(null); setRegionMode(false); }
+  };
 
-    if (hideBg) {
-      bgGroup?.visible(originalBgVis ?? true);
-    }
-    symGuides.forEach((g, i) => g.visible(originalSymVis[i] ?? true));
-    alignGuides.forEach((g, i) => g.visible(originalAlignVis[i] ?? true));
-    
-    setSelectedId(prevSelectedId);
-    stage.batchDraw();
-
-    return dataUrl;
-  }, [selectedId]);
+  const serializeLayers = (): StudioLayer[] =>
+    layers.map((l) => (l.type === "paint" && paintCanvases.current[l.id]) ? { ...l, src: paintCanvases.current[l.id].toDataURL() } : l);
 
   const save = async () => {
     setSaving(true);
@@ -798,7 +783,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
         
         {/* Stage Canvas Area — canvas-scroll-container enables drawing panning */}
         <div ref={scrollOuterRef} className="flex-1 overflow-auto p-4 min-h-[380px] lg:min-h-0 bg-[#f5f5f7] dark:bg-[#111111] relative canvas-scroll-container">
-          {/* Centering Wrapper — symmetrically locks canvas center position during scale changes */}
+          {/* Centering Wrapper — mathematically centers smaller canvas, enables seamless scrollable space when zoomed in */}
           <div 
             className="relative block animate-fade-in"
             style={{
@@ -1090,17 +1075,17 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
               <div>
                 <h3 className="text-[11px] font-bold uppercase tracking-widest mb-4 font-mono">Workspace Actions</h3>
                 <div className="grid grid-cols-3 gap-3">
-                  <button onClick={() => { exportPng(); setMobileSheet("none"); }} className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
+                  <button onClick={() => { exportPng(); setMobileSheet("none"); }} className={`flex-col flex items-center justify-center gap-2 p-4 rounded-2xl border border-dashed hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
                     <Download size={18} />
-                    <span className="text-[8px] font-bold uppercase tracking-wider mt-1">PNG</span>
+                    <span className="text-[8px] font-bold uppercase tracking-wider mt-1 font-mono">PNG</span>
                   </button>
-                  <button onClick={() => { save(); setMobileSheet("none"); }} className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
+                  <button onClick={() => { save(); setMobileSheet("none"); }} className={`flex-col flex items-center justify-center gap-2 p-4 rounded-2xl border border-dashed hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
                     <Save size={18} />
-                    <span className="text-[8px] font-bold uppercase tracking-wider mt-1">Save</span>
+                    <span className="text-[8px] font-bold uppercase tracking-wider mt-1 font-mono">Save</span>
                   </button>
-                  <button onClick={() => { publish(); setMobileSheet("none"); }} className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
+                  <button onClick={() => { publish(); setMobileSheet("none"); }} className={`flex-col flex items-center justify-center gap-2 p-4 rounded-2xl border border-dashed hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
                     <Sparkles size={18} />
-                    <span className="text-[8px] font-bold uppercase tracking-wider mt-1">Publish</span>
+                    <span className="text-[8px] font-bold uppercase tracking-wider mt-1 font-mono">Publish</span>
                   </button>
                 </div>
               </div>
