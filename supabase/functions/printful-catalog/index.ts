@@ -108,28 +108,45 @@ async function printfulDetail(id: number | string): Promise<any> {
 }
 
 // ── Apliiq (signed REST) ─────────────────────────────────────────────────────
-// Apliiq signs each request: Authorization: "amx <appKey>:<sig>" where
-// sig = Base64(HMAC-SHA256(sharedSecret, "<METHOD>\n<contentMD5>\n<contentType>\n<date>\n<path>")).
-async function apliiqSign(method: string, path: string, contentType = ""): Promise<Record<string, string>> {
-  const date = new Date().toUTCString();
-  const stringToSign = `${method}\n\n${contentType}\n${date}\n${path}`;
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(APLIIQ_SHARED_SECRET),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sigBuf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(stringToSign));
+// Apliiq uses the ASP.NET "amx" HMAC scheme, header renamed to x-apliiq-auth:
+//   value = "<RTS>:<SIG>:<APPID>:<STATE>"  (timestamp:signature:appkey:nonce)
+// signatureRawData = APPID + METHOD + urlEncode(absoluteUrl.toLowerCase())
+//                    + RTS + STATE + base64(md5(body))   (body empty for GET)
+// key = base64-decode(sharedSecret); SIG = base64(HMAC-SHA256(key, rawData)).
+const APLIIQ_BASE = "https://api.apliiq.com";
+
+// Mimic .NET HttpUtility.UrlEncode: lowercase percent-encoding.
+const dotNetUrlEncode = (s: string) =>
+  encodeURIComponent(s).replace(/%[0-9A-F]{2}/g, (m) => m.toLowerCase());
+
+function b64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+async function apliiqHeaders(method: string, fullUrl: string): Promise<Record<string, string>> {
+  const rts = Math.floor(Date.now() / 1000).toString();
+  const state = crypto.randomUUID().replace(/-/g, "");
+  const requestUri = dotNetUrlEncode(fullUrl.toLowerCase());
+  const rawData = `${APLIIQ_APP_KEY}${method}${requestUri}${rts}${state}`;
+  // Shared secret is a base64 string; decode to key bytes (fall back to utf8).
+  let keyBytes: Uint8Array;
+  try { keyBytes = b64ToBytes(APLIIQ_SHARED_SECRET); }
+  catch { keyBytes = new TextEncoder().encode(APLIIQ_SHARED_SECRET); }
+  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sigBuf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawData));
   const sig = btoa(String.fromCharCode(...new Uint8Array(sigBuf)));
-  return { Authorization: `amx ${APLIIQ_APP_KEY}:${sig}`, Date: date, Accept: "application/json" };
+  return { "x-apliiq-auth": `${rts}:${sig}:${APLIIQ_APP_KEY}:${state}`, Accept: "application/json" };
 }
 
 async function apliiqFetch(method: string, path: string): Promise<any> {
   if (!APLIIQ_APP_KEY || !APLIIQ_SHARED_SECRET) throw new Error("Apliiq creds not set (APLIIQ_APP_KEY / APLIIQ_SHARED_SECRET)");
-  const headers = await apliiqSign(method, path);
-  const r = await fetch(`https://api.apliiq.com${path}`, { method, headers });
-  if (!r.ok) throw new Error(`Apliiq HTTP ${r.status}`);
+  const url = `${APLIIQ_BASE}${path}`;
+  const headers = await apliiqHeaders(method, url);
+  const r = await fetch(url, { method, headers });
+  if (!r.ok) throw new Error(`Apliiq HTTP ${r.status}: ${(await r.text().catch(() => "")).slice(0, 120)}`);
   return r.json();
 }
 
@@ -137,7 +154,7 @@ async function apliiqFetch(method: string, path: string): Promise<any> {
 const pick = (o: any, ...keys: string[]) => { for (const k of keys) if (o?.[k] != null) return o[k]; return null; };
 
 async function apliiqList(): Promise<any[]> {
-  const data = await apliiqFetch("GET", "/Product");
+  const data = await apliiqFetch("GET", "/api/Product");
   const items: any[] = Array.isArray(data) ? data : (data?.Products || data?.products || []);
   return items.map((p) => {
     const id = pick(p, "Id", "id", "ProductId", "productId");
@@ -155,7 +172,7 @@ async function apliiqList(): Promise<any[]> {
 }
 
 async function apliiqDetail(id: number | string): Promise<any> {
-  const p = await apliiqFetch("GET", `/Product/${id}`);
+  const p = await apliiqFetch("GET", `/api/Product/${id}`);
   const colorsRaw: any[] = pick(p, "Colors", "colors") || [];
   const sizesRaw: any[] = pick(p, "Sizes", "sizes") || [];
   const cost = pick(p, "BasePrice", "basePrice", "Price", "price");

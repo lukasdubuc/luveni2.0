@@ -9,7 +9,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Suspense, useMemo, useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Decal, useTexture, Environment, ContactShadows, Center } from "@react-three/drei";
+import { OrbitControls, Decal, useTexture, ContactShadows, Center } from "@react-three/drei";
 import * as THREE from "three";
 import { X, Loader2, RotateCcw, Box, User } from "lucide-react";
 
@@ -36,56 +36,41 @@ function Tee({ color, design }: { color: string; design: string }) {
 
   return (
     <Center>
-      <group rotation={[0, 0, 0]}>
-        {/* Mannequin — neck + head so the garment reads on a human form */}
-        <mesh position={[0, 1.62, 0.05]} material={skin}>
-          <cylinderGeometry args={[0.26, 0.34, 0.5, 24]} />
-        </mesh>
-        <mesh position={[0, 2.18, 0.05]} material={skin} castShadow>
-          <sphereGeometry args={[0.42, 32, 24]} />
-        </mesh>
-        {/* Torso */}
-        <mesh castShadow receiveShadow material={mat}>
-          <capsuleGeometry args={[0.95, 1.5, 12, 32]} />
-          {/* Chest decal — the user's design */}
-          <Decal
-            position={[0, 0.35, 0.92]}
-            rotation={[0, 0, 0]}
-            scale={[1.25, 1.4, 1.2]}
-          >
-            <meshStandardMaterial
-              map={texture}
-              transparent
-              polygonOffset
-              polygonOffsetFactor={-1}
-              roughness={0.9}
-              depthTest
-            />
-          </Decal>
-        </mesh>
+      {/* Human mannequin (skin) with the shirt worn over the torso + upper arms */}
+      <group>
+        {/* Head */}
+        <mesh position={[0, 2.55, 0]} material={skin}><sphereGeometry args={[0.46, 32, 24]} /></mesh>
+        {/* Neck */}
+        <mesh position={[0, 2.0, 0]} material={skin}><cylinderGeometry args={[0.2, 0.26, 0.45, 24]} /></mesh>
 
-        {/* Shoulders */}
-        <mesh position={[0, 0.95, 0]} material={mat} castShadow>
-          <sphereGeometry args={[0.98, 24, 16]} />
-        </mesh>
+        {/* Hips / waist below the shirt hem (skin) */}
+        <mesh position={[0, -0.35, 0]} material={skin}><capsuleGeometry args={[0.62, 0.5, 8, 24]} /></mesh>
 
-        {/* Sleeves */}
+        {/* Forearms (skin) hanging below the sleeves */}
         {[-1, 1].map((s) => (
-          <mesh
-            key={s}
-            position={[s * 1.05, 0.7, 0]}
-            rotation={[0, 0, (s * Math.PI) / 4]}
-            material={mat}
-            castShadow
-          >
-            <capsuleGeometry args={[0.42, 0.7, 8, 20]} />
+          <mesh key={`fa${s}`} position={[s * 0.92, 0.35, 0]} rotation={[0, 0, s * 0.12]} material={skin}>
+            <capsuleGeometry args={[0.16, 0.85, 8, 20]} />
           </mesh>
         ))}
 
+        {/* ── Shirt ── */}
+        {/* Shoulders / yoke */}
+        <mesh position={[0, 1.5, 0]} material={mat}><sphereGeometry args={[0.78, 28, 20]} /></mesh>
         {/* Collar */}
-        <mesh position={[0, 1.32, 0.18]} rotation={[Math.PI / 2.4, 0, 0]} material={mat}>
-          <torusGeometry args={[0.34, 0.1, 12, 32]} />
+        <mesh position={[0, 1.78, 0]} rotation={[Math.PI / 2, 0, 0]} material={mat}><torusGeometry args={[0.24, 0.07, 12, 28]} /></mesh>
+        {/* Torso — slightly tapered chest→waist; carries the chest decal */}
+        <mesh position={[0, 0.75, 0]} material={mat}>
+          <capsuleGeometry args={[0.72, 1.35, 16, 36]} />
+          <Decal position={[0, 0.28, 0.7]} rotation={[0, 0, 0]} scale={[1.0, 1.15, 1.0]}>
+            <meshStandardMaterial map={texture} transparent polygonOffset polygonOffsetFactor={-1} roughness={0.92} depthTest />
+          </Decal>
         </mesh>
+        {/* Short sleeves over the upper arms */}
+        {[-1, 1].map((s) => (
+          <mesh key={`sl${s}`} position={[s * 0.82, 1.15, 0]} rotation={[0, 0, s * 0.55]} material={mat}>
+            <capsuleGeometry args={[0.28, 0.5, 10, 24]} />
+          </mesh>
+        ))}
       </group>
     </Center>
   );
@@ -173,30 +158,32 @@ export default function Garment3DPreview({
 
       {/* 3D viewport */}
       <div className={`relative flex-1 ${tab === "real" ? "hidden" : ""}`}>
-        <Canvas shadows camera={{ position: [0, 0.3, 4.2], fov: 40 }} dpr={[1, 2]}>
+        <Canvas
+          camera={{ position: [0, 0, 5.4], fov: 38 }}
+          dpr={[1, 1.5]}
+          gl={{ antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: false }}
+        >
           <color attach="background" args={[isDark ? "#0a0a0b" : "#101012"]} />
-          <ambientLight intensity={0.6} />
-          <directionalLight position={[3, 5, 4]} intensity={1.4} castShadow shadow-mapSize={[1024, 1024]} />
-          <directionalLight position={[-4, 2, -2]} intensity={0.5} />
+          {/* Soft studio lighting — no network HDR, so no context churn */}
+          <hemisphereLight args={["#ffffff", "#3a3a40", 0.85]} />
+          <ambientLight intensity={0.35} />
+          <directionalLight position={[3, 5, 4]} intensity={1.1} />
+          <directionalLight position={[-4, 2, -3]} intensity={0.45} />
+          <directionalLight position={[0, 2, -5]} intensity={0.35} />
           <Suspense fallback={null}>
             <Tee color={color} design={design} />
-            <Environment preset="studio" />
           </Suspense>
-          <ContactShadows position={[0, -1.6, 0]} opacity={0.45} scale={8} blur={2.5} far={3} />
+          <ContactShadows position={[0, -1.95, 0]} opacity={0.4} scale={9} blur={2.6} far={3.5} />
           <OrbitControls
             enablePan={false}
             autoRotate={spin}
-            autoRotateSpeed={1.6}
-            minDistance={2.6}
-            maxDistance={7}
+            autoRotateSpeed={1.4}
+            minDistance={3}
+            maxDistance={8}
+            target={[0, 0, 0]}
             onStart={() => setSpin(false)}
           />
         </Canvas>
-
-        {/* Loading hint */}
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <Suspense fallback={<Loader2 className="animate-spin text-white/40" />}>{null}</Suspense>
-        </div>
       </div>
 
       {/* Bottom controls: garment color + reset spin (3D tab only) */}
