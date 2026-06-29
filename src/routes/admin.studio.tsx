@@ -53,8 +53,19 @@ function StudioPage() {
   };
   useEffect(() => { loadProjects(); loadDesigns(); }, []);
 
-  // Deep-link: /admin/studio?open=<projectId> opens that project (used by the
-  // Compare page's "Modify in Studio").
+  // Update browser URL query params dynamically to enable session recovery upon refresh
+  const handleSetEditing = (p: Project | null) => {
+    setEditing(p);
+    const url = new URL(window.location.href);
+    if (p) {
+      url.searchParams.set("open", p.id);
+    } else {
+      url.searchParams.delete("open");
+    }
+    window.history.pushState({}, "", url.toString());
+  };
+
+  // Deep-link: /admin/studio?open=<projectId> opens that project (used by page refreshes)
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get("open");
     if (!id) return;
@@ -92,7 +103,7 @@ function StudioPage() {
       canvas: { layers: [] },
     }).select("*").single();
     if (error || !data) { toast.error(error?.message || "Could not create project"); return; }
-    setNewOpen(false); await loadProjects(); setEditing(data as Project);
+    setNewOpen(false); await loadProjects(); handleSetEditing(data as Project);
   };
 
   const createBlankCanvas = async () => {
@@ -102,7 +113,7 @@ function StudioPage() {
       canvas_kind: "canvas", template_image: null, canvas: { layers: [] },
     }).select("*").single();
     if (error || !data) { toast.error(error?.message || "Could not create project"); return; }
-    setNewOpen(false); await loadProjects(); setEditing(data as Project);
+    setNewOpen(false); await loadProjects(); handleSetEditing(data as Project);
   };
 
   const removeProject = async (id: string) => {
@@ -161,7 +172,7 @@ function StudioPage() {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {projects.map((p) => (
                 <div key={p.id} className={`group relative rounded-[20px] overflow-hidden border transition-all duration-300 hover:-translate-y-0.5 ${card}`}>
-                  <button onClick={() => setEditing(p)} className="block w-full text-left">
+                  <button onClick={() => handleSetEditing(p)} className="block w-full text-left">
                     <div className={`aspect-square flex items-center justify-center overflow-hidden ${isDark ? "bg-neutral-900" : "bg-[#f0f0f3]"}`}>
                       {p.thumbnail_url ? (
                         <img src={p.thumbnail_url} alt="" loading="lazy" className="w-full h-full object-contain" />
@@ -253,7 +264,7 @@ function StudioPage() {
             priceCents={editing.price_cents}
             printArea={editing.print_area || null}
             isDark={isDark}
-            onClose={() => { setEditing(null); loadProjects(); }}
+            onClose={() => { handleSetEditing(null); loadProjects(); }}
           />
         </Suspense>
       )}
@@ -301,7 +312,7 @@ function AssetsTab({ isDark, designs, reload, onRemove }: { isDark: boolean; des
       {designs.length === 0 ? <Empty isDark={isDark} text="No AI assets yet." /> : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {designs.map((d) => (
-            <div key={d.id} className={`group relative rounded-[20px] overflow-hidden border transition-all duration-300 hover:-translate-y-0.5 ${isDark ? "border-neutral-850 bg-neutral-955/40 hover:border-neutral-700" : "border-[#D1D1D6] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_6px_24px_rgba(0,0,0,0.08)]"}`}>
+            <div key={d.id} className={`rounded-[20px] overflow-hidden border transition-all duration-300 hover:-translate-y-0.5 ${isDark ? "border-neutral-850 bg-neutral-955/40 hover:border-neutral-700" : "border-[#D1D1D6] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_6px_24px_rgba(0,0,0,0.08)]"}`}>
               <div className="aspect-square bg-[#FAFAFA] overflow-hidden">
                 <img src={d.image_url} alt={d.title ?? ""} className="w-full h-full object-cover" />
               </div>
