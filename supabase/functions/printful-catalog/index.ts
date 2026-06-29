@@ -118,36 +118,39 @@ function b64ToBytes(b64: string): Uint8Array {
   return out;
 }
 
-async function apliiqHeaders(): Promise<Record<string, string>> {
+// Mimic .NET HttpUtility.UrlEncode: lowercase percent-encoding.
+const dotNetUrlEncode = (s: string) =>
+  encodeURIComponent(s).replace(/%[0-9A-F]{2}/g, (m) => m.toLowerCase());
+
+// Apliiq uses the ASP.NET "amx" HMAC scheme (header renamed to x-apliiq-auth):
+//   signatureRawData = AppId + Method + urlEncode(absoluteUrl.toLowerCase())
+//                      + Timestamp + Nonce + base64(md5(body))   (body empty for GET)
+//   SIG  = base64(HMAC-SHA256(base64-decode(sharedSecret), signatureRawData))
+//   header value = AppId:Signature:Nonce:Timestamp
+// The method + full URL MUST be in the signed data, and the header field order
+// is AppId:Sig:Nonce:Timestamp — getting either wrong makes Apliiq return 500.
+async function apliiqHeaders(method: string, fullUrl: string): Promise<Record<string, string>> {
   const rts = Math.floor(Date.now() / 1000).toString();
   const state = crypto.randomUUID().replace(/-/g, "");
-  
-  // base64_encode(HMACSHA256([APPId][RTS][STATE][Base64_ReqContentIFanyOREmptyString], Shared_SECRET))
-  // For standard GET list/detail calls, content body is empty.
-  const requestContentBase64String = "";
-  const rawData = `${APLIIQ_APP_KEY}${rts}${state}${requestContentBase64String}`;
-  
+  const requestUri = dotNetUrlEncode(fullUrl.toLowerCase());
+  const requestContentBase64String = ""; // empty body for GET list/detail calls
+  const rawData = `${APLIIQ_APP_KEY}${method}${requestUri}${rts}${state}${requestContentBase64String}`;
+
   let keyBytes: Uint8Array;
   try { keyBytes = b64ToBytes(APLIIQ_SHARED_SECRET); }
   catch { keyBytes = new TextEncoder().encode(APLIIQ_SHARED_SECRET); }
-  
+
   const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const sigBuf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawData));
   const sig = btoa(String.fromCharCode(...new Uint8Array(sigBuf)));
-  
-  // Format standard signature authentication sequence: RTS:SIG:APPID:STATE
-  const authValue = `${rts}:${sig}:${APLIIQ_APP_KEY}:${state}`;
-  return { 
-    "Authorization": `x-apliiq-auth ${authValue}`,
-    "x-apliiq-auth": authValue, 
-    "Accept": "application/json" 
-  };
+
+  return { "x-apliiq-auth": `${APLIIQ_APP_KEY}:${sig}:${state}:${rts}`, "Accept": "application/json" };
 }
 
 async function apliiqFetch(method: string, path: string): Promise<any> {
   if (!APLIIQ_APP_KEY || !APLIIQ_SHARED_SECRET) throw new Error("Apliiq credentials not set (APLIIQ_APP_KEY / APLIIQ_SHARED_SECRET)");
   const url = `${APLIIQ_BASE}${path}`;
-  const headers = await apliiqHeaders();
+  const headers = await apliiqHeaders(method, url);
   const r = await fetch(url, { method, headers });
   if (!r.ok) throw new Error(`Apliiq HTTP ${r.status}: ${(await r.text().catch(() => "")).slice(0, 120)}`);
   return r.json();
