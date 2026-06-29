@@ -14,7 +14,10 @@ export const Route = createFileRoute("/admin/studio")({
 // Editor pulls in Konva (DOM-only) — load it lazily so it never runs on SSR.
 const StudioEditor = lazy(() => import("@/components/studio/StudioEditor"));
 
-type Blank = { key: string; label: string; mfr: string; catalog_id: number; image: string | null; template_image?: string | null; thumb?: string | null; cost_cents: number; variant_count: number; error?: string; artboard_w?: number; artboard_h?: number; print_area?: { x: number; y: number; w: number; h: number } | null };
+type Blank = { id: number | string; key: string; label: string; mfr: string; type?: string; brand?: string | null; image: string | null; variant_count?: number; error?: string };
+type BlankColor = { name: string; code: string | null; image: string | null };
+type BlankDetail = { id: number | string; key: string; label: string; mfr: string; type?: string; image: string | null; min_cost_cents: number; max_cost_cents: number; colors: BlankColor[]; sizes: string[]; variant_count: number };
+type MfrStatus = { available: boolean; error: string | null; count: number };
 
 type Project = {
   id: string; name: string; manufacturer: string; template_key: string;
@@ -34,6 +37,12 @@ function StudioPage() {
   const [newOpen, setNewOpen] = useState(false);
   const [blanks, setBlanks] = useState<Blank[]>([]);
   const [loadingBlanks, setLoadingBlanks] = useState(false);
+  const [manufacturer, setManufacturer] = useState<"all" | "printful" | "apliiq">("all");
+  const [category, setCategory] = useState<string>("all");
+  const [mfrStatus, setMfrStatus] = useState<{ printful?: MfrStatus; apliiq?: MfrStatus }>({});
+  const [detail, setDetail] = useState<BlankDetail | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     const update = () => setIsDark(document.documentElement.classList.contains("dark"));
@@ -75,35 +84,61 @@ function StudioPage() {
     })();
   }, []);
 
-  // Pull the real manufacturer blanks (image + cost) when the modal opens.
-  const openNew = async () => {
-    setNewOpen(true);
-    if (blanks.length === 0) {
-      setLoadingBlanks(true);
-      try {
-        const { data, error } = await supabase.functions.invoke("printful-catalog", { body: {} });
-        if (!error && data?.blanks) setBlanks(data.blanks as Blank[]);
-        else if (data?.error) toast.error(data.error);
-      } finally { setLoadingBlanks(false); }
-    }
+  // Pull the full real-time catalog for the selected manufacturer(s).
+  const loadCatalog = async (mfr: "all" | "printful" | "apliiq") => {
+    setLoadingBlanks(true);
+    setBlanks([]);
+    setCategory("all");
+    try {
+      const { data, error } = await supabase.functions.invoke("printful-catalog", { body: { action: "list", manufacturer: mfr } });
+      if (!error && data?.blanks) setBlanks(data.blanks as Blank[]);
+      if (data?.manufacturers) setMfrStatus(data.manufacturers);
+      if (data?.error) toast.error(data.error);
+    } finally { setLoadingBlanks(false); }
   };
 
-  const createFromBlank = async (b: Blank) => {
-    // Pull the dynamic template proportions directly from the printful-catalog API
-    const { data, error } = await supabase.from("studio_projects").insert({
-      name: `${b.label} design`,
-      manufacturer: b.mfr,
-      template_key: b.key,
-      price_cents: b.cost_cents,
-      artboard_w: b.artboard_w || 4500,
-      artboard_h: b.artboard_h || 5400,
-      template_image: b.template_image || b.image,
-      canvas_kind: "product",
-      print_area: b.print_area || null,
-      canvas: { layers: [] },
-    }).select("*").single();
-    if (error || !data) { toast.error(error?.message || "Could not create project"); return; }
-    setNewOpen(false); await loadProjects(); handleSetEditing(data as Project);
+  const openNew = async () => {
+    setNewOpen(true);
+    setDetail(null);
+    await loadCatalog(manufacturer);
+  };
+
+  const switchManufacturer = async (mfr: "all" | "printful" | "apliiq") => {
+    setManufacturer(mfr);
+    setDetail(null);
+    await loadCatalog(mfr);
+  };
+
+  // Selecting a product fetches its live colors / sizes / price range.
+  const openBlankDetail = async (b: Blank) => {
+    setLoadingDetail(true);
+    setDetail(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("printful-catalog", { body: { action: "detail", manufacturer: b.mfr, id: b.id } });
+      if (error || !data?.detail) { toast.error(data?.error || error?.message || "Could not load product"); return; }
+      setDetail(data.detail as BlankDetail);
+    } finally { setLoadingDetail(false); }
+  };
+
+  const createFromDetail = async (d: BlankDetail, color: BlankColor | null) => {
+    setCreating(true);
+    try {
+      const tee = /t-?shirt|tee|hoodie|sweat|long\s*sleeve|crew/i.test(d.type || d.label);
+      const { data, error } = await supabase.from("studio_projects").insert({
+        name: `${color ? color.name + " " : ""}${d.label}`,
+        manufacturer: d.mfr,
+        template_key: d.key,
+        price_cents: d.min_cost_cents || 0,
+        artboard_w: tee ? 4500 : 4000,
+        artboard_h: tee ? 5400 : 4000,
+        template_image: color?.image || d.image,
+        canvas_kind: "product",
+        print_area: null,
+        canvas: { layers: [], product: { id: d.id, mfr: d.mfr, color: color?.name || null, sizes: d.sizes } },
+      }).select("*").single();
+      if (error || !data) { toast.error(error?.message || "Could not create project"); return; }
+      setNewOpen(false); setDetail(null); await loadProjects(); handleSetEditing(data as Project);
+    } finally { setCreating(false); }
   };
 
   const createBlankCanvas = async () => {
@@ -132,6 +167,10 @@ function StudioPage() {
 
   const card = isDark ? "border-neutral-850 bg-neutral-955/40 hover:border-neutral-700" : "border-[#D1D1D6] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_6px_24px_rgba(0,0,0,0.08)]";
   const sub = isDark ? "text-neutral-500" : "text-neutral-555";
+
+  // Derived catalog filters for the picker.
+  const categories = Array.from(new Set(blanks.map((b) => b.type).filter(Boolean) as string[])).sort();
+  const visibleBlanks = category === "all" ? blanks : blanks.filter((b) => b.type === category);
 
   return (
     <div className={`admin-page min-h-screen relative font-mono bg-[#f5f5f7] text-neutral-900 selection:bg-neutral-200 dark:bg-black dark:text-neutral-105 dark:selection:bg-neutral-800`}>
@@ -213,37 +252,77 @@ function StudioPage() {
 
       {/* New project modal */}
       {newOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setNewOpen(false)}>
-          <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-lg rounded-[24px] border p-6 ${isDark ? "bg-neutral-955 border-neutral-850" : "bg-white border-[#D1D1D6]"}`}>
-            <h2 className="text-[13px] font-semibold mb-1">New project</h2>
-            <p className={`text-[10px] mb-5 ${sub}`}>Start from a blank canvas, or design directly on a real manufacturer blank — the artboard becomes that exact product at its real cost.</p>
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => { setNewOpen(false); setDetail(null); }}>
+          <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-2xl rounded-[24px] border p-6 ${isDark ? "bg-neutral-955 border-neutral-850" : "bg-white border-[#D1D1D6]"}`}>
 
-            {/* Blank canvas */}
-            <button onClick={createBlankCanvas}
-              className={`w-full flex items-center gap-3 p-4 rounded-[16px] border mb-4 transition-all ${isDark ? "border-neutral-800 hover:bg-neutral-900/40" : "border-[#D1D1D6] hover:bg-neutral-50"}`}>
-              <div className={`w-12 h-12 rounded-[10px] flex items-center justify-center ${isDark ? "bg-neutral-900" : "bg-[#f0f0f3]"}`}><Layers size={18} className="opacity-50" /></div>
-              <div className="text-left"><p className="text-[11px] font-semibold normal-case">Blank Canvas</p><p className={`text-[9px] mt-0.5 ${sub}`}>4000 × 4000 · free-form artwork</p></div>
-            </button>
-
-            <p className={`text-[9px] uppercase tracking-widest mb-2 ${sub}`}>Manufacturer blanks</p>
-            {loadingBlanks ? (
-              <div className="flex justify-center py-10"><Loader2 className="animate-spin opacity-50" /></div>
+            {/* ── Detail step: choose color, see live price ── */}
+            {detail ? (
+              <ColorStep isDark={isDark} sub={sub} detail={detail} creating={creating}
+                onBack={() => setDetail(null)}
+                onCreate={(c) => createFromDetail(detail, c)} />
             ) : (
-              <div className="grid grid-cols-2 gap-3 max-h-[50vh] overflow-y-auto">
-                {blanks.map((b) => (
-                  <button key={b.key} onClick={() => createFromBlank(b)} disabled={!!b.error}
-                    className={`text-left rounded-[16px] border overflow-hidden transition-all disabled:opacity-40 ${isDark ? "border-neutral-800 hover:bg-neutral-900/40" : "border-[#D1D1D6] hover:bg-neutral-50"}`}>
-                    <div className={`aspect-square flex items-center justify-center ${isDark ? "bg-neutral-900" : "bg-[#f0f0f3]"}`}>
-                      {b.image ? <img src={b.image} alt={b.label} className="w-full h-full object-contain" /> : <Layers size={20} className="opacity-30" />}
-                    </div>
-                    <div className="p-3">
-                      <p className="text-[11px] font-semibold normal-case">{b.label}</p>
-                      <p className={`text-[9px] mt-0.5 ${sub}`}>{b.mfr} · from ${(b.cost_cents / 100).toFixed(2)}{b.error ? " · unavailable" : ""}</p>
-                    </div>
-                  </button>
-                ))}
-                {blanks.length === 0 && !loadingBlanks && <p className={`text-[10px] col-span-2 ${sub}`}>Could not load manufacturer blanks (check PRINTFUL_API_KEY).</p>}
-              </div>
+              <>
+                <h2 className="text-[13px] font-semibold mb-1">New project</h2>
+                <p className={`text-[10px] mb-4 ${sub}`}>Start from a blank canvas, or design on a real blank from the full live catalog — the artboard becomes that exact product at its real cost.</p>
+
+                {/* Blank canvas */}
+                <button onClick={createBlankCanvas}
+                  className={`w-full flex items-center gap-3 p-4 rounded-[16px] border mb-4 transition-all ${isDark ? "border-neutral-800 hover:bg-neutral-900/40" : "border-[#D1D1D6] hover:bg-neutral-50"}`}>
+                  <div className={`w-12 h-12 rounded-[10px] flex items-center justify-center ${isDark ? "bg-neutral-900" : "bg-[#f0f0f3]"}`}><Layers size={18} className="opacity-50" /></div>
+                  <div className="text-left"><p className="text-[11px] font-semibold normal-case">Blank Canvas</p><p className={`text-[9px] mt-0.5 ${sub}`}>4000 × 4000 · free-form artwork</p></div>
+                </button>
+
+                {/* Manufacturer + category controls */}
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
+                  <span className={`text-[9px] uppercase tracking-widest ${sub}`}>Store</span>
+                  <div className={`flex gap-1 p-1 rounded-[9999px] ${isDark ? "bg-neutral-900/60" : "bg-[#e8e8ed]/70"}`}>
+                    {(["all", "printful", "apliiq"] as const).map((m) => (
+                      <button key={m} onClick={() => switchManufacturer(m)}
+                        className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-[9999px] transition-all ${manufacturer === m ? (isDark ? "bg-white text-black" : "bg-white text-black shadow") : sub}`}>
+                        {m === "all" ? "Both" : m}
+                      </button>
+                    ))}
+                  </div>
+                  {categories.length > 1 && (
+                    <select value={category} onChange={(e) => setCategory(e.target.value)}
+                      className={`ml-auto text-[10px] rounded-[9999px] px-3 py-1.5 border focus:outline-none ${isDark ? "bg-neutral-900 border-neutral-800 text-neutral-200" : "bg-white border-[#D1D1D6]"}`}>
+                      <option value="all">All categories ({blanks.length})</option>
+                      {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  )}
+                </div>
+
+                {/* Per-manufacturer status (errors surface here, never blank the picker) */}
+                {(mfrStatus.printful?.error || mfrStatus.apliiq?.error) && (
+                  <div className={`text-[9px] mb-2 ${sub}`}>
+                    {mfrStatus.printful?.error && <span className="mr-3">Printful: {mfrStatus.printful.error}</span>}
+                    {mfrStatus.apliiq?.error && <span>Apliiq: {mfrStatus.apliiq.error}</span>}
+                  </div>
+                )}
+
+                {loadingBlanks ? (
+                  <div className="flex justify-center py-10"><Loader2 className="animate-spin opacity-50" /></div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[50vh] overflow-y-auto pr-1">
+                    {visibleBlanks.map((b) => (
+                      <button key={b.key} onClick={() => openBlankDetail(b)} disabled={loadingDetail}
+                        className={`text-left rounded-[16px] border overflow-hidden transition-all disabled:opacity-50 ${isDark ? "border-neutral-800 hover:bg-neutral-900/40" : "border-[#D1D1D6] hover:bg-neutral-50"}`}>
+                        <div className={`aspect-square flex items-center justify-center ${isDark ? "bg-neutral-900" : "bg-[#f0f0f3]"}`}>
+                          {b.image ? <img src={b.image} alt={b.label} loading="lazy" className="w-full h-full object-contain" /> : <Layers size={20} className="opacity-30" />}
+                        </div>
+                        <div className="p-2.5">
+                          <p className="text-[10px] font-semibold normal-case truncate">{b.label}</p>
+                          <p className={`text-[8px] mt-0.5 uppercase tracking-wider ${sub}`}>{b.mfr}{b.type ? ` · ${b.type}` : ""}</p>
+                        </div>
+                      </button>
+                    ))}
+                    {visibleBlanks.length === 0 && !loadingBlanks && (
+                      <p className={`text-[10px] col-span-full ${sub}`}>No products found. Check PRINTFUL_API_KEY / APLIIQ_APP_KEY + APLIIQ_SHARED_SECRET.</p>
+                    )}
+                  </div>
+                )}
+                {loadingDetail && <div className="flex items-center gap-2 mt-3 text-[10px]"><Loader2 size={12} className="animate-spin" /> Loading colors & pricing…</div>}
+              </>
             )}
           </div>
         </div>
@@ -269,6 +348,56 @@ function StudioPage() {
         </Suspense>
       )}
     </div>
+  );
+}
+
+// Color/size/price chooser shown after a blank is selected. The chosen color's
+// mockup becomes the artboard template so the studio + 3D view reflect reality.
+function ColorStep({ isDark, sub, detail, creating, onBack, onCreate }: {
+  isDark: boolean; sub: string; detail: BlankDetail; creating: boolean;
+  onBack: () => void; onCreate: (color: BlankColor | null) => void;
+}) {
+  const [color, setColor] = useState<BlankColor | null>(detail.colors[0] || null);
+  const priceLabel = detail.min_cost_cents
+    ? detail.max_cost_cents && detail.max_cost_cents !== detail.min_cost_cents
+      ? `$${(detail.min_cost_cents / 100).toFixed(2)}–$${(detail.max_cost_cents / 100).toFixed(2)}`
+      : `from $${(detail.min_cost_cents / 100).toFixed(2)}`
+    : "price unavailable";
+
+  return (
+    <>
+      <button onClick={onBack} className={`inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest mb-3 ${sub} hover:opacity-70`}>
+        <ArrowLeft size={11} /> Back to catalog
+      </button>
+      <div className="flex gap-4">
+        <div className={`w-40 h-40 shrink-0 rounded-[16px] overflow-hidden flex items-center justify-center ${isDark ? "bg-neutral-900" : "bg-[#f0f0f3]"}`}>
+          {(color?.image || detail.image) ? <img src={color?.image || detail.image || ""} alt={detail.label} className="w-full h-full object-contain" /> : <Layers size={24} className="opacity-30" />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-[13px] font-semibold normal-case">{detail.label}</h2>
+          <p className={`text-[10px] mt-0.5 uppercase tracking-wider ${sub}`}>{detail.mfr}{detail.type ? ` · ${detail.type}` : ""}</p>
+          <p className="text-[12px] font-semibold mt-2">{priceLabel}</p>
+          {detail.sizes.length > 0 && <p className={`text-[9px] mt-1 ${sub}`}>Sizes: {detail.sizes.join(", ")}</p>}
+
+          {detail.colors.length > 0 && (
+            <>
+              <p className={`text-[9px] uppercase tracking-widest mt-3 mb-1.5 ${sub}`}>Color · {color?.name || "—"}</p>
+              <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                {detail.colors.map((c) => (
+                  <button key={c.name} onClick={() => setColor(c)} title={c.name}
+                    className={`w-6 h-6 rounded-full border transition-transform hover:scale-110 ${color?.name === c.name ? "ring-2 ring-offset-1 ring-current" : ""} ${isDark ? "border-neutral-700 ring-offset-neutral-955" : "border-neutral-300 ring-offset-white"}`}
+                    style={{ backgroundColor: c.code ? (c.code.startsWith("#") ? c.code : `#${c.code}`) : "#ccc" }} />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+      <button onClick={() => onCreate(color)} disabled={creating}
+        className={`w-full mt-5 flex items-center justify-center gap-2 py-3 rounded-[9999px] text-[10px] font-bold uppercase tracking-widest ${isDark ? "bg-white text-black" : "bg-black text-white"}`}>
+        {creating ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />} Create project
+      </button>
+    </>
   );
 }
 

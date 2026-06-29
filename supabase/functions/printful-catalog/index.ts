@@ -1,7 +1,18 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// Returns real Printful blank products (image + price) for the studio's
-// new-project picker, so the artboard can BE the actual garment at the
-// actual manufacturer cost.
+// ─────────────────────────────────────────────────────────────
+//  Luveni — catalog (Supabase Edge Function)
+//  Serves the FULL real-time blank catalog for the studio's
+//  new-project picker, across BOTH manufacturers:
+//    • Printful  — public catalog API (Bearer key)
+//    • Apliiq    — signed REST API (App key + shared secret, HMAC)
+//
+//  Actions:
+//    { action: "list",   manufacturer }            → product grid
+//    { action: "detail", manufacturer, id }        → colors/sizes/prices
+//
+//  Admin-gated. Each manufacturer fails independently so one bad
+//  key never blanks the whole picker.
+// ─────────────────────────────────────────────────────────────
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,16 +24,11 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const PRINTFUL_API_KEY = Deno.env.get("PRINTFUL_API_KEY") || "";
 const PRINTFUL_STORE_ID = Deno.env.get("PRINTFUL_STORE_ID") || "";
+const APLIIQ_APP_KEY = Deno.env.get("APLIIQ_APP_KEY") || "";
+const APLIIQ_SHARED_SECRET = Deno.env.get("APLIIQ_SHARED_SECRET") || "";
 
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-
-const BLANKS = [
-  { key: "tee", label: "T-Shirt", id: 71, mfr: "printful" },
-  { key: "hoodie", label: "Hoodie", id: 146, mfr: "printful" },
-  { key: "hat", label: "Dad Hat", id: 206, mfr: "printful" },
-  { key: "poster", label: "Poster", id: 1, mfr: "printful" },
-];
 
 async function requireAdmin(req: Request): Promise<Response | null> {
   const auth = req.headers.get("Authorization") || req.headers.get("authorization");
@@ -43,35 +49,170 @@ async function requireAdmin(req: Request): Promise<Response | null> {
   } catch (e: any) { return json({ error: `Auth error: ${e.message}` }, 401); }
 }
 
+// ── Printful ────────────────────────────────────────────────────────────────
 const pfHeaders = () => {
   const h: Record<string, string> = { Authorization: `Bearer ${PRINTFUL_API_KEY}` };
   if (PRINTFUL_STORE_ID) h["X-PF-Store-Id"] = PRINTFUL_STORE_ID;
   return h;
 };
 
+// Slugged key so the editor can branch artboard/print-area logic on type.
+const slugKey = (mfr: string, type: string, id: number | string) =>
+  `${mfr}-${String(type || "item").toLowerCase().replace(/[^a-z0-9]+/g, "")}-${id}`;
+
+async function printfulList(): Promise<any[]> {
+  if (!PRINTFUL_API_KEY) throw new Error("PRINTFUL_API_KEY not set");
+  const r = await fetch("https://api.printful.com/products", { headers: pfHeaders() });
+  if (!r.ok) throw new Error(`Printful HTTP ${r.status}`);
+  const d = await r.json();
+  const items: any[] = d?.result || [];
+  return items.map((p) => ({
+    id: p.id,
+    key: slugKey("printful", p.type, p.id),
+    label: p.title || p.model || `Product ${p.id}`,
+    mfr: "printful",
+    type: p.type_name || p.type || "Other",
+    brand: p.brand || null,
+    image: p.image || null,
+    variant_count: p.variant_count ?? 0,
+  }));
+}
+
+async function printfulDetail(id: number | string): Promise<any> {
+  if (!PRINTFUL_API_KEY) throw new Error("PRINTFUL_API_KEY not set");
+  const r = await fetch(`https://api.printful.com/products/${id}`, { headers: pfHeaders() });
+  if (!r.ok) throw new Error(`Printful HTTP ${r.status}`);
+  const d = await r.json();
+  const product = d?.result?.product || {};
+  const variants: any[] = d?.result?.variants || [];
+  const prices = variants.map((v) => parseFloat(v.price)).filter((p) => Number.isFinite(p) && p > 0);
+  // Distinct colors (preserve first image per color for swatch + mockup).
+  const colorMap = new Map<string, { name: string; code: string | null; image: string | null }>();
+  const sizeSet = new Set<string>();
+  for (const v of variants) {
+    if (v.color && !colorMap.has(v.color)) colorMap.set(v.color, { name: v.color, code: v.color_code || null, image: v.image || null });
+    if (v.size) sizeSet.add(v.size);
+  }
+  return {
+    id, mfr: "printful",
+    key: slugKey("printful", product.type, id),
+    label: product.title || product.model || `Product ${id}`,
+    type: product.type_name || product.type || "Other",
+    image: product.image || variants[0]?.image || null,
+    min_cost_cents: prices.length ? Math.round(Math.min(...prices) * 100) : 0,
+    max_cost_cents: prices.length ? Math.round(Math.max(...prices) * 100) : 0,
+    colors: [...colorMap.values()],
+    sizes: [...sizeSet],
+    variant_count: variants.length,
+  };
+}
+
+// ── Apliiq (signed REST) ─────────────────────────────────────────────────────
+// Apliiq signs each request: Authorization: "amx <appKey>:<sig>" where
+// sig = Base64(HMAC-SHA256(sharedSecret, "<METHOD>\n<contentMD5>\n<contentType>\n<date>\n<path>")).
+async function apliiqSign(method: string, path: string, contentType = ""): Promise<Record<string, string>> {
+  const date = new Date().toUTCString();
+  const stringToSign = `${method}\n\n${contentType}\n${date}\n${path}`;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(APLIIQ_SHARED_SECRET),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sigBuf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(stringToSign));
+  const sig = btoa(String.fromCharCode(...new Uint8Array(sigBuf)));
+  return { Authorization: `amx ${APLIIQ_APP_KEY}:${sig}`, Date: date, Accept: "application/json" };
+}
+
+async function apliiqFetch(method: string, path: string): Promise<any> {
+  if (!APLIIQ_APP_KEY || !APLIIQ_SHARED_SECRET) throw new Error("Apliiq creds not set (APLIIQ_APP_KEY / APLIIQ_SHARED_SECRET)");
+  const headers = await apliiqSign(method, path);
+  const r = await fetch(`https://api.apliiq.com${path}`, { method, headers });
+  if (!r.ok) throw new Error(`Apliiq HTTP ${r.status}`);
+  return r.json();
+}
+
+// Apliiq shapes vary by account; map defensively across common field casings.
+const pick = (o: any, ...keys: string[]) => { for (const k of keys) if (o?.[k] != null) return o[k]; return null; };
+
+async function apliiqList(): Promise<any[]> {
+  const data = await apliiqFetch("GET", "/Product");
+  const items: any[] = Array.isArray(data) ? data : (data?.Products || data?.products || []);
+  return items.map((p) => {
+    const id = pick(p, "Id", "id", "ProductId", "productId");
+    return {
+      id,
+      key: slugKey("apliiq", pick(p, "GarmentType", "Category", "type") || "item", id),
+      label: pick(p, "Name", "name", "Title", "title") || `Product ${id}`,
+      mfr: "apliiq",
+      type: pick(p, "Category", "GarmentType", "type") || "Other",
+      brand: pick(p, "Brand", "brand"),
+      image: pick(p, "ImageUrl", "imageUrl", "Image", "image", "PreviewUrl"),
+      variant_count: (pick(p, "Colors", "colors")?.length) || 0,
+    };
+  });
+}
+
+async function apliiqDetail(id: number | string): Promise<any> {
+  const p = await apliiqFetch("GET", `/Product/${id}`);
+  const colorsRaw: any[] = pick(p, "Colors", "colors") || [];
+  const sizesRaw: any[] = pick(p, "Sizes", "sizes") || [];
+  const cost = pick(p, "BasePrice", "basePrice", "Price", "price");
+  const costCents = cost != null ? Math.round(parseFloat(String(cost)) * 100) : 0;
+  return {
+    id, mfr: "apliiq",
+    key: slugKey("apliiq", pick(p, "Category", "GarmentType") || "item", id),
+    label: pick(p, "Name", "name", "Title") || `Product ${id}`,
+    type: pick(p, "Category", "GarmentType") || "Other",
+    image: pick(p, "ImageUrl", "Image", "PreviewUrl"),
+    min_cost_cents: costCents,
+    max_cost_cents: costCents,
+    colors: colorsRaw.map((c: any) => ({
+      name: pick(c, "Name", "name") || String(c),
+      code: pick(c, "HexCode", "hex", "Code") || null,
+      image: pick(c, "ImageUrl", "Image") || null,
+    })),
+    sizes: sizesRaw.map((s: any) => (typeof s === "string" ? s : pick(s, "Name", "name", "Size") || "")),
+    variant_count: colorsRaw.length || 0,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const authErr = await requireAdmin(req);
   if (authErr) return authErr;
-  if (!PRINTFUL_API_KEY) return json({ error: "PRINTFUL_API_KEY secret not set" }, 500);
 
-  const out = await Promise.all(BLANKS.map(async (b) => {
+  const body = await req.json().catch(() => ({}));
+  const action = body.action || "list";
+  const manufacturer = (body.manufacturer || "all").toLowerCase();
+
+  if (action === "detail") {
     try {
-      const r = await fetch(`https://api.printful.com/products/${b.id}`, { headers: pfHeaders() });
-      if (!r.ok) return { ...b, error: `HTTP ${r.status}` };
-      const d = await r.json();
-      const product = d?.result?.product || {};
-      const variants: any[] = d?.result?.variants || [];
-      const prices = variants.map((v) => parseFloat(v.price)).filter((p) => Number.isFinite(p) && p > 0);
-      const minCostCents = prices.length ? Math.round(Math.min(...prices) * 100) : 0;
-      return {
-        key: b.key, label: b.label, mfr: b.mfr, catalog_id: b.id,
-        image: product.image || variants[0]?.image || null,
-        cost_cents: minCostCents,
-        variant_count: variants.length,
-      };
-    } catch (e: any) { return { ...b, error: e.message }; }
-  }));
+      const detail = manufacturer === "apliiq"
+        ? await apliiqDetail(body.id)
+        : await printfulDetail(body.id);
+      return json({ ok: true, detail });
+    } catch (e: any) {
+      return json({ error: e.message }, 502);
+    }
+  }
 
-  return json({ ok: true, blanks: out });
+  // list — fetch requested manufacturer(s) in parallel, each isolated.
+  const wantPF = manufacturer === "all" || manufacturer === "printful";
+  const wantAP = manufacturer === "all" || manufacturer === "apliiq";
+
+  const [pf, ap] = await Promise.all([
+    wantPF ? printfulList().then((blanks) => ({ blanks })).catch((e) => ({ error: e.message, blanks: [] })) : Promise.resolve({ blanks: [] }),
+    wantAP ? apliiqList().then((blanks) => ({ blanks })).catch((e) => ({ error: e.message, blanks: [] })) : Promise.resolve({ blanks: [] }),
+  ]);
+
+  return json({
+    ok: true,
+    manufacturers: {
+      printful: { available: !!PRINTFUL_API_KEY, error: (pf as any).error || null, count: pf.blanks.length },
+      apliiq: { available: !!(APLIIQ_APP_KEY && APLIIQ_SHARED_SECRET), error: (ap as any).error || null, count: ap.blanks.length },
+    },
+    blanks: [...pf.blanks, ...ap.blanks],
+  });
 });
