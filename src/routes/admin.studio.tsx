@@ -14,21 +14,13 @@ export const Route = createFileRoute("/admin/studio")({
 // Editor pulls in Konva (DOM-only) — load it lazily so it never runs on SSR.
 const StudioEditor = lazy(() => import("@/components/studio/StudioEditor"));
 
-// Manufacturer blank templates. Artboard is print-resolution (300dpi-ish).
-// Real garment mockups arrive when we wire the Printful Mockup API (Phase 3);
-// for now each is a print-area artboard with a sensible base price.
-const TEMPLATES = [
-  { key: "tee", label: "T-Shirt", w: 4500, h: 5400, price: 2499, mfr: "printful" },
-  { key: "hoodie", label: "Hoodie", w: 4500, h: 5400, price: 4499, mfr: "printful" },
-  { key: "hat", label: "Hat / Cap", w: 2400, h: 1200, price: 2299, mfr: "printful" },
-  { key: "poster", label: "Poster", w: 3600, h: 5400, price: 1899, mfr: "printful" },
-  { key: "tee_apliq", label: "T-Shirt (Apliiq)", w: 4500, h: 5400, price: 2899, mfr: "apliq" },
-];
+type Blank = { key: string; label: string; mfr: string; catalog_id: number; image: string | null; cost_cents: number; variant_count: number; error?: string };
 
 type Project = {
   id: string; name: string; manufacturer: string; template_key: string;
   price_cents: number; canvas: any; artboard_w: number; artboard_h: number;
   thumbnail_url: string | null; status: string; created_at: string;
+  template_image?: string | null; canvas_kind?: string;
 };
 type Design = { id: string; title: string | null; prompt: string | null; image_url: string; width: number; height: number; model: string };
 
@@ -39,6 +31,8 @@ function StudioPage() {
   const [designs, setDesigns] = useState<Design[]>([]);
   const [editing, setEditing] = useState<Project | null>(null);
   const [newOpen, setNewOpen] = useState(false);
+  const [blanks, setBlanks] = useState<Blank[]>([]);
+  const [loadingBlanks, setLoadingBlanks] = useState(false);
 
   useEffect(() => {
     const update = () => setIsDark(document.documentElement.classList.contains("dark"));
@@ -69,24 +63,45 @@ function StudioPage() {
     })();
   }, []);
 
-  const createProject = async (tpl: typeof TEMPLATES[number]) => {
-    const { data, error } = await supabase
-      .from("studio_projects")
-      .insert({
-        name: `${tpl.label} design`,
-        manufacturer: tpl.mfr,
-        template_key: tpl.key,
-        price_cents: tpl.price,
-        artboard_w: tpl.w,
-        artboard_h: tpl.h,
-        canvas: { layers: [] },
-      })
-      .select("*")
-      .single();
+  // Pull the real manufacturer blanks (image + cost) when the modal opens.
+  const openNew = async () => {
+    setNewOpen(true);
+    if (blanks.length === 0) {
+      setLoadingBlanks(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("printful-catalog", { body: {} });
+        if (!error && data?.blanks) setBlanks(data.blanks as Blank[]);
+        else if (data?.error) toast.error(data.error);
+      } finally { setLoadingBlanks(false); }
+    }
+  };
+
+  const createFromBlank = async (b: Blank) => {
+    // The artboard IS the garment image (so the canvas looks identical to the
+    // chosen manufacturer item). Standard 4500×5400 print ratio behind it.
+    const { data, error } = await supabase.from("studio_projects").insert({
+      name: `${b.label} design`,
+      manufacturer: b.mfr,
+      template_key: b.key,
+      price_cents: b.cost_cents,
+      artboard_w: 4500,
+      artboard_h: 5400,
+      template_image: b.image,
+      canvas_kind: "product",
+      canvas: { layers: [] },
+    }).select("*").single();
     if (error || !data) { toast.error(error?.message || "Could not create project"); return; }
-    setNewOpen(false);
-    await loadProjects();
-    setEditing(data as Project);
+    setNewOpen(false); await loadProjects(); setEditing(data as Project);
+  };
+
+  const createBlankCanvas = async () => {
+    const { data, error } = await supabase.from("studio_projects").insert({
+      name: "Blank canvas", manufacturer: "none", template_key: "canvas",
+      price_cents: 0, artboard_w: 4000, artboard_h: 4000,
+      canvas_kind: "canvas", template_image: null, canvas: { layers: [] },
+    }).select("*").single();
+    if (error || !data) { toast.error(error?.message || "Could not create project"); return; }
+    setNewOpen(false); await loadProjects(); setEditing(data as Project);
   };
 
   const removeProject = async (id: string) => {
@@ -100,18 +115,18 @@ function StudioPage() {
   const sub = isDark ? "text-neutral-500" : "text-neutral-555";
 
   return (
-    <div className={`admin-page min-h-screen ${isDark ? "bg-black text-white" : "bg-[#f5f5f7] text-black"} font-mono`}>
+    <div className={`admin-page min-h-screen relative font-mono bg-[#f5f5f7] text-neutral-900 selection:bg-neutral-200 dark:bg-black dark:text-neutral-105 dark:selection:bg-neutral-800`}>
       <div className="max-w-7xl mx-auto px-6 md:px-10 py-8">
         <Link to="/admin" className={`inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest mb-3 ${sub} hover:opacity-70`}>
           <ArrowLeft size={11} /> Back to Admin
         </Link>
         <div className="flex items-end justify-between flex-wrap gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2"><Wand2 size={18} className="opacity-70" /> Design Studio</h1>
+            <h1 className="text-xl font-medium tracking-tight flex items-center gap-2"><Wand2 size={16} className="opacity-70" /> Design Studio</h1>
             <p className={`text-[11px] mt-1 ${sub}`}>Free Illustrator-grade editor · AI magic · manufacturer templates</p>
           </div>
           {tab === "projects" && (
-            <button onClick={() => setNewOpen(true)}
+            <button onClick={openNew}
               className={`flex items-center gap-2 px-5 py-2.5 text-[10px] font-bold uppercase tracking-widest rounded-[9999px] ${isDark ? "bg-white text-black" : "bg-black text-white"}`}>
               <Plus size={13} /> New project
             </button>
@@ -168,18 +183,36 @@ function StudioPage() {
       {newOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setNewOpen(false)}>
           <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-lg rounded-[24px] border p-6 ${isDark ? "bg-neutral-955 border-neutral-850" : "bg-white border-[#D1D1D6]"}`}>
-            <h2 className="text-[13px] font-semibold mb-1">Choose a template</h2>
-            <p className={`text-[10px] mb-5 ${sub}`}>Pick the manufacturer blank + print size. Price is the suggested retail; you can change it at publish.</p>
-            <div className="grid grid-cols-2 gap-3">
-              {TEMPLATES.map((t) => (
-                <button key={t.key} onClick={() => createProject(t)}
-                  className={`text-left p-4 rounded-[16px] border transition-all ${isDark ? "border-neutral-800 hover:bg-neutral-900/40" : "border-[#D1D1D6] hover:bg-neutral-50"}`}>
-                  <p className="text-[11px] font-semibold">{t.label}</p>
-                  <p className={`text-[9px] mt-1 ${sub}`}>{t.mfr} · {t.w}×{t.h}</p>
-                  <p className={`text-[10px] mt-2`}>${(t.price / 100).toFixed(2)}</p>
-                </button>
-              ))}
-            </div>
+            <h2 className="text-[13px] font-semibold mb-1">New project</h2>
+            <p className={`text-[10px] mb-5 ${sub}`}>Start from a blank canvas, or design directly on a real manufacturer blank — the artboard becomes that exact product at its real cost.</p>
+
+            {/* Blank canvas */}
+            <button onClick={createBlankCanvas}
+              className={`w-full flex items-center gap-3 p-4 rounded-[16px] border mb-4 transition-all ${isDark ? "border-neutral-800 hover:bg-neutral-900/40" : "border-[#D1D1D6] hover:bg-neutral-50"}`}>
+              <div className={`w-12 h-12 rounded-[10px] flex items-center justify-center ${isDark ? "bg-neutral-900" : "bg-[#f0f0f3]"}`}><Layers size={18} className="opacity-50" /></div>
+              <div className="text-left"><p className="text-[11px] font-semibold normal-case">Blank Canvas</p><p className={`text-[9px] mt-0.5 ${sub}`}>4000 × 4000 · free-form artwork</p></div>
+            </button>
+
+            <p className={`text-[9px] uppercase tracking-widest mb-2 ${sub}`}>Manufacturer blanks</p>
+            {loadingBlanks ? (
+              <div className="flex justify-center py-10"><Loader2 className="animate-spin opacity-50" /></div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 max-h-[50vh] overflow-y-auto">
+                {blanks.map((b) => (
+                  <button key={b.key} onClick={() => createFromBlank(b)} disabled={!!b.error}
+                    className={`text-left rounded-[16px] border overflow-hidden transition-all disabled:opacity-40 ${isDark ? "border-neutral-800 hover:bg-neutral-900/40" : "border-[#D1D1D6] hover:bg-neutral-50"}`}>
+                    <div className={`aspect-square flex items-center justify-center ${isDark ? "bg-neutral-900" : "bg-[#f0f0f3]"}`}>
+                      {b.image ? <img src={b.image} alt={b.label} className="w-full h-full object-contain" /> : <Layers size={20} className="opacity-30" />}
+                    </div>
+                    <div className="p-3">
+                      <p className="text-[11px] font-semibold normal-case">{b.label}</p>
+                      <p className={`text-[9px] mt-0.5 ${sub}`}>{b.mfr} · from ${(b.cost_cents / 100).toFixed(2)}{b.error ? " · unavailable" : ""}</p>
+                    </div>
+                  </button>
+                ))}
+                {blanks.length === 0 && !loadingBlanks && <p className={`text-[10px] col-span-2 ${sub}`}>Could not load manufacturer blanks (check PRINTFUL_API_KEY).</p>}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -193,6 +226,8 @@ function StudioPage() {
             artboardW={editing.artboard_w}
             artboardH={editing.artboard_h}
             templateKey={editing.template_key}
+            templateImage={editing.template_image || null}
+            canvasKind={editing.canvas_kind || "product"}
             projectName={editing.name}
             priceCents={editing.price_cents}
             isDark={isDark}

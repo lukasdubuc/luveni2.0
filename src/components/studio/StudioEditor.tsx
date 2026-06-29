@@ -54,6 +54,7 @@ type Props = {
   projectId: string;
   initialCanvas: { layers?: StudioLayer[] } | null;
   artboardW: number; artboardH: number; templateKey: string;
+  templateImage?: string | null; canvasKind?: string;
   projectName: string; priceCents: number;
   onClose: () => void; isDark: boolean;
 };
@@ -137,7 +138,8 @@ function PaintNode({ layer, canvas }: any) {
   );
 }
 
-export default function StudioEditor({ projectId, initialCanvas, artboardW, artboardH, templateKey, projectName, priceCents, onClose, isDark }: Props) {
+export default function StudioEditor({ projectId, initialCanvas, artboardW, artboardH, templateKey, templateImage, canvasKind, projectName, priceCents, onClose, isDark }: Props) {
+  const garment = useHtmlImage(templateImage || undefined);
   const [layers, setLayers] = useState<StudioLayer[]>(initialCanvas?.layers ?? []);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -535,7 +537,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const pa = isHat ? { x: 0.28, y: 0.32, w: 0.44, h: 0.36 } : isPoster ? { x: 0.06, y: 0.05, w: 0.88, h: 0.9 } : { x: 0.2, y: 0.14, w: 0.6, h: 0.62 };
 
   return (
-    <div className={`admin-page fixed inset-0 z-50 flex flex-col ${isDark ? "bg-neutral-950 text-white" : "bg-[#f5f5f7] text-black"} font-mono`}>
+    <div className={`admin-page fixed inset-0 z-50 flex flex-col font-mono ${isDark ? "bg-black text-neutral-105" : "bg-[#f5f5f7] text-neutral-900"}`}>
       {/* Toolbar — floating pill cluster */}
       <div className="flex items-center gap-2 px-4 py-3">
         <div className={`flex items-center gap-1 p-1 rounded-full ${isDark ? "bg-neutral-900/80 backdrop-blur-xl" : "bg-white/90 backdrop-blur-xl shadow-[0_4px_20px_rgba(0,0,0,0.08)]"}`}>
@@ -640,10 +642,19 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
               }}
             >
               <Layer>
-                {/* Product blank: tinted body + print-area guide */}
-                <Rect name="bg" x={0} y={0} width={artboardW} height={artboardH} fill={isDark ? "#0d0d0d" : "#ffffff"} listening />
-                <Rect x={artboardW * 0.06} y={artboardH * 0.05} width={artboardW * 0.88} height={artboardH * 0.9} cornerRadius={artboardW * 0.06} fill={isDark ? "#161616" : "#f1f1f3"} listening={false} />
-                <Rect x={artboardW * pa.x} y={artboardH * pa.y} width={artboardW * pa.w} height={artboardH * pa.h} stroke="#9ca3af" strokeWidth={4} dash={[26, 18]} cornerRadius={20} listening={false} />
+                {/* Background: real garment image (product) · white (canvas) · synthetic fallback */}
+                <Rect name="bg" x={0} y={0} width={artboardW} height={artboardH} fill="#ffffff" listening />
+                {canvasKind === "canvas" ? null : garment ? (
+                  <>
+                    <KImage image={garment} x={0} y={0} width={artboardW} height={artboardH} listening={false} />
+                    <Rect x={artboardW * pa.x} y={artboardH * pa.y} width={artboardW * pa.w} height={artboardH * pa.h} stroke="#6366f1" strokeWidth={4} dash={[26, 18]} cornerRadius={20} listening={false} opacity={0.6} />
+                  </>
+                ) : (
+                  <>
+                    <Rect x={artboardW * 0.06} y={artboardH * 0.05} width={artboardW * 0.88} height={artboardH * 0.9} cornerRadius={artboardW * 0.06} fill={isDark ? "#161616" : "#f1f1f3"} listening={false} />
+                    <Rect x={artboardW * pa.x} y={artboardH * pa.y} width={artboardW * pa.w} height={artboardH * pa.h} stroke="#9ca3af" strokeWidth={4} dash={[26, 18]} cornerRadius={20} listening={false} />
+                  </>
+                )}
 
                 {layers.map((l) => l.type === "paint" ? (
                   <PaintNode key={l.id} layer={l} canvas={getPaintCanvas(l)} />

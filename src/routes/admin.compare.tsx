@@ -63,12 +63,12 @@ function ComparePage() {
   };
 
   return (
-    <div className={`admin-page min-h-screen ${isDark ? "bg-black text-white" : "bg-[#f5f5f7] text-black"} font-mono`}>
+    <div className={`admin-page min-h-screen relative font-mono bg-[#f5f5f7] text-neutral-900 selection:bg-neutral-200 dark:bg-black dark:text-neutral-105 dark:selection:bg-neutral-800`}>
       <div className="max-w-7xl mx-auto px-6 md:px-10 py-8">
         <Link to="/admin" className={`inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest mb-3 ${sub} hover:opacity-70`}>
           <ArrowLeft size={11} /> Back to Admin
         </Link>
-        <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2"><Sparkles size={18} className="opacity-70" /> AI Auto · Manufacturer Compare</h1>
+        <h1 className="text-xl font-medium tracking-tight flex items-center gap-2"><Sparkles size={16} className="opacity-70" /> AI Auto · Manufacturer Compare</h1>
         <p className={`text-[11px] mt-1 mb-7 ${sub}`}>
           Autonomous AI drafts, shown side-by-side on each manufacturer with cost &amp; markup. Choose one to publish, or modify in the Studio.
         </p>
