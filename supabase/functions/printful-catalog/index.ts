@@ -63,7 +63,7 @@ const slugKey = (mfr: string, type: string, id: number | string) =>
 async function printfulList(): Promise<any[]> {
   if (!PRINTFUL_API_KEY) throw new Error("PRINTFUL_API_KEY not set");
   const r = await fetch("https://api.printful.com/products", { headers: pfHeaders() });
-  if (!r.ok) throw new Error(`Printful HTTP ${r.status}`);
+  if (!r.ok) throw new Error(`Printful HTTP ${r.status}: ${(await r.text().catch(() => "")).slice(0, 160)}`);
   const d = await r.json();
   const items: any[] = d?.result || [];
   return items.map((p) => ({
@@ -81,7 +81,7 @@ async function printfulList(): Promise<any[]> {
 async function printfulDetail(id: number | string): Promise<any> {
   if (!PRINTFUL_API_KEY) throw new Error("PRINTFUL_API_KEY not set");
   const r = await fetch(`https://api.printful.com/products/${id}`, { headers: pfHeaders() });
-  if (!r.ok) throw new Error(`Printful HTTP ${r.status}`);
+  if (!r.ok) throw new Error(`Printful HTTP ${r.status}: ${(await r.text().catch(() => "")).slice(0, 160)}`);
   const d = await r.json();
   const product = d?.result?.product || {};
   const variants: any[] = d?.result?.variants || [];
@@ -109,7 +109,7 @@ async function printfulDetail(id: number | string): Promise<any> {
 
 // ── Apliiq (signed REST) ─────────────────────────────────────────────────────
 // Apliiq uses the ASP.NET "amx" HMAC scheme, header renamed to x-apliiq-auth:
-//   value = "<RTS>:<SIG>:<APPID>:<STATE>"  (timestamp:signature:appkey:nonce)
+//   value = "APPID:SIG:STATE:RTS" (AppId:Signature:Nonce:Timestamp)
 // signatureRawData = APPID + METHOD + urlEncode(absoluteUrl.toLowerCase())
 //                    + RTS + STATE + base64(md5(body))   (body empty for GET)
 // key = base64-decode(sharedSecret); SIG = base64(HMAC-SHA256(key, rawData)).
@@ -138,7 +138,7 @@ async function apliiqHeaders(method: string, fullUrl: string): Promise<Record<st
   const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const sigBuf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawData));
   const sig = btoa(String.fromCharCode(...new Uint8Array(sigBuf)));
-  return { "x-apliiq-auth": `${rts}:${sig}:${APLIIQ_APP_KEY}:${state}`, Accept: "application/json" };
+  return { "x-apliiq-auth": `${APLIIQ_APP_KEY}:${sig}:${state}:${rts}`, Accept: "application/json" };
 }
 
 async function apliiqFetch(method: string, path: string): Promise<any> {
@@ -205,7 +205,6 @@ Deno.serve(async (req) => {
   const manufacturer = (body.manufacturer || "all").toLowerCase();
 
   // ── mockup: photoreal on-model render of the exact print (Printful) ──────────
-  // body: { productId, variantId, imageUrl }  → { mockups: [url, ...] }
   if (action === "mockup") {
     if (manufacturer === "apliiq") return json({ error: "Apliiq mockups not supported yet" }, 400);
     if (!PRINTFUL_API_KEY) return json({ error: "PRINTFUL_API_KEY not set" }, 500);
@@ -241,10 +240,8 @@ Deno.serve(async (req) => {
   }
 
   // ── match: closest blank to a traced/custom design, cheapest across both ────
-  // body: { garmentType }  → ranked candidates (cheapest first) with live cost.
   if (action === "match") {
     const gt = String(body.garmentType || "t-shirt").toLowerCase();
-    // Keyword expansion so "tee" also matches "T-Shirt", etc.
     const synonyms: Record<string, string[]> = {
       "t-shirt": ["t-shirt", "tee", "shirt", "crew"],
       hoodie: ["hoodie", "hooded", "sweatshirt", "pullover"],
@@ -261,7 +258,6 @@ Deno.serve(async (req) => {
       apliiqList().catch(() => []),
     ]);
     const candidates = [...pf, ...ap].filter(matchType).slice(0, 12);
-    // Pull live cost for each candidate; ignore those that fail.
     const detailed = await Promise.all(candidates.map(async (b) => {
       try {
         const d = b.mfr === "apliiq" ? await apliiqDetail(b.id) : await printfulDetail(b.id);
