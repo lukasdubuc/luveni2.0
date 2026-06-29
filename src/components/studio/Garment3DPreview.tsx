@@ -26,18 +26,19 @@ const GARMENT_COLORS: { key: string; label: string; hex: string }[] = [
 ];
 
 // Calibration: a standard 12" front print maps to this decal width on the
-// torso; real print widths scale linearly from here.
+// chest; real print widths scale linearly from here.
 const REF_PRINT_W_IN = 12;
-const REF_DECAL_W = 1.25;
+const REF_DECAL_W = 0.95;
+const TORSO_R = 0.7; // torso radius — decal sits on the front of the chest
 
 // A soft-knit fabric material so light reads like cloth, not plastic.
 function fabric(color: string) {
   return new THREE.MeshStandardMaterial({ color, roughness: 0.92, metalness: 0.02 });
 }
 
-// Procedural t-shirt: a rounded torso + two angled sleeves, on a neck/head so
-// the garment reads on a human form. Not a CAD pattern, but enough volume for
-// a convincing live preview & decal.
+// Procedural human torso wearing a fitted tee: tapered torso, shoulder yoke,
+// neck + head and arms hanging at the sides so it reads as a proportional
+// person — not a blob. Enough form for a convincing live preview & decal.
 function Tee({ color, design, printWidthIn, printHeightIn }: { color: string; design: string; printWidthIn?: number | null; printHeightIn?: number | null }) {
   const mat = useMemo(() => fabric(color), [color]);
   const skin = useMemo(() => new THREE.MeshStandardMaterial({ color: "#cdb09a", roughness: 0.7, metalness: 0.02 }), []);
@@ -50,29 +51,31 @@ function Tee({ color, design, printWidthIn, printHeightIn }: { color: string; de
     const w = printWidthIn && printWidthIn > 0 ? (printWidthIn / REF_PRINT_W_IN) * REF_DECAL_W : REF_DECAL_W;
     const aspect = printHeightIn && printHeightIn > 0
       ? printHeightIn / printWidthIn!
-      : (texture.image ? (texture.image as any).height / (texture.image as any).width : 1.4 / 1.25);
-    return [w, w * aspect, 1.2];
+      : (texture.image ? (texture.image as any).height / (texture.image as any).width : 1.25);
+    return [w, w * aspect, 1.0];
   }, [printWidthIn, printHeightIn, texture]);
 
   return (
     <Center>
       <group rotation={[0, 0, 0]}>
-        {/* Mannequin — neck + head so the garment reads on a human form */}
-        <mesh position={[0, 1.62, 0.05]} material={skin}>
-          <cylinderGeometry args={[0.26, 0.34, 0.5, 24]} />
+        {/* Head + neck */}
+        <mesh position={[0, 2.02, 0]} material={skin} castShadow>
+          <sphereGeometry args={[0.32, 32, 24]} />
         </mesh>
-        <mesh position={[0, 2.18, 0.05]} material={skin} castShadow>
-          <sphereGeometry args={[0.42, 32, 24]} />
+        <mesh position={[0, 1.62, 0]} material={skin}>
+          <cylinderGeometry args={[0.14, 0.17, 0.34, 24]} />
         </mesh>
-        {/* Torso */}
-        <mesh castShadow receiveShadow material={mat}>
-          <capsuleGeometry args={[0.95, 1.5, 12, 32]} />
+
+        {/* Shoulder yoke (horizontal capsule reads as shoulders, not a ball) */}
+        <mesh position={[0, 1.34, 0]} rotation={[0, 0, Math.PI / 2]} material={mat} castShadow>
+          <capsuleGeometry args={[0.24, 1.0, 16, 32]} />
+        </mesh>
+
+        {/* Torso (tapered, narrower than the shoulders so it reads human) */}
+        <mesh position={[0, 0.5, 0]} material={mat} castShadow receiveShadow>
+          <capsuleGeometry args={[TORSO_R, 1.25, 16, 48]} />
           {/* Chest decal — the user's design, true-to-print */}
-          <Decal
-            position={[0, 0.35, 0.92]}
-            rotation={[0, 0, 0]}
-            scale={decalScale}
-          >
+          <Decal position={[0, 0.4, TORSO_R]} rotation={[0, 0, 0]} scale={decalScale}>
             <meshStandardMaterial
               map={texture}
               transparent
@@ -84,27 +87,23 @@ function Tee({ color, design, printWidthIn, printHeightIn }: { color: string; de
           </Decal>
         </mesh>
 
-        {/* Shoulders */}
-        <mesh position={[0, 0.95, 0]} material={mat} castShadow>
-          <sphereGeometry args={[0.98, 24, 16]} />
-        </mesh>
-
-        {/* Sleeves */}
+        {/* Upper arms hanging at the sides */}
         {[-1, 1].map((s) => (
-          <mesh
-            key={s}
-            position={[s * 1.05, 0.7, 0]}
-            rotation={[0, 0, (s * Math.PI) / 4]}
-            material={mat}
-            castShadow
-          >
-            <capsuleGeometry args={[0.42, 0.7, 8, 20]} />
+          <mesh key={`arm-${s}`} position={[s * 0.82, 0.78, 0]} rotation={[0, 0, s * 0.16]} material={mat} castShadow>
+            <capsuleGeometry args={[0.17, 1.0, 12, 28]} />
+          </mesh>
+        ))}
+
+        {/* Short sleeves at the shoulders */}
+        {[-1, 1].map((s) => (
+          <mesh key={`slv-${s}`} position={[s * 0.78, 1.16, 0]} rotation={[0, 0, s * 0.5]} material={mat} castShadow>
+            <capsuleGeometry args={[0.25, 0.34, 10, 24]} />
           </mesh>
         ))}
 
         {/* Collar */}
-        <mesh position={[0, 1.32, 0.18]} rotation={[Math.PI / 2.4, 0, 0]} material={mat}>
-          <torusGeometry args={[0.34, 0.1, 12, 32]} />
+        <mesh position={[0, 1.5, 0]} rotation={[Math.PI / 2, 0, 0]} material={mat}>
+          <torusGeometry args={[0.17, 0.05, 12, 36]} />
         </mesh>
       </group>
     </Center>
