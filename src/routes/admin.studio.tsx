@@ -28,6 +28,19 @@ type Project = {
 };
 type Design = { id: string; title: string | null; prompt: string | null; image_url: string; width: number; height: number; model: string };
 
+// Utility function to transparently rewrite Printful and Apliiq image CDN URLs 
+// to go through our Supabase Edge Function proxy, avoiding canvas/WebGL CORS blocks.
+export const getProxyImageUrl = (url: string | null): string => {
+  if (!url) return "";
+  if (url.includes("files.cdn.printful.com") || url.includes("apliiq.com")) {
+    const supabaseUrl = (supabase as any).supabaseUrl || import.meta.env.VITE_SUPABASE_URL || "";
+    if (supabaseUrl) {
+      return `${supabaseUrl}/functions/v1/printful-catalog?action=proxy-image&url=${encodeURIComponent(url)}`;
+    }
+  }
+  return url;
+};
+
 function StudioPage() {
   const [isDark, setIsDark] = useState(false);
   const [tab, setTab] = useState<"projects" | "assets">("projects");
@@ -183,7 +196,7 @@ function StudioPage() {
   return (
     <div className={`admin-page min-h-screen relative font-mono bg-[#f5f5f7] text-neutral-900 selection:bg-neutral-200 dark:bg-black dark:text-neutral-105 dark:selection:bg-neutral-800`}>
       <div className="max-w-7xl mx-auto px-6 md:px-10 py-8">
-        <Link to="/admin" className={`inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest mb-3 ${sub} hover:opacity-70`}>
+        <Link to="/admin" preload={false} className={`inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest mb-3 ${sub} hover:opacity-70`}>
           <ArrowLeft size={11} /> Back to Admin
         </Link>
         <div className="flex items-end justify-between flex-wrap gap-4 mb-6">
@@ -222,9 +235,9 @@ function StudioPage() {
                   <button onClick={() => handleSetEditing(p)} className="block w-full text-left">
                     <div className={`aspect-square flex items-center justify-center overflow-hidden ${isDark ? "bg-neutral-900" : "bg-[#f0f0f3]"}`}>
                       {p.thumbnail_url ? (
-                        <img src={p.thumbnail_url} alt="" loading="lazy" className="w-full h-full object-contain" />
+                        <img src={getProxyImageUrl(p.thumbnail_url)} alt="" loading="lazy" className="w-full h-full object-contain" />
                       ) : p.template_image ? (
-                        <img src={p.template_image} alt="" loading="lazy" className="w-full h-full object-contain opacity-50" />
+                        <img src={getProxyImageUrl(p.template_image)} alt="" loading="lazy" className="w-full h-full object-contain opacity-50" />
                       ) : (
                         <Layers size={26} className="opacity-20" />
                       )}
@@ -327,7 +340,7 @@ function StudioPage() {
                       <button key={b.key} onClick={() => openBlankDetail(b)} disabled={loadingDetail}
                         className={`text-left rounded-[16px] border overflow-hidden transition-all disabled:opacity-50 ${isDark ? "border-neutral-800 hover:bg-neutral-900/40" : "border-[#D1D1D6] hover:bg-neutral-50"}`}>
                         <div className={`aspect-square flex items-center justify-center ${isDark ? "bg-neutral-900" : "bg-[#f0f0f3]"}`}>
-                          {b.image ? <img src={b.image} alt={b.label} loading="lazy" className="w-full h-full object-contain" /> : <Layers size={20} className="opacity-30" />}
+                          {b.image ? <img src={getProxyImageUrl(b.image)} alt={b.label} loading="lazy" className="w-full h-full object-contain" /> : <Layers size={20} className="opacity-30" />}
                         </div>
                         <div className="p-2.5">
                           <p className="text-[10px] font-semibold normal-case truncate">{b.label}</p>
@@ -390,7 +403,7 @@ function ColorStep({ isDark, sub, detail, creating, onBack, onCreate }: {
       </button>
       <div className="flex gap-4">
         <div className={`w-40 h-40 shrink-0 rounded-[16px] overflow-hidden flex items-center justify-center ${isDark ? "bg-neutral-900" : "bg-[#f0f0f3]"}`}>
-          {(color?.image || detail.image) ? <img src={color?.image || detail.image || ""} alt={detail.label} className="w-full h-full object-contain" /> : <Layers size={24} className="opacity-30" />}
+          {(color?.image || detail.image) ? <img src={getProxyImageUrl(color?.image || detail.image || "")} alt={detail.label} className="w-full h-full object-contain" /> : <Layers size={24} className="opacity-30" />}
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="text-[13px] font-semibold normal-case">{detail.label}</h2>
