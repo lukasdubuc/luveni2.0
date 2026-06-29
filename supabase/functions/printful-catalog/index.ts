@@ -9,6 +9,7 @@
 //  Actions:
 //    { action: "list",   manufacturer }            → product grid
 //    { action: "detail", manufacturer, id }        → colors/sizes/prices
+//    { action: "proxy-image", url }                → bypasses CDN CORS blocks
 //
 //  Admin-gated. Each manufacturer fails independently so one bad
 //  key never blanks the whole picker.
@@ -16,7 +17,7 @@
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, Authorization",
 };
 
@@ -108,16 +109,7 @@ async function printfulDetail(id: number | string): Promise<any> {
 }
 
 // ── Apliiq (signed REST) ─────────────────────────────────────────────────────
-// Apliiq uses the ASP.NET "amx" HMAC scheme, header renamed to x-apliiq-auth:
-//   value = "APPID:SIG:STATE:RTS" (AppId:Signature:Nonce:Timestamp)
-// signatureRawData = APPID + METHOD + urlEncode(absoluteUrl.toLowerCase())
-//                    + RTS + STATE + base64(md5(body))   (body empty for GET)
-// key = base64-decode(sharedSecret); SIG = base64(HMAC-SHA256(key, rawData)).
 const APLIIQ_BASE = "https://api.apliiq.com";
-
-// Mimic .NET HttpUtility.UrlEncode: lowercase percent-encoding.
-const dotNetUrlEncode = (s: string) =>
-  encodeURIComponent(s).replace(/%[0-9A-F]{2}/g, (m) => m.toLowerCase());
 
 function b64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64);
@@ -126,31 +118,41 @@ function b64ToBytes(b64: string): Uint8Array {
   return out;
 }
 
-async function apliiqHeaders(method: string, fullUrl: string): Promise<Record<string, string>> {
+async function apliiqHeaders(): Promise<Record<string, string>> {
   const rts = Math.floor(Date.now() / 1000).toString();
   const state = crypto.randomUUID().replace(/-/g, "");
-  const requestUri = dotNetUrlEncode(fullUrl.toLowerCase());
-  const rawData = `${APLIIQ_APP_KEY}${method}${requestUri}${rts}${state}`;
-  // Shared secret is a base64 string; decode to key bytes (fall back to utf8).
+  
+  // base64_encode(HMACSHA256([APPId][RTS][STATE][Base64_ReqContentIFanyOREmptyString], Shared_SECRET))
+  // For standard GET list/detail calls, content body is empty.
+  const requestContentBase64String = "";
+  const rawData = `${APLIIQ_APP_KEY}${rts}${state}${requestContentBase64String}`;
+  
   let keyBytes: Uint8Array;
   try { keyBytes = b64ToBytes(APLIIQ_SHARED_SECRET); }
   catch { keyBytes = new TextEncoder().encode(APLIIQ_SHARED_SECRET); }
+  
   const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const sigBuf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawData));
   const sig = btoa(String.fromCharCode(...new Uint8Array(sigBuf)));
-  return { "x-apliiq-auth": `${APLIIQ_APP_KEY}:${sig}:${state}:${rts}`, Accept: "application/json" };
+  
+  // Format standard signature authentication sequence: RTS:SIG:APPID:STATE
+  const authValue = `${rts}:${sig}:${APLIIQ_APP_KEY}:${state}`;
+  return { 
+    "Authorization": `x-apliiq-auth ${authValue}`,
+    "x-apliiq-auth": authValue, 
+    "Accept": "application/json" 
+  };
 }
 
 async function apliiqFetch(method: string, path: string): Promise<any> {
-  if (!APLIIQ_APP_KEY || !APLIIQ_SHARED_SECRET) throw new Error("Apliiq creds not set (APLIIQ_APP_KEY / APLIIQ_SHARED_SECRET)");
+  if (!APLIIQ_APP_KEY || !APLIIQ_SHARED_SECRET) throw new Error("Apliiq credentials not set (APLIIQ_APP_KEY / APLIIQ_SHARED_SECRET)");
   const url = `${APLIIQ_BASE}${path}`;
-  const headers = await apliiqHeaders(method, url);
+  const headers = await apliiqHeaders();
   const r = await fetch(url, { method, headers });
   if (!r.ok) throw new Error(`Apliiq HTTP ${r.status}: ${(await r.text().catch(() => "")).slice(0, 120)}`);
   return r.json();
 }
 
-// Apliiq shapes vary by account; map defensively across common field casings.
 const pick = (o: any, ...keys: string[]) => { for (const k of keys) if (o?.[k] != null) return o[k]; return null; };
 
 async function apliiqList(): Promise<any[]> {
@@ -197,6 +199,38 @@ async function apliiqDetail(id: number | string): Promise<any> {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  // Handle public image proxy requests to bypass the requireAdmin block
+  const urlObj = new URL(req.url);
+  const getAction = urlObj.searchParams.get("action");
+  const getUrl = urlObj.searchParams.get("url");
+
+  if (req.method === "GET" && getAction === "proxy-image" && getUrl) {
+    if (
+      !getUrl.startsWith("https://files.cdn.printful.com/") && 
+      !getUrl.startsWith("https://api.apliiq.com/") && 
+      !getUrl.startsWith("https://www.apliiq.com/")
+    ) {
+      return new Response("Forbidden proxy target", { status: 403, headers: corsHeaders });
+    }
+    try {
+      const imgRes = await fetch(getUrl);
+      if (!imgRes.ok) return new Response("Failed to fetch image", { status: imgRes.status, headers: corsHeaders });
+      const contentType = imgRes.headers.get("content-type") || "image/jpeg";
+      const blob = await imgRes.blob();
+      return new Response(blob, {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": contentType,
+          "Cache-Control": "public, max-age=86400",
+        }
+      });
+    } catch (e: any) {
+      return new Response(e.message, { status: 502, headers: corsHeaders });
+    }
+  }
+
+  // Admin access validation is required for the standard catalog actions
   const authErr = await requireAdmin(req);
   if (authErr) return authErr;
 
