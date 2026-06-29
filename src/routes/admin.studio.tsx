@@ -4,6 +4,7 @@ import { Sparkles, Loader2, Trash2, ArrowLeft, Plus, Wand2, Layers, ImageIcon } 
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { requireAdmin } from "@/lib/admin-guard";
+import { computeRetailCents, realizedMargin } from "@/lib/pricing";
 
 export const Route = createFileRoute("/admin/studio")({
   beforeLoad: requireAdmin,
@@ -35,7 +36,7 @@ export const getProxyImageUrl = (url: string | null): string => {
   if (url.includes("files.cdn.printful.com") || url.includes("apliiq.com")) {
     const supabaseUrl = (supabase as any).supabaseUrl || import.meta.env.VITE_SUPABASE_URL || "";
     if (supabaseUrl) {
-      return `${supabaseUrl}/functions/v1/printful-catalog?action=proxy-image&url=${encodeURIComponent(url)}`;
+      return `${supabaseUrl}/functions/v1/proxy-image?url=${encodeURIComponent(url)}`;
     }
   }
   return url;
@@ -140,17 +141,21 @@ function StudioPage() {
     setCreating(true);
     try {
       const tee = /t-?shirt|tee|hoodie|sweat|long\s*sleeve|crew/i.test(d.type || d.label);
+      // Manufacturer cost → margin → retail. price_cents is the storefront retail;
+      // the raw blank cost is preserved on the product ref for the live calculator.
+      const costCents = d.min_cost_cents || 0;
+      const retailCents = computeRetailCents(costCents);
       const { data, error } = await supabase.from("studio_projects").insert({
         name: `${color ? color.name + " " : ""}${d.label}`,
         manufacturer: d.mfr,
         template_key: d.key,
-        price_cents: d.min_cost_cents || 0,
+        price_cents: retailCents,
         artboard_w: tee ? 4500 : 5400, // standard t-shirt aspect ratio, otherwise square
         artboard_h: tee ? 5400 : 5400,
         template_image: color?.image || d.image,
         canvas_kind: "product",
         print_area: null,
-        canvas: { layers: [], product: { id: d.id, mfr: d.mfr, color: color?.name || null, variant_id: color?.variant_id ?? null, sizes: d.sizes } },
+        canvas: { layers: [], product: { id: d.id, mfr: d.mfr, color: color?.name || null, variant_id: color?.variant_id ?? null, sizes: d.sizes, cost_cents: costCents } },
       }).select("*").single();
       if (error || !data) { toast.error(error?.message || "Could not create project"); return; }
       setNewOpen(false); setDetail(null); await loadProjects(); handleSetEditing(data as Project);
@@ -395,6 +400,9 @@ function ColorStep({ isDark, sub, detail, creating, onBack, onCreate }: {
       ? `$${(detail.min_cost_cents / 100).toFixed(2)}–$${(detail.max_cost_cents / 100).toFixed(2)}`
       : `from $${(detail.min_cost_cents / 100).toFixed(2)}`
     : "price unavailable";
+  // Live retail from the blank cost (cost → margin → retail).
+  const retailCents = computeRetailCents(detail.min_cost_cents);
+  const marginPct = Math.round(realizedMargin(detail.min_cost_cents, retailCents) * 100);
 
   return (
     <>
@@ -408,7 +416,13 @@ function ColorStep({ isDark, sub, detail, creating, onBack, onCreate }: {
         <div className="min-w-0 flex-1">
           <h2 className="text-[13px] font-semibold normal-case">{detail.label}</h2>
           <p className={`text-[10px] mt-0.5 uppercase tracking-wider ${sub}`}>{detail.mfr}{detail.type ? ` · ${detail.type}` : ""}</p>
-          <p className="text-[12px] font-semibold mt-2">{priceLabel}</p>
+          <p className={`text-[9px] mt-2 uppercase tracking-wider ${sub}`}>Blank cost · {priceLabel}</p>
+          {retailCents > 0 && (
+            <p className="text-[13px] font-semibold mt-0.5">
+              Retail ${(retailCents / 100).toFixed(2)}
+              <span className={`ml-2 text-[9px] font-normal uppercase tracking-wider ${sub}`}>{marginPct}% margin</span>
+            </p>
+          )}
           {detail.sizes.length > 0 && <p className={`text-[9px] mt-1 ${sub}`}>Sizes: {detail.sizes.join(", ")}</p>}
 
           {detail.colors.length > 0 && (
