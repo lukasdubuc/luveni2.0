@@ -898,7 +898,7 @@ function AdminPage() {
 
 
       {/* ── DESKTOP SIDEBAR ── */}
-      <aside className={`hidden md:flex flex-col fixed left-0 top-0 h-screen w-56 z-50 border-r ${isDark ? "bg-neutral-955/98 border-white/[0.06]" : "bg-white/98 border-black/[0.07]"} backdrop-blur-xl`}>
+      <aside className={`hidden lg:flex flex-col fixed left-0 top-0 h-screen w-56 z-50 border-r ${isDark ? "bg-neutral-955/98 border-white/[0.06]" : "bg-white/98 border-black/[0.07]"} backdrop-blur-xl`}>
 
         {/* Brand */}
         <div className={`px-5 pt-6 pb-5 border-b ${isDark ? "border-white/[0.05]" : "border-black/[0.06]"}`}>
@@ -993,7 +993,7 @@ function AdminPage() {
       </aside>
 
       {/* ── NAV (mobile only) ── */}
-      <nav className={`md:hidden sticky top-0 z-50 backdrop-blur-xl border-b ${isDark ? "bg-black/90 border-white/[0.06]" : "bg-white/90 border-black/[0.07]"}`}>
+      <nav className={`lg:hidden sticky top-0 z-50 backdrop-blur-xl border-b ${isDark ? "bg-black/90 border-white/[0.06]" : "bg-white/90 border-black/[0.07]"}`}>
         <div className="relative flex items-center justify-center px-6 py-3">
           <div className="absolute right-6">
             <button
@@ -1009,7 +1009,7 @@ function AdminPage() {
       {/* ── MOBILE FULL-SCREEN OVERLAY ── */}
       {mobileMenuOpen && (
         <div
-          className={`md:hidden fixed inset-0 z-[100] font-mono overflow-x-hidden ${isDark ? "bg-black" : "bg-[#f5f5f7]"}`}
+          className={`lg:hidden fixed inset-0 z-[100] font-mono overflow-x-hidden ${isDark ? "bg-black" : "bg-[#f5f5f7]"}`}
         >
           {/* X button */}
           <button
@@ -1036,7 +1036,7 @@ function AdminPage() {
         </div>
       )}
 
-      <main className="relative w-full px-6 py-8 space-y-8 z-10 md:ml-56 md:w-[calc(100%-14rem)] md:px-10 md:py-10">
+      <main className="relative w-full px-6 py-8 space-y-8 z-10 lg:ml-56 lg:w-[calc(100%-14rem)] lg:px-10 lg:py-10">
 
         {/* ════════════════════════════════════════════════════════════════
             OVERVIEW
@@ -1044,7 +1044,7 @@ function AdminPage() {
         {section === "overview" && (
           <div className="space-y-10 animate-in fade-in duration-500">
             {/* Mobile-only header */}
-            <div className="flex items-end justify-between gap-4 flex-wrap md:hidden">
+            <div className="flex items-end justify-between gap-4 flex-wrap lg:hidden">
               <div className="space-y-1">
                 <h1 className={`text-2xl font-semibold tracking-tight ${isDark ? "text-white" : "text-neutral-955"}`} style={{ letterSpacing: "-0.03em" }}>
                   Overview
@@ -1069,7 +1069,7 @@ function AdminPage() {
               </button>
             </div>
             {/* Desktop-only section header */}
-            <div className="hidden md:flex items-center justify-between">
+            <div className="hidden lg:flex items-center justify-between">
               <div>
                 <h1 className={`text-3xl font-bold tracking-tight ${isDark ? "text-white" : "text-neutral-955"}`} style={{ letterSpacing: "-0.04em" }}>Overview</h1>
                 <div className="flex items-center gap-2 mt-1">
