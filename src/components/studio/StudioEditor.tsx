@@ -825,8 +825,9 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
       {/* ─────────────────────────────────────────────────────────────
          DESKTOP FLOATING CONTROLS (Hidden if Clean Canvas is active)
          ───────────────────────────────────────────────────────────── */}
-      {/* AI prompt bar — always visible capsule on desktop */}
-      <div className={`hidden lg:block px-4 pb-2 shrink-0 mt-3 transition-all ${fullScreenCanvas ? "lg:hidden" : ""}`}>
+      {/* AI prompt bar — hidden by default; only revealed when Region AI is
+         pressed, so the workspace stays clean until AI is actually invoked. */}
+      <div className={`hidden px-4 pb-2 shrink-0 mt-3 transition-all ${regionMode && !fullScreenCanvas ? "lg:block" : ""}`}>
         <div className={`flex items-center gap-2 px-2 py-2 rounded-full ${isDark ? "bg-neutral-900/70 backdrop-blur-xl" : "bg-[#f5f5f7]/90 backdrop-blur-xl shadow-sm border border-neutral-200/40"}`}>
           <Sparkles size={14} className="opacity-50 ml-2" />
           <input value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)}

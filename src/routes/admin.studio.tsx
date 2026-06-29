@@ -43,6 +43,7 @@ function StudioPage() {
   const [detail, setDetail] = useState<BlankDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     const update = () => setIsDark(document.documentElement.classList.contains("dark"));
@@ -170,7 +171,12 @@ function StudioPage() {
 
   // Derived catalog filters for the picker.
   const categories = Array.from(new Set(blanks.map((b) => b.type).filter(Boolean) as string[])).sort();
-  const visibleBlanks = category === "all" ? blanks : blanks.filter((b) => b.type === category);
+  const q = query.trim().toLowerCase();
+  const visibleBlanks = blanks.filter((b) => {
+    if (category !== "all" && b.type !== category) return false;
+    if (!q) return true;
+    return `${b.label} ${b.type || ""} ${b.brand || ""} ${b.mfr}`.toLowerCase().includes(q);
+  });
 
   return (
     <div className={`admin-page min-h-screen relative font-mono bg-[#f5f5f7] text-neutral-900 selection:bg-neutral-200 dark:bg-black dark:text-neutral-105 dark:selection:bg-neutral-800`}>
@@ -292,6 +298,17 @@ function StudioPage() {
                   )}
                 </div>
 
+                {/* Search across the live manufacturer catalog(s) */}
+                <div className="relative mb-3">
+                  <input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder={`Search ${blanks.length || ""} products by name, type or brand…`}
+                    className={`w-full text-[11px] rounded-[9999px] pl-9 pr-3 py-2 border focus:outline-none ${isDark ? "bg-neutral-900 border-neutral-800 text-neutral-200 placeholder:text-neutral-600" : "bg-white border-[#D1D1D6] placeholder:text-neutral-400"}`}
+                  />
+                  <svg className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${sub}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+                </div>
+
                 {/* Per-manufacturer status (errors surface here, never blank the picker) */}
                 {(mfrStatus.printful?.error || mfrStatus.apliiq?.error) && (
                   <div className={`text-[9px] mb-2 ${sub}`}>
@@ -317,7 +334,11 @@ function StudioPage() {
                       </button>
                     ))}
                     {visibleBlanks.length === 0 && !loadingBlanks && (
-                      <p className={`text-[10px] col-span-full ${sub}`}>No products found. Check PRINTFUL_API_KEY / APLIIQ_APP_KEY + APLIIQ_SHARED_SECRET.</p>
+                      <p className={`text-[10px] col-span-full ${sub}`}>
+                        {blanks.length > 0
+                          ? "No products match your search."
+                          : "No products found. Check PRINTFUL_API_KEY / APLIIQ_APP_KEY + APLIIQ_SHARED_SECRET."}
+                      </p>
                     )}
                   </div>
                 )}

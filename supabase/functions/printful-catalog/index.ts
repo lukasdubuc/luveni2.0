@@ -63,7 +63,7 @@ const slugKey = (mfr: string, type: string, id: number | string) =>
 async function printfulList(): Promise<any[]> {
   if (!PRINTFUL_API_KEY) throw new Error("PRINTFUL_API_KEY not set");
   const r = await fetch("https://api.printful.com/products", { headers: pfHeaders() });
-  if (!r.ok) throw new Error(`Printful HTTP ${r.status}`);
+  if (!r.ok) throw new Error(`Printful HTTP ${r.status}: ${(await r.text().catch(() => "")).slice(0, 160)}`);
   const d = await r.json();
   const items: any[] = d?.result || [];
   return items.map((p) => ({
@@ -81,7 +81,7 @@ async function printfulList(): Promise<any[]> {
 async function printfulDetail(id: number | string): Promise<any> {
   if (!PRINTFUL_API_KEY) throw new Error("PRINTFUL_API_KEY not set");
   const r = await fetch(`https://api.printful.com/products/${id}`, { headers: pfHeaders() });
-  if (!r.ok) throw new Error(`Printful HTTP ${r.status}`);
+  if (!r.ok) throw new Error(`Printful HTTP ${r.status}: ${(await r.text().catch(() => "")).slice(0, 160)}`);
   const d = await r.json();
   const product = d?.result?.product || {};
   const variants: any[] = d?.result?.variants || [];
@@ -138,7 +138,9 @@ async function apliiqHeaders(method: string, fullUrl: string): Promise<Record<st
   const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const sigBuf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawData));
   const sig = btoa(String.fromCharCode(...new Uint8Array(sigBuf)));
-  return { "x-apliiq-auth": `${rts}:${sig}:${APLIIQ_APP_KEY}:${state}`, Accept: "application/json" };
+  // Header value order is AppId:Signature:Nonce:Timestamp (the ASP.NET "amx"
+  // HMAC scheme Apliiq uses). A wrong order makes their server 500.
+  return { "x-apliiq-auth": `${APLIIQ_APP_KEY}:${sig}:${state}:${rts}`, Accept: "application/json" };
 }
 
 async function apliiqFetch(method: string, path: string): Promise<any> {
