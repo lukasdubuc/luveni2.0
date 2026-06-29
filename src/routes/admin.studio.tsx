@@ -112,6 +112,13 @@ function StudioPage() {
     toast.success("Project deleted.");
   };
 
+  const removeDesign = async (id: string) => {
+    const { error } = await supabase.from("designs").delete().eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    setDesigns((d) => d.filter((x) => x.id !== id));
+    toast.success("AI asset deleted.");
+  };
+
   const card = isDark ? "border-neutral-850 bg-neutral-955/40 hover:border-neutral-700" : "border-[#D1D1D6] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_6px_24px_rgba(0,0,0,0.08)]";
   const sub = isDark ? "text-neutral-500" : "text-neutral-555";
 
@@ -183,7 +190,14 @@ function StudioPage() {
         )}
 
         {/* AI assets gallery (Phase 1 generator) */}
-        {tab === "assets" && <AssetsTab isDark={isDark} designs={designs} reload={loadDesigns} />}
+        {tab === "assets" && (
+          <AssetsTab
+            isDark={isDark}
+            designs={designs}
+            reload={loadDesigns}
+            onRemove={removeDesign}
+          />
+        )}
       </div>
 
       {/* New project modal */}
@@ -256,7 +270,7 @@ function Empty({ isDark, text }: { isDark: boolean; text: string }) {
   );
 }
 
-function AssetsTab({ isDark, designs, reload }: { isDark: boolean; designs: Design[]; reload: () => void }) {
+function AssetsTab({ isDark, designs, reload, onRemove }: { isDark: boolean; designs: Design[]; reload: () => void; onRemove: (id: string) => void }) {
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
   const sub = isDark ? "text-neutral-500" : "text-neutral-555";
@@ -287,11 +301,18 @@ function AssetsTab({ isDark, designs, reload }: { isDark: boolean; designs: Desi
       {designs.length === 0 ? <Empty isDark={isDark} text="No AI assets yet." /> : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {designs.map((d) => (
-            <div key={d.id} className={`rounded-[20px] overflow-hidden border ${isDark ? "border-neutral-850 bg-neutral-955/40" : "border-[#D1D1D6] bg-white"}`}>
+            <div key={d.id} className={`group relative rounded-[20px] overflow-hidden border transition-all duration-300 hover:-translate-y-0.5 ${isDark ? "border-neutral-850 bg-neutral-955/40 hover:border-neutral-700" : "border-[#D1D1D6] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_6px_24px_rgba(0,0,0,0.08)]"}`}>
               <div className="aspect-square bg-[#FAFAFA] overflow-hidden">
                 <img src={d.image_url} alt={d.title ?? ""} className="w-full h-full object-cover" />
               </div>
-              <div className="p-2.5"><p className="text-[10px] truncate opacity-90">{d.title || d.prompt}</p><p className={`text-[9px] ${sub}`}>{d.model} · {d.width}×{d.height}</p></div>
+              <div className="p-2.5">
+                <p className="text-[10px] truncate opacity-90">{d.title || d.prompt}</p>
+                <p className={`text-[9px] ${sub}`}>{d.model} · {d.width}×{d.height}</p>
+              </div>
+              <button onClick={() => onRemove(d.id)}
+                className="absolute top-2 right-2 p-1.5 rounded-full bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                <Trash2 size={11} />
+              </button>
             </div>
           ))}
         </div>
