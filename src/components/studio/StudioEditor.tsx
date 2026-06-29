@@ -153,8 +153,8 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   // Tablet/Desktop clean mode: collapses panels to give maximum drawing space
   const [fullScreenCanvas, setFullScreenCanvas] = useState(false);
 
-  // Mobile Sheets manager: "none" | "layers" | "ai" | "export"
-  const [mobileSheet, setMobileSheet] = useState<"none" | "layers" | "ai" | "export">("none");
+  // Mobile Sheets manager: "none" | "layers" | "ai" | "export" | "add"
+  const [mobileSheet, setMobileSheet] = useState<"none" | "layers" | "ai" | "export" | "add">("none");
 
   // Paint engine state
   const [tool, setTool] = useState<"select" | "brush" | "fill">("select");
@@ -198,6 +198,41 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     stageRef.current?.getLayers()?.[0]?.batchDraw();
     setPaintVersion((v) => v + 1);
   }, []);
+
+  // Force safe-area background colors and meta tags to prevent browser viewport leaks / black margins
+  useEffect(() => {
+    const originalBodyBg = document.body.style.backgroundColor;
+    const originalHtmlBg = document.documentElement.style.backgroundColor;
+
+    // Solid white in light, deep black in dark mode
+    const targetColor = isDark ? "#000000" : "#ffffff";
+    document.body.style.backgroundColor = targetColor;
+    document.documentElement.style.backgroundColor = targetColor;
+
+    let themeMeta = document.querySelector('meta[name="theme-color"]');
+    let originalThemeContent = "";
+    if (themeMeta) {
+      originalThemeContent = themeMeta.getAttribute("content") || "";
+      themeMeta.setAttribute("content", targetColor);
+    } else {
+      themeMeta = document.createElement("meta");
+      themeMeta.setAttribute("name", "theme-color");
+      themeMeta.setAttribute("content", targetColor);
+      document.head.appendChild(themeMeta);
+    }
+
+    return () => {
+      document.body.style.backgroundColor = originalBodyBg;
+      document.documentElement.style.backgroundColor = originalHtmlBg;
+      if (themeMeta) {
+        if (originalThemeContent) {
+          themeMeta.setAttribute("content", originalThemeContent);
+        } else {
+          themeMeta.remove();
+        }
+      }
+    };
+  }, [isDark]);
 
   // History — snapshot BEFORE a mutation, then apply.
   const commit = useCallback((updater: (ls: StudioLayer[]) => StudioLayer[]) => {
@@ -654,9 +689,10 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
           <button onClick={() => { setTool("brush"); setRegionMode(false); }} className={`p-2 rounded-lg ${tool === "brush" ? "bg-neutral-100 dark:bg-neutral-900 text-[#6366f1]" : "text-neutral-600 dark:text-neutral-400"}`}><Paintbrush size={16} /></button>
           <button onClick={() => { setTool("fill"); setRegionMode(false); }} className={`p-2 rounded-lg ${tool === "fill" ? "bg-neutral-100 dark:bg-neutral-900 text-[#6366f1]" : "text-neutral-600 dark:text-neutral-400"}`}><PaintBucket size={16} /></button>
           <span className="w-px h-4 bg-neutral-200 dark:bg-neutral-800 mx-1" />
-          <button onClick={() => setMobileSheet("ai")} className="p-2 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white"><Sparkles size={16} /></button>
-          <button onClick={() => setMobileSheet("layers")} className="p-2 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white"><Layers size={16} /></button>
-          <button onClick={() => setMobileSheet("export")} className="p-2 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white"><Download size={16} /></button>
+          <button onClick={() => setMobileSheet("add")} className="p-2 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white" title="Add Assets"><Plus size={16} /></button>
+          <button onClick={() => setMobileSheet("ai")} className="p-2 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white" title="AI Magic"><Sparkles size={16} /></button>
+          <button onClick={() => setMobileSheet("layers")} className="p-2 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white" title="Layers"><Layers size={16} /></button>
+          <button onClick={() => setMobileSheet("export")} className="p-2 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white" title="Export Menu"><Download size={16} /></button>
         </div>
       </div>
 
@@ -698,44 +734,55 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-         MOBILE & STYLUS PROCREATE SIDEBAR (Sleek Vertical Sliders)
+         MOBILE & STYLUS PROCREATE SIDEBAR (CSS Rotated Range Controls)
+         Stop-propagation added to prevent clicks from painting on canvas
          ───────────────────────────────────────────────────────────── */}
-      <div className="absolute left-3 top-[42%] -translate-y-1/2 flex flex-col items-center gap-6 z-30 lg:hidden pointer-events-auto">
+      <div 
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
+        className="absolute left-3 top-[42%] -translate-y-1/2 flex flex-col items-center gap-6 z-[9999] lg:hidden pointer-events-auto"
+      >
         {/* Brush Size Dock */}
-        <div className="flex flex-col items-center gap-1.5 bg-white/70 dark:bg-black/60 backdrop-blur-md p-1.5 py-4 rounded-full shadow-lg border border-neutral-200/40 dark:border-neutral-800/40">
-          <span className="text-[7px] font-bold opacity-50 uppercase tracking-wider">Size</span>
-          <div className="h-28 w-5 flex items-center justify-center relative">
+        <div className="flex flex-col items-center gap-1 bg-white/80 dark:bg-black/70 backdrop-blur-md p-1.5 py-4 rounded-full shadow-lg border border-neutral-200/40 dark:border-neutral-800/40">
+          <span className="text-[7px] font-bold opacity-50 uppercase tracking-wider select-none">Size</span>
+          {/* Re-designed as standard range slider rotated -90deg to bypass all mobile web touch bugs */}
+          <div className="h-28 w-6 flex items-center justify-center relative select-none">
             <input 
               type="range" min={4} max={600} value={brushSize} 
               onChange={(e) => setBrushSize(parseInt(e.target.value))} 
               className="accent-[#6366f1] cursor-pointer"
               style={{
-                WebkitAppearance: "slider-vertical",
-                height: "100%",
-                width: "3px"
+                transform: "rotate(-90deg)",
+                width: "112px",
+                position: "absolute",
+                margin: 0,
+                padding: 0
               }} 
             />
           </div>
-          <span className="text-[7px] font-bold opacity-60">{brushSize}</span>
+          <span className="text-[7px] font-bold opacity-60 select-none">{brushSize}</span>
         </div>
 
         {/* Dynamic Opacity Dock */}
         {selected && (
-          <div className="flex flex-col items-center gap-1.5 bg-white/70 dark:bg-black/60 backdrop-blur-md p-1.5 py-4 rounded-full shadow-lg border border-neutral-200/40 dark:border-neutral-800/40">
-            <span className="text-[7px] font-bold opacity-50 uppercase tracking-wider">Opa</span>
-            <div className="h-28 w-5 flex items-center justify-center relative">
+          <div className="flex flex-col items-center gap-1 bg-white/80 dark:bg-black/70 backdrop-blur-md p-1.5 py-4 rounded-full shadow-lg border border-neutral-200/40 dark:border-neutral-800/40">
+            <span className="text-[7px] font-bold opacity-50 uppercase tracking-wider select-none">Opa</span>
+            <div className="h-28 w-6 flex items-center justify-center relative select-none">
               <input 
                 type="range" min={0} max={1} step={0.05} value={selected.opacity} 
                 onChange={(e) => livePatch(selected.id, { opacity: parseFloat(e.target.value) })} 
                 className="accent-[#6366f1] cursor-pointer"
                 style={{
-                  WebkitAppearance: "slider-vertical",
-                  height: "100%",
-                  width: "3px"
+                  transform: "rotate(-90deg)",
+                  width: "112px",
+                  position: "absolute",
+                  margin: 0,
+                  padding: 0
                 }} 
               />
             </div>
-            <span className="text-[7px] font-bold opacity-60">{Math.round(selected.opacity * 100)}%</span>
+            <span className="text-[7px] font-bold opacity-60 select-none">{Math.round(selected.opacity * 100)}%</span>
           </div>
         )}
       </div>
@@ -940,10 +987,35 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
          MOBILE TRANSLUCENT BOTTOM DRAWERS (Procreate Style)
          ───────────────────────────────────────────────────────────── */}
       {mobileSheet !== "none" && (
-        <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden" onClick={() => setMobileSheet("none")}>
+        <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden animate-fade-in" onClick={() => setMobileSheet("none")}>
           <div onClick={(e) => e.stopPropagation()} className={`fixed bottom-0 left-0 right-0 rounded-t-[32px] p-6 max-h-[80vh] overflow-y-auto border-t shadow-[0_-10px_40px_rgba(0,0,0,0.15)] transition-transform duration-300 ${isDark ? "bg-[#121212] border-neutral-850 text-neutral-105" : "bg-white border-[#D1D1D6] text-neutral-900"}`}>
             {/* Grab pull bar */}
             <div className="w-12 h-1.5 rounded-full mx-auto bg-neutral-200 dark:bg-neutral-800 mb-5" />
+
+            {/* Mobile Actions/Add Sheet (+) */}
+            {mobileSheet === "add" && (
+              <div>
+                <h3 className="text-[11px] font-bold uppercase tracking-widest mb-4 font-mono">Add Assets</h3>
+                <div className="grid grid-cols-3 gap-3">
+                  <button onClick={() => { addText(); setMobileSheet("none"); }} className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
+                    <Type size={18} />
+                    <span className="text-[8px] font-bold uppercase tracking-wider mt-1">Text</span>
+                  </button>
+
+                  <label className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
+                    <ImagePlus size={18} />
+                    <span className="text-[8px] font-bold uppercase tracking-wider mt-1">Photo</span>
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files?.[0]) { uploadImage(e.target.files[0]); setMobileSheet("none"); } }} />
+                  </label>
+
+                  <label className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
+                    <Wand2 size={18} />
+                    <span className="text-[8px] font-bold uppercase tracking-wider mt-1">Texture</span>
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files?.[0]) { importTexture(e.target.files[0]); setMobileSheet("none"); } }} />
+                  </label>
+                </div>
+              </div>
+            )}
 
             {mobileSheet === "ai" && (
               <div>
