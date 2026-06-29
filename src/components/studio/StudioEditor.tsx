@@ -12,7 +12,7 @@ import {
   Save, Download, Loader2, Wand2, X, RefreshCw, Undo2, Redo2, SquareDashed,
   Paintbrush, FlipHorizontal2, FlipVertical2, MousePointer2, PaintBucket,
   AlignCenterHorizontal, AlignCenterVertical, AlignVerticalJustifyCenter, Layers, Plus,
-  Maximize2, Minimize2, Box
+  Maximize2, Minimize2, Box, Shirt
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -162,8 +162,45 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   // transparent design PNG; null when the modal is closed.
   const [preview3d, setPreview3d] = useState<string | null>(null);
   // Manufacturer product the project was created from (id/variant/color),
-  // used to render photoreal on-model mockups of the exact print.
-  const product = (initialCanvas as any)?.product as { id?: number | string; mfr?: string; variant_id?: number | null; color?: string | null } | undefined;
+  // used to render photoreal on-model mockups of the exact print. Stateful so
+  // a traced/custom canvas can be matched & attached to a real blank.
+  type ProductRef = { id?: number | string; mfr?: string; variant_id?: number | null; color?: string | null };
+  const [product, setProduct] = useState<ProductRef | undefined>((initialCanvas as any)?.product);
+
+  // Blank-matching (for traced/custom canvases): find the closest real blank
+  // on the cheaper manufacturer so 3D mockups & publish reflect a real product.
+  const [matchOpen, setMatchOpen] = useState(false);
+  const [matchType, setMatchType] = useState("t-shirt");
+  const [matchBusy, setMatchBusy] = useState(false);
+  const [matchResults, setMatchResults] = useState<any[]>([]);
+
+  const runMatch = async () => {
+    setMatchBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("printful-catalog", { body: { action: "match", garmentType: matchType } });
+      const msg = await extractFnError(error, data);
+      if (msg) { toast.error(msg); return; }
+      setMatchResults(data.matches || []);
+      if (!data.matches?.length) toast.error("No matching blanks found");
+    } finally { setMatchBusy(false); }
+  };
+
+  const attachBlank = async (d: any) => {
+    const color = d.colors?.[0] || null;
+    const ref: ProductRef = { id: d.id, mfr: d.mfr, variant_id: color?.variant_id ?? null, color: color?.name ?? null };
+    setProduct(ref);
+    // Persist onto the project so it survives reload & feeds publish/pricing.
+    // Cast: studio_projects isn't in the generated Supabase types yet.
+    await (supabase as any).from("studio_projects").update({
+      manufacturer: d.mfr,
+      template_key: d.key,
+      price_cents: d.min_cost_cents || 0,
+      canvas: { layers: serializeLayers(), product: { ...ref, sizes: d.sizes } },
+      updated_at: new Date().toISOString(),
+    }).eq("id", projectId);
+    setMatchOpen(false);
+    toast.success(`Matched to ${d.label} (${d.mfr}) · $${((d.min_cost_cents || 0) / 100).toFixed(2)}`);
+  };
 
   // Mobile Sheets manager: "none" | "layers" | "ai" | "export" | "add"
   const [mobileSheet, setMobileSheet] = useState<"none" | "layers" | "ai" | "export" | "add">("none");
@@ -746,6 +783,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
             {fullScreenCanvas ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
             <span className="hidden sm:inline">{fullScreenCanvas ? "Show Sidebars" : "Full Canvas"}</span>
           </button>
+          {!product?.id && <button onClick={() => setMatchOpen(true)} className={`${pill} ${isDark ? "bg-neutral-900/80" : "bg-[#f5f5f7]/90 shadow-sm"}`} title="Match this design to the cheapest real blank"><Shirt size={13} /> Match blank</button>}
           <button onClick={open3d} className={`${pill} ${isDark ? "bg-neutral-900/80" : "bg-[#f5f5f7]/90 shadow-sm"}`} title="Live 3D garment view"><Box size={13} /> 3D View</button>
           <button onClick={exportPng} className={`${pill} ${isDark ? "bg-neutral-900/80" : "bg-[#f5f5f7]/90 shadow-sm"}`}><Download size={13} /> Export</button>
           <button onClick={save} disabled={saving} className={`${pill} ${isDark ? "bg-neutral-900/80" : "bg-[#f5f5f7]/90 shadow-sm"}`}>
@@ -1172,6 +1210,44 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Blank-matching modal (traced/custom canvases) */}
+      {matchOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setMatchOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-md rounded-[24px] border p-6 ${isDark ? "bg-neutral-950 border-neutral-800 text-neutral-100" : "bg-white border-neutral-200 text-neutral-900"}`}>
+            <h2 className="text-[13px] font-semibold mb-1">Match to a real blank</h2>
+            <p className={`text-[10px] mb-4 ${isDark ? "text-neutral-500" : "text-neutral-500"}`}>Traced your own shirt? Pick the garment type — we'll find the closest blank across Printful & Apliiq and rank by price so you get the cheapest.</p>
+            <div className="flex items-center gap-2 mb-4">
+              <select value={matchType} onChange={(e) => setMatchType(e.target.value)}
+                className={`flex-1 text-[11px] rounded-full px-3 py-2 border focus:outline-none ${isDark ? "bg-neutral-900 border-neutral-800" : "bg-white border-neutral-200"}`}>
+                {["t-shirt", "hoodie", "sweatshirt", "tank", "long sleeve", "hat"].map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <button onClick={runMatch} disabled={matchBusy}
+                className={`flex items-center gap-1.5 px-4 py-2 text-[10px] font-bold uppercase rounded-full ${isDark ? "bg-white text-black" : "bg-black text-white"}`}>
+                {matchBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Find
+              </button>
+            </div>
+            <div className="max-h-[44vh] overflow-y-auto flex flex-col gap-2">
+              {matchResults.map((d, i) => (
+                <button key={`${d.mfr}-${d.id}`} onClick={() => attachBlank(d)}
+                  className={`flex items-center gap-3 p-2.5 rounded-2xl border text-left transition-all ${isDark ? "border-neutral-800 hover:bg-neutral-900" : "border-neutral-200 hover:bg-neutral-50"}`}>
+                  <div className={`w-12 h-12 rounded-xl overflow-hidden shrink-0 flex items-center justify-center ${isDark ? "bg-neutral-900" : "bg-neutral-100"}`}>
+                    {d.image ? <img src={d.image} alt="" className="w-full h-full object-contain" /> : <Shirt size={16} className="opacity-30" />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-medium truncate">{d.label}</p>
+                    <p className={`text-[9px] uppercase tracking-wider ${isDark ? "text-neutral-500" : "text-neutral-500"}`}>{d.mfr} · {d.colors?.length || 0} colors</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-[12px] font-semibold">${((d.min_cost_cents || 0) / 100).toFixed(2)}</p>
+                    {i === 0 && <span className="text-[7px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 uppercase tracking-widest">Cheapest</span>}
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}

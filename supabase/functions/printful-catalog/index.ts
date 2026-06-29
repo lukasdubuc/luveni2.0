@@ -223,6 +223,38 @@ Deno.serve(async (req) => {
     } catch (e: any) { return json({ error: e.message }, 502); }
   }
 
+  // ── match: closest blank to a traced/custom design, cheapest across both ────
+  // body: { garmentType }  → ranked candidates (cheapest first) with live cost.
+  if (action === "match") {
+    const gt = String(body.garmentType || "t-shirt").toLowerCase();
+    // Keyword expansion so "tee" also matches "T-Shirt", etc.
+    const synonyms: Record<string, string[]> = {
+      "t-shirt": ["t-shirt", "tee", "shirt", "crew"],
+      hoodie: ["hoodie", "hooded", "sweatshirt", "pullover"],
+      sweatshirt: ["sweatshirt", "crewneck", "fleece"],
+      tank: ["tank", "sleeveless"],
+      "long sleeve": ["long sleeve", "longsleeve"],
+      hat: ["hat", "cap", "beanie"],
+    };
+    const keys = synonyms[gt] || [gt];
+    const matchType = (b: any) => keys.some((k) => `${b.type} ${b.label}`.toLowerCase().includes(k));
+
+    const [pf, ap] = await Promise.all([
+      printfulList().catch(() => []),
+      apliiqList().catch(() => []),
+    ]);
+    const candidates = [...pf, ...ap].filter(matchType).slice(0, 12);
+    // Pull live cost for each candidate; ignore those that fail.
+    const detailed = await Promise.all(candidates.map(async (b) => {
+      try {
+        const d = b.mfr === "apliiq" ? await apliiqDetail(b.id) : await printfulDetail(b.id);
+        return d.min_cost_cents > 0 ? d : null;
+      } catch { return null; }
+    }));
+    const ranked = detailed.filter(Boolean).sort((a: any, z: any) => a.min_cost_cents - z.min_cost_cents);
+    return json({ ok: true, garmentType: gt, matches: ranked, cheapest: ranked[0] || null });
+  }
+
   if (action === "detail") {
     try {
       const detail = manufacturer === "apliiq"
