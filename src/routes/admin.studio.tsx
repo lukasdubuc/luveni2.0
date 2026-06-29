@@ -15,7 +15,7 @@ export const Route = createFileRoute("/admin/studio")({
 const StudioEditor = lazy(() => import("@/components/studio/StudioEditor"));
 
 type Blank = { id: number | string; key: string; label: string; mfr: string; type?: string; brand?: string | null; image: string | null; variant_count?: number; error?: string };
-type BlankColor = { name: string; code: string | null; image: string | null };
+type BlankColor = { name: string; code: string | null; image: string | null; variant_id?: number | null };
 type BlankDetail = { id: number | string; key: string; label: string; mfr: string; type?: string; image: string | null; min_cost_cents: number; max_cost_cents: number; colors: BlankColor[]; sizes: string[]; variant_count: number };
 type MfrStatus = { available: boolean; error: string | null; count: number };
 
@@ -134,7 +134,7 @@ function StudioPage() {
         template_image: color?.image || d.image,
         canvas_kind: "product",
         print_area: null,
-        canvas: { layers: [], product: { id: d.id, mfr: d.mfr, color: color?.name || null, sizes: d.sizes } },
+        canvas: { layers: [], product: { id: d.id, mfr: d.mfr, color: color?.name || null, variant_id: color?.variant_id ?? null, sizes: d.sizes } },
       }).select("*").single();
       if (error || !data) { toast.error(error?.message || "Could not create project"); return; }
       setNewOpen(false); setDetail(null); await loadProjects(); handleSetEditing(data as Project);

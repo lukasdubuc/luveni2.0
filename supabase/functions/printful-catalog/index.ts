@@ -86,11 +86,11 @@ async function printfulDetail(id: number | string): Promise<any> {
   const product = d?.result?.product || {};
   const variants: any[] = d?.result?.variants || [];
   const prices = variants.map((v) => parseFloat(v.price)).filter((p) => Number.isFinite(p) && p > 0);
-  // Distinct colors (preserve first image per color for swatch + mockup).
-  const colorMap = new Map<string, { name: string; code: string | null; image: string | null }>();
+  // Distinct colors (keep a variant_id + image per color for swatch + mockup).
+  const colorMap = new Map<string, { name: string; code: string | null; image: string | null; variant_id: number | null }>();
   const sizeSet = new Set<string>();
   for (const v of variants) {
-    if (v.color && !colorMap.has(v.color)) colorMap.set(v.color, { name: v.color, code: v.color_code || null, image: v.image || null });
+    if (v.color && !colorMap.has(v.color)) colorMap.set(v.color, { name: v.color, code: v.color_code || null, image: v.image || null, variant_id: v.id ?? null });
     if (v.size) sizeSet.add(v.size);
   }
   return {
@@ -186,6 +186,42 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   const action = body.action || "list";
   const manufacturer = (body.manufacturer || "all").toLowerCase();
+
+  // ── mockup: photoreal on-model render of the exact print (Printful) ──────────
+  // body: { productId, variantId, imageUrl }  → { mockups: [url, ...] }
+  if (action === "mockup") {
+    if (manufacturer === "apliiq") return json({ error: "Apliiq mockups not supported yet" }, 400);
+    if (!PRINTFUL_API_KEY) return json({ error: "PRINTFUL_API_KEY not set" }, 500);
+    const { productId, variantId, imageUrl } = body;
+    if (!productId || !variantId || !imageUrl) return json({ error: "productId, variantId and imageUrl required" }, 400);
+    try {
+      const create = await fetch(`https://api.printful.com/mockup-generator/create-task/${productId}`, {
+        method: "POST",
+        headers: { ...pfHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          variant_ids: [variantId],
+          format: "jpg",
+          files: [{ placement: "front", image_url: imageUrl, position: { area_width: 1800, area_height: 2400, width: 1800, height: 2400, top: 0, left: 0 } }],
+        }),
+      });
+      if (!create.ok) return json({ error: `Printful mockup HTTP ${create.status}: ${await create.text().catch(() => "")}` }, 502);
+      const task = (await create.json())?.result?.task_key;
+      if (!task) return json({ error: "No task_key from Printful" }, 502);
+      // Poll up to ~25s for the render to finish.
+      for (let i = 0; i < 12; i++) {
+        await new Promise((r) => setTimeout(r, i === 0 ? 1500 : 2000));
+        const pr = await fetch(`https://api.printful.com/mockup-generator/task?task_key=${task}`, { headers: pfHeaders() });
+        if (!pr.ok) continue;
+        const res = (await pr.json())?.result;
+        if (res?.status === "completed") {
+          const urls = (res.mockups || []).flatMap((m: any) => [m.mockup_url, ...((m.extra || []).map((e: any) => e.url))]).filter(Boolean);
+          return json({ ok: true, mockups: urls });
+        }
+        if (res?.status === "failed") return json({ error: "Printful mockup render failed" }, 502);
+      }
+      return json({ error: "Mockup render timed out" }, 504);
+    } catch (e: any) { return json({ error: e.message }, 502); }
+  }
 
   if (action === "detail") {
     try {

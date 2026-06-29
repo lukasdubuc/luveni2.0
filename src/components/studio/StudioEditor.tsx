@@ -161,6 +161,9 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   // 3D garment preview (CLO-3D-style live view). Holds the flattened
   // transparent design PNG; null when the modal is closed.
   const [preview3d, setPreview3d] = useState<string | null>(null);
+  // Manufacturer product the project was created from (id/variant/color),
+  // used to render photoreal on-model mockups of the exact print.
+  const product = (initialCanvas as any)?.product as { id?: number | string; mfr?: string; variant_id?: number | null; color?: string | null } | undefined;
 
   // Mobile Sheets manager: "none" | "layers" | "ai" | "export" | "add"
   const [mobileSheet, setMobileSheet] = useState<"none" | "layers" | "ai" | "export" | "add">("none");
@@ -672,6 +675,28 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     });
   };
 
+  // Photoreal on-model mockup of the exact print via the manufacturer's
+  // mockup generator. Uploads the current flattened print, then renders.
+  const fetchMockups = async (): Promise<string[]> => {
+    if (product?.mfr !== "printful" || !product?.id || !product?.variant_id) {
+      toast.error("Realistic mockups need a Printful product variant — recreate this project from the catalog.");
+      return [];
+    }
+    const dataUrl = captureStage(1800, true);
+    if (!dataUrl) { toast.error("Could not render the design"); return []; }
+    const blob = await (await fetch(dataUrl)).blob();
+    const path = `mockup-src/${projectId}-${Date.now()}.png`;
+    const up = await supabase.storage.from("designs").upload(path, blob, { contentType: "image/png", upsert: true });
+    if (up.error) { toast.error(`Upload failed: ${up.error.message}`); return []; }
+    const { data: pub } = supabase.storage.from("designs").getPublicUrl(path);
+    const { data, error } = await supabase.functions.invoke("printful-catalog", {
+      body: { action: "mockup", manufacturer: product.mfr, productId: product.id, variantId: product.variant_id, imageUrl: pub.publicUrl },
+    });
+    const msg = await extractFnError(error, data);
+    if (msg) { toast.error(msg); return []; }
+    return (data.mockups as string[]) || [];
+  };
+
   const selected = layers.find((l) => l.id === selectedId);
   const pill = `flex items-center gap-1.5 text-[10px] font-medium px-3.5 py-2 rounded-full transition-all ${isDark ? "text-neutral-300 hover:bg-white/10" : "text-neutral-700 hover:bg-black/[0.06]"}`;
   const isHat = templateKey?.startsWith("hat");
@@ -1154,7 +1179,9 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
       {/* 3D garment preview (Three.js, lazy/client-only) */}
       {preview3d && (
         <Suspense fallback={<div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/95 text-white"><Loader2 className="animate-spin" /></div>}>
-          <Garment3DPreview design={preview3d} isDark={isDark} onClose={() => setPreview3d(null)} />
+          <Garment3DPreview design={preview3d} isDark={isDark} onClose={() => setPreview3d(null)}
+            canMockup={product?.mfr === "printful" && !!product?.variant_id}
+            fetchMockups={fetchMockups} />
         </Suspense>
       )}
 
