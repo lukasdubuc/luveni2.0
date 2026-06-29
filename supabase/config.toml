@@ -5,3 +5,5 @@ verify_jwt = false
 verify_jwt = true
 [functions.discord-bot]
 verify_jwt = false
+[functions.printful-catalog]
+verify_jwt = false
