@@ -6,7 +6,7 @@
 // ─────────────────────────────────────────────────────────────
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Stage, Layer, Image as KImage, Text as KText, Rect, Transformer } from "react-konva";
-import type Konva from "konva";
+import Konva from "konva";
 import {
   Type, ImagePlus, Sparkles, Trash2, Eye, EyeOff, ArrowUp, ArrowDown,
   Save, Download, Loader2, Wand2, X, RefreshCw, Undo2, Redo2, SquareDashed,
@@ -24,7 +24,27 @@ export type StudioLayer = {
   src?: string; width?: number; height?: number;
   text?: string; fontSize?: number; fill?: string; fontStyle?: string; fontFamily?: string;
   blend?: BlendMode;
+  clip?: boolean;   // clip to the layers below (Procreate clipping mask)
+  blur?: number;    // 0–100 gaussian blur
 };
+
+// Non-destructive Konva blur via node caching. Re-caches when radius or the
+// content dependency changes; clears cache at radius 0.
+function useBlur(getNode: () => Konva.Node | null, radius: number, dep: any) {
+  useEffect(() => {
+    const n = getNode(); if (!n) return;
+    try {
+      if (radius > 0) {
+        n.cache(); n.filters([Konva.Filters.Blur]); (n as any).blurRadius(radius);
+      } else {
+        n.filters([]); n.clearCache();
+      }
+      n.getLayer()?.batchDraw();
+    } catch { /* node not ready */ }
+  }, [radius, dep]);
+}
+
+const gco = (l: StudioLayer) => (l.clip ? "source-atop" : (l.blend || "source-over"));
 
 const BLENDS: BlendMode[] = ["source-over", "multiply", "screen", "overlay", "darken", "lighten"];
 const BLEND_LABEL: Record<BlendMode, string> = { "source-over": "Normal", multiply: "Multiply", screen: "Screen", overlay: "Overlay", darken: "Darken", lighten: "Lighten" };
@@ -55,13 +75,15 @@ function useHtmlImage(src?: string) {
 
 function ImageNode({ layer, onChange, onSelect, onDragMove, nodeRef, listening }: any) {
   const img = useHtmlImage(layer.src);
+  const innerRef = useRef<Konva.Image>(null);
+  useBlur(() => innerRef.current, layer.blur || 0, [img, layer.blur, layer.width, layer.height]);
   if (!layer.visible) return null;
   return (
     <KImage
-      ref={nodeRef} image={img || undefined}
+      ref={(n: any) => { innerRef.current = n; if (nodeRef) nodeRef(n); }} image={img || undefined}
       x={layer.x} y={layer.y} width={layer.width} height={layer.height}
       rotation={layer.rotation} opacity={layer.opacity}
-      globalCompositeOperation={layer.blend || "source-over"}
+      globalCompositeOperation={gco(layer)}
       draggable={listening} listening={listening}
       onClick={onSelect} onTap={onSelect}
       onDragMove={onDragMove}
@@ -83,7 +105,7 @@ function TextNode({ layer, onChange, onSelect, onDragMove, nodeRef, listening }:
       x={layer.x} y={layer.y} fontSize={layer.fontSize} fill={layer.fill}
       fontStyle={layer.fontStyle} fontFamily={layer.fontFamily || "Space Mono"}
       rotation={layer.rotation} opacity={layer.opacity}
-      globalCompositeOperation={layer.blend || "source-over"}
+      globalCompositeOperation={gco(layer)}
       draggable={listening} listening={listening}
       onClick={onSelect} onTap={onSelect}
       onDragMove={onDragMove}
@@ -101,11 +123,15 @@ function TextNode({ layer, onChange, onSelect, onDragMove, nodeRef, listening }:
 // painted imperatively (brush strokes); `version` forces a re-render when the
 // blend/opacity changes (live strokes call layer.batchDraw directly).
 function PaintNode({ layer, canvas }: any) {
+  const innerRef = useRef<Konva.Image>(null);
+  // Recache only when blur changes (not on every stroke) to keep painting fast.
+  useBlur(() => innerRef.current, layer.blur || 0, [layer.blur]);
   if (!layer.visible || !canvas) return null;
   return (
     <KImage
+      ref={innerRef}
       image={canvas} x={0} y={0} listening={false}
-      opacity={layer.opacity} globalCompositeOperation={layer.blend || "source-over"}
+      opacity={layer.opacity} globalCompositeOperation={gco(layer)}
     />
   );
 }
@@ -251,9 +277,9 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     commit((ls) => [...ls, l]); setSelectedId(l.id);
   };
 
-  const addImageAt = (src: string, name: string, box?: { x: number; y: number; w: number; h: number }) => {
+  const addImageAt = (src: string, name: string, box?: { x: number; y: number; w: number; h: number }, blend?: BlendMode) => {
     const place = (w: number, h: number, x: number, y: number) => {
-      const l: StudioLayer = { id: uid(), type: "image", name, visible: true, x, y, rotation: 0, opacity: 1, src, width: w, height: h };
+      const l: StudioLayer = { id: uid(), type: "image", name, visible: true, x, y, rotation: 0, opacity: 1, src, width: w, height: h, blend };
       commit((ls) => [...ls, l]); setSelectedId(l.id);
     };
     if (box) { place(box.w, box.h, box.x, box.y); return; }
@@ -265,6 +291,26 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   };
 
   const uploadImage = (file: File) => { const r = new FileReader(); r.onload = () => addImageAt(r.result as string, file.name); r.readAsDataURL(file); };
+
+  // Import a fabric/texture image and auto-pick the blend mode: light texture
+  // -> Multiply, dark texture -> Screen (the "Overlay Strategy" from the brief).
+  const importTexture = (file: File) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const src = r.result as string;
+      const im = new window.Image(); im.crossOrigin = "anonymous"; im.src = src;
+      im.onload = () => {
+        const s = document.createElement("canvas"); s.width = 16; s.height = 16;
+        const sx = s.getContext("2d")!; sx.drawImage(im, 0, 0, 16, 16);
+        const d = sx.getImageData(0, 0, 16, 16).data;
+        let lum = 0; for (let i = 0; i < d.length; i += 4) lum += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+        lum /= d.length / 4;
+        addImageAt(src, file.name, undefined, lum > 128 ? "multiply" : "screen");
+        toast.success(`Texture added (${lum > 128 ? "Multiply" : "Screen"}).`);
+      };
+    };
+    r.readAsDataURL(file);
+  };
 
   // ── Paint engine ───────────────────────────────────────────────
   const addPaintLayer = () => {
@@ -453,6 +499,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
           <span className="w-px h-4 opacity-10 bg-current" />
           <button onClick={addText} className={pill}><Type size={13} /> Text</button>
           <label className={pill + " cursor-pointer"}><ImagePlus size={13} /> Upload<input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadImage(e.target.files[0])} /></label>
+          <label className={pill + " cursor-pointer"} title="Import fabric texture (auto Multiply/Screen)"><Wand2 size={13} /> Texture<input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && importTexture(e.target.files[0])} /></label>
           <button onClick={addPaintLayer} className={pill}><Paintbrush size={13} /> Paint layer</button>
           <button onClick={() => { setRegionMode((v) => !v); setTool("select"); setSelectedId(null); }} className={pill + (regionMode ? (isDark ? " bg-white/15" : " bg-black/10") : "")} title="Draw a region for AI">
             <SquareDashed size={13} /> Region AI
@@ -602,13 +649,25 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
                 </div>
               )}
               {(selected.type === "image" || selected.type === "paint") && (
-                <div className="mt-3">
-                  <p className="text-[8px] uppercase tracking-widest opacity-40 mb-1">Blend mode</p>
-                  <select value={selected.blend || "source-over"} onChange={(e) => patchLayer(selected.id, { blend: e.target.value as BlendMode })}
-                    className={`w-full bg-transparent border rounded-full px-3 py-1.5 text-[10px] ${isDark ? "border-neutral-800" : "border-[#E2E2E6]"}`}>
-                    {BLENDS.map((b) => <option key={b} value={b} className="text-black">{BLEND_LABEL[b]}</option>)}
-                  </select>
-                </div>
+                <>
+                  <div className="mt-3">
+                    <p className="text-[8px] uppercase tracking-widest opacity-40 mb-1">Blend mode</p>
+                    <select value={selected.blend || "source-over"} disabled={!!selected.clip} onChange={(e) => patchLayer(selected.id, { blend: e.target.value as BlendMode })}
+                      className={`w-full bg-transparent border rounded-full px-3 py-1.5 text-[10px] ${isDark ? "border-neutral-800" : "border-[#E2E2E6]"} ${selected.clip ? "opacity-40" : ""}`}>
+                      {BLENDS.map((b) => <option key={b} value={b} className="text-black">{BLEND_LABEL[b]}</option>)}
+                    </select>
+                  </div>
+                  <label className="mt-3 flex items-center gap-2 text-[10px] cursor-pointer select-none">
+                    <input type="checkbox" checked={!!selected.clip} onChange={(e) => patchLayer(selected.id, { clip: e.target.checked })} />
+                    Clip to layers below
+                  </label>
+                  <div className="mt-3">
+                    <p className="text-[8px] uppercase tracking-widest opacity-40 mb-1">Gaussian blur · {selected.blur || 0}</p>
+                    <input type="range" min={0} max={100} value={selected.blur || 0}
+                      onMouseDown={() => { past.current.push(clone(layers)); future.current = []; }}
+                      onChange={(e) => livePatch(selected.id, { blur: parseInt(e.target.value) })} className="w-full" />
+                  </div>
+                </>
               )}
               <div className="mt-3">
                 <p className="text-[8px] uppercase tracking-widest opacity-40 mb-1">Opacity</p>
