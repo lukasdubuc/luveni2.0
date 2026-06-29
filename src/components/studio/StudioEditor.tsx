@@ -101,6 +101,23 @@ function ImageNode({ layer, onChange, onSelect, onDragMove, nodeRef, listening }
   );
 }
 
+// Paint layers render a backing HTMLCanvas as a Konva image. The canvas is
+// painted imperatively (brush strokes); `version` forces a re-render when the
+// blend/opacity changes (live strokes call layer.batchDraw directly).
+function PaintNode({ layer, canvas }: any) {
+  const innerRef = useRef<Konva.Image>(null);
+  // Recache only when blur changes (not on every stroke) to keep painting fast.
+  useBlur(() => innerRef.current, layer.blur || 0, [layer.blur]);
+  if (!layer.visible || !canvas) return null;
+  return (
+    <KImage
+      ref={innerRef}
+      image={canvas} x={0} y={0} listening={false}
+      opacity={layer.opacity} globalCompositeOperation={gco(layer)}
+    />
+  );
+}
+
 function TextNode({ layer, onChange, onSelect, onDragMove, nodeRef, listening }: any) {
   if (!layer.visible) return null;
   return (
@@ -119,23 +136,6 @@ function TextNode({ layer, onChange, onSelect, onDragMove, nodeRef, listening }:
         n.scaleX(1); n.scaleY(1);
         onChange({ x: n.x(), y: n.y(), fontSize: Math.max(6, (layer.fontSize || 48) * sx), rotation: n.rotation() });
       }}
-    />
-  );
-}
-
-// Paint layers render a backing HTMLCanvas as a Konva image. The canvas is
-// painted imperatively (brush strokes); `version` forces a re-render when the
-// blend/opacity changes (live strokes call layer.batchDraw directly).
-function PaintNode({ layer, canvas }: any) {
-  const innerRef = useRef<Konva.Image>(null);
-  // Recache only when blur changes (not on every stroke) to keep painting fast.
-  useBlur(() => innerRef.current, layer.blur || 0, [layer.blur]);
-  if (!layer.visible || !canvas) return null;
-  return (
-    <KImage
-      ref={innerRef}
-      image={canvas} x={0} y={0} listening={false}
-      opacity={layer.opacity} globalCompositeOperation={gco(layer)}
     />
   );
 }
@@ -181,6 +181,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   // Zoom management states for stylus/tablet precision controls
   const [zoomPercent, setZoomPercent] = useState(100); // 100% (exact fit) to 800%
   const [fitScale, setFitScale] = useState(0.15);
+  const [viewDims, setViewDims] = useState({ w: 800, h: 600 });
   const scrollOuterRef = useRef<HTMLDivElement>(null);
 
   const scale = fitScale * (zoomPercent / 100);
@@ -335,8 +336,9 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
       const padH = (isMobile || fullScreenCanvas) ? 140 : 220;
       const availW = Math.max(280, window.innerWidth - padW);
       const availH = Math.max(280, window.innerHeight - padH);
-      const calculatedFit = Math.min(availW / artboardW, availH / artboardH, 1);
-      setFitScale(calculatedFit);
+      
+      setViewDims({ w: availW, h: availH });
+      setFitScale(Math.min(availW / artboardW, availH / artboardH, 1));
     };
     fit(); window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
@@ -440,6 +442,107 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
       };
     };
     r.readAsDataURL(file);
+  };
+
+  const addPaintLayer = () => {
+    const l: StudioLayer = { id: uid(), type: "paint", name: "Paint", visible: true, x: 0, y: 0, rotation: 0, opacity: 1, blend: "source-over" };
+    getPaintCanvas(l);
+    commit((ls) => [...ls, l]); setSelectedId(l.id); setTool("brush");
+  };
+
+  // Ensure there's a paint layer to draw on; returns its id.
+  const ensurePaintTarget = (): string | null => {
+    const sel = layers.find((l) => l.id === selectedId);
+    if (sel?.type === "paint") return sel.id;
+    const anyPaint = [...layers].reverse().find((l) => l.type === "paint");
+    if (anyPaint) { setSelectedId(anyPaint.id); return anyPaint.id; }
+    return null;
+  };
+
+  const snapshotPaint = (id: string) => {
+    const c = paintCanvases.current[id]; if (!c) return;
+    paintUndo.current.push({ id, data: c.toDataURL() });
+    if (paintUndo.current.length > 12) paintUndo.current.shift();
+    paintRedo.current = [];
+  };
+
+  const dab = (id: string, x: number, y: number, pressure: number) => {
+    const c = paintCanvases.current[id]; if (!c) return;
+    const ctx = c.getContext("2d")!;
+    const r = (brushSize / 2) * (0.4 + pressure * 0.6);
+    const draw = (px: number, py: number) => {
+      const g = ctx.createRadialGradient(px, py, 0, px, py, r);
+      g.addColorStop(0, brushColor);
+      g.addColorStop(0.75, brushColor);
+      g.addColorStop(1, brushColor + "00");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+    };
+    draw(x, y);
+    if (symmetry === "v") draw(artboardW - x, y);
+    if (symmetry === "h") draw(x, artboardH - y);
+  };
+
+  // interpolate between last and current point so fast strokes stay continuous
+  const strokeTo = (id: string, x: number, y: number, pressure: number) => {
+    const last = lastPt.current;
+    if (last) {
+      const dist = Math.hypot(x - last.x, y - last.y);
+      const step = Math.max(2, brushSize * 0.18);
+      const n = Math.ceil(dist / step);
+      for (let i = 1; i <= n; i++) dab(id, last.x + ((x - last.x) * i) / n, last.y + ((y - last.y) * i) / n, pressure);
+    } else dab(id, x, y, pressure);
+    lastPt.current = { x, y };
+    redrawStage();
+  };
+
+  // Reference-layer flood fill (bucket). Boundaries come from the layer
+  // flagged "reference" (its drawn lines); the fill paints into the active
+  // paint layer. Falls back to the active layer's own pixels.
+  const floodFill = (startX: number, startY: number) => {
+    const destId = ensurePaintTarget();
+    if (!destId) { toast.error("Add a paint layer to fill into"); return; }
+    const dest = paintCanvases.current[destId]; if (!dest) return;
+    const refLayer = layers.find((l) => l.reference && l.type === "paint" && paintCanvases.current[l.id]);
+    const src = refLayer ? paintCanvases.current[refLayer.id] : dest;
+    const W = dest.width, H = dest.height;
+    const x = Math.round(startX), y = Math.round(startY);
+    if (x < 0 || y < 0 || x >= W || y >= H) return;
+
+    const sctx = src.getContext("2d", { willReadFrequently: true })!;
+    const dctx = dest.getContext("2d")!;
+    const sd = sctx.getImageData(0, 0, W, H);
+    const dd = dctx.getImageData(0, 0, W, H);
+    const sp = sd.data, dp = dd.data;
+    const idx = (px: number, py: number) => (py * W + px) * 4;
+
+    const si = idx(x, y);
+    const tr = sp[si], tg = sp[si + 1], tb = sp[si + 2], ta = sp[si + 3];
+    const fill = hexToRgb(brushColor);
+    const tol = 48 * 48 * 3; // squared tolerance
+    const match = (i: number) => {
+      const dr = sp[i] - tr, dg = sp[i + 1] - tg, db = sp[i + 2] - tb, da = sp[i + 3] - ta;
+      return dr * dr + dg * dg + db * db + da * da <= tol;
+    };
+
+    snapshotPaint(destId);
+    const stack = [[x, y]];
+    const seen = new Uint8Array(W * H);
+    while (stack.length) {
+      const [cx, cy] = stack.pop()!;
+      const fi = cy * W + cx;
+      if (seen[fi]) continue;
+      seen[fi] = 1;
+      const i = fi * 4;
+      if (!match(i)) continue;
+      dp[i] = fill.r; dp[i + 1] = fill.g; dp[i + 2] = fill.b; dp[i + 3] = 255;
+      if (cx > 0) stack.push([cx - 1, cy]);
+      if (cx < W - 1) stack.push([cx + 1, cy]);
+      if (cy > 0) stack.push([cx, cy - 1]);
+      if (cy < H - 1) stack.push([cx, cy + 1]);
+    }
+    dctx.putImageData(dd, 0, 0);
+    redrawStage();
   };
 
   const move = (id: string, dir: -1 | 1) => commit((ls) => {
@@ -757,7 +860,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
 
                   {/* Center alignment guides (while dragging) */}
                   {guides.v && <Rect name="align-guide" x={artboardW / 2 - 1} y={0} width={2} height={artboardH} fill="#22d3ee" listening={false} />}
-                  {guides.h && <Rect name="align-guide" x={0} y={artboardH / 2 - 1} width={artboardW} height={2} fill="#22d3ee" listening={false} />}
+                  {guides.h && <Rect name="align-guide" x={artboardW / 2 - 1} width={artboardW} height={2} fill="#22d3ee" listening={false} />}
 
                   {region && <Rect x={region.x} y={region.y} width={region.w} height={region.h} stroke="#6366f1" strokeWidth={4} dash={[16, 12]} fill="rgba(99,102,241,0.08)" listening={false} />}
                   <Transformer
