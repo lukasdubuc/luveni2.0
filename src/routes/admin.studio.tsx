@@ -14,13 +14,14 @@ export const Route = createFileRoute("/admin/studio")({
 // Editor pulls in Konva (DOM-only) — load it lazily so it never runs on SSR.
 const StudioEditor = lazy(() => import("@/components/studio/StudioEditor"));
 
-type Blank = { key: string; label: string; mfr: string; catalog_id: number; image: string | null; cost_cents: number; variant_count: number; error?: string };
+type Blank = { key: string; label: string; mfr: string; catalog_id: number; image: string | null; cost_cents: number; variant_count: number; error?: string; artboard_w?: number; artboard_h?: number; print_area?: { x: number; y: number; w: number; h: number } | null };
 
 type Project = {
   id: string; name: string; manufacturer: string; template_key: string;
   price_cents: number; canvas: any; artboard_w: number; artboard_h: number;
   thumbnail_url: string | null; status: string; created_at: string;
   template_image?: string | null; canvas_kind?: string;
+  print_area?: { x: number; y: number; w: number; h: number } | null;
 };
 type Design = { id: string; title: string | null; prompt: string | null; image_url: string; width: number; height: number; model: string };
 
@@ -77,17 +78,17 @@ function StudioPage() {
   };
 
   const createFromBlank = async (b: Blank) => {
-    // The artboard IS the garment image (so the canvas looks identical to the
-    // chosen manufacturer item). Standard 4500×5400 print ratio behind it.
+    // Pull the dynamic template proportions directly from the printful-catalog API
     const { data, error } = await supabase.from("studio_projects").insert({
       name: `${b.label} design`,
       manufacturer: b.mfr,
       template_key: b.key,
       price_cents: b.cost_cents,
-      artboard_w: 4500,
-      artboard_h: 5400,
-      template_image: b.image,
+      artboard_w: b.artboard_w || 4500,
+      artboard_h: b.artboard_h || 5400,
+      template_image: b.template_image || b.image,
       canvas_kind: "product",
+      print_area: b.print_area || null,
       canvas: { layers: [] },
     }).select("*").single();
     if (error || !data) { toast.error(error?.message || "Could not create project"); return; }
@@ -155,7 +156,13 @@ function StudioPage() {
                 <div key={p.id} className={`group relative rounded-[20px] overflow-hidden border transition-all duration-300 hover:-translate-y-0.5 ${card}`}>
                   <button onClick={() => setEditing(p)} className="block w-full text-left">
                     <div className={`aspect-square flex items-center justify-center overflow-hidden ${isDark ? "bg-neutral-900" : "bg-[#f0f0f3]"}`}>
-                      {p.thumbnail_url ? <img src={p.thumbnail_url} alt="" loading="lazy" className="w-full h-full object-contain" /> : <Layers size={26} className="opacity-20" />}
+                      {p.thumbnail_url ? (
+                        <img src={p.thumbnail_url} alt="" loading="lazy" className="w-full h-full object-contain" />
+                      ) : p.template_image ? (
+                        <img src={p.template_image} alt="" loading="lazy" className="w-full h-full object-contain opacity-50" />
+                      ) : (
+                        <Layers size={26} className="opacity-20" />
+                      )}
                     </div>
                     <div className="px-3 py-3 flex items-center justify-between gap-2">
                       <div className="min-w-0">
@@ -230,6 +237,7 @@ function StudioPage() {
             canvasKind={editing.canvas_kind || "product"}
             projectName={editing.name}
             priceCents={editing.price_cents}
+            printArea={editing.print_area || null}
             isDark={isDark}
             onClose={() => { setEditing(null); loadProjects(); }}
           />
