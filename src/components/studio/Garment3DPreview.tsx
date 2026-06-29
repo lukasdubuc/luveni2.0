@@ -1,24 +1,21 @@
 // ─────────────────────────────────────────────────────────────
-//  Garment3DPreview — CLO-3D-style live 3D garment view.
-//  Drapes a tailored t-shirt (with the flattened artboard mapped onto
-//  the chest as a <Decal>) over a photoreal rigged human GLB. If the
-//  GLB can't load (offline / CDN blocked), it gracefully falls back to
-//  a procedural mannequin body so the preview never blanks.
-//  Clears the Three cache on unmount to avoid WebGL context leaks.
+//  Garment3DPreview — live 3D garment view.
+//  A single, correctly-proportioned mannequin that actually WEARS the
+//  t-shirt: body + fitted shirt + chest <Decal> all live in one coordinate
+//  space, so the print sits on the chest and the figure is never oversized.
+//  The decal is sized true-to-print from the real front-print dimensions.
+//
+//  For a photoreal human-on-model render, the "Realistic" tab uses Printful's
+//  mockup generator (the exact print on a real product photo). That tab is the
+//  default whenever a Printful variant is available.
 // ─────────────────────────────────────────────────────────────
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Suspense, useMemo, useState, useEffect, Component, type ReactNode } from "react";
+import { Suspense, useMemo, useState, useEffect } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Decal, useTexture, useGLTF, ContactShadows, Center, Html } from "@react-three/drei";
+import { OrbitControls, Decal, useTexture, ContactShadows, Center, Html } from "@react-three/drei";
 import * as THREE from "three";
 import { X, Loader2, RotateCcw, Box, User } from "lucide-react";
-
-// Free, CC-licensed rigged human avatar (Ready Player Me). Swappable via
-// VITE_STUDIO_HUMAN_GLB. A-pose, ~1.8m tall, origin at the feet.
-const HUMAN_GLB =
-  (import.meta as any).env?.VITE_STUDIO_HUMAN_GLB ||
-  "https://models.readyplayer.me/64bfa15f0e72c63d7c3934a6.glb";
 
 const GARMENT_COLORS: { key: string; label: string; hex: string }[] = [
   { key: "white", label: "White", hex: "#f4f4f5" },
@@ -28,137 +25,81 @@ const GARMENT_COLORS: { key: string; label: string; hex: string }[] = [
   { key: "olive", label: "Olive", hex: "#5a5f3f" },
 ];
 
-// ── Photoreal rigged human GLB (preferred body) ───────────────────────────────
-function HumanBody({ isDark }: { isDark: boolean }) {
-  // useGLTF's type is a union (single url vs array); we always pass one url.
-  const { scene } = useGLTF(HUMAN_GLB) as unknown as { scene: THREE.Object3D };
-  // Clone so we never mutate the cached source, and tone down emissive so the
-  // avatar reads as a neutral mannequin under studio lighting.
-  const model = useMemo(() => {
-    const c = scene.clone(true);
-    c.traverse((o: any) => {
-      if (o.isMesh) {
-        o.castShadow = false;
-        o.receiveShadow = false;
-        if (o.material) {
-          o.material = o.material.clone();
-          o.material.envMapIntensity = isDark ? 0.5 : 0.8;
-        }
-      }
-    });
-    return c;
-  }, [scene, isDark]);
-
-  // RPM avatars stand ~1.8 units tall with feet at the origin. Lift + scale so
-  // the chest sits where the shirt decal is mapped.
-  return <primitive object={model} position={[0, -1.25, 0]} scale={1.35} />;
-}
-
-// ── Procedural mannequin (graceful fallback when the GLB can't load) ──────────
-function ProceduralBody({ isDark }: { isDark: boolean }) {
-  const skinColor = isDark ? "#1f1f21" : "#e4e4e7";
-  const skinMaterial = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.45, metalness: 0.12 }),
-    [skinColor],
-  );
-
-  return (
-    <group>
-      {/* Head */}
-      <mesh position={[0, 2.0, 0]} material={skinMaterial}><sphereGeometry args={[0.22, 32, 32]} /></mesh>
-      {/* Neck */}
-      <mesh position={[0, 1.72, 0]} material={skinMaterial}><cylinderGeometry args={[0.1, 0.12, 0.35, 32]} /></mesh>
-      {/* Shoulders / clavicle beam */}
-      <mesh position={[0, 1.5, 0]} material={skinMaterial}><capsuleGeometry args={[0.12, 0.8, 16, 32]} /></mesh>
-      {/* Lower body / hips */}
-      <mesh position={[0, 0.05, 0]} material={skinMaterial}><cylinderGeometry args={[0.28, 0.24, 0.6, 32]} /></mesh>
-      <mesh position={[0, -0.25, 0]} material={skinMaterial}><capsuleGeometry args={[0.24, 0.3, 16, 32]} /></mesh>
-      {/* Arms hanging at the sides */}
-      {[-1, 1].map((s) => (
-        <group key={`arm-${s}`} position={[s * 0.48, 1.4, 0]}>
-          <mesh position={[s * 0.06, -0.25, 0]} rotation={[0, 0, s * 0.15]} material={skinMaterial}><capsuleGeometry args={[0.09, 0.5, 16, 32]} /></mesh>
-          <mesh position={[s * 0.16, -0.75, 0]} rotation={[0, 0, s * 0.08]} material={skinMaterial}><capsuleGeometry args={[0.08, 0.5, 16, 32]} /></mesh>
-        </group>
-      ))}
-    </group>
-  );
-}
-
-// Error boundary so a failed GLB fetch swaps in the procedural body instead of
-// blanking the whole preview.
-class BodyBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
-  state = { failed: false };
-  static getDerivedStateFromError() { return { failed: true }; }
-  render() { return this.state.failed ? this.props.fallback : this.props.children; }
-}
-
 // Calibration: a standard 12" front print maps to this decal width on the
-// chest mesh. Real print widths scale linearly from here, so a 14" print reads
-// proportionally larger and a 4" pocket print proportionally smaller.
+// chest. Real print widths scale linearly from here.
 const REF_PRINT_W_IN = 12;
-const REF_DECAL_W = 0.55;
+const REF_DECAL_W = 0.62;
 
-// The tailored t-shirt garment + chest decal. Always rendered on top of the
-// body so the print mapping and colour swatches behave identically regardless
-// of which body (GLB or procedural) is underneath. When real print dimensions
-// are known the decal is sized true-to-print (width fraction of chest + exact
-// aspect ratio); otherwise it falls back to the default placement.
-function Shirt({ color, design, printWidthIn, printHeightIn }: { color: string; design: string; printWidthIn?: number | null; printHeightIn?: number | null }) {
+// One mannequin that wears the shirt. Body + shirt + decal share the same
+// local space so the garment is always on the figure at a sane scale.
+function Mannequin({
+  color, design, isDark, printWidthIn, printHeightIn,
+}: {
+  color: string; design: string; isDark: boolean; printWidthIn?: number | null; printHeightIn?: number | null;
+}) {
   const texture = useTexture(design);
   texture.anisotropy = 8;
 
-  const shirtMaterial = useMemo(
-    () => new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0.05, side: THREE.DoubleSide }),
+  const skinColor = isDark ? "#2a2a2e" : "#d9d4cc";
+  const skin = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.6, metalness: 0.05 }),
+    [skinColor],
+  );
+  const shirt = useMemo(
+    () => new THREE.MeshStandardMaterial({ color, roughness: 0.82, metalness: 0.04, side: THREE.DoubleSide }),
     [color],
   );
 
-  // True-to-print decal scale. Width from the real print width; height from the
-  // real print aspect ratio (falls back to the texture's own aspect, then 0.75).
+  // True-to-print decal scale: width from the real print width vs a 12" baseline,
+  // height from the real print aspect (falls back to the texture's own aspect).
   const decalScale = useMemo<[number, number, number]>(() => {
-    if (printWidthIn && printWidthIn > 0) {
-      const w = (printWidthIn / REF_PRINT_W_IN) * REF_DECAL_W;
-      const aspect = printHeightIn && printHeightIn > 0
-        ? printHeightIn / printWidthIn
-        : (texture.image ? (texture.image as any).height / (texture.image as any).width : 0.75 / 0.55);
-      return [w, w * aspect, 0.5];
-    }
-    return [REF_DECAL_W, 0.75, 0.5];
+    const w = printWidthIn && printWidthIn > 0 ? (printWidthIn / REF_PRINT_W_IN) * REF_DECAL_W : REF_DECAL_W;
+    const aspect = printHeightIn && printHeightIn > 0
+      ? printHeightIn / printWidthIn!
+      : (texture.image ? (texture.image as any).height / (texture.image as any).width : 1.25);
+    return [w, w * aspect, 0.6];
   }, [printWidthIn, printHeightIn, texture]);
 
-  // Keep the print top-anchored near the chest as it grows/shrinks.
-  const decalY = 0.28 + (decalScale[1] - 0.75) * 0.5;
+  // Anchor the print just below the collar and let it grow downward.
+  const decalY = 0.74 - decalScale[1] * 0.5;
 
-  return (
-    <group>
-      {/* Torso shirt body — carries the chest decal */}
-      <mesh position={[0, 0.78, 0.01]} material={shirtMaterial}>
-        <cylinderGeometry args={[0.39, 0.34, 1.25, 64, 1, true]} />
-        <Decal position={[0, decalY, 0.39]} rotation={[0, 0, 0]} scale={decalScale}>
-          <meshStandardMaterial map={texture} transparent polygonOffset polygonOffsetFactor={-4} roughness={0.85} depthTest />
-        </Decal>
-      </mesh>
-      {/* Shoulder yoke */}
-      <mesh position={[0, 1.4, 0]} material={shirtMaterial}><capsuleGeometry args={[0.395, 0.76, 32, 64]} /></mesh>
-      {/* Collar trim */}
-      <mesh position={[0, 1.55, 0]} rotation={[Math.PI / 2, 0, 0]} material={shirtMaterial}><torusGeometry args={[0.13, 0.03, 16, 64]} /></mesh>
-      {/* Sleeves */}
-      <mesh position={[-0.45, 1.34, 0]} rotation={[0, 0, 0.45]} material={shirtMaterial}><cylinderGeometry args={[0.14, 0.135, 0.35, 32, 1, true]} /></mesh>
-      <mesh position={[0.45, 1.34, 0]} rotation={[0, 0, -0.45]} material={shirtMaterial}><cylinderGeometry args={[0.14, 0.135, 0.35, 32, 1, true]} /></mesh>
-    </group>
-  );
-}
-
-// Composes the body (GLB → procedural fallback) with the shirt + decal.
-function Figure({ color, design, isDark, printWidthIn, printHeightIn }: { color: string; design: string; isDark: boolean; printWidthIn?: number | null; printHeightIn?: number | null }) {
   return (
     <Center>
-      <group position={[0, -0.6, 0]}>
-        <BodyBoundary fallback={<ProceduralBody isDark={isDark} />}>
-          <Suspense fallback={<ProceduralBody isDark={isDark} />}>
-            <HumanBody isDark={isDark} />
-          </Suspense>
-        </BodyBoundary>
-        <Shirt color={color} design={design} printWidthIn={printWidthIn} printHeightIn={printHeightIn} />
+      <group position={[0, -0.15, 0]} scale={0.92}>
+        {/* ── Body ── */}
+        {/* Head */}
+        <mesh position={[0, 1.42, 0]} material={skin}><sphereGeometry args={[0.2, 32, 32]} /></mesh>
+        {/* Neck */}
+        <mesh position={[0, 1.2, 0]} material={skin}><cylinderGeometry args={[0.085, 0.1, 0.22, 24]} /></mesh>
+        {/* Hips / legs base (below the shirt hem) */}
+        <mesh position={[0, -0.35, 0]} material={skin}><cylinderGeometry args={[0.22, 0.18, 0.5, 32]} /></mesh>
+        {/* Forearms peeking from the sleeves */}
+        {[-1, 1].map((s) => (
+          <mesh key={s} position={[s * 0.4, 0.42, 0]} rotation={[0, 0, s * 0.18]} material={skin}>
+            <capsuleGeometry args={[0.07, 0.42, 12, 24]} />
+          </mesh>
+        ))}
+
+        {/* ── Shirt (worn on the torso) ── */}
+        {/* Torso — carries the chest print */}
+        <mesh position={[0, 0.42, 0]} material={shirt}>
+          <cylinderGeometry args={[0.34, 0.3, 1.15, 64, 1, true]} />
+          <Decal position={[0, decalY, 0.34]} rotation={[0, 0, 0]} scale={decalScale}>
+            <meshStandardMaterial map={texture} transparent polygonOffset polygonOffsetFactor={-4} roughness={0.82} depthTest />
+          </Decal>
+        </mesh>
+        {/* Closed top + shoulders */}
+        <mesh position={[0, 0.96, 0]} material={shirt}><sphereGeometry args={[0.34, 48, 32, 0, Math.PI * 2, 0, Math.PI / 2]} /></mesh>
+        {/* Shoulder yoke (horizontal capsule across the shoulders) */}
+        <mesh position={[0, 0.92, 0]} rotation={[0, 0, Math.PI / 2]} material={shirt}><capsuleGeometry args={[0.33, 0.62, 24, 48]} /></mesh>
+        {/* Collar */}
+        <mesh position={[0, 1.08, 0]} rotation={[Math.PI / 2, 0, 0]} material={shirt}><torusGeometry args={[0.11, 0.025, 16, 48]} /></mesh>
+        {/* Sleeves */}
+        {[-1, 1].map((s) => (
+          <mesh key={s} position={[s * 0.4, 0.72, 0]} rotation={[0, 0, s * 0.5]} material={shirt}>
+            <cylinderGeometry args={[0.12, 0.115, 0.42, 32, 1, true]} />
+          </mesh>
+        ))}
       </group>
     </Center>
   );
@@ -183,16 +124,13 @@ export default function Garment3DPreview({
 }) {
   const [color, setColor] = useState(GARMENT_COLORS[0].hex);
   const [spin, setSpin] = useState(true);
-  const [tab, setTab] = useState<"3d" | "real">("3d");
+  // Default to the photoreal Printful render when it's available — that's the
+  // real human-on-model result; 3D is the live stylized preview.
+  const [tab, setTab] = useState<"3d" | "real">(canMockup ? "real" : "3d");
   const [mockups, setMockups] = useState<string[] | null>(null);
   const [mockBusy, setMockBusy] = useState(false);
 
-  // Clear memory cache upon closing the component to prevent WebGL Context Losses
-  useEffect(() => {
-    return () => {
-      THREE.Cache.clear();
-    };
-  }, []);
+  useEffect(() => () => { THREE.Cache.clear(); }, []);
 
   const openReal = async () => {
     setTab("real");
@@ -202,22 +140,31 @@ export default function Garment3DPreview({
     finally { setMockBusy(false); }
   };
 
+  // Auto-render the mockup on open when Realistic is the default tab.
+  useEffect(() => {
+    if (canMockup && fetchMockups && !mockups && !mockBusy) {
+      setMockBusy(true);
+      fetchMockups().then(setMockups).finally(() => setMockBusy(false));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-black/95 backdrop-blur-md">
       {/* Top bar */}
       <div className="flex items-center justify-between px-5 py-4 shrink-0">
         <div className="flex items-center gap-2">
           <div className="flex gap-1 rounded-full bg-white/10 p-1">
-            <button onClick={() => setTab("3d")}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest transition-colors ${tab === "3d" ? "bg-white text-black" : "text-white/60 hover:text-white"}`}>
-              <Box size={12} /> 3D
-            </button>
             {canMockup && (
               <button onClick={openReal}
                 className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest transition-colors ${tab === "real" ? "bg-white text-black" : "text-white/60 hover:text-white"}`}>
                 <User size={12} /> Realistic
               </button>
             )}
+            <button onClick={() => setTab("3d")}
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest transition-colors ${tab === "3d" ? "bg-white text-black" : "text-white/60 hover:text-white"}`}>
+              <Box size={12} /> 3D
+            </button>
           </div>
           <span className="hidden sm:inline text-[9px] uppercase tracking-widest text-white/40">
             {tab === "3d"
@@ -262,12 +209,11 @@ export default function Garment3DPreview({
       {/* 3D viewport */}
       <div className={`relative flex-1 ${tab === "real" ? "hidden" : ""}`}>
         <Canvas
-          camera={{ position: [0, 0, 5.4], fov: 38 }}
+          camera={{ position: [0, 0.1, 4.6], fov: 40 }}
           dpr={[1, 1.5]}
           gl={{ antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: false }}
         >
           <color attach="background" args={[isDark ? "#0a0a0b" : "#101012"]} />
-          {/* Soft studio lighting */}
           <hemisphereLight args={["#ffffff", "#3a3a40", 0.85]} />
           <ambientLight intensity={0.35} />
           <directionalLight position={[3, 5, 4]} intensity={1.1} />
@@ -277,20 +223,20 @@ export default function Garment3DPreview({
             <Html center>
               <div className="flex flex-col items-center justify-center gap-2">
                 <Loader2 className="animate-spin text-white" />
-                <span className="text-[10px] text-white/50 uppercase tracking-widest">Loading model…</span>
+                <span className="text-[10px] text-white/50 uppercase tracking-widest">Loading…</span>
               </div>
             </Html>
           }>
-            <Figure color={color} design={design} isDark={isDark} printWidthIn={printWidthIn} printHeightIn={printHeightIn} />
+            <Mannequin color={color} design={design} isDark={isDark} printWidthIn={printWidthIn} printHeightIn={printHeightIn} />
           </Suspense>
-          <ContactShadows position={[0, -1.95, 0]} opacity={0.4} scale={9} blur={2.6} far={3.5} />
+          <ContactShadows position={[0, -1.25, 0]} opacity={0.4} scale={6} blur={2.6} far={3} />
           <OrbitControls
             enablePan={false}
             autoRotate={spin}
             autoRotateSpeed={1.4}
-            minDistance={3}
-            maxDistance={8}
-            target={[0, 0, 0]}
+            minDistance={2.6}
+            maxDistance={7}
+            target={[0, 0.1, 0]}
             onStart={() => setSpin(false)}
           />
         </Canvas>
@@ -322,6 +268,3 @@ export default function Garment3DPreview({
     </div>
   );
 }
-
-// Preload the avatar so the first open is snappy; harmless if the CDN is blocked.
-try { useGLTF.preload(HUMAN_GLB); } catch { /* noop */ }

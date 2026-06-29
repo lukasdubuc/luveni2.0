@@ -235,22 +235,25 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const [brushSize, setBrushSize] = useState(120);
   const [brushColor, setBrushColor] = useState("#000000");
   const [symmetry, setSymmetry] = useState<"off" | "v" | "h">("off");
+  const [fillTolerance, setFillTolerance] = useState(48); // bucket color match tolerance (0–128)
   const [, setPaintVersion] = useState(0);
   const [guides, setGuides] = useState<{ v: boolean; h: boolean }>({ v: false, h: false });
 
   const stageRef = useRef<Konva.Stage>(null);
   const trRef = useRef<Konva.Transformer>(null);
   const nodeRefs = useRef<Record<string, Konva.Node | null>>({});
-  const past = useRef<StudioLayer[][]>([]);
-  const future = useRef<StudioLayer[][]>([]);
+  // Unified, chronological history so undo/redo follows the real order of
+  // actions (a layer edit then a brush stroke undoes the stroke first, etc.) —
+  // not two separate stacks that clump paint and layer ops out of order.
+  type HistEntry = { kind: "layers"; layers: StudioLayer[] } | { kind: "paint"; id: string; data: string };
+  const undoStack = useRef<HistEntry[]>([]);
+  const redoStack = useRef<HistEntry[]>([]);
   const drawing = useRef<{ x: number; y: number } | null>(null);
   // Backing canvases for paint layers + last brush point + paint undo stacks.
   const paintCanvases = useRef<Record<string, HTMLCanvasElement>>({});
   const loadedPaint = useRef<Set<string>>(new Set());
   const lastPt = useRef<{ x: number; y: number } | null>(null);
   const painting = useRef(false);
-  const paintUndo = useRef<{ id: string; data: string }[]>([]);
-  const paintRedo = useRef<{ id: string; data: string }[]>([]);
 
   // Zoom management states for stylus/tablet precision controls
   const [zoomPercent, setZoomPercent] = useState(100); // 100% (exact fit) to 800%
@@ -297,48 +300,47 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     setPaintVersion((v) => v + 1);
   }, []);
 
-  // History — snapshot BEFORE a mutation, then apply.
+  // Record the layers state onto the unified undo stack (clears redo).
+  const recordLayers = useCallback((snapshot: StudioLayer[]) => {
+    undoStack.current.push({ kind: "layers", layers: clone(snapshot) });
+    if (undoStack.current.length > 80) undoStack.current.shift();
+    redoStack.current = [];
+  }, []);
+
+  // History — snapshot BEFORE a mutation, then apply (one entry per action).
   const commit = useCallback((updater: (ls: StudioLayer[]) => StudioLayer[]) => {
-    setLayers((cur) => { past.current.push(clone(cur)); if (past.current.length > 60) past.current.shift(); future.current = []; return updater(cur); });
-  }, []);
-  const undo = useCallback(() => {
-    setLayers((cur) => { const prev = past.current.pop(); if (!prev) return cur; future.current.push(clone(cur)); return prev; });
-    setSelectedId(null);
-  }, []);
-  const redo = useCallback(() => {
-    setLayers((cur) => { const nxt = future.current.pop(); if (!nxt) return cur; past.current.push(clone(cur)); return nxt; });
-    setSelectedId(null);
-  }, []);
+    setLayers((cur) => { recordLayers(cur); return updater(cur); });
+  }, [recordLayers]);
 
-  const undoPaint = (): boolean => {
-    const entry = paintUndo.current.pop(); if (!entry) return false;
-    const c = paintCanvases.current[entry.id]; if (!c) return false;
-    paintRedo.current.push({ id: entry.id, data: c.toDataURL() });
-    const im = new window.Image(); im.src = entry.data;
+  const restorePaint = (c: HTMLCanvasElement, dataUrl: string) => {
+    const im = new window.Image(); im.src = dataUrl;
     im.onload = () => { const ctx = c.getContext("2d")!; ctx.clearRect(0, 0, c.width, c.height); ctx.drawImage(im, 0, 0); redrawStage(); };
-    return true;
-  };
-  const redoPaint = (): boolean => {
-    const entry = paintRedo.current.pop(); if (!entry) return false;
-    const c = paintCanvases.current[entry.id]; if (!c) return false;
-    paintUndo.current.push({ id: entry.id, data: c.toDataURL() });
-    const im = new window.Image(); im.src = entry.data;
-    im.onload = () => { const ctx = c.getContext("2d")!; ctx.clearRect(0, 0, c.width, c.height); ctx.drawImage(im, 0, 0); redrawStage(); };
-    return true;
   };
 
-  // Cohesive Handlers: prioritize paint stroke history, fallback to layers
+  // One step back, honoring the true chronological order across paint + layers.
   const handleUndo = useCallback(() => {
-    const paintUndone = undoPaint();
-    if (paintUndone) return;
-    undo();
-  }, [undo]);
+    const entry = undoStack.current.pop(); if (!entry) return;
+    if (entry.kind === "layers") {
+      setLayers((cur) => { redoStack.current.push({ kind: "layers", layers: clone(cur) }); return entry.layers; });
+      setSelectedId(null);
+    } else {
+      const c = paintCanvases.current[entry.id]; if (!c) return;
+      redoStack.current.push({ kind: "paint", id: entry.id, data: c.toDataURL() });
+      restorePaint(c, entry.data);
+    }
+  }, [redrawStage]);
 
   const handleRedo = useCallback(() => {
-    const paintRedone = redoPaint();
-    if (paintRedone) return;
-    redo();
-  }, [redo]);
+    const entry = redoStack.current.pop(); if (!entry) return;
+    if (entry.kind === "layers") {
+      setLayers((cur) => { undoStack.current.push({ kind: "layers", layers: clone(cur) }); return entry.layers; });
+      setSelectedId(null);
+    } else {
+      const c = paintCanvases.current[entry.id]; if (!c) return;
+      undoStack.current.push({ kind: "paint", id: entry.id, data: c.toDataURL() });
+      restorePaint(c, entry.data);
+    }
+  }, [redrawStage]);
 
   // Keyboard: Cmd/Ctrl+Z undo, +Shift redo. Ignore while typing in fields.
   useEffect(() => {
@@ -542,20 +544,28 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     commit((ls) => [...ls, l]); setSelectedId(l.id); setTool("brush");
   };
 
-  // Ensure there's a paint layer to draw on; returns its id.
-  const ensurePaintTarget = (): string | null => {
+  // Ensure there's a paint layer to draw on; returns its id. When `create` is
+  // true and none exists, one is added on the fly (so the bucket/brush never
+  // silently no-op).
+  const ensurePaintTarget = (create = false): string | null => {
     const sel = layers.find((l) => l.id === selectedId);
     if (sel?.type === "paint") return sel.id;
     const anyPaint = [...layers].reverse().find((l) => l.type === "paint");
     if (anyPaint) { setSelectedId(anyPaint.id); return anyPaint.id; }
+    if (create) {
+      const l: StudioLayer = { id: uid(), type: "paint", name: "Paint", visible: true, x: 0, y: 0, rotation: 0, opacity: 1, blend: "source-over" };
+      getPaintCanvas(l);
+      commit((ls) => [...ls, l]); setSelectedId(l.id);
+      return l.id;
+    }
     return null;
   };
 
   const snapshotPaint = (id: string) => {
     const c = paintCanvases.current[id]; if (!c) return;
-    paintUndo.current.push({ id, data: c.toDataURL() });
-    if (paintUndo.current.length > 12) paintUndo.current.shift();
-    paintRedo.current = [];
+    undoStack.current.push({ kind: "paint", id, data: c.toDataURL() });
+    if (undoStack.current.length > 80) undoStack.current.shift();
+    redoStack.current = [];
   };
 
   const dab = (id: string, x: number, y: number, pressure: number) => {
@@ -592,8 +602,8 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   // flagged "reference" (its drawn lines); the fill paints into the active
   // paint layer. Falls back to the active layer's own pixels.
   const floodFill = (startX: number, startY: number) => {
-    const destId = ensurePaintTarget();
-    if (!destId) { toast.error("Add a paint layer to fill into"); return; }
+    const destId = ensurePaintTarget(true);
+    if (!destId) { toast.error("Could not create a paint layer to fill into"); return; }
     const dest = paintCanvases.current[destId]; if (!dest) return;
     const refLayer = layers.find((l) => l.reference && l.type === "paint" && paintCanvases.current[l.id]);
     const src = refLayer ? paintCanvases.current[refLayer.id] : dest;
@@ -611,7 +621,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     const si = idx(x, y);
     const tr = sp[si], tg = sp[si + 1], tb = sp[si + 2], ta = sp[si + 3];
     const fill = hexToRgb(brushColor);
-    const tol = 48 * 48 * 3; // squared tolerance
+    const tol = fillTolerance * fillTolerance * 3; // squared tolerance (user-tunable)
     const match = (i: number) => {
       const dr = sp[i] - tr, dg = sp[i + 1] - tg, db = sp[i + 2] - tb, da = sp[i + 3] - ta;
       return dr * dr + dg * dg + db * db + da * da <= tol;
@@ -785,6 +795,16 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const defaultPa = isHat ? { x: 0.28, y: 0.32, w: 0.44, h: 0.36 } : isPoster ? { x: 0.06, y: 0.05, w: 0.88, h: 0.9 } : { x: 0.2, y: 0.14, w: 0.6, h: 0.62 };
   const pa = printArea || defaultPa;
 
+  // Fit the product template into the artboard preserving its aspect ratio
+  // (object-fit: contain), so the garment photo is never stretched/warped.
+  const garmentFit = (() => {
+    const iw = garment?.naturalWidth || garment?.width || artboardW;
+    const ih = garment?.naturalHeight || garment?.height || artboardH;
+    const s = Math.min(artboardW / iw, artboardH / ih);
+    const w = iw * s, h = ih * s;
+    return { x: (artboardW - w) / 2, y: (artboardH - h) / 2, width: w, height: h };
+  })();
+
   return (
     <div className={`admin-page fixed inset-0 z-50 flex flex-col font-mono select-none ${isDark ? "bg-black text-neutral-105" : "bg-white text-neutral-900"}`}>
       
@@ -922,6 +942,25 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
         </div>
       )}
 
+      {/* Fill (bucket) controls — color + match tolerance, like the brush panel */}
+      {tool === "fill" && (
+        <div className={`px-4 pb-2 shrink-0 transition-all ${fullScreenCanvas ? "lg:hidden" : ""}`}>
+          <div className={`flex flex-col md:flex-row items-stretch md:items-center gap-3 px-3 py-2 rounded-2xl md:rounded-full ${isDark ? "bg-neutral-900/70 backdrop-blur-xl" : "bg-white/90 backdrop-blur-xl shadow-sm border border-neutral-200/40"}`}>
+            <div className="flex items-center gap-2 flex-wrap">
+              <PaintBucket size={13} className="opacity-50 ml-1" />
+              <input type="color" value={brushColor} onChange={(e) => setBrushColor(e.target.value)} className="w-7 h-7 rounded-full bg-transparent border-0 cursor-pointer shrink-0" title="Fill color" />
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] opacity-50 uppercase tracking-widest">Tolerance</span>
+                <input type="range" min={0} max={128} value={fillTolerance} onChange={(e) => setFillTolerance(parseInt(e.target.value))} className="w-32 sm:w-40" />
+                <span className="text-[9px] opacity-60 w-8">{fillTolerance}</span>
+              </div>
+            </div>
+            <span className="hidden md:block w-px h-4 opacity-10 bg-current" />
+            <span className="text-[9px] opacity-50 normal-case">Tap an area to fill. Flag a layer “Reference” to fill within its line boundaries.</span>
+          </div>
+        </div>
+      )}
+
       {/* ─────────────────────────────────────────────────────────────
          MOBILE & STYLUS PROCREATE FLOATING HORIZONTAL ZOOM CAPSULE
          Positions a standard horizontal range input (100% immune to touch blockages)
@@ -976,8 +1015,8 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
                     return;
                   }
                   if (tool === "brush") {
-                    const id = ensurePaintTarget();
-                    if (!id) { toast.error("Add a paint layer first"); return; }
+                    const id = ensurePaintTarget(true);
+                    if (!id) { toast.error("Could not create a paint layer"); return; }
                     const p = e.target.getStage()!.getRelativePointerPosition()!;
                     snapshotPaint(id); painting.current = true; lastPt.current = null;
                     strokeTo(id, p.x, p.y, (e.evt as any).pressure || 0.5);
@@ -1000,7 +1039,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
                 }}
                 onTouchStart={(e) => {
                   if (tool === "brush") {
-                    const id = ensurePaintTarget();
+                    const id = ensurePaintTarget(true);
                     if (!id) return;
                     const p = e.target.getStage()!.getRelativePointerPosition()!;
                     snapshotPaint(id); painting.current = true; lastPt.current = null;
@@ -1018,12 +1057,17 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
                 }}
               >
                 <Layer>
-                  {/* Background Group — can be hidden cleanly during hi-res transparent exports */}
+                  {/* Background Group — hidden cleanly during hi-res transparent exports.
+                      • Blank canvas: a white artboard.
+                      • Product: the product template IS the canvas (aspect-correct,
+                        no warp, no white sheet behind it). */}
                   <Group name="background-group">
-                    <Rect name="bg" x={0} y={0} width={artboardW} height={artboardH} fill="#ffffff" listening />
-                    {canvasKind === "canvas" ? null : garment ? (
+                    {canvasKind === "canvas" ? (
+                      <Rect name="bg" x={0} y={0} width={artboardW} height={artboardH} fill="#ffffff" listening />
+                    ) : garment ? (
                       <>
-                        <KImage name="garment" image={garment} x={0} y={0} width={artboardW} height={artboardH} listening={false} />
+                        {/* Contain the product image so it keeps its real aspect ratio. */}
+                        <KImage name="garment" image={garment} {...garmentFit} listening={false} />
                         <Rect name="guide" x={artboardW * pa.x} y={artboardH * pa.y} width={artboardW * pa.w} height={artboardH * pa.h} stroke="#6366f1" strokeWidth={4} dash={[26, 18]} cornerRadius={20} listening={false} opacity={0.6} />
                       </>
                     ) : (
@@ -1118,7 +1162,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
                   <div className="mt-3">
                     <p className="text-[8px] uppercase tracking-widest opacity-40 mb-1">Gaussian blur · {selected.blur || 0}</p>
                     <input type="range" min={0} max={100} value={selected.blur || 0}
-                      onMouseDown={() => { past.current.push(clone(layers)); future.current = []; }}
+                      onMouseDown={() => recordLayers(layers)}
                       onChange={(e) => livePatch(selected.id, { blur: parseInt(e.target.value) })} className="w-full" />
                   </div>
                 </>
@@ -1126,7 +1170,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
               <div className="mt-3">
                 <p className="text-[8px] uppercase tracking-widest opacity-40 mb-1">Opacity</p>
                 <input type="range" min={0} max={1} step={0.05} value={selected.opacity}
-                  onMouseDown={() => { past.current.push(clone(layers)); future.current = []; }}
+                  onMouseDown={() => recordLayers(layers)}
                   onChange={(e) => livePatch(selected.id, { opacity: parseFloat(e.target.value) })} className="w-full" />
               </div>
             </div>
