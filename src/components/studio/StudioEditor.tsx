@@ -46,6 +46,29 @@ const getProxyImageUrl = (url: string | null): string => {
   return url;
 };
 
+// Helper function to load proxied images with the user's active session token
+// to bypass gateway JWT checks, converting the binary stream to a local object URL.
+const fetchProxiedImage = async (url: string, activeSignal: { active: boolean }): Promise<string | null> => {
+  if (!url.includes("action=proxy-image")) return url;
+  try {
+    const { data } = await supabase.auth.getSession();
+    const session = data?.session;
+    const headers: Record<string, string> = {};
+    if (session?.access_token) {
+      headers["Authorization"] = `Bearer ${session.access_token}`;
+    }
+    const res = await fetch(url, { headers });
+    if (!activeSignal.active) return null;
+    if (res.ok) {
+      const blob = await res.blob();
+      return URL.createObjectURL(blob);
+    }
+  } catch (e) {
+    console.error("Failed to fetch proxied image:", e);
+  }
+  return null;
+};
+
 // Non-destructive Konva blur via node caching. Re-caches when radius or the
 // content dependency changes; clears cache at radius 0.
 function useBlur(getNode: () => Konva.Node | null, radius: number, dep: any) {
@@ -84,11 +107,41 @@ function useHtmlImage(src?: string) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   useEffect(() => {
     if (!src) { setImg(null); return; }
-    const im = new window.Image();
-    im.crossOrigin = "anonymous";
-    im.src = getProxyImageUrl(src);
-    im.onload = () => setImg(im);
-    im.onerror = () => setImg(null);
+    
+    const activeSignal = { active: true };
+    let objectUrl: string | null = null;
+
+    (async () => {
+      const targetUrl = src.includes("action=proxy-image") 
+        ? await fetchProxiedImage(src, activeSignal) 
+        : src;
+        
+      if (!activeSignal.active || !targetUrl) {
+        if (activeSignal.active) setImg(null);
+        return;
+      }
+      
+      if (src.includes("action=proxy-image")) {
+        objectUrl = targetUrl;
+      }
+
+      const im = new window.Image();
+      im.crossOrigin = "anonymous";
+      im.src = targetUrl;
+      im.onload = () => {
+        if (activeSignal.active) setImg(im);
+      };
+      im.onerror = () => {
+        if (activeSignal.active) setImg(null);
+      };
+    })();
+
+    return () => {
+      activeSignal.active = false;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
   }, [src]);
   return img;
 }
@@ -273,11 +326,31 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     }
     if (l.src && !loadedPaint.current.has(l.id)) {
       loadedPaint.current.add(l.id);
-      const im = new window.Image(); im.crossOrigin = "anonymous"; im.src = getProxyImageUrl(l.src);
-      im.onload = () => { c!.getContext("2d")!.drawImage(im, 0, 0); redrawStage(); };
+      
+      const im = new window.Image();
+      im.crossOrigin = "anonymous";
+      
+      const activeSignal = { active: true };
+      (async () => {
+        const srcUrl = l.src ? getProxyImageUrl(l.src) : "";
+        const targetUrl = srcUrl.includes("action=proxy-image")
+          ? await fetchProxiedImage(srcUrl, activeSignal)
+          : srcUrl;
+          
+        if (targetUrl) {
+          im.src = targetUrl;
+          im.onload = () => {
+            c!.getContext("2d")!.drawImage(im, 0, 0);
+            redrawStage();
+            if (srcUrl.includes("action=proxy-image")) {
+              URL.revokeObjectURL(targetUrl);
+            }
+          };
+        }
+      })();
     }
     return c;
-  }, [artboardW, artboardH]);
+  }, [artboardW, artboardH, redrawStage]);
 
   const redrawStage = useCallback(() => {
     stageRef.current?.getLayers()?.[0]?.batchDraw();
