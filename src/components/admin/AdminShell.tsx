@@ -1,5 +1,5 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import { LayoutDashboard, ShoppingCart, Users, Package, Settings, LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, ShoppingCart, Users, Package, Settings, LogOut, Menu, X, Wand2, GitCompare, Bot } from "lucide-react";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,8 +9,15 @@ const nav: { to: string; label: string; icon: typeof LayoutDashboard; exact?: bo
   { to: "/admin/orders", label: "Orders", icon: ShoppingCart },
   { to: "/admin/leads", label: "Leads", icon: Users },
   { to: "/admin/products", label: "Products", icon: Package },
+  { to: "/admin/studio", label: "Studio", icon: Wand2 },
+  { to: "/admin/compare", label: "Compare", icon: GitCompare },
+  { to: "/admin/jarvis", label: "Jarvis", icon: Bot },
   { to: "/admin/settings", label: "Settings", icon: Settings },
 ];
+
+// Helvetica face used by the shop's mobile nav — mirrored here so the admin
+// overlay is format-identical to the storefront menu.
+const NAV_FONT = '"Helvetica Neue", Helvetica, Arial, sans-serif';
 
 export function AdminShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
@@ -56,8 +63,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
         </nav>
       </aside>
       <main className="flex-1 overflow-x-hidden">
-        {/* ── Mobile nav bar — mirrors the shop Header format ── */}
-        <header className="sticky top-0 z-50 border-b border-border bg-card text-foreground md:hidden">
+        {/* ── Mobile nav bar — format-identical to the shop Header ── */}
+        <header className="sticky top-0 z-50 border-b border-border bg-background text-foreground md:hidden">
           <div className="flex h-14 w-full items-center justify-between px-6">
             {/* Left: burger */}
             <div className="flex flex-1 items-center">
@@ -71,8 +78,11 @@ export function AdminShell({ children }: { children: ReactNode }) {
             </div>
 
             {/* Center: title */}
-            <span className="absolute left-1/2 -translate-x-1/2 text-[13px] font-semibold tracking-[0em]">
-              Owner portal
+            <span
+              className="absolute left-1/2 -translate-x-1/2 text-[13px] font-normal tracking-[0em] text-foreground"
+              style={{ fontFamily: NAV_FONT }}
+            >
+              OWNER
             </span>
 
             {/* Right: sign out */}
@@ -82,14 +92,14 @@ export function AdminShell({ children }: { children: ReactNode }) {
                 aria-label="Sign out"
                 className="flex items-center text-foreground transition-opacity hover:opacity-60"
               >
-                <LogOut className="h-[18px] w-[18px]" />
+                <LogOut size={18} strokeWidth={1} />
               </button>
             </div>
           </div>
 
-          {/* Fullscreen overlay */}
+          {/* Fullscreen overlay — same structure/typography as the shop menu */}
           {open && (
-            <div className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-8 bg-card">
+            <div className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-8 bg-background">
               {nav.map((item) => {
                 const active = item.exact ? path === item.to : path.startsWith(item.to);
                 return (
@@ -100,8 +110,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
                     className={`text-[13px] font-normal tracking-[0em] transition-colors ${
                       active ? "text-foreground" : "text-foreground/40"
                     }`}
+                    style={{ fontFamily: NAV_FONT }}
                   >
-                    {item.label}
+                    {item.label.toUpperCase()}
                   </Link>
                 );
               })}
@@ -111,8 +122,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
                   logout();
                 }}
                 className="text-[13px] font-normal tracking-[0em] text-foreground/40 transition-colors hover:text-foreground"
+                style={{ fontFamily: NAV_FONT }}
               >
-                Sign out
+                SIGN OUT
               </button>
               <button
                 onClick={() => setOpen(false)}
