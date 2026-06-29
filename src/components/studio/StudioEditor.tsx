@@ -181,7 +181,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   // Zoom management states for stylus/tablet precision controls
   const [zoomPercent, setZoomPercent] = useState(100); // 100% (exact fit) to 800%
   const [fitScale, setFitScale] = useState(0.15);
-  const [viewDims, setViewDims] = useState({ w: 800, h: 600 });
   const scrollOuterRef = useRef<HTMLDivElement>(null);
 
   const scale = fitScale * (zoomPercent / 100);
@@ -331,22 +330,11 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
 
   useEffect(() => {
     const fit = () => {
-      const outer = scrollOuterRef.current;
       const isMobile = window.innerWidth < 1024;
       const padW = (isMobile || fullScreenCanvas) ? 32 : 420;
       const padH = (isMobile || fullScreenCanvas) ? 140 : 220;
       const availW = Math.max(280, window.innerWidth - padW);
       const availH = Math.max(280, window.innerHeight - padH);
-      
-      if (outer) {
-        setViewDims({
-          w: outer.clientWidth || availW,
-          h: outer.clientHeight || availH
-        });
-      } else {
-        setViewDims({ w: availW, h: availH });
-      }
-
       const calculatedFit = Math.min(availW / artboardW, availH / artboardH, 1);
       setFitScale(calculatedFit);
     };
@@ -454,145 +442,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     r.readAsDataURL(file);
   };
 
-  // ── Paint engine ───────────────────────────────────────────────
-  const addPaintLayer = () => {
-    const l: StudioLayer = { id: uid(), type: "paint", name: "Paint", visible: true, x: 0, y: 0, rotation: 0, opacity: 1, blend: "source-over" };
-    getPaintCanvas(l);
-    commit((ls) => [...ls, l]); setSelectedId(l.id); setTool("brush");
-  };
-
-  // Ensure there's a paint layer to draw on; returns its id.
-  const ensurePaintTarget = (): string | null => {
-    const sel = layers.find((l) => l.id === selectedId);
-    if (sel?.type === "paint") return sel.id;
-    const anyPaint = [...layers].reverse().find((l) => l.type === "paint");
-    if (anyPaint) { setSelectedId(anyPaint.id); return anyPaint.id; }
-    return null;
-  };
-
-  const snapshotPaint = (id: string) => {
-    const c = paintCanvases.current[id]; if (!c) return;
-    paintUndo.current.push({ id, data: c.toDataURL() });
-    if (paintUndo.current.length > 12) paintUndo.current.shift();
-    paintRedo.current = [];
-  };
-
-  const dab = (id: string, x: number, y: number, pressure: number) => {
-    const c = paintCanvases.current[id]; if (!c) return;
-    const ctx = c.getContext("2d")!;
-    const r = (brushSize / 2) * (0.4 + pressure * 0.6);
-    const draw = (px: number, py: number) => {
-      const g = ctx.createRadialGradient(px, py, 0, px, py, r);
-      g.addColorStop(0, brushColor);
-      g.addColorStop(0.75, brushColor);
-      g.addColorStop(1, brushColor + "00");
-      ctx.fillStyle = g;
-      ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
-    };
-    draw(x, y);
-    if (symmetry === "v") draw(artboardW - x, y);
-    if (symmetry === "h") draw(x, artboardH - y);
-  };
-
-  // interpolate between last and current point so fast strokes stay continuous
-  const strokeTo = (id: string, x: number, y: number, pressure: number) => {
-    const last = lastPt.current;
-    if (last) {
-      const dist = Math.hypot(x - last.x, y - last.y);
-      const step = Math.max(2, brushSize * 0.18);
-      const n = Math.ceil(dist / step);
-      for (let i = 1; i <= n; i++) dab(id, last.x + ((x - last.x) * i) / n, last.y + ((y - last.y) * i) / n, pressure);
-    } else dab(id, x, y, pressure);
-    lastPt.current = { x, y };
-    redrawStage();
-  };
-
-  // Reference-layer flood fill (bucket). Boundaries come from the layer
-  // flagged "reference" (its drawn lines); the fill paints into the active
-  // paint layer. Falls back to the active layer's own pixels.
-  const floodFill = (startX: number, startY: number) => {
-    const destId = ensurePaintTarget();
-    if (!destId) { toast.error("Add a paint layer to fill into"); return; }
-    const dest = paintCanvases.current[destId]; if (!dest) return;
-    const refLayer = layers.find((l) => l.reference && l.type === "paint" && paintCanvases.current[l.id]);
-    const src = refLayer ? paintCanvases.current[refLayer.id] : dest;
-    const W = dest.width, H = dest.height;
-    const x = Math.round(startX), y = Math.round(startY);
-    if (x < 0 || y < 0 || x >= W || y >= H) return;
-
-    const sctx = src.getContext("2d", { willReadFrequently: true })!;
-    const dctx = dest.getContext("2d")!;
-    const sd = sctx.getImageData(0, 0, W, H);
-    const dd = dctx.getImageData(0, 0, W, H);
-    const sp = sd.data, dp = dd.data;
-    const idx = (px: number, py: number) => (py * W + px) * 4;
-
-    const si = idx(x, y);
-    const tr = sp[si], tg = sp[si + 1], tb = sp[si + 2], ta = sp[si + 3];
-    const fill = hexToRgb(brushColor);
-    const tol = 48 * 48 * 3; // squared tolerance
-    const match = (i: number) => {
-      const dr = sp[i] - tr, dg = sp[i + 1] - tg, db = sp[i + 2] - tb, da = sp[i + 3] - ta;
-      return dr * dr + dg * dg + db * db + da * da <= tol;
-    };
-
-    snapshotPaint(destId);
-    const stack = [[x, y]];
-    const seen = new Uint8Array(W * H);
-    while (stack.length) {
-      const [cx, cy] = stack.pop()!;
-      const fi = cy * W + cx;
-      if (seen[fi]) continue;
-      seen[fi] = 1;
-      const i = fi * 4;
-      if (!match(i)) continue;
-      dp[i] = fill.r; dp[i + 1] = fill.g; dp[i + 2] = fill.b; dp[i + 3] = 255;
-      if (cx > 0) stack.push([cx - 1, cy]);
-      if (cx < W - 1) stack.push([cx + 1, cy]);
-      if (cy > 0) stack.push([cx, cy - 1]);
-      if (cy < H - 1) stack.push([cx, cy + 1]);
-    }
-    dctx.putImageData(dd, 0, 0);
-    redrawStage();
-  };
-
-  const runAi = async (body: any) => {
-    const { data, error } = await supabase.functions.invoke("ai-generate-image", { body });
-    const msg = await extractFnError(error, data);
-    if (msg) { toast.error(msg); return null; }
-    return data.image_url as string;
-  };
-
-  const aiNewLayer = async () => {
-    if (aiPrompt.trim().length < 3) { toast.error("Prompt too short"); return; }
-    setAiBusy(true);
-    try { const url = await runAi({ prompt: aiPrompt.trim(), width: 1024, height: 1024, persist: true }); if (url) { addImageAt(url, aiPrompt.slice(0, 24)); setAiPrompt(""); toast.success("AI layer added."); } }
-    finally { setAiBusy(false); }
-  };
-
-  const aiRegenerateSelected = async () => {
-    const sel = layers.find((l) => l.id === selectedId);
-    if (!sel || sel.type !== "image" || !sel.src) { toast.error("Select an image layer first"); return; }
-    if (aiPrompt.trim().length < 3) { toast.error("Enter a prompt"); return; }
-    setAiBusy(true);
-    try { const url = await runAi({ prompt: aiPrompt.trim(), image: sel.src, width: 1024, height: 1024, persist: false }); if (url) { patchLayer(sel.id, { src: url }); setAiPrompt(""); toast.success("Layer reimagined."); } }
-    finally { setAiBusy(false); }
-  };
-
-  // Region marquee → generate INTO that space.
-  const finalizeRegion = async (r: { x: number; y: number; w: number; h: number }) => {
-    if (r.w < 40 || r.h < 40) { setRegion(null); return; }
-    if (aiPrompt.trim().length < 3) { toast.error("Type a prompt first, then draw the region"); setRegion(null); return; }
-    setAiBusy(true);
-    try {
-      // size sent to the model, clamped, preserving region aspect
-      const longest = Math.max(r.w, r.h); const k = Math.min(1, 1024 / longest);
-      const gw = Math.round(r.w * k); const gh = Math.round(r.h * k);
-      const url = await runAi({ prompt: aiPrompt.trim(), width: gw, height: gh, persist: false });
-      if (url) { addImageAt(url, aiPrompt.slice(0, 24), r); setAiPrompt(""); toast.success("Generated into region."); }
-    } finally { setAiBusy(false); setRegion(null); setRegionMode(false); }
-  };
-
   const move = (id: string, dir: -1 | 1) => commit((ls) => {
     const i = ls.findIndex((l) => l.id === id); const j = i + dir;
     if (i < 0 || j < 0 || j >= ls.length) return ls;
@@ -602,6 +451,54 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   // Bake each paint layer's pixels into its `src` so strokes persist.
   const serializeLayers = (): StudioLayer[] =>
     layers.map((l) => (l.type === "paint" && paintCanvases.current[l.id]) ? { ...l, src: paintCanvases.current[l.id].toDataURL() } : l);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const thumbnail = captureStage(720, false);
+      const { error } = await supabase.from("studio_projects").update({ canvas: { layers: serializeLayers() }, thumbnail_url: thumbnail, updated_at: new Date().toISOString() }).eq("id", projectId);
+      if (error) { toast.error(error.message); return; }
+      toast.success("Saved.");
+    } finally { setSaving(false); }
+  };
+
+  const [publishing, setPublishing] = useState(false);
+  const publish = async () => {
+    if (layers.length === 0) { toast.error("Design something first"); return; }
+    setPublishing(true);
+    setSelectedId(null);
+    try {
+      await new Promise((r) => setTimeout(r, 60));
+      const dataUrl = captureStage(artboardW, true);
+      if (!dataUrl) { toast.error("Could not render the design"); return; }
+      const blob = await (await fetch(dataUrl)).blob();
+      const path = `published/${projectId}-${Date.now()}.png`;
+      const up = await supabase.storage.from("designs").upload(path, blob, { contentType: "image/png", upsert: true });
+      if (up.error) { toast.error(`Upload failed: ${up.error.message}`); return; }
+      const { data: pub } = supabase.storage.from("designs").getPublicUrl(path);
+
+      const { data, error } = await supabase.functions.invoke("publish-design", {
+        body: { projectId, imageUrl: pub.publicUrl, title: projectName, retailPriceCents: priceCents, templateKey },
+      });
+      const msg = await extractFnError(error, data);
+      if (msg) { toast.error(msg); return; }
+      toast.success("Published to Printful — run Sync (or wait for the heartbeat) to see it in the shop.");
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const exportPng = () => {
+    const uri = captureStage(artboardW, true);
+    if (!uri) {
+      toast.error("Could not render the design");
+      return;
+    }
+    const a = document.createElement("a");
+    a.download = `${projectName.toLowerCase().replace(/\s+/g, "-")}-design.png`;
+    a.href = uri;
+    a.click();
+  };
 
   const selected = layers.find((l) => l.id === selectedId);
   const pill = `flex items-center gap-1.5 text-[10px] font-medium px-3.5 py-2 rounded-full transition-all ${isDark ? "text-neutral-300 hover:bg-white/10" : "text-neutral-700 hover:bg-black/[0.06]"}`;
@@ -638,7 +535,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
         </div>
         <div className="ml-auto flex items-center justify-end gap-2 flex-wrap">
           {/* Desktop Zoom Controller */}
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-neutral-100 dark:border-neutral-900 bg-[#f5f5f7]/30 dark:bg-[#111111]/30">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-neutral-100 dark:border-neutral-900 bg-[#f5f5f7]/30 dark:bg-[#111111]/30 animate-fade-in">
             <span className="text-[8px] opacity-50 uppercase tracking-widest">Zoom</span>
             <input 
               type="range" min={100} max={800} step={10} value={zoomPercent} 
@@ -976,18 +873,18 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
               <div>
                 <h3 className="text-[11px] font-bold uppercase tracking-widest mb-4 font-mono">Add Assets</h3>
                 <div className="grid grid-cols-3 gap-3">
-                  <button onClick={() => { addText(); setMobileSheet("none"); }} className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
+                  <button onClick={() => { addText(); setMobileSheet("none"); }} className={`flex-1 flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
                     <Type size={18} />
                     <span className="text-[8px] font-bold uppercase tracking-wider mt-1">Text</span>
                   </button>
 
-                  <label className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
+                  <label className={`flex-1 flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
                     <ImagePlus size={18} />
                     <span className="text-[8px] font-bold uppercase tracking-wider mt-1">Photo</span>
                     <input type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files?.[0]) { uploadImage(e.target.files[0]); setMobileSheet("none"); } }} />
                   </label>
 
-                  <label className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
+                  <label className={`flex-1 flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
                     <Wand2 size={18} />
                     <span className="text-[8px] font-bold uppercase tracking-wider mt-1">Texture</span>
                     <input type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files?.[0]) { importTexture(e.target.files[0]); setMobileSheet("none"); } }} />
