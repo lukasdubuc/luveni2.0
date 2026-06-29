@@ -137,14 +137,17 @@ function StudioPage() {
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {projects.map((p) => (
-                <div key={p.id} className={`group relative rounded-[20px] overflow-hidden border ${card}`}>
+                <div key={p.id} className={`group relative rounded-[20px] overflow-hidden border transition-all duration-300 hover:-translate-y-0.5 ${card}`}>
                   <button onClick={() => setEditing(p)} className="block w-full text-left">
-                    <div className="aspect-square bg-[#FAFAFA] flex items-center justify-center overflow-hidden">
-                      {p.thumbnail_url ? <img src={p.thumbnail_url} alt="" className="w-full h-full object-contain" /> : <Layers size={26} className="opacity-20" />}
+                    <div className={`aspect-square flex items-center justify-center overflow-hidden ${isDark ? "bg-neutral-900" : "bg-[#f0f0f3]"}`}>
+                      {p.thumbnail_url ? <img src={p.thumbnail_url} alt="" loading="lazy" className="w-full h-full object-contain" /> : <Layers size={26} className="opacity-20" />}
                     </div>
-                    <div className="p-2.5">
-                      <p className="text-[10px] truncate">{p.name}</p>
-                      <p className={`text-[9px] mt-0.5 ${sub}`}>{p.manufacturer} · ${(p.price_cents / 100).toFixed(2)}</p>
+                    <div className="px-3 py-3 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-medium truncate normal-case">{p.name}</p>
+                        <p className={`text-[9px] mt-0.5 uppercase tracking-wider ${sub}`}>{p.manufacturer} · ${(p.price_cents / 100).toFixed(2)}</p>
+                      </div>
+                      {p.status === "published" && <span className="shrink-0 text-[7px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 uppercase tracking-widest">Live</span>}
                     </div>
                   </button>
                   <button onClick={() => removeProject(p.id)}
