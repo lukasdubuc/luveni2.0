@@ -39,6 +39,7 @@ function StudioPage() {
   const [loadingBlanks, setLoadingBlanks] = useState(false);
   const [manufacturer, setManufacturer] = useState<"all" | "printful" | "apliiq">("all");
   const [category, setCategory] = useState<string>("all");
+  const [query, setQuery] = useState("");
   const [mfrStatus, setMfrStatus] = useState<{ printful?: MfrStatus; apliiq?: MfrStatus }>({});
   const [detail, setDetail] = useState<BlankDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -100,12 +101,14 @@ function StudioPage() {
   const openNew = async () => {
     setNewOpen(true);
     setDetail(null);
+    setQuery("");
     await loadCatalog(manufacturer);
   };
 
   const switchManufacturer = async (mfr: "all" | "printful" | "apliiq") => {
     setManufacturer(mfr);
     setDetail(null);
+    setQuery("");
     await loadCatalog(mfr);
   };
 
@@ -129,8 +132,8 @@ function StudioPage() {
         manufacturer: d.mfr,
         template_key: d.key,
         price_cents: d.min_cost_cents || 0,
-        artboard_w: tee ? 4500 : 4000,
-        artboard_h: tee ? 5400 : 4000,
+        artboard_w: tee ? 4500 : 5400, // standard t-shirt aspect ratio, otherwise square
+        artboard_h: tee ? 5400 : 5400,
         template_image: color?.image || d.image,
         canvas_kind: "product",
         print_area: null,
@@ -170,7 +173,12 @@ function StudioPage() {
 
   // Derived catalog filters for the picker.
   const categories = Array.from(new Set(blanks.map((b) => b.type).filter(Boolean) as string[])).sort();
-  const visibleBlanks = category === "all" ? blanks : blanks.filter((b) => b.type === category);
+  const q = query.trim().toLowerCase();
+  const visibleBlanks = blanks.filter((b) => {
+    if (category !== "all" && b.type !== category) return false;
+    if (!q) return true;
+    return `${b.label} ${b.type || ""} ${b.brand || ""} ${b.mfr}`.toLowerCase().includes(q);
+  });
 
   return (
     <div className={`admin-page min-h-screen relative font-mono bg-[#f5f5f7] text-neutral-900 selection:bg-neutral-200 dark:bg-black dark:text-neutral-105 dark:selection:bg-neutral-800`}>
@@ -292,11 +300,22 @@ function StudioPage() {
                   )}
                 </div>
 
+                {/* Search Box */}
+                <div className="mb-4">
+                  <input
+                    type="text"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search blanks (e.g., canvas, shirt, heavyweight)..."
+                    className={`w-full bg-transparent border rounded-[9999px] px-4 py-2 text-[11px] focus:outline-none ${isDark ? "border-neutral-800 text-white placeholder-neutral-500" : "border-[#D1D1D6] text-black placeholder-neutral-400"}`}
+                  />
+                </div>
+
                 {/* Per-manufacturer status (errors surface here, never blank the picker) */}
                 {(mfrStatus.printful?.error || mfrStatus.apliiq?.error) && (
                   <div className={`text-[9px] mb-2 ${sub}`}>
-                    {mfrStatus.printful?.error && <span className="mr-3">Printful: {mfrStatus.printful.error}</span>}
-                    {mfrStatus.apliiq?.error && <span>Apliiq: {mfrStatus.apliiq.error}</span>}
+                    {mfrStatus.printful?.error && <span className="mr-3 text-red-500">Printful: {mfrStatus.printful.error}</span>}
+                    {mfrStatus.apliiq?.error && <span className="text-red-500">Apliiq: {mfrStatus.apliiq.error}</span>}
                   </div>
                 )}
 
@@ -317,7 +336,7 @@ function StudioPage() {
                       </button>
                     ))}
                     {visibleBlanks.length === 0 && !loadingBlanks && (
-                      <p className={`text-[10px] col-span-full ${sub}`}>No products found. Check PRINTFUL_API_KEY / APLIIQ_APP_KEY + APLIIQ_SHARED_SECRET.</p>
+                      <p className={`text-[10px] col-span-full text-center py-4 ${sub}`}>No products found matching your filter criteria.</p>
                     )}
                   </div>
                 )}
