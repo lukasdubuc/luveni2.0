@@ -18,7 +18,9 @@ const StudioEditor = lazy(() => import("@/components/studio/StudioEditor"));
 type Blank = { id: number | string; key: string; label: string; mfr: string; type?: string; brand?: string | null; image: string | null; variant_count?: number; error?: string };
 type BlankColor = { name: string; code: string | null; image: string | null; variant_id?: number | null };
 type PrintArea = { placement: string; width_px: number; height_px: number; dpi: number; width_in: number; height_in: number };
-type BlankDetail = { id: number | string; key: string; label: string; mfr: string; type?: string; image: string | null; min_cost_cents: number; max_cost_cents: number; colors: BlankColor[]; sizes: string[]; variant_count: number; print_area?: PrintArea | null };
+type Frac = { x: number; y: number; w: number; h: number };
+type Template = { image_url: string | null; background_url: string | null; template_w: number; template_h: number; print_area: Frac; print_px: { width: number; height: number } };
+type BlankDetail = { id: number | string; key: string; label: string; mfr: string; type?: string; image: string | null; min_cost_cents: number; max_cost_cents: number; colors: BlankColor[]; sizes: string[]; variant_count: number; print_area?: PrintArea | null; template?: Template | null };
 type MfrStatus = { available: boolean; error: string | null; count: number };
 
 type Project = {
@@ -146,20 +148,22 @@ function StudioPage() {
       // the raw blank cost is preserved on the product ref for the live calculator.
       const costCents = d.min_cost_cents || 0;
       const retailCents = computeRetailCents(costCents);
-      // Standard tee/square artboard so the product template renders at the
-      // ratio it was designed for. The real print dimensions still flow through
-      // on the product ref (below) to drive the true-to-size 3D decal.
       const pa = d.print_area;
+      // Use Printful's real mockup template when available: the artboard becomes
+      // the exact template (so the product image fills it without warping) and
+      // the dashed guide is the real print area — 100% accurate to Printful.
+      // Fall back to the variant photo + standard tee/square ratio otherwise.
+      const tpl = d.template;
       const { data, error } = await supabase.from("studio_projects").insert({
         name: `${color ? color.name + " " : ""}${d.label}`,
         manufacturer: d.mfr,
         template_key: d.key,
         price_cents: retailCents,
-        artboard_w: tee ? 4500 : 5400,
-        artboard_h: 5400,
-        template_image: color?.image || d.image,
+        artboard_w: tpl?.template_w || (tee ? 4500 : 5400),
+        artboard_h: tpl?.template_h || 5400,
+        template_image: tpl?.image_url || color?.image || d.image,
         canvas_kind: "product",
-        print_area: null,
+        print_area: tpl?.print_area || null,
         canvas: { layers: [], product: { id: d.id, mfr: d.mfr, color: color?.name || null, variant_id: color?.variant_id ?? null, sizes: d.sizes, cost_cents: costCents, print: pa || null } },
       }).select("*").single();
       if (error || !data) { toast.error(error?.message || "Could not create project"); return; }

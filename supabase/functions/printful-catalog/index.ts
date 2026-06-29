@@ -107,6 +107,42 @@ async function printfulPrintArea(id: number | string): Promise<any> {
   } catch { return null; }
 }
 
+// Printful's real mockup TEMPLATE for the front placement: the exact design
+// surface (image) + the exact print-area box (top/left/width/height in template
+// px). This makes the studio canvas 100% accurate to Printful — the artboard
+// becomes the template and the dashed guide is the real print area.
+async function printfulTemplate(id: number | string): Promise<any> {
+  try {
+    const r = await fetch(`https://api.printful.com/mockup-generator/templates/${id}`, { headers: pfHeaders() });
+    if (!r.ok) return null;
+    const res = (await r.json())?.result;
+    const templates: any[] = res?.templates || [];
+    if (!templates.length) return null;
+    // Resolve the "front" template via the variant mapping; fall back sensibly.
+    let frontId: any = null;
+    for (const v of (res?.variant_mapping || [])) {
+      const t = (v.templates || []).find((x: any) => x.placement === "front");
+      if (t) { frontId = t.template_id; break; }
+    }
+    const tpl = templates.find((t) => t.template_id === frontId)
+      || templates.find((t) => t.is_template_on_front)
+      || templates[0];
+    const tw = tpl?.template_width, th = tpl?.template_height;
+    const pw = tpl?.print_area_width, ph = tpl?.print_area_height;
+    if (!tw || !th || !pw || !ph) return null;
+    const pt = tpl.print_area_top || 0, pl = tpl.print_area_left || 0;
+    return {
+      image_url: tpl.image_url || null,        // the design-surface template
+      background_url: tpl.background_url || null,
+      template_w: tw,
+      template_h: th,
+      // Print area as fractions of the template, for the editor's dashed guide.
+      print_area: { x: pl / tw, y: pt / th, w: pw / tw, h: ph / th },
+      print_px: { width: pw, height: ph },
+    };
+  } catch { return null; }
+}
+
 async function printfulDetail(id: number | string): Promise<any> {
   if (!PRINTFUL_API_KEY) throw new Error("PRINTFUL_API_KEY not set");
   const r = await fetch(`https://api.printful.com/products/${id}`, { headers: pfHeaders() });
@@ -122,7 +158,12 @@ async function printfulDetail(id: number | string): Promise<any> {
     if (v.color && !colorMap.has(v.color)) colorMap.set(v.color, { name: v.color, code: v.color_code || null, image: v.image || null, variant_id: v.id ?? null });
     if (v.size) sizeSet.add(v.size);
   }
-  const print_area = await printfulPrintArea(id);
+  // Real print dimensions (inches, via printfiles) for the true-to-size 3D decal,
+  // and the real mockup template (surface image + accurate print-area box).
+  const [print_area, template] = await Promise.all([
+    printfulPrintArea(id),
+    printfulTemplate(id),
+  ]);
   return {
     id, mfr: "printful",
     key: slugKey("printful", product.type, id),
@@ -135,6 +176,7 @@ async function printfulDetail(id: number | string): Promise<any> {
     sizes: [...sizeSet],
     variant_count: variants.length,
     print_area, // { placement, width_px, height_px, dpi, width_in, height_in } | null
+    template,   // { image_url, background_url, template_w, template_h, print_area:{x,y,w,h}, print_px } | null
   };
 }
 
