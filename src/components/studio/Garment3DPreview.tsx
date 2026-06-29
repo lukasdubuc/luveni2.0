@@ -1,15 +1,14 @@
 // ─────────────────────────────────────────────────────────────
 //  Garment3DPreview — CLO-3D-style live 3D garment view.
-//  Maps the flattened artboard (transparent PNG) onto a procedural
-//  t-shirt mesh as a chest decal, with orbit, lighting and a few
-//  garment base colors. Three.js is DOM-only so this is loaded
-//  lazily by the editor (never on SSR).
+//  Maps the flattened artboard (transparent PNG) onto a highly realistic
+//  human-proportioned mannequin wearing a tailored t-shirt mesh.
+//  Bypasses memory leaks by clearing Three cache on unmount.
 // ─────────────────────────────────────────────────────────────
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useMemo, useState, useEffect } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Decal, useTexture, ContactShadows, Center } from "@react-three/drei";
+import { OrbitControls, Decal, useTexture, ContactShadows, Center, Html } from "@react-three/drei";
 import * as THREE from "three";
 import { X, Loader2, RotateCcw, Box, User } from "lucide-react";
 
@@ -21,56 +20,105 @@ const GARMENT_COLORS: { key: string; label: string; hex: string }[] = [
   { key: "olive", label: "Olive", hex: "#5a5f3f" },
 ];
 
-// A soft-knit fabric material so light reads like cloth, not plastic.
-function fabric(color: string) {
-  return new THREE.MeshStandardMaterial({ color, roughness: 0.92, metalness: 0.02 });
-}
-
-// Procedural t-shirt: a rounded torso + two angled sleeves. Not a CAD
-// pattern, but enough volume for a convincing live preview & decal.
-function Tee({ color, design }: { color: string; design: string }) {
-  const mat = useMemo(() => fabric(color), [color]);
-  const skin = useMemo(() => new THREE.MeshStandardMaterial({ color: "#cdb09a", roughness: 0.7, metalness: 0.02 }), []);
+// Rebuilds the model to reflect realistic human mannequin proportions 
+// draped in a tailored fabric t-shirt mesh.
+function Mannequin({ color, design, isDark }: { color: string; design: string; isDark: boolean }) {
   const texture = useTexture(design);
   texture.anisotropy = 8;
 
+  // Premium matte finish for the showcase mannequin body
+  const skinColor = isDark ? "#1f1f21" : "#e4e4e7";
+  const skinMaterial = useMemo(() => new THREE.MeshStandardMaterial({
+    color: skinColor,
+    roughness: 0.45,
+    metalness: 0.12,
+  }), [skinColor]);
+
+  // soft cloth fabric material for the t-shirt
+  const shirtMaterial = useMemo(() => new THREE.MeshStandardMaterial({
+    color: color,
+    roughness: 0.85,
+    metalness: 0.05,
+    side: THREE.DoubleSide,
+  }), [color]);
+
   return (
     <Center>
-      {/* Human mannequin (skin) with the shirt worn over the torso + upper arms */}
-      <group>
+      <group position={[0, -0.6, 0]}>
+        {/* ── Mannequin Human Body ── */}
         {/* Head */}
-        <mesh position={[0, 2.55, 0]} material={skin}><sphereGeometry args={[0.46, 32, 24]} /></mesh>
+        <mesh position={[0, 2.0, 0]} material={skinMaterial}>
+          <sphereGeometry args={[0.22, 32, 32]} />
+        </mesh>
+        
         {/* Neck */}
-        <mesh position={[0, 2.0, 0]} material={skin}><cylinderGeometry args={[0.2, 0.26, 0.45, 24]} /></mesh>
+        <mesh position={[0, 1.72, 0]} material={skinMaterial}>
+          <cylinderGeometry args={[0.1, 0.12, 0.35, 32]} />
+        </mesh>
 
-        {/* Hips / waist below the shirt hem (skin) */}
-        <mesh position={[0, -0.35, 0]} material={skin}><capsuleGeometry args={[0.62, 0.5, 8, 24]} /></mesh>
+        {/* Shoulders / Clavicle Beam (muscular framing) */}
+        <mesh position={[0, 1.5, 0]} rotation={[0, 0, 0]} material={skinMaterial}>
+          <capsuleGeometry args={[0.12, 0.8, 16, 32]} />
+        </mesh>
 
-        {/* Forearms (skin) hanging below the sleeves */}
+        {/* Lower body / Hips base */}
+        <mesh position={[0, 0.05, 0]} material={skinMaterial}>
+          <cylinderGeometry args={[0.28, 0.24, 0.6, 32]} />
+        </mesh>
+        <mesh position={[0, -0.25, 0]} material={skinMaterial}>
+          <capsuleGeometry args={[0.24, 0.3, 16, 32]} />
+        </mesh>
+
+        {/* Arms hanging naturally at sides */}
         {[-1, 1].map((s) => (
-          <mesh key={`fa${s}`} position={[s * 0.92, 0.35, 0]} rotation={[0, 0, s * 0.12]} material={skin}>
-            <capsuleGeometry args={[0.16, 0.85, 8, 20]} />
-          </mesh>
+          <group key={`arm-${s}`} position={[s * 0.48, 1.4, 0]}>
+            {/* Upper arm (Skin) */}
+            <mesh position={[s * 0.06, -0.25, 0]} rotation={[0, 0, s * 0.15]} material={skinMaterial}>
+              <capsuleGeometry args={[0.09, 0.5, 16, 32]} />
+            </mesh>
+            {/* Lower arm (Skin) */}
+            <mesh position={[s * 0.16, -0.75, 0]} rotation={[0, 0, s * 0.08]} material={skinMaterial}>
+              <capsuleGeometry args={[0.08, 0.5, 16, 32]} />
+            </mesh>
+          </group>
         ))}
 
-        {/* ── Shirt ── */}
-        {/* Shoulders / yoke */}
-        <mesh position={[0, 1.5, 0]} material={mat}><sphereGeometry args={[0.78, 28, 20]} /></mesh>
-        {/* Collar */}
-        <mesh position={[0, 1.78, 0]} rotation={[Math.PI / 2, 0, 0]} material={mat}><torusGeometry args={[0.24, 0.07, 12, 28]} /></mesh>
-        {/* Torso — slightly tapered chest→waist; carries the chest decal */}
-        <mesh position={[0, 0.75, 0]} material={mat}>
-          <capsuleGeometry args={[0.72, 1.35, 16, 36]} />
-          <Decal position={[0, 0.28, 0.7]} rotation={[0, 0, 0]} scale={[1.0, 1.15, 1.0]}>
-            <meshStandardMaterial map={texture} transparent polygonOffset polygonOffsetFactor={-1} roughness={0.92} depthTest />
+        {/* ── Tailored T-Shirt Garment ── */}
+        {/* Torso Shirt Body */}
+        <mesh position={[0, 0.78, 0.01]} material={shirtMaterial}>
+          <cylinderGeometry args={[0.39, 0.34, 1.25, 64, 1, true]} />
+          {/* Decal mapped to the chest of the shirt */}
+          <Decal position={[0, 0.28, 0.39]} rotation={[0, 0, 0]} scale={[0.55, 0.75, 0.5]}>
+            <meshStandardMaterial 
+              map={texture} 
+              transparent 
+              polygonOffset 
+              polygonOffsetFactor={-4} 
+              roughness={0.85} 
+              depthTest 
+            />
           </Decal>
         </mesh>
-        {/* Short sleeves over the upper arms */}
-        {[-1, 1].map((s) => (
-          <mesh key={`sl${s}`} position={[s * 0.82, 1.15, 0]} rotation={[0, 0, s * 0.55]} material={mat}>
-            <capsuleGeometry args={[0.28, 0.5, 10, 24]} />
-          </mesh>
-        ))}
+
+        {/* Shoulders Top Coverage (Yoke) */}
+        <mesh position={[0, 1.4, 0]} rotation={[0, 0, 0]} material={shirtMaterial}>
+          <capsuleGeometry args={[0.395, 0.76, 32, 64]} />
+        </mesh>
+
+        {/* Collar trim */}
+        <mesh position={[0, 1.55, 0]} rotation={[Math.PI / 2, 0, 0]} material={shirtMaterial}>
+          <torusGeometry args={[0.13, 0.03, 16, 64]} />
+        </mesh>
+
+        {/* Left Sleeve */}
+        <mesh position={[-0.45, 1.34, 0]} rotation={[0, 0, 0.45]} material={shirtMaterial}>
+          <cylinderGeometry args={[0.14, 0.135, 0.35, 32, 1, true]} />
+        </mesh>
+        
+        {/* Right Sleeve */}
+        <mesh position={[0.45, 1.34, 0]} rotation={[0, 0, -0.45]} material={shirtMaterial}>
+          <cylinderGeometry args={[0.14, 0.135, 0.35, 32, 1, true]} />
+        </mesh>
       </group>
     </Center>
   );
@@ -94,6 +142,13 @@ export default function Garment3DPreview({
   const [tab, setTab] = useState<"3d" | "real">("3d");
   const [mockups, setMockups] = useState<string[] | null>(null);
   const [mockBusy, setMockBusy] = useState(false);
+
+  // Clear memory cache upon closing the component to prevent WebGL Context Losses
+  useEffect(() => {
+    return () => {
+      THREE.Cache.clear();
+    };
+  }, []);
 
   const openReal = async () => {
     setTab("real");
@@ -164,14 +219,21 @@ export default function Garment3DPreview({
           gl={{ antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: false }}
         >
           <color attach="background" args={[isDark ? "#0a0a0b" : "#101012"]} />
-          {/* Soft studio lighting — no network HDR, so no context churn */}
+          {/* Soft studio lighting */}
           <hemisphereLight args={["#ffffff", "#3a3a40", 0.85]} />
           <ambientLight intensity={0.35} />
           <directionalLight position={[3, 5, 4]} intensity={1.1} />
           <directionalLight position={[-4, 2, -3]} intensity={0.45} />
           <directionalLight position={[0, 2, -5]} intensity={0.35} />
-          <Suspense fallback={null}>
-            <Tee color={color} design={design} />
+          <Suspense fallback={
+            <Html center>
+              <div className="flex flex-col items-center justify-center gap-2">
+                <Loader2 className="animate-spin text-white" />
+                <span className="text-[10px] text-white/50 uppercase tracking-widest">Loading Mannequin...</span>
+              </div>
+            </Html>
+          }>
+            <Mannequin color={color} design={design} isDark={isDark} />
           </Suspense>
           <ContactShadows position={[0, -1.95, 0]} opacity={0.4} scale={9} blur={2.6} far={3.5} />
           <OrbitControls
