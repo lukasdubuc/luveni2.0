@@ -181,6 +181,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   // Zoom management states for stylus/tablet precision controls
   const [zoomPercent, setZoomPercent] = useState(100); // 100% (exact fit) to 800%
   const [fitScale, setFitScale] = useState(0.15);
+  const [viewDims, setViewDims] = useState({ w: 800, h: 600 });
   const scrollOuterRef = useRef<HTMLDivElement>(null);
 
   const scale = fitScale * (zoomPercent / 100);
@@ -330,11 +331,22 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
 
   useEffect(() => {
     const fit = () => {
+      const outer = scrollOuterRef.current;
       const isMobile = window.innerWidth < 1024;
       const padW = (isMobile || fullScreenCanvas) ? 32 : 420;
       const padH = (isMobile || fullScreenCanvas) ? 140 : 220;
       const availW = Math.max(280, window.innerWidth - padW);
       const availH = Math.max(280, window.innerHeight - padH);
+      
+      if (outer) {
+        setViewDims({
+          w: outer.clientWidth || availW,
+          h: outer.clientHeight || availH
+        });
+      } else {
+        setViewDims({ w: availW, h: availH });
+      }
+
       const calculatedFit = Math.min(availW / artboardW, availH / artboardH, 1);
       setFitScale(calculatedFit);
     };
@@ -442,7 +454,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     r.readAsDataURL(file);
   };
 
-  // ── Paint engine ───────────────────────────────────────────────
   const addPaintLayer = () => {
     const l: StudioLayer = { id: uid(), type: "paint", name: "Paint", visible: true, x: 0, y: 0, rotation: 0, opacity: 1, blend: "source-over" };
     getPaintCanvas(l);
@@ -544,52 +555,48 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     redrawStage();
   };
 
-  const runAi = async (body: any) => {
-    const { data, error } = await supabase.functions.invoke("ai-generate-image", { body });
-    const msg = await extractFnError(error, data);
-    if (msg) { toast.error(msg); return null; }
-    return data.image_url as string;
-  };
+  const captureStage = useCallback((targetWidth: number, hideBg = false) => {
+    const stage = stageRef.current;
+    if (!stage) return null;
 
-  const aiNewLayer = async () => {
-    if (aiPrompt.trim().length < 3) { toast.error("Prompt too short"); return; }
-    setAiBusy(true);
-    try { const url = await runAi({ prompt: aiPrompt.trim(), width: 1024, height: 1024, persist: true }); if (url) { addImageAt(url, aiPrompt.slice(0, 24)); setAiPrompt(""); toast.success("AI layer added."); } }
-    finally { setAiBusy(false); }
-  };
+    const prevSelectedId = selectedId;
+    setSelectedId(null);
+    stage.batchDraw();
 
-  const aiRegenerateSelected = async () => {
-    const sel = layers.find((l) => l.id === selectedId);
-    if (!sel || sel.type !== "image" || !sel.src) { toast.error("Select an image layer first"); return; }
-    if (aiPrompt.trim().length < 3) { toast.error("Enter a prompt"); return; }
-    setAiBusy(true);
-    try { const url = await runAi({ prompt: aiPrompt.trim(), image: sel.src, width: 1024, height: 1024, persist: false }); if (url) { patchLayer(sel.id, { src: url }); setAiPrompt(""); toast.success("Layer reimagined."); } }
-    finally { setAiBusy(false); }
-  };
+    const bgGroup = stage.findOne(".background-group");
+    const originalBgVis = bgGroup?.visible();
 
-  // Region marquee → generate INTO that space.
-  const finalizeRegion = async (r: { x: number; y: number; w: number; h: number }) => {
-    if (r.w < 40 || r.h < 40) { setRegion(null); return; }
-    if (aiPrompt.trim().length < 3) { toast.error("Type a prompt first, then draw the region"); setRegion(null); return; }
-    setAiBusy(true);
+    const symGuides = stage.find(".symmetry-guide");
+    const alignGuides = stage.find(".align-guide");
+    const originalSymVis = symGuides.map((g) => g.visible());
+    const originalAlignVis = alignGuides.map((g) => g.visible());
+
+    if (hideBg) {
+      bgGroup?.visible(false);
+    }
+    symGuides.forEach((g) => g.visible(false));
+    alignGuides.forEach((g) => g.visible(false));
+    stage.batchDraw();
+
+    const pixelRatio = targetWidth / stage.width();
+    let dataUrl: string | undefined;
     try {
-      // size sent to the model, clamped, preserving region aspect
-      const longest = Math.max(r.w, r.h); const k = Math.min(1, 1024 / longest);
-      const gw = Math.round(r.w * k); const gh = Math.round(r.h * k);
-      const url = await runAi({ prompt: aiPrompt.trim(), width: gw, height: gh, persist: false });
-      if (url) { addImageAt(url, aiPrompt.slice(0, 24), r); setAiPrompt(""); toast.success("Generated into region."); }
-    } finally { setAiBusy(false); setRegion(null); setRegionMode(false); }
-  };
+      dataUrl = stage.toDataURL({ pixelRatio });
+    } catch (err) {
+      console.error("Failed to capture stage:", err);
+    }
 
-  const move = (id: string, dir: -1 | 1) => commit((ls) => {
-    const i = ls.findIndex((l) => l.id === id); const j = i + dir;
-    if (i < 0 || j < 0 || j >= ls.length) return ls;
-    const c = [...ls]; [c[i], c[j]] = [c[j], c[i]]; return c;
-  });
+    if (hideBg) {
+      bgGroup?.visible(originalBgVis ?? true);
+    }
+    symGuides.forEach((g, i) => g.visible(originalSymVis[i] ?? true));
+    alignGuides.forEach((g, i) => g.visible(originalAlignVis[i] ?? true));
+    
+    setSelectedId(prevSelectedId);
+    stage.batchDraw();
 
-  // Bake each paint layer's pixels into its `src` so strokes persist.
-  const serializeLayers = (): StudioLayer[] =>
-    layers.map((l) => (l.type === "paint" && paintCanvases.current[l.id]) ? { ...l, src: paintCanvases.current[l.id].toDataURL() } : l);
+    return dataUrl;
+  }, [selectedId]);
 
   const save = async () => {
     setSaving(true);
@@ -654,7 +661,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
          DESKTOP WORKSPACE HEADER (Hidden on mobile)
          ───────────────────────────────────────────────────────────── */}
       <div className="hidden lg:flex items-center gap-2 px-4 py-3 border-b border-neutral-100 dark:border-neutral-900 shrink-0">
-        <div className={`flex flex-wrap items-center gap-1 p-1 rounded-full ${isDark ? "bg-neutral-900/80 backdrop-blur-xl" : "bg-[#f5f5f7]/90 backdrop-blur-xl shadow-sm"}`}>
+        <div className={`flex flex-wrap items-center gap-1 p-1 rounded-full ${isDark ? "bg-neutral-900/80 backdrop-blur-xl" : "bg-white/90 backdrop-blur-xl shadow-sm"}`}>
           <button onClick={onClose} className={pill}><X size={13} /> Close</button>
           <span className="w-px h-4 opacity-10 bg-current" />
           <button onClick={handleUndo} className={pill} title="Undo (⌘Z)"><Undo2 size={13} /></button>
@@ -672,7 +679,17 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
             <SquareDashed size={13} /> Region AI
           </button>
         </div>
-        <div className="ml-auto flex items-center justify-end gap-2">
+        <div className="ml-auto flex items-center justify-end gap-2 flex-wrap">
+          {/* Desktop Zoom Controller */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-neutral-100 dark:border-neutral-900 bg-[#f5f5f7]/30 dark:bg-[#111111]/30">
+            <span className="text-[8px] opacity-50 uppercase tracking-widest">Zoom</span>
+            <input 
+              type="range" min={100} max={800} step={10} value={zoomPercent} 
+              onChange={(e) => setZoomPercent(parseInt(e.target.value))} 
+              className="w-20 sm:w-28 accent-[#6366f1] cursor-pointer"
+            />
+            <span className="text-[8px] font-bold opacity-60 w-8">{zoomPercent}%</span>
+          </div>
           {/* Tablet/Stylus Maximizer Button */}
           <button onClick={() => setFullScreenCanvas(!fullScreenCanvas)} className={pill} title="Toggle Clean Canvas Mode">
             {fullScreenCanvas ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
@@ -756,35 +773,22 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-         MOBILE & STYLUS PROCREATE SIDEBAR (CSS Rotated Range Controls)
-         Stop-propagation added to prevent clicks from painting on canvas
+         MOBILE & STYLUS PROCREATE FLOATING HORIZONTAL ZOOM CAPSULE
+         Positions a standard horizontal range input (100% immune to touch blockages)
          ───────────────────────────────────────────────────────────── */}
       <div 
         onMouseDown={(e) => e.stopPropagation()}
         onTouchStart={(e) => e.stopPropagation()}
         onTouchMove={(e) => e.stopPropagation()}
-        className="absolute left-3 top-[42%] -translate-y-1/2 flex flex-col items-center gap-6 z-[9999] lg:hidden pointer-events-auto animate-fade-in"
+        className="absolute bottom-16 left-1/2 -translate-x-1/2 z-[9999] lg:hidden flex items-center gap-3 px-4 py-2.5 rounded-full bg-white/95 dark:bg-[#121212]/95 backdrop-blur-md shadow-xl border border-neutral-100 dark:border-neutral-900 pointer-events-auto"
       >
-        {/* Canvas Zoom Slider Dock (100% to 800% Precision scaling) */}
-        <div className="flex flex-col items-center gap-1 bg-white/85 dark:bg-black/80 backdrop-blur-md p-1.5 py-4 rounded-full shadow-lg border border-neutral-200/40 dark:border-neutral-800/40 select-none">
-          <span className="text-[7px] font-bold opacity-50 uppercase tracking-wider select-none">Zoom</span>
-          {/* Custom native vertical rendering (bypasses browser CSS transform bugs completely for buttery-smooth stylus sliding) */}
-          <div className="h-28 w-6 flex items-center justify-center relative select-none">
-            <input 
-              type="range" min={100} max={800} step={10} value={zoomPercent} 
-              onChange={(e) => setZoomPercent(parseInt(e.target.value))} 
-              className="accent-[#6366f1] cursor-pointer"
-              style={{
-                writingMode: "vertical-lr",
-                WebkitAppearance: "slider-vertical",
-                height: "100%",
-                width: "4px"
-              }} 
-              {...{ orient: "vertical" }}
-            />
-          </div>
-          <span className="text-[7px] font-bold opacity-60 select-none">{zoomPercent}%</span>
-        </div>
+        <span className="text-[8px] font-bold opacity-50 uppercase tracking-wider select-none">Zoom</span>
+        <input 
+          type="range" min={100} max={800} step={10} value={zoomPercent} 
+          onChange={(e) => setZoomPercent(parseInt(e.target.value))} 
+          className="w-36 sm:w-48 accent-[#6366f1] cursor-pointer"
+        />
+        <span className="text-[8px] font-bold opacity-60 select-none w-8">{zoomPercent}%</span>
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
@@ -795,8 +799,22 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
         {/* Stage Canvas Area — canvas-scroll-container enables drawing panning */}
         <div ref={scrollOuterRef} className="flex-1 overflow-auto p-4 min-h-[380px] lg:min-h-0 bg-[#f5f5f7] dark:bg-[#111111] relative canvas-scroll-container">
           {/* Centering Wrapper — symmetrically locks canvas center position during scale changes */}
-          <div className="min-w-full min-h-full flex items-center justify-center">
-            <div className="rounded-[28px] overflow-hidden shadow-2xl">
+          <div 
+            className="relative block animate-fade-in"
+            style={{
+              width: `${Math.max(workspaceSize.w, artboardW * scale)}px`,
+              height: `${Math.max(workspaceSize.h, artboardH * scale)}px`,
+            }}
+          >
+            <div 
+              className="absolute rounded-[28px] overflow-hidden shadow-2xl transition-all duration-75"
+              style={{
+                left: `${Math.max(0, (workspaceSize.w - artboardW * scale) / 2)}px`,
+                top: `${Math.max(0, (workspaceSize.h - artboardH * scale) / 2)}px`,
+                width: `${artboardW * scale}px`,
+                height: `${artboardH * scale}px`,
+              }}
+            >
               <Stage
                 ref={stageRef}
                 width={artboardW * scale} height={artboardH * scale} scaleX={scale} scaleY={scale}
@@ -906,7 +924,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
           fullScreenCanvas ? "lg:hidden" : "hidden lg:block"
         }`}>
           {selected && (
-            <div className={`rounded-[20px] p-4 mb-3 ${isDark ? "bg-neutral-900/60" : "bg-neutral-50/70 border border-neutral-100 shadow-sm"}`}>
+            <div className={`rounded-[20px] p-4 mb-3 ${isDark ? "bg-neutral-900/60" : "bg-white shadow-[0_2px_12px_rgba(0,0,0,0.05)]"}`}>
               <p className="text-[9px] uppercase tracking-widest opacity-50 mb-3">Properties</p>
               {/* Centering / alignment */}
               <div className="flex items-center gap-1.5 mb-3">
@@ -1000,18 +1018,18 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
               <div>
                 <h3 className="text-[11px] font-bold uppercase tracking-widest mb-4 font-mono">Add Assets</h3>
                 <div className="grid grid-cols-3 gap-3">
-                  <button onClick={() => { addText(); setMobileSheet("none"); }} className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
+                  <button onClick={() => { addText(); setMobileSheet("none"); }} className={`flex-1 flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
                     <Type size={18} />
                     <span className="text-[8px] font-bold uppercase tracking-wider mt-1">Text</span>
                   </button>
 
-                  <label className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
+                  <label className={`flex-1 flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
                     <ImagePlus size={18} />
                     <span className="text-[8px] font-bold uppercase tracking-wider mt-1">Photo</span>
                     <input type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files?.[0]) { uploadImage(e.target.files[0]); setMobileSheet("none"); } }} />
                   </label>
 
-                  <label className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
+                  <label className={`flex-1 flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
                     <Wand2 size={18} />
                     <span className="text-[8px] font-bold uppercase tracking-wider mt-1">Texture</span>
                     <input type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files?.[0]) { importTexture(e.target.files[0]); setMobileSheet("none"); } }} />
