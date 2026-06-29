@@ -46,29 +46,6 @@ const getProxyImageUrl = (url: string | null): string => {
   return url;
 };
 
-// Helper function to load proxied images with the user's active session token
-// to bypass gateway JWT checks, converting the binary stream to a local object URL.
-const fetchProxiedImage = async (url: string, activeSignal: { active: boolean }): Promise<string | null> => {
-  if (!url.includes("action=proxy-image")) return url;
-  try {
-    const { data } = await supabase.auth.getSession();
-    const session = data?.session;
-    const headers: Record<string, string> = {};
-    if (session?.access_token) {
-      headers["Authorization"] = `Bearer ${session.access_token}`;
-    }
-    const res = await fetch(url, { headers });
-    if (!activeSignal.active) return null;
-    if (res.ok) {
-      const blob = await res.blob();
-      return URL.createObjectURL(blob);
-    }
-  } catch (e) {
-    console.error("Failed to fetch proxied image:", e);
-  }
-  return null;
-};
-
 // Non-destructive Konva blur via node caching. Re-caches when radius or the
 // content dependency changes; clears cache at radius 0.
 function useBlur(getNode: () => Konva.Node | null, radius: number, dep: any) {
@@ -107,41 +84,12 @@ function useHtmlImage(src?: string) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   useEffect(() => {
     if (!src) { setImg(null); return; }
-    
-    const activeSignal = { active: true };
-    let objectUrl: string | null = null;
-
-    (async () => {
-      const targetUrl = src.includes("action=proxy-image") 
-        ? await fetchProxiedImage(src, activeSignal) 
-        : src;
-        
-      if (!activeSignal.active || !targetUrl) {
-        if (activeSignal.active) setImg(null);
-        return;
-      }
-      
-      if (src.includes("action=proxy-image")) {
-        objectUrl = targetUrl;
-      }
-
-      const im = new window.Image();
-      im.crossOrigin = "anonymous";
-      im.src = targetUrl;
-      im.onload = () => {
-        if (activeSignal.active) setImg(im);
-      };
-      im.onerror = () => {
-        if (activeSignal.active) setImg(null);
-      };
-    })();
-
-    return () => {
-      activeSignal.active = false;
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
-    };
+    const im = new window.Image();
+    im.crossOrigin = "anonymous";
+    // Directly append a cache-busting query parameter to force fresh CORS headers
+    im.src = src.includes("?") ? `${src}&cors=1` : `${src}?cors=1`;
+    im.onload = () => setImg(im);
+    im.onerror = () => setImg(null);
   }, [src]);
   return img;
 }
@@ -326,31 +274,12 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     }
     if (l.src && !loadedPaint.current.has(l.id)) {
       loadedPaint.current.add(l.id);
-      
-      const im = new window.Image();
-      im.crossOrigin = "anonymous";
-      
-      const activeSignal = { active: true };
-      (async () => {
-        const srcUrl = l.src ? getProxyImageUrl(l.src) : "";
-        const targetUrl = srcUrl.includes("action=proxy-image")
-          ? await fetchProxiedImage(srcUrl, activeSignal)
-          : srcUrl;
-          
-        if (targetUrl) {
-          im.src = targetUrl;
-          im.onload = () => {
-            c!.getContext("2d")!.drawImage(im, 0, 0);
-            redrawStage();
-            if (srcUrl.includes("action=proxy-image")) {
-              URL.revokeObjectURL(targetUrl);
-            }
-          };
-        }
-      })();
+      const im = new window.Image(); im.crossOrigin = "anonymous"; 
+      im.src = l.src.includes("?") ? `${l.src}&cors=1` : `${l.src}?cors=1`;
+      im.onload = () => { c!.getContext("2d")!.drawImage(im, 0, 0); redrawStage(); };
     }
     return c;
-  }, [artboardW, artboardH, redrawStage]);
+  }, [artboardW, artboardH]);
 
   const redrawStage = useCallback(() => {
     stageRef.current?.getLayers()?.[0]?.batchDraw();
@@ -565,7 +494,8 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
       commit((ls) => [...ls, l]); setSelectedId(l.id);
     };
     if (box) { place(box.w, box.h, box.x, box.y); return; }
-    const im = new window.Image(); im.crossOrigin = "anonymous"; im.src = getProxyImageUrl(src);
+    const im = new window.Image(); im.crossOrigin = "anonymous"; 
+    im.src = src.includes("?") ? `${src}&cors=1` : `${src}?cors=1`;
     im.onload = () => {
       const ratio = im.width / im.height; const w = Math.min(artboardW * 0.7, im.width); const h = w / ratio;
       place(w, h, (artboardW - w) / 2, (artboardH - h) / 2);
@@ -580,7 +510,8 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     const r = new FileReader();
     r.onload = () => {
       const src = r.result as string;
-      const im = new window.Image(); im.crossOrigin = "anonymous"; im.src = getProxyImageUrl(src);
+      const im = new window.Image(); im.crossOrigin = "anonymous"; 
+      im.src = src.includes("?") ? `${src}&cors=1` : `${src}?cors=1`;
       im.onload = () => {
         const s = document.createElement("canvas"); s.width = 16; s.height = 16;
         const sx = s.getContext("2d")!; sx.drawImage(im, 0, 0, 16, 16);
@@ -1226,18 +1157,18 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
                 <div className="grid grid-cols-3 gap-3">
                   <button onClick={() => { addText(); setMobileSheet("none"); }} className={`flex-1 flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
                     <Type size={18} />
-                    <span className="text-[8px] font-bold uppercase tracking-wider mt-1">Text</span>
+                    <span className="text-[8px] font-bold uppercase tracking-wider mt-1 font-mono">Text</span>
                   </button>
 
                   <label className={`flex-1 flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
                     <ImagePlus size={18} />
-                    <span className="text-[8px] font-bold uppercase tracking-wider mt-1">Photo</span>
+                    <span className="text-[8px] font-bold uppercase tracking-wider mt-1 font-mono">Photo</span>
                     <input type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files?.[0]) { uploadImage(e.target.files[0]); setMobileSheet("none"); } }} />
                   </label>
 
                   <label className={`flex-1 flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
                     <Wand2 size={18} />
-                    <span className="text-[8px] font-bold uppercase tracking-wider mt-1">Texture</span>
+                    <span className="text-[8px] font-bold uppercase tracking-wider mt-1 font-mono">Texture</span>
                     <input type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files?.[0]) { importTexture(e.target.files[0]); setMobileSheet("none"); } }} />
                   </label>
                 </div>
@@ -1296,15 +1227,15 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
               <div>
                 <h3 className="text-[11px] font-bold uppercase tracking-widest mb-4 font-mono">Workspace Actions</h3>
                 <div className="grid grid-cols-3 gap-3">
-                  <button onClick={() => { exportPng(); setMobileSheet("none"); }} className={`flex-col flex items-center justify-center gap-2 p-4 rounded-2xl border border-dashed hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
+                  <button onClick={() => { exportPng(); setMobileSheet("none"); }} className={`flex-col flex items-center justify-center gap-2 p-4 rounded-2xl border border-dashed hover:bg-neutral-50 dark:hover:bg-[#121212] ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
                     <Download size={18} />
                     <span className="text-[8px] font-bold uppercase tracking-wider mt-1 font-mono">PNG</span>
                   </button>
-                  <button onClick={() => { save(); setMobileSheet("none"); }} className={`flex-col flex items-center justify-center gap-2 p-4 rounded-2xl border border-dashed hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
+                  <button onClick={() => { save(); setMobileSheet("none"); }} className={`flex-col flex items-center justify-center gap-2 p-4 rounded-2xl border border-dashed hover:bg-neutral-50 dark:hover:bg-[#121212] ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
                     <Save size={18} />
                     <span className="text-[8px] font-bold uppercase tracking-wider mt-1 font-mono">Save</span>
                   </button>
-                  <button onClick={() => { publish(); setMobileSheet("none"); }} className={`flex-col flex items-center justify-center gap-2 p-4 rounded-2xl border border-dashed hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
+                  <button onClick={() => { publish(); setMobileSheet("none"); }} className={`flex-col flex items-center justify-center gap-2 p-4 rounded-2xl border border-dashed hover:bg-neutral-50 dark:hover:bg-[#121212] ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
                     <Sparkles size={18} />
                     <span className="text-[8px] font-bold uppercase tracking-wider mt-1 font-mono">Publish</span>
                   </button>
@@ -1355,7 +1286,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
 
       {/* 3D garment preview (Three.js, lazy/client-only) */}
       {preview3d && (
-        <Suspense fallback={<div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/95 text-white"><Loader2 className="animate-spin" /></div>}>
+        <Suspense fallback={<div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 text-white"><Loader2 className="animate-spin" /></div>}>
           <Garment3DPreview design={preview3d} isDark={isDark} onClose={() => setPreview3d(null)}
             canMockup={product?.mfr === "printful" && !!product?.variant_id}
             fetchMockups={fetchMockups} />
