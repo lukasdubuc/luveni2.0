@@ -181,6 +181,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   // Zoom management states for stylus/tablet precision controls
   const [zoomPercent, setZoomPercent] = useState(100); // 100% (exact fit) to 800%
   const [fitScale, setFitScale] = useState(0.15);
+  const scrollOuterRef = useRef<HTMLDivElement>(null);
 
   const scale = fitScale * (zoomPercent / 100);
 
@@ -241,9 +242,9 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   // Lock browser viewport to completely prevent horizontal and vertical page swiping/sliding
   useEffect(() => {
     const preventTouchMove = (e: TouchEvent) => {
-      // Allow scrolling ONLY inside bottom drawers/modal sheets
       const target = e.target as HTMLElement;
-      if (target.closest('.overflow-y-auto')) {
+      // Allow touch scrolling inside modal drawers OR the canvas viewport container
+      if (target.closest('.overflow-y-auto') || target.closest('.canvas-scroll-container')) {
         return;
       }
       e.preventDefault();
@@ -312,6 +313,23 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     fit(); window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
   }, [artboardW, artboardH, fullScreenCanvas]);
+
+  // Handle dynamic scroll coordinates to keep the canvas centered inside viewport during zoom transitions
+  useEffect(() => {
+    const outer = scrollOuterRef.current;
+    if (!outer) return;
+
+    const rect = outer.getBoundingClientRect();
+    const viewW = rect.width;
+    const viewH = rect.height;
+
+    const stageW = artboardW * scale;
+    const stageH = artboardH * scale;
+
+    // Center scroll offsets
+    outer.scrollLeft = (stageW - viewW) / 2;
+    outer.scrollTop = (stageH - viewH) / 2;
+  }, [scale, artboardW, artboardH]);
 
   useEffect(() => {
     const tr = trRef.current; if (!tr) return;
@@ -559,51 +577,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const serializeLayers = (): StudioLayer[] =>
     layers.map((l) => (l.type === "paint" && paintCanvases.current[l.id]) ? { ...l, src: paintCanvases.current[l.id].toDataURL() } : l);
 
-  // A comprehensive helper to temporarily hide UI helpers, guides, and backdrops
-  // to run a clean, full-resolution capture.
-  const captureStage = useCallback((targetWidth: number, hideBg = false) => {
-    const stage = stageRef.current;
-    if (!stage) return null;
-
-    const prevSelectedId = selectedId;
-    setSelectedId(null);
-    stage.batchDraw();
-
-    const bgGroup = stage.findOne(".background-group");
-    const originalBgVis = bgGroup?.visible();
-
-    const symGuides = stage.find(".symmetry-guide");
-    const alignGuides = stage.find(".align-guide");
-    const originalSymVis = symGuides.map((g) => g.visible());
-    const originalAlignVis = alignGuides.map((g) => g.visible());
-
-    if (hideBg) {
-      bgGroup?.visible(false);
-    }
-    symGuides.forEach((g) => g.visible(false));
-    alignGuides.forEach((g) => g.visible(false));
-    stage.batchDraw();
-
-    const pixelRatio = targetWidth / stage.width();
-    let dataUrl: string | undefined;
-    try {
-      dataUrl = stage.toDataURL({ pixelRatio });
-    } catch (err) {
-      console.error("Failed to capture stage:", err);
-    }
-
-    if (hideBg) {
-      bgGroup?.visible(originalBgVis ?? true);
-    }
-    symGuides.forEach((g, i) => g.visible(originalSymVis[i] ?? true));
-    alignGuides.forEach((g, i) => g.visible(originalAlignVis[i] ?? true));
-    
-    setSelectedId(prevSelectedId);
-    stage.batchDraw();
-
-    return dataUrl;
-  }, [selectedId]);
-
   const save = async () => {
     setSaving(true);
     try {
@@ -743,23 +716,27 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
         </div>
       </div>
 
-      {/* Brush controls — only while painting on desktop */}
+      {/* Brush controls — visible on both desktop & mobile when brush is selected */}
       {tool === "brush" && (
-        <div className={`hidden lg:block px-4 pb-2 shrink-0 transition-all ${fullScreenCanvas ? "lg:hidden" : ""}`}>
-          <div className={`flex items-center gap-3 px-3 py-2 rounded-full ${isDark ? "bg-neutral-900/70 backdrop-blur-xl" : "bg-[#f5f5f7]/90 backdrop-blur-xl shadow-sm border border-neutral-200/40"}`}>
-            <Paintbrush size={13} className="opacity-50 ml-1" />
-            <input type="color" value={brushColor} onChange={(e) => setBrushColor(e.target.value)} className="w-7 h-7 rounded-full bg-transparent border-0 cursor-pointer" title="Brush color" />
-            <div className="flex items-center gap-2">
-              <span className="text-[9px] opacity-50 uppercase tracking-widest">Size</span>
-              <input type="range" min={4} max={600} value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} className="w-40" />
-              <span className="text-[9px] opacity-60 w-8">{brushSize}</span>
+        <div className={`px-4 pb-2 shrink-0 transition-all ${fullScreenCanvas ? "lg:hidden" : ""}`}>
+          <div className={`flex flex-col md:flex-row items-stretch md:items-center gap-3 px-3 py-2 rounded-2xl md:rounded-full ${isDark ? "bg-neutral-900/70 backdrop-blur-xl" : "bg-white/90 backdrop-blur-xl shadow-sm border border-neutral-200/40"}`}>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Paintbrush size={13} className="opacity-50 ml-1" />
+              <input type="color" value={brushColor} onChange={(e) => setBrushColor(e.target.value)} className="w-7 h-7 rounded-full bg-transparent border-0 cursor-pointer shrink-0" title="Brush color" />
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] opacity-50 uppercase tracking-widest">Size</span>
+                <input type="range" min={4} max={600} value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} className="w-32 sm:w-40" />
+                <span className="text-[9px] opacity-60 w-8">{brushSize}</span>
+              </div>
             </div>
-            <span className="w-px h-4 opacity-10 bg-current" />
-            <span className="text-[9px] opacity-50 uppercase tracking-widest">Symmetry</span>
-            <button onClick={() => setSymmetry((s) => (s === "off" ? "v" : s === "v" ? "h" : "off"))}
-              className={pill + (symmetry !== "off" ? (isDark ? " bg-white/15" : " bg-black/10") : "")}>
-              {symmetry === "h" ? <FlipVertical2 size={13} /> : <FlipHorizontal2 size={13} />} {symmetry === "off" ? "Off" : symmetry === "v" ? "Vertical" : "Horizontal"}
-            </button>
+            <span className="hidden md:block w-px h-4 opacity-10 bg-current" />
+            <div className="flex items-center gap-2 justify-between md:justify-start mt-2 md:mt-0">
+              <span className="text-[9px] opacity-50 uppercase tracking-widest">Symmetry</span>
+              <button onClick={() => setSymmetry((s) => (s === "off" ? "v" : s === "v" ? "h" : "off"))}
+                className={pill + (symmetry !== "off" ? (isDark ? " bg-white/15" : " bg-black/10") : "")}>
+                {symmetry === "h" ? <FlipVertical2 size={13} /> : <FlipHorizontal2 size={13} />} {symmetry === "off" ? "Off" : symmetry === "v" ? "Vertical" : "Horizontal"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -772,11 +749,12 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
         onMouseDown={(e) => e.stopPropagation()}
         onTouchStart={(e) => e.stopPropagation()}
         onTouchMove={(e) => e.stopPropagation()}
-        className="absolute left-3 top-[42%] -translate-y-1/2 flex flex-col items-center gap-6 z-[9999] lg:hidden pointer-events-auto"
+        className="absolute left-3 top-[42%] -translate-y-1/2 flex flex-col items-center gap-6 z-[9999] lg:hidden pointer-events-auto animate-fade-in"
       >
         {/* Canvas Zoom Slider Dock (100% to 800% Precision scaling) */}
-        <div className="flex flex-col items-center gap-1 bg-white/80 dark:bg-black/70 backdrop-blur-md p-1.5 py-4 rounded-full shadow-lg border border-neutral-200/40 dark:border-neutral-800/40">
+        <div className="flex flex-col items-center gap-1 bg-white/85 dark:bg-black/80 backdrop-blur-md p-1.5 py-4 rounded-full shadow-lg border border-neutral-200/40 dark:border-neutral-800/40 select-none">
           <span className="text-[7px] font-bold opacity-50 uppercase tracking-wider select-none">Zoom</span>
+          {/* Re-designed as standard range slider rotated -90deg to bypass all mobile web touch bugs */}
           <div className="h-28 w-6 flex items-center justify-center relative select-none">
             <input 
               type="range" min={100} max={800} step={10} value={zoomPercent} 
@@ -793,26 +771,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
           </div>
           <span className="text-[7px] font-bold opacity-60 select-none">{zoomPercent}%</span>
         </div>
-
-        {/* Brush Size Slider Dock */}
-        <div className="flex flex-col items-center gap-1 bg-white/80 dark:bg-black/70 backdrop-blur-md p-1.5 py-4 rounded-full shadow-lg border border-neutral-200/40 dark:border-neutral-800/40">
-          <span className="text-[7px] font-bold opacity-50 uppercase tracking-wider select-none">Size</span>
-          <div className="h-28 w-6 flex items-center justify-center relative select-none">
-            <input 
-              type="range" min={4} max={600} value={brushSize} 
-              onChange={(e) => setBrushSize(parseInt(e.target.value))} 
-              className="accent-[#6366f1] cursor-pointer"
-              style={{
-                transform: "rotate(-90deg)",
-                width: "112px",
-                position: "absolute",
-                margin: 0,
-                padding: 0
-              }} 
-            />
-          </div>
-          <span className="text-[7px] font-bold opacity-60 select-none">{brushSize}</span>
-        </div>
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
@@ -820,8 +778,8 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
          ───────────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden relative">
         
-        {/* Stage Wrapper */}
-        <div className="flex-1 flex items-center justify-center overflow-auto p-4 min-h-[380px] lg:min-h-0 bg-[#f5f5f7] dark:bg-[#111111] relative">
+        {/* Stage Canvas Area — canvas-scroll-container enables drawing panning */}
+        <div ref={scrollOuterRef} className="flex-1 flex items-center justify-center overflow-auto p-4 min-h-[380px] lg:min-h-0 bg-[#f5f5f7] dark:bg-[#111111] relative canvas-scroll-container">
           <div className="rounded-[28px] overflow-hidden shadow-2xl">
             <Stage
               ref={stageRef}
