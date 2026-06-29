@@ -181,6 +181,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   // Zoom management states for stylus/tablet precision controls
   const [zoomPercent, setZoomPercent] = useState(100); // 100% (exact fit) to 800%
   const [fitScale, setFitScale] = useState(0.15);
+  const [viewDims, setViewDims] = useState({ w: 800, h: 600 });
   const scrollOuterRef = useRef<HTMLDivElement>(null);
 
   const scale = fitScale * (zoomPercent / 100);
@@ -330,11 +331,22 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
 
   useEffect(() => {
     const fit = () => {
+      const outer = scrollOuterRef.current;
       const isMobile = window.innerWidth < 1024;
       const padW = (isMobile || fullScreenCanvas) ? 32 : 420;
       const padH = (isMobile || fullScreenCanvas) ? 140 : 220;
       const availW = Math.max(280, window.innerWidth - padW);
       const availH = Math.max(280, window.innerHeight - padH);
+      
+      if (outer) {
+        setViewDims({
+          w: outer.clientWidth || availW,
+          h: outer.clientHeight || availH
+        });
+      } else {
+        setViewDims({ w: availW, h: availH });
+      }
+
       const calculatedFit = Math.min(availW / artboardW, availH / artboardH, 1);
       setFitScale(calculatedFit);
     };
@@ -591,54 +603,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const serializeLayers = (): StudioLayer[] =>
     layers.map((l) => (l.type === "paint" && paintCanvases.current[l.id]) ? { ...l, src: paintCanvases.current[l.id].toDataURL() } : l);
 
-  const save = async () => {
-    setSaving(true);
-    try {
-      const thumbnail = captureStage(720, false);
-      const { error } = await supabase.from("studio_projects").update({ canvas: { layers: serializeLayers() }, thumbnail_url: thumbnail, updated_at: new Date().toISOString() }).eq("id", projectId);
-      if (error) { toast.error(error.message); return; }
-      toast.success("Saved.");
-    } finally { setSaving(false); }
-  };
-
-  const [publishing, setPublishing] = useState(false);
-  const publish = async () => {
-    if (layers.length === 0) { toast.error("Design something first"); return; }
-    setPublishing(true);
-    setSelectedId(null);
-    try {
-      await new Promise((r) => setTimeout(r, 60));
-      const dataUrl = captureStage(artboardW, true);
-      if (!dataUrl) { toast.error("Could not render the design"); return; }
-      const blob = await (await fetch(dataUrl)).blob();
-      const path = `published/${projectId}-${Date.now()}.png`;
-      const up = await supabase.storage.from("designs").upload(path, blob, { contentType: "image/png", upsert: true });
-      if (up.error) { toast.error(`Upload failed: ${up.error.message}`); return; }
-      const { data: pub } = supabase.storage.from("designs").getPublicUrl(path);
-
-      const { data, error } = await supabase.functions.invoke("publish-design", {
-        body: { projectId, imageUrl: pub.publicUrl, title: projectName, retailPriceCents: priceCents, templateKey },
-      });
-      const msg = await extractFnError(error, data);
-      if (msg) { toast.error(msg); return; }
-      toast.success("Published to Printful — run Sync (or wait for the heartbeat) to see it in the shop.");
-    } finally {
-      setPublishing(false);
-    }
-  };
-
-  const exportPng = () => {
-    const uri = captureStage(artboardW, true);
-    if (!uri) {
-      toast.error("Could not render the design");
-      return;
-    }
-    const a = document.createElement("a");
-    a.download = `${projectName.toLowerCase().replace(/\s+/g, "-")}-design.png`;
-    a.href = uri;
-    a.click();
-  };
-
   const selected = layers.find((l) => l.id === selectedId);
   const pill = `flex items-center gap-1.5 text-[10px] font-medium px-3.5 py-2 rounded-full transition-all ${isDark ? "text-neutral-300 hover:bg-white/10" : "text-neutral-700 hover:bg-black/[0.06]"}`;
   const isHat = templateKey?.startsWith("hat");
@@ -672,7 +636,17 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
             <SquareDashed size={13} /> Region AI
           </button>
         </div>
-        <div className="ml-auto flex items-center justify-end gap-2">
+        <div className="ml-auto flex items-center justify-end gap-2 flex-wrap">
+          {/* Desktop Zoom Controller */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-neutral-100 dark:border-neutral-900 bg-[#f5f5f7]/30 dark:bg-[#111111]/30">
+            <span className="text-[8px] opacity-50 uppercase tracking-widest">Zoom</span>
+            <input 
+              type="range" min={100} max={800} step={10} value={zoomPercent} 
+              onChange={(e) => setZoomPercent(parseInt(e.target.value))} 
+              className="w-20 sm:w-28 accent-[#6366f1] cursor-pointer"
+            />
+            <span className="text-[8px] font-bold opacity-60 w-8">{zoomPercent}%</span>
+          </div>
           {/* Tablet/Stylus Maximizer Button */}
           <button onClick={() => setFullScreenCanvas(!fullScreenCanvas)} className={pill} title="Toggle Clean Canvas Mode">
             {fullScreenCanvas ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
@@ -756,35 +730,22 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-         MOBILE & STYLUS PROCREATE SIDEBAR (CSS Rotated Range Controls)
-         Stop-propagation added to prevent clicks from painting on canvas
+         MOBILE & STYLUS PROCREATE FLOATING HORIZONTAL ZOOM CAPSULE
+         Positions a standard horizontal range input (100% immune to touch blockages)
          ───────────────────────────────────────────────────────────── */}
       <div 
         onMouseDown={(e) => e.stopPropagation()}
         onTouchStart={(e) => e.stopPropagation()}
         onTouchMove={(e) => e.stopPropagation()}
-        className="absolute left-3 top-[42%] -translate-y-1/2 flex flex-col items-center gap-6 z-[9999] lg:hidden pointer-events-auto animate-fade-in"
+        className="absolute bottom-16 left-1/2 -translate-x-1/2 z-[9999] lg:hidden flex items-center gap-3 px-4 py-2.5 rounded-full bg-white/95 dark:bg-[#121212]/95 backdrop-blur-md shadow-xl border border-neutral-100 dark:border-neutral-900 pointer-events-auto"
       >
-        {/* Canvas Zoom Slider Dock (100% to 800% Precision scaling) */}
-        <div className="flex flex-col items-center gap-1 bg-white/85 dark:bg-black/80 backdrop-blur-md p-1.5 py-4 rounded-full shadow-lg border border-neutral-200/40 dark:border-neutral-800/40 select-none">
-          <span className="text-[7px] font-bold opacity-50 uppercase tracking-wider select-none">Zoom</span>
-          {/* Custom native vertical rendering (bypasses browser CSS transform bugs completely for buttery-smooth stylus sliding) */}
-          <div className="h-28 w-6 flex items-center justify-center relative select-none">
-            <input 
-              type="range" min={100} max={800} step={10} value={zoomPercent} 
-              onChange={(e) => setZoomPercent(parseInt(e.target.value))} 
-              className="accent-[#6366f1] cursor-pointer"
-              style={{
-                writingMode: "vertical-lr",
-                WebkitAppearance: "slider-vertical",
-                height: "100%",
-                width: "4px"
-              }} 
-              {...{ orient: "vertical" }}
-            />
-          </div>
-          <span className="text-[7px] font-bold opacity-60 select-none">{zoomPercent}%</span>
-        </div>
+        <span className="text-[8px] font-bold opacity-50 uppercase tracking-wider select-none">Zoom</span>
+        <input 
+          type="range" min={100} max={800} step={10} value={zoomPercent} 
+          onChange={(e) => setZoomPercent(parseInt(e.target.value))} 
+          className="w-36 sm:w-48 accent-[#6366f1] cursor-pointer"
+        />
+        <span className="text-[8px] font-bold opacity-60 select-none w-8">{zoomPercent}%</span>
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
@@ -794,9 +755,24 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
         
         {/* Stage Canvas Area — canvas-scroll-container enables drawing panning */}
         <div ref={scrollOuterRef} className="flex-1 overflow-auto p-4 min-h-[380px] lg:min-h-0 bg-[#f5f5f7] dark:bg-[#111111] relative canvas-scroll-container">
-          {/* Centering Wrapper — symmetrically locks canvas center position during scale changes */}
-          <div className="min-w-full min-h-full flex items-center justify-center">
-            <div className="rounded-[28px] overflow-hidden shadow-2xl">
+          
+          {/* Centering Wrapper — mathematically centers smaller canvas, enables seamless scrollable space when zoomed in */}
+          <div 
+            className="relative block"
+            style={{
+              width: `${Math.max(viewDims.w, artboardW * scale)}px`,
+              height: `${Math.max(viewDims.h, artboardH * scale)}px`,
+            }}
+          >
+            <div 
+              className="absolute rounded-[28px] overflow-hidden shadow-2xl transition-all duration-75"
+              style={{
+                left: `${Math.max(0, (viewDims.w - artboardW * scale) / 2)}px`,
+                top: `${Math.max(0, (viewDims.h - artboardH * scale) / 2)}px`,
+                width: `${artboardW * scale}px`,
+                height: `${artboardH * scale}px`,
+              }}
+            >
               <Stage
                 ref={stageRef}
                 width={artboardW * scale} height={artboardH * scale} scaleX={scale} scaleY={scale}
