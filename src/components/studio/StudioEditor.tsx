@@ -11,7 +11,7 @@ import {
   Type, ImagePlus, Sparkles, Trash2, Eye, EyeOff, ArrowUp, ArrowDown,
   Save, Download, Loader2, Wand2, X, RefreshCw, Undo2, Redo2, SquareDashed,
   Paintbrush, FlipHorizontal2, FlipVertical2, MousePointer2, PaintBucket,
-  AlignCenterHorizontal, AlignCenterVertical, AlignVerticalJustifyCenter,
+  AlignCenterHorizontal, AlignCenterVertical, AlignVerticalJustifyCenter, Layers, Plus
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -149,6 +149,9 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const [regionMode, setRegionMode] = useState(false);
   const [region, setRegion] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
 
+  // Mobile Sheets manager: "none" | "layers" | "ai" | "export"
+  const [mobileSheet, setMobileSheet] = useState<"none" | "layers" | "ai" | "export">("none");
+
   // Paint engine state
   const [tool, setTool] = useState<"select" | "brush" | "fill">("select");
   const [brushSize, setBrushSize] = useState(120);
@@ -229,9 +232,8 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   useEffect(() => {
     const fit = () => {
       const isMobile = window.innerWidth < 1024;
-      // Adapt horizontal/vertical offsets dynamically for mobile stack view
       const padW = isMobile ? 32 : 420;
-      const padH = isMobile ? 360 : 220;
+      const padH = isMobile ? 180 : 220;
       const availW = Math.max(280, window.innerWidth - padW);
       const availH = Math.max(280, window.innerHeight - padH);
       setScale(Math.min(availW / artboardW, availH / artboardH, 1));
@@ -588,10 +590,13 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const pa = printArea || defaultPa;
 
   return (
-    <div className={`admin-page fixed inset-0 z-50 flex flex-col font-mono overflow-y-auto lg:overflow-hidden ${isDark ? "bg-black text-neutral-105" : "bg-[#f5f5f7] text-neutral-900"}`}>
-      {/* Toolbar — responsive flex-wrap cluster */}
-      <div className="flex flex-col lg:flex-row items-start lg:items-center gap-2 px-4 py-3 shrink-0">
-        <div className={`flex flex-wrap items-center gap-1 p-1 rounded-2xl lg:rounded-full ${isDark ? "bg-neutral-900/80 backdrop-blur-xl" : "bg-white/90 backdrop-blur-xl shadow-[0_4px_20px_rgba(0,0,0,0.08)]"}`}>
+    <div className={`admin-page fixed inset-0 z-50 flex flex-col font-mono relative select-none ${isDark ? "bg-black text-neutral-105" : "bg-white text-neutral-900"}`}>
+      
+      {/* ─────────────────────────────────────────────────────────────
+         DESKTOP WORKSPACE HEADER (Hidden on mobile)
+         ───────────────────────────────────────────────────────────── */}
+      <div className="hidden lg:flex items-center gap-2 px-4 py-3 border-b border-neutral-100 dark:border-neutral-900 shrink-0">
+        <div className={`flex flex-wrap items-center gap-1 p-1 rounded-full ${isDark ? "bg-neutral-900/80 backdrop-blur-xl" : "bg-[#f5f5f7]/90 backdrop-blur-xl shadow-sm"}`}>
           <button onClick={onClose} className={pill}><X size={13} /> Close</button>
           <span className="w-px h-4 opacity-10 bg-current" />
           <button onClick={undo} className={pill} title="Undo (⌘Z)"><Undo2 size={13} /></button>
@@ -609,9 +614,9 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
             <SquareDashed size={13} /> Region AI
           </button>
         </div>
-        <div className="w-full lg:w-auto ml-auto flex items-center justify-end gap-2 flex-wrap mt-2 lg:mt-0">
-          <button onClick={exportPng} className={`${pill} ${isDark ? "bg-neutral-900/80" : "bg-white/90 shadow"}`}><Download size={13} /> Export</button>
-          <button onClick={save} disabled={saving} className={`${pill} ${isDark ? "bg-neutral-900/80" : "bg-white/90 shadow"}`}>
+        <div className="ml-auto flex items-center justify-end gap-2">
+          <button onClick={exportPng} className={`${pill} ${isDark ? "bg-neutral-900/80" : "bg-[#f5f5f7]/90 shadow-sm"}`}><Download size={13} /> Export</button>
+          <button onClick={save} disabled={saving} className={`${pill} ${isDark ? "bg-neutral-900/80" : "bg-[#f5f5f7]/90 shadow-sm"}`}>
             {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save
           </button>
           <button onClick={publish} disabled={publishing} className={`flex items-center gap-1.5 text-[10px] font-semibold px-4 py-2.5 rounded-full ${isDark ? "bg-white text-black" : "bg-black text-white"}`}>
@@ -620,53 +625,119 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
         </div>
       </div>
 
-      {/* AI prompt bar — stacks on tiny viewports */}
-      <div className="px-4 pb-2 shrink-0">
-        <div className={`flex flex-col sm:flex-row items-stretch sm:items-center gap-2 px-3 py-2 rounded-2xl sm:rounded-full ${isDark ? "bg-neutral-900/70 backdrop-blur-xl" : "bg-white/90 backdrop-blur-xl shadow-[0_2px_12px_rgba(0,0,0,0.06)]"}`}>
-          <div className="flex items-center flex-1 min-w-0">
-            <Sparkles size={14} className="opacity-50 ml-1 shrink-0" />
-            <input value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)}
-              placeholder={regionMode ? "Type a prompt, then drag a region on the canvas…" : selected?.type === "image" ? "Reimagine the selected layer, or add a new one…" : "Describe an image to generate…"}
-              className="flex-1 bg-transparent text-[11px] px-2 focus:outline-none min-w-0" />
-            {aiBusy && <Loader2 size={14} className="animate-spin opacity-60 shrink-0" />}
-          </div>
-          <div className="flex items-center gap-1.5 justify-end mt-2 sm:mt-0">
-            <button onClick={aiNewLayer} disabled={aiBusy} className={pill}><Sparkles size={12} /> New layer</button>
-            {selected?.type === "image" && <button onClick={aiRegenerateSelected} disabled={aiBusy} className={pill}><RefreshCw size={12} /> Reimagine</button>}
-          </div>
+      {/* ─────────────────────────────────────────────────────────────
+         MOBILE MINIMALIST HEADER (Procreate Style)
+         ───────────────────────────────────────────────────────────── */}
+      <div className="flex lg:hidden items-center justify-between px-4 py-3 border-b border-neutral-100 dark:border-neutral-900 shrink-0 z-20 bg-white dark:bg-black">
+        <div className="flex items-center gap-1">
+          <button onClick={onClose} className="p-2 -ml-2 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white transition-colors">
+            <X size={18} />
+          </button>
+          <button onClick={undo} className="p-2 text-neutral-600 dark:text-neutral-400" title="Undo"><Undo2 size={16} /></button>
+          <button onClick={redo} className="p-2 text-neutral-600 dark:text-neutral-400" title="Redo"><Redo2 size={16} /></button>
+        </div>
+
+        <span className="text-[10px] uppercase font-bold tracking-widest truncate max-w-[140px] text-neutral-400 dark:text-neutral-500">{projectName}</span>
+
+        <div className="flex items-center gap-1">
+          <button onClick={() => { setTool("select"); setRegionMode(false); }} className={`p-2 rounded-lg ${tool === "select" ? "bg-neutral-100 dark:bg-neutral-900 text-[#6366f1]" : "text-neutral-600 dark:text-neutral-400"}`}><MousePointer2 size={16} /></button>
+          <button onClick={() => { setTool("brush"); setRegionMode(false); }} className={`p-2 rounded-lg ${tool === "brush" ? "bg-neutral-100 dark:bg-neutral-900 text-[#6366f1]" : "text-neutral-600 dark:text-neutral-400"}`}><Paintbrush size={16} /></button>
+          <button onClick={() => { setTool("fill"); setRegionMode(false); }} className={`p-2 rounded-lg ${tool === "fill" ? "bg-neutral-100 dark:bg-neutral-900 text-[#6366f1]" : "text-neutral-600 dark:text-neutral-400"}`}><PaintBucket size={16} /></button>
+          <span className="w-px h-4 bg-neutral-200 dark:bg-neutral-800 mx-1" />
+          <button onClick={() => setMobileSheet("ai")} className="p-2 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white"><Sparkles size={16} /></button>
+          <button onClick={() => setMobileSheet("layers")} className="p-2 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white"><Layers size={16} /></button>
+          <button onClick={() => setMobileSheet("export")} className="p-2 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white"><Download size={16} /></button>
         </div>
       </div>
 
-      {/* Brush controls — optimized for smaller viewports */}
+      {/* ─────────────────────────────────────────────────────────────
+         DESKTOP FLOATING CONTROLS
+         ───────────────────────────────────────────────────────────── */}
+      {/* AI prompt bar — always visible capsule on desktop */}
+      <div className="hidden lg:block px-4 pb-2 shrink-0 mt-3">
+        <div className={`flex items-center gap-2 px-2 py-2 rounded-full ${isDark ? "bg-neutral-900/70 backdrop-blur-xl" : "bg-[#f5f5f7]/90 backdrop-blur-xl shadow-sm border border-neutral-200/40"}`}>
+          <Sparkles size={14} className="opacity-50 ml-2" />
+          <input value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)}
+            placeholder={regionMode ? "Type a prompt, then drag a region on the canvas…" : selected?.type === "image" ? "Reimagine the selected layer, or describe an image to generate…" : "Describe an image to generate…"}
+            className="flex-1 bg-transparent text-[11px] px-2 focus:outline-none" />
+          {aiBusy && <Loader2 size={14} className="animate-spin opacity-60" />}
+          <button onClick={aiNewLayer} disabled={aiBusy} className={pill}><Sparkles size={12} /> New layer</button>
+          {selected?.type === "image" && <button onClick={aiRegenerateSelected} disabled={aiBusy} className={pill}><RefreshCw size={12} /> Reimagine</button>}
+        </div>
+      </div>
+
+      {/* Brush controls — only while painting on desktop */}
       {tool === "brush" && (
-        <div className="px-4 pb-2 shrink-0">
-          <div className={`flex flex-col md:flex-row items-stretch md:items-center gap-3 px-3 py-2 rounded-2xl md:rounded-full ${isDark ? "bg-neutral-900/70 backdrop-blur-xl" : "bg-white/90 backdrop-blur-xl shadow-[0_2px_12px_rgba(0,0,0,0.06)]"}`}>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Paintbrush size={13} className="opacity-50 ml-1" />
-              <input type="color" value={brushColor} onChange={(e) => setBrushColor(e.target.value)} className="w-7 h-7 rounded-full bg-transparent border-0 cursor-pointer shrink-0" title="Brush color" />
-              <div className="flex items-center gap-2">
-                <span className="text-[9px] opacity-50 uppercase tracking-widest">Size</span>
-                <input type="range" min={4} max={600} value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} className="w-32 sm:w-40" />
-                <span className="text-[9px] opacity-60 w-8">{brushSize}</span>
-              </div>
+        <div className="hidden lg:block px-4 pb-2 shrink-0">
+          <div className={`flex items-center gap-3 px-3 py-2 rounded-full ${isDark ? "bg-neutral-900/70 backdrop-blur-xl" : "bg-[#f5f5f7]/90 backdrop-blur-xl shadow-sm border border-neutral-200/40"}`}>
+            <Paintbrush size={13} className="opacity-50 ml-1" />
+            <input type="color" value={brushColor} onChange={(e) => setBrushColor(e.target.value)} className="w-7 h-7 rounded-full bg-transparent border-0 cursor-pointer" title="Brush color" />
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] opacity-50 uppercase tracking-widest">Size</span>
+              <input type="range" min={4} max={600} value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} className="w-40" />
+              <span className="text-[9px] opacity-60 w-8">{brushSize}</span>
             </div>
-            <span className="hidden md:block w-px h-4 opacity-10 bg-current" />
-            <div className="flex items-center gap-2 justify-between md:justify-start mt-2 md:mt-0">
-              <span className="text-[9px] opacity-50 uppercase tracking-widest">Symmetry</span>
-              <button onClick={() => setSymmetry((s) => (s === "off" ? "v" : s === "v" ? "h" : "off"))}
-                className={pill + (symmetry !== "off" ? (isDark ? " bg-white/15" : " bg-black/10") : "")}>
-                {symmetry === "h" ? <FlipVertical2 size={13} /> : <FlipHorizontal2 size={13} />} {symmetry === "off" ? "Off" : symmetry === "v" ? "Vertical" : "Horizontal"}
-              </button>
-            </div>
+            <span className="w-px h-4 opacity-10 bg-current" />
+            <span className="text-[9px] opacity-50 uppercase tracking-widest">Symmetry</span>
+            <button onClick={() => setSymmetry((s) => (s === "off" ? "v" : s === "v" ? "h" : "off"))}
+              className={pill + (symmetry !== "off" ? (isDark ? " bg-white/15" : " bg-black/10") : "")}>
+              {symmetry === "h" ? <FlipVertical2 size={13} /> : <FlipHorizontal2 size={13} />} {symmetry === "off" ? "Off" : symmetry === "v" ? "Vertical" : "Horizontal"}
+            </button>
           </div>
         </div>
       )}
 
-      {/* Main Workspace — flex-col on mobile, flex-row on desktop */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
-        {/* Canvas Area */}
-        <div className="flex-1 flex items-center justify-center overflow-auto p-4 min-h-[360px] lg:min-h-0">
-          <div className="rounded-[28px] overflow-hidden" style={{ boxShadow: "0 30px 80px rgba(0,0,0,0.28)" }}>
+      {/* ─────────────────────────────────────────────────────────────
+         MOBILE PROCREATE SIDEBAR (Sleek Vertical Sliders)
+         ───────────────────────────────────────────────────────────── */}
+      <div className="absolute left-3 top-[42%] -translate-y-1/2 flex flex-col items-center gap-6 z-30 lg:hidden pointer-events-auto">
+        {/* Brush Size Dock */}
+        <div className="flex flex-col items-center gap-1.5 bg-white/70 dark:bg-black/60 backdrop-blur-md p-1.5 py-4 rounded-full shadow-lg border border-neutral-200/40 dark:border-neutral-800/40">
+          <span className="text-[7px] font-bold opacity-50 uppercase tracking-wider">Size</span>
+          <div className="h-28 w-5 flex items-center justify-center relative">
+            <input 
+              type="range" min={4} max={600} value={brushSize} 
+              onChange={(e) => setBrushSize(parseInt(e.target.value))} 
+              className="accent-[#6366f1] cursor-pointer"
+              style={{
+                WebkitAppearance: "slider-vertical",
+                height: "100%",
+                width: "3px"
+              }} 
+            />
+          </div>
+          <span className="text-[7px] font-bold opacity-60">{brushSize}</span>
+        </div>
+
+        {/* Dynamic Opacity Dock */}
+        {selected && (
+          <div className="flex flex-col items-center gap-1.5 bg-white/70 dark:bg-black/60 backdrop-blur-md p-1.5 py-4 rounded-full shadow-lg border border-neutral-200/40 dark:border-neutral-800/40">
+            <span className="text-[7px] font-bold opacity-50 uppercase tracking-wider">Opa</span>
+            <div className="h-28 w-5 flex items-center justify-center relative">
+              <input 
+                type="range" min={0} max={1} step={0.05} value={selected.opacity} 
+                onChange={(e) => livePatch(selected.id, { opacity: parseFloat(e.target.value) })} 
+                className="accent-[#6366f1] cursor-pointer"
+                style={{
+                  WebkitAppearance: "slider-vertical",
+                  height: "100%",
+                  width: "3px"
+                }} 
+              />
+            </div>
+            <span className="text-[7px] font-bold opacity-60">{Math.round(selected.opacity * 100)}%</span>
+          </div>
+        )}
+      </div>
+
+      {/* ─────────────────────────────────────────────────────────────
+         MAIN EDITING AREA
+         ───────────────────────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden relative">
+        
+        {/* Stage Wrapper */}
+        <div className="flex-1 flex items-center justify-center overflow-auto p-4 min-h-[380px] lg:min-h-0 bg-[#f5f5f7] dark:bg-[#111111] relative">
+          <div className="rounded-[28px] overflow-hidden shadow-2xl">
             <Stage
               ref={stageRef}
               width={artboardW * scale} height={artboardH * scale} scaleX={scale} scaleY={scale}
@@ -720,7 +791,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
               }}
             >
               <Layer>
-                {/* Background Group */}
+                {/* Background Group — can be hidden cleanly during hi-res transparent exports */}
                 <Group name="background-group">
                   <Rect name="bg" x={0} y={0} width={artboardW} height={artboardH} fill="#ffffff" listening />
                   {canvasKind === "canvas" ? null : garment ? (
@@ -768,10 +839,12 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
           </div>
         </div>
 
-        {/* Right Rail Panel — stacks below the canvas on mobile */}
-        <div className="w-full lg:w-[300px] p-3 overflow-y-auto shrink-0 border-t lg:border-t-0 lg:border-l border-current/10">
+        {/* ─────────────────────────────────────────────────────────────
+           DESKTOP ONLY LAYER / PROPERTIES PANEL
+           ───────────────────────────────────────────────────────────── */}
+        <div className="hidden lg:block w-[300px] p-3 overflow-y-auto shrink-0 border-l border-neutral-100 dark:border-neutral-900 bg-white dark:bg-black">
           {selected && (
-            <div className={`rounded-[20px] p-4 mb-3 ${isDark ? "bg-neutral-900/60" : "bg-white shadow-[0_2px_12px_rgba(0,0,0,0.05)]"}`}>
+            <div className={`rounded-[20px] p-4 mb-3 ${isDark ? "bg-neutral-900/60" : "bg-neutral-50/70 border border-neutral-100 shadow-sm"}`}>
               <p className="text-[9px] uppercase tracking-widest opacity-50 mb-3">Properties</p>
               {/* Centering / alignment */}
               <div className="flex items-center gap-1.5 mb-3">
@@ -829,8 +902,11 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
             </div>
           )}
 
-          <div className={`rounded-[20px] p-4 ${isDark ? "bg-neutral-900/60" : "bg-white shadow-[0_2px_12px_rgba(0,0,0,0.05)]"}`}>
-            <p className="text-[9px] uppercase tracking-widest opacity-50 mb-3">Layers · {layers.length}</p>
+          <div className={`rounded-[20px] p-4 ${isDark ? "bg-neutral-900/60" : "bg-neutral-50/70 border border-neutral-100 shadow-sm"}`}>
+            <div className="flex justify-between items-center mb-3">
+              <p className="text-[9px] uppercase tracking-widest opacity-50">Layers · {layers.length}</p>
+              <button onClick={addPaintLayer} className={pill}><Plus size={11} /> Paint Layer</button>
+            </div>
             {layers.length === 0 && <p className="text-[10px] opacity-40">Add text, image, or AI.</p>}
             <div className="space-y-1">
               {[...layers].reverse().map((l) => (
@@ -847,6 +923,87 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
           </div>
         </div>
       </div>
+
+      {/* ─────────────────────────────────────────────────────────────
+         MOBILE TRANSLUCENT BOTTOM DRAWERS (Procreate Style)
+         ───────────────────────────────────────────────────────────── */}
+      {mobileSheet !== "none" && (
+        <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden" onClick={() => setMobileSheet("none")}>
+          <div onClick={(e) => e.stopPropagation()} className={`fixed bottom-0 left-0 right-0 rounded-t-[32px] p-6 max-h-[80vh] overflow-y-auto border-t shadow-[0_-10px_40px_rgba(0,0,0,0.15)] transition-transform duration-300 ${isDark ? "bg-[#121212] border-neutral-850 text-neutral-105" : "bg-white border-[#D1D1D6] text-neutral-900"}`}>
+            {/* Grab pull bar */}
+            <div className="w-12 h-1.5 rounded-full mx-auto bg-neutral-200 dark:bg-neutral-800 mb-5" />
+
+            {mobileSheet === "ai" && (
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <Sparkles size={16} className="text-[#6366f1]" />
+                  <h3 className="text-[11px] font-bold uppercase tracking-widest">AI Canvas Generation</h3>
+                </div>
+                <textarea 
+                  value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)}
+                  placeholder={regionMode ? "Type a prompt, then drag a region on the canvas…" : selected?.type === "image" ? "Reimagine the selected layer, or describe an image to generate…" : "Describe an image to generate…"}
+                  className={`w-full h-24 bg-transparent border rounded-2xl p-4 text-[11px] focus:outline-none mb-4 ${isDark ? "border-neutral-800" : "border-[#E2E2E6]"}`} 
+                />
+                <div className="flex gap-2">
+                  <button onClick={() => { aiNewLayer(); setMobileSheet("none"); }} disabled={aiBusy} className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-full text-[10px] font-bold uppercase tracking-wider ${isDark ? "bg-white text-black" : "bg-black text-white"}`}>
+                    {aiBusy ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} New Layer
+                  </button>
+                  {selected?.type === "image" && (
+                    <button onClick={() => { aiRegenerateSelected(); setMobileSheet("none"); }} disabled={aiBusy} className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-full text-[10px] font-bold uppercase tracking-wider border ${isDark ? "border-neutral-800 hover:bg-neutral-900" : "border-neutral-300 hover:bg-neutral-50"}`}>
+                      <RefreshCw size={13} /> Reimagine
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {mobileSheet === "layers" && (
+              <div>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-[11px] font-bold uppercase tracking-widest">Active Layers ({layers.length})</h3>
+                  <button onClick={() => { addPaintLayer(); setMobileSheet("none"); }} className={pill}><Plus size={11} /> Paint Layer</button>
+                </div>
+                {layers.length === 0 && <p className="text-[10px] opacity-40 py-6 text-center">Add text, image, or AI.</p>}
+                <div className="space-y-2">
+                  {[...layers].reverse().map((l) => (
+                    <div key={l.id} onClick={() => setSelectedId(l.id)}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-2xl cursor-pointer text-[11px] ${selectedId === l.id ? (isDark ? "bg-white/10" : "bg-black/[0.06]") : "hover:bg-current/5"}`}>
+                      <button onClick={(e) => { e.stopPropagation(); patchLayer(l.id, { visible: !l.visible }); }}>{l.visible ? <Eye size={14} /> : <EyeOff size={14} className="opacity-40" />}</button>
+                      <span className="flex-1 truncate">{l.type === "text" ? (l.text || "Text") : l.name}</span>
+                      <div className="flex gap-1.5">
+                        <button onClick={(e) => { e.stopPropagation(); move(l.id, 1); }} className="p-1"><ArrowUp size={12} /></button>
+                        <button onClick={(e) => { e.stopPropagation(); move(l.id, -1); }} className="p-1"><ArrowDown size={12} /></button>
+                        <button onClick={(e) => { e.stopPropagation(); commit((ls) => ls.filter((x) => x.id !== l.id)); if (selectedId === l.id) setSelectedId(null); }} className="p-1 text-rose-500"><Trash2 size={12} /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {mobileSheet === "export" && (
+              <div>
+                <h3 className="text-[11px] font-bold uppercase tracking-widest mb-4 font-mono">Workspace Actions</h3>
+                <div className="grid grid-cols-3 gap-3">
+                  <button onClick={() => { exportPng(); setMobileSheet("none"); }} className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
+                    <Download size={18} />
+                    <span className="text-[8px] font-bold uppercase tracking-wider mt-1">PNG</span>
+                  </button>
+                  <button onClick={() => { save(); setMobileSheet("none"); }} className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
+                    <Save size={18} />
+                    <span className="text-[8px] font-bold uppercase tracking-wider mt-1">Save</span>
+                  </button>
+                  <button onClick={() => { publish(); setMobileSheet("none"); }} className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
+                    <Sparkles size={18} />
+                    <span className="text-[8px] font-bold uppercase tracking-wider mt-1">Publish</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
