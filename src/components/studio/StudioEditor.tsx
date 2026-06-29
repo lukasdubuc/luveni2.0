@@ -178,6 +178,12 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const paintUndo = useRef<{ id: string; data: string }[]>([]);
   const paintRedo = useRef<{ id: string; data: string }[]>([]);
 
+  // Zoom management states for stylus/tablet precision controls
+  const [zoomPercent, setZoomPercent] = useState(100); // 100% (exact fit) to 800%
+  const [fitScale, setFitScale] = useState(0.15);
+
+  const scale = fitScale * (zoomPercent / 100);
+
   // Lazily create (and rehydrate from saved src) a paint layer's canvas.
   const getPaintCanvas = useCallback((l: StudioLayer): HTMLCanvasElement => {
     let c = paintCanvases.current[l.id];
@@ -198,41 +204,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     stageRef.current?.getLayers()?.[0]?.batchDraw();
     setPaintVersion((v) => v + 1);
   }, []);
-
-  // Force safe-area background colors and meta tags to prevent browser viewport leaks / black margins
-  useEffect(() => {
-    const originalBodyBg = document.body.style.backgroundColor;
-    const originalHtmlBg = document.documentElement.style.backgroundColor;
-
-    // Solid white in light, deep black in dark mode
-    const targetColor = isDark ? "#000000" : "#ffffff";
-    document.body.style.backgroundColor = targetColor;
-    document.documentElement.style.backgroundColor = targetColor;
-
-    let themeMeta = document.querySelector('meta[name="theme-color"]');
-    let originalThemeContent = "";
-    if (themeMeta) {
-      originalThemeContent = themeMeta.getAttribute("content") || "";
-      themeMeta.setAttribute("content", targetColor);
-    } else {
-      themeMeta = document.createElement("meta");
-      themeMeta.setAttribute("name", "theme-color");
-      themeMeta.setAttribute("content", targetColor);
-      document.head.appendChild(themeMeta);
-    }
-
-    return () => {
-      document.body.style.backgroundColor = originalBodyBg;
-      document.documentElement.style.backgroundColor = originalHtmlBg;
-      if (themeMeta) {
-        if (originalThemeContent) {
-          themeMeta.setAttribute("content", originalThemeContent);
-        } else {
-          themeMeta.remove();
-        }
-      }
-    };
-  }, [isDark]);
 
   // History — snapshot BEFORE a mutation, then apply.
   const commit = useCallback((updater: (ls: StudioLayer[]) => StudioLayer[]) => {
@@ -267,16 +238,76 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     return () => window.removeEventListener("keydown", onKey);
   }, [undo, redo, commit, selectedId]);
 
-  const [scale, setScale] = useState(0.15);
+  // Lock browser viewport to completely prevent horizontal and vertical page swiping/sliding
+  useEffect(() => {
+    const preventTouchMove = (e: TouchEvent) => {
+      // Allow scrolling ONLY inside bottom drawers/modal sheets
+      const target = e.target as HTMLElement;
+      if (target.closest('.overflow-y-auto')) {
+        return;
+      }
+      e.preventDefault();
+    };
+
+    // Lock page elements securely
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.width = "100%";
+    document.body.style.height = "100%";
+    document.addEventListener("touchmove", preventTouchMove, { passive: false });
+
+    return () => {
+      document.body.style.overflow = "";
+      document.body.style.position = "";
+      document.body.style.width = "";
+      document.body.style.height = "";
+      document.removeEventListener("touchmove", preventTouchMove);
+    };
+  }, []);
+
+  // Force safe-area background colors and meta tags to prevent browser viewport leaks / black margins
+  useEffect(() => {
+    const originalBodyBg = document.body.style.backgroundColor;
+    const originalHtmlBg = document.documentElement.style.backgroundColor;
+
+    const targetColor = isDark ? "#000000" : "#ffffff";
+    document.body.style.backgroundColor = targetColor;
+    document.documentElement.style.backgroundColor = targetColor;
+
+    let themeMeta = document.querySelector('meta[name="theme-color"]');
+    let originalThemeContent = "";
+    if (themeMeta) {
+      originalThemeContent = themeMeta.getAttribute("content") || "";
+      themeMeta.setAttribute("content", targetColor);
+    } else {
+      themeMeta = document.createElement("meta");
+      themeMeta.setAttribute("name", "theme-color");
+      themeMeta.setAttribute("content", targetColor);
+      document.head.appendChild(themeMeta);
+    }
+
+    return () => {
+      document.body.style.backgroundColor = originalBodyBg;
+      document.documentElement.style.backgroundColor = originalHtmlBg;
+      if (themeMeta) {
+        if (originalThemeContent) {
+          themeMeta.setAttribute("content", originalThemeContent);
+        } else {
+          themeMeta.remove();
+        }
+      }
+    };
+  }, [isDark]);
+
   useEffect(() => {
     const fit = () => {
       const isMobile = window.innerWidth < 1024;
-      // If mobile OR clean fullscreen is active, maximize drawing proportions
       const padW = (isMobile || fullScreenCanvas) ? 32 : 420;
       const padH = (isMobile || fullScreenCanvas) ? 140 : 220;
       const availW = Math.max(280, window.innerWidth - padW);
       const availH = Math.max(280, window.innerHeight - padH);
-      setScale(Math.min(availW / artboardW, availH / artboardH, 1));
+      const calculatedFit = Math.min(availW / artboardW, availH / artboardH, 1);
+      setFitScale(calculatedFit);
     };
     fit(); window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
@@ -743,10 +774,29 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
         onTouchMove={(e) => e.stopPropagation()}
         className="absolute left-3 top-[42%] -translate-y-1/2 flex flex-col items-center gap-6 z-[9999] lg:hidden pointer-events-auto"
       >
-        {/* Brush Size Dock */}
+        {/* Canvas Zoom Slider Dock (100% to 800% Precision scaling) */}
+        <div className="flex flex-col items-center gap-1 bg-white/80 dark:bg-black/70 backdrop-blur-md p-1.5 py-4 rounded-full shadow-lg border border-neutral-200/40 dark:border-neutral-800/40">
+          <span className="text-[7px] font-bold opacity-50 uppercase tracking-wider select-none">Zoom</span>
+          <div className="h-28 w-6 flex items-center justify-center relative select-none">
+            <input 
+              type="range" min={100} max={800} step={10} value={zoomPercent} 
+              onChange={(e) => setZoomPercent(parseInt(e.target.value))} 
+              className="accent-[#6366f1] cursor-pointer"
+              style={{
+                transform: "rotate(-90deg)",
+                width: "112px",
+                position: "absolute",
+                margin: 0,
+                padding: 0
+              }} 
+            />
+          </div>
+          <span className="text-[7px] font-bold opacity-60 select-none">{zoomPercent}%</span>
+        </div>
+
+        {/* Brush Size Slider Dock */}
         <div className="flex flex-col items-center gap-1 bg-white/80 dark:bg-black/70 backdrop-blur-md p-1.5 py-4 rounded-full shadow-lg border border-neutral-200/40 dark:border-neutral-800/40">
           <span className="text-[7px] font-bold opacity-50 uppercase tracking-wider select-none">Size</span>
-          {/* Re-designed as standard range slider rotated -90deg to bypass all mobile web touch bugs */}
           <div className="h-28 w-6 flex items-center justify-center relative select-none">
             <input 
               type="range" min={4} max={600} value={brushSize} 
@@ -763,28 +813,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
           </div>
           <span className="text-[7px] font-bold opacity-60 select-none">{brushSize}</span>
         </div>
-
-        {/* Dynamic Opacity Dock */}
-        {selected && (
-          <div className="flex flex-col items-center gap-1 bg-white/80 dark:bg-black/70 backdrop-blur-md p-1.5 py-4 rounded-full shadow-lg border border-neutral-200/40 dark:border-neutral-800/40">
-            <span className="text-[7px] font-bold opacity-50 uppercase tracking-wider select-none">Opa</span>
-            <div className="h-28 w-6 flex items-center justify-center relative select-none">
-              <input 
-                type="range" min={0} max={1} step={0.05} value={selected.opacity} 
-                onChange={(e) => livePatch(selected.id, { opacity: parseFloat(e.target.value) })} 
-                className="accent-[#6366f1] cursor-pointer"
-                style={{
-                  transform: "rotate(-90deg)",
-                  width: "112px",
-                  position: "absolute",
-                  margin: 0,
-                  padding: 0
-                }} 
-              />
-            </div>
-            <span className="text-[7px] font-bold opacity-60 select-none">{Math.round(selected.opacity * 100)}%</span>
-          </div>
-        )}
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
@@ -792,7 +820,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
          ───────────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden relative">
         
-        {/* Stage Canvas Area */}
+        {/* Stage Wrapper */}
         <div className="flex-1 flex items-center justify-center overflow-auto p-4 min-h-[380px] lg:min-h-0 bg-[#f5f5f7] dark:bg-[#111111] relative">
           <div className="rounded-[28px] overflow-hidden shadow-2xl">
             <Stage
@@ -987,7 +1015,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
          MOBILE TRANSLUCENT BOTTOM DRAWERS (Procreate Style)
          ───────────────────────────────────────────────────────────── */}
       {mobileSheet !== "none" && (
-        <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden animate-fade-in" onClick={() => setMobileSheet("none")}>
+        <div className="fixed inset-0 z-[99999] bg-black/40 backdrop-blur-sm lg:hidden animate-fade-in" onClick={() => setMobileSheet("none")}>
           <div onClick={(e) => e.stopPropagation()} className={`fixed bottom-0 left-0 right-0 rounded-t-[32px] p-6 max-h-[80vh] overflow-y-auto border-t shadow-[0_-10px_40px_rgba(0,0,0,0.15)] transition-transform duration-300 ${isDark ? "bg-[#121212] border-neutral-850 text-neutral-105" : "bg-white border-[#D1D1D6] text-neutral-900"}`}>
             {/* Grab pull bar */}
             <div className="w-12 h-1.5 rounded-full mx-auto bg-neutral-200 dark:bg-neutral-800 mb-5" />
