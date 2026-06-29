@@ -5,7 +5,7 @@
 //  (marquee a space → generate into it). Client-only (Konva needs DOM).
 // ─────────────────────────────────────────────────────────────
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Stage, Layer, Image as KImage, Text as KText, Rect, Transformer } from "react-konva";
+import { Stage, Layer, Image as KImage, Text as KText, Rect, Transformer, Group } from "react-konva";
 import Konva from "konva";
 import {
   Type, ImagePlus, Sparkles, Trash2, Eye, EyeOff, ArrowUp, ArrowDown,
@@ -56,6 +56,7 @@ type Props = {
   artboardW: number; artboardH: number; templateKey: string;
   templateImage?: string | null; canvasKind?: string;
   projectName: string; priceCents: number;
+  printArea?: { x: number; y: number; w: number; h: number } | null;
   onClose: () => void; isDark: boolean;
 };
 
@@ -138,7 +139,7 @@ function PaintNode({ layer, canvas }: any) {
   );
 }
 
-export default function StudioEditor({ projectId, initialCanvas, artboardW, artboardH, templateKey, templateImage, canvasKind, projectName, priceCents, onClose, isDark }: Props) {
+export default function StudioEditor({ projectId, initialCanvas, artboardW, artboardH, templateKey, templateImage, canvasKind, projectName, priceCents, printArea, onClose, isDark }: Props) {
   const garment = useHtmlImage(templateImage || undefined);
   const [layers, setLayers] = useState<StudioLayer[]>(initialCanvas?.layers ?? []);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -481,12 +482,61 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const serializeLayers = (): StudioLayer[] =>
     layers.map((l) => (l.type === "paint" && paintCanvases.current[l.id]) ? { ...l, src: paintCanvases.current[l.id].toDataURL() } : l);
 
+  // A comprehensive helper to temporarily hide UI helpers, guides, and backdrops
+  // to run a crisp, clean toDataURL call at exact proportions.
+  const captureStage = useCallback((targetWidth: number, hideBg = false) => {
+    const stage = stageRef.current;
+    if (!stage) return null;
+
+    // Temporarily deselect layer to hide bounding boxes and anchors
+    const prevSelectedId = selectedId;
+    setSelectedId(null);
+    stage.batchDraw();
+
+    // Toggle background group (garments, printable outline, fallback, etc.)
+    const bgGroup = stage.findOne(".background-group");
+    const originalBgVis = bgGroup?.visible();
+
+    // Toggle symmetry/alignment lines
+    const symGuides = stage.find(".symmetry-guide");
+    const alignGuides = stage.find(".align-guide");
+    const originalSymVis = symGuides.map((g) => g.visible());
+    const originalAlignVis = alignGuides.map((g) => g.visible());
+
+    if (hideBg) {
+      bgGroup?.visible(false);
+    }
+    symGuides.forEach((g) => g.visible(false));
+    alignGuides.forEach((g) => g.visible(false));
+    stage.batchDraw();
+
+    // Dynamic resolution multiplier based on live scaled stage size
+    const pixelRatio = targetWidth / stage.width();
+    let dataUrl: string | undefined;
+    try {
+      dataUrl = stage.toDataURL({ pixelRatio });
+    } catch (err) {
+      console.error("Failed to capture stage:", err);
+    }
+
+    // Restore visible helper state
+    if (hideBg) {
+      bgGroup?.visible(originalBgVis ?? true);
+    }
+    symGuides.forEach((g, i) => g.visible(originalSymVis[i] ?? true));
+    alignGuides.forEach((g, i) => g.visible(originalAlignVis[i] ?? true));
+    
+    setSelectedId(prevSelectedId);
+    stage.batchDraw();
+
+    return dataUrl;
+  }, [selectedId]);
+
   const save = async () => {
     setSaving(true);
     try {
-      // Crisp ~720px-wide thumbnail (was 0.12 → blurry on the cards).
-      let thumbnail: string | undefined;
-      try { thumbnail = stageRef.current?.toDataURL({ pixelRatio: Math.min(1, 720 / artboardW), mimeType: "image/jpeg", quality: 0.85 }); } catch { /* tainted */ }
+      // Crisp ~720px-wide thumbnail (without hiding the garment photo background, but removing helpers)
+      const thumbnail = captureStage(720, false);
       const { error } = await supabase.from("studio_projects").update({ canvas: { layers: serializeLayers() }, thumbnail_url: thumbnail, updated_at: new Date().toISOString() }).eq("id", projectId);
       if (error) { toast.error(error.message); return; }
       toast.success("Saved.");
@@ -501,7 +551,8 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     try {
       // Flatten the artboard at full resolution -> blob.
       await new Promise((r) => setTimeout(r, 60));
-      const dataUrl = stageRef.current?.toDataURL({ pixelRatio: 1 });
+      // HIDE the background group so it generates design elements only on transparency
+      const dataUrl = captureStage(artboardW, true);
       if (!dataUrl) { toast.error("Could not render the design"); return; }
       const blob = await (await fetch(dataUrl)).blob();
       const path = `published/${projectId}-${Date.now()}.png`;
@@ -521,11 +572,16 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   };
 
   const exportPng = () => {
-    setSelectedId(null);
-    setTimeout(() => {
-      try { const uri = stageRef.current?.toDataURL({ pixelRatio: 1 }); if (!uri) return; const a = document.createElement("a"); a.download = "luveni-design.png"; a.href = uri; a.click(); }
-      catch { toast.error("Export blocked by a cross-origin image."); }
-    }, 60);
+    // Hide background for a clean transparent design PNG download
+    const uri = captureStage(artboardW, true);
+    if (!uri) {
+      toast.error("Could not render the design");
+      return;
+    }
+    const a = document.createElement("a");
+    a.download = `${projectName.toLowerCase().replace(/\s+/g, "-")}-design.png`;
+    a.href = uri;
+    a.click();
   };
 
   const selected = layers.find((l) => l.id === selectedId);
@@ -533,8 +589,9 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const isHat = templateKey?.startsWith("hat");
   const isPoster = templateKey?.startsWith("poster");
 
-  // Print-area guide proportions vary by product.
-  const pa = isHat ? { x: 0.28, y: 0.32, w: 0.44, h: 0.36 } : isPoster ? { x: 0.06, y: 0.05, w: 0.88, h: 0.9 } : { x: 0.2, y: 0.14, w: 0.6, h: 0.62 };
+  // Print-area guide proportions. Fall back gracefully to hardcoded defaults if no printArea is returned
+  const defaultPa = isHat ? { x: 0.28, y: 0.32, w: 0.44, h: 0.36 } : isPoster ? { x: 0.06, y: 0.05, w: 0.88, h: 0.9 } : { x: 0.2, y: 0.14, w: 0.6, h: 0.62 };
+  const pa = printArea || defaultPa;
 
   return (
     <div className={`admin-page fixed inset-0 z-50 flex flex-col font-mono ${isDark ? "bg-black text-neutral-105" : "bg-[#f5f5f7] text-neutral-900"}`}>
@@ -642,19 +699,22 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
               }}
             >
               <Layer>
-                {/* Background: real garment image (product) · white (canvas) · synthetic fallback */}
-                <Rect name="bg" x={0} y={0} width={artboardW} height={artboardH} fill="#ffffff" listening />
-                {canvasKind === "canvas" ? null : garment ? (
-                  <>
-                    <KImage image={garment} x={0} y={0} width={artboardW} height={artboardH} listening={false} />
-                    <Rect x={artboardW * pa.x} y={artboardH * pa.y} width={artboardW * pa.w} height={artboardH * pa.h} stroke="#6366f1" strokeWidth={4} dash={[26, 18]} cornerRadius={20} listening={false} opacity={0.6} />
-                  </>
-                ) : (
-                  <>
-                    <Rect x={artboardW * 0.06} y={artboardH * 0.05} width={artboardW * 0.88} height={artboardH * 0.9} cornerRadius={artboardW * 0.06} fill={isDark ? "#161616" : "#f1f1f3"} listening={false} />
-                    <Rect x={artboardW * pa.x} y={artboardH * pa.y} width={artboardW * pa.w} height={artboardH * pa.h} stroke="#9ca3af" strokeWidth={4} dash={[26, 18]} cornerRadius={20} listening={false} />
-                  </>
-                )}
+                {/* Background Group — can be hidden cleanly during hi-res transparent exports */}
+                <Group name="background-group">
+                  {/* Background: real garment image (product) · white (canvas) · synthetic fallback */}
+                  <Rect name="bg" x={0} y={0} width={artboardW} height={artboardH} fill="#ffffff" listening />
+                  {canvasKind === "canvas" ? null : garment ? (
+                    <>
+                      <KImage name="garment" image={garment} x={0} y={0} width={artboardW} height={artboardH} listening={false} />
+                      <Rect name="guide" x={artboardW * pa.x} y={artboardH * pa.y} width={artboardW * pa.w} height={artboardH * pa.h} stroke="#6366f1" strokeWidth={4} dash={[26, 18]} cornerRadius={20} listening={false} opacity={0.6} />
+                    </>
+                  ) : (
+                    <>
+                      <Rect name="garment" x={artboardW * 0.06} y={artboardH * 0.05} width={artboardW * 0.88} height={artboardH * 0.9} cornerRadius={artboardW * 0.06} fill={isDark ? "#161616" : "#f1f1f3"} listening={false} />
+                      <Rect name="guide" x={artboardW * pa.x} y={artboardH * pa.y} width={artboardW * pa.w} height={artboardH * pa.h} stroke="#9ca3af" strokeWidth={4} dash={[26, 18]} cornerRadius={20} listening={false} />
+                    </>
+                  )}
+                </Group>
 
                 {layers.map((l) => l.type === "paint" ? (
                   <PaintNode key={l.id} layer={l} canvas={getPaintCanvas(l)} />
@@ -668,13 +728,13 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
                     onSelect={() => setSelectedId(l.id)} onChange={(patch: any) => { patchLayer(l.id, patch); setGuides({ v: false, h: false }); }} />
                 ))}
 
-                {/* Symmetry mirror guide */}
-                {tool === "brush" && symmetry === "v" && <Rect x={artboardW / 2 - 1} y={0} width={2} height={artboardH} fill="#6366f1" opacity={0.5} listening={false} />}
-                {tool === "brush" && symmetry === "h" && <Rect x={0} y={artboardH / 2 - 1} width={artboardW} height={2} fill="#6366f1" opacity={0.5} listening={false} />}
+                {/* Symmetry mirror guides */}
+                {tool === "brush" && symmetry === "v" && <Rect name="symmetry-guide" x={artboardW / 2 - 1} y={0} width={2} height={artboardH} fill="#6366f1" opacity={0.5} listening={false} />}
+                {tool === "brush" && symmetry === "h" && <Rect name="symmetry-guide" x={0} y={artboardH / 2 - 1} width={artboardW} height={2} fill="#6366f1" opacity={0.5} listening={false} />}
 
                 {/* Center alignment guides (while dragging) */}
-                {guides.v && <Rect x={artboardW / 2 - 1} y={0} width={2} height={artboardH} fill="#22d3ee" listening={false} />}
-                {guides.h && <Rect x={0} y={artboardH / 2 - 1} width={artboardW} height={2} fill="#22d3ee" listening={false} />}
+                {guides.v && <Rect name="align-guide" x={artboardW / 2 - 1} y={0} width={2} height={artboardH} fill="#22d3ee" listening={false} />}
+                {guides.h && <Rect name="align-guide" x={0} y={artboardH / 2 - 1} width={artboardW} height={2} fill="#22d3ee" listening={false} />}
 
                 {region && <Rect x={region.x} y={region.y} width={region.w} height={region.h} stroke="#6366f1" strokeWidth={4} dash={[16, 12]} fill="rgba(99,102,241,0.08)" listening={false} />}
                 {/* keepRatio locks corner anchors to proportional scaling; the
