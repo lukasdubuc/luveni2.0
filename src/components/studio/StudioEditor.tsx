@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { computeRetailCents } from "@/lib/pricing";
 
 // Three.js 3D garment preview — DOM-only, loaded lazily so SSR never touches it.
 const Garment3DPreview = lazy(() => import("./Garment3DPreview"));
@@ -40,7 +41,7 @@ const getProxyImageUrl = (url: string | null): string => {
   if (url.includes("files.cdn.printful.com") || url.includes("apliiq.com")) {
     const supabaseUrl = (supabase as any).supabaseUrl || import.meta.env.VITE_SUPABASE_URL || "";
     if (supabaseUrl) {
-      return `${supabaseUrl}/functions/v1/printful-catalog?action=proxy-image&url=${encodeURIComponent(url)}`;
+      return `${supabaseUrl}/functions/v1/proxy-image?url=${encodeURIComponent(url)}`;
     }
   }
   return url;
@@ -205,15 +206,17 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     setProduct(ref);
     // Persist onto the project so it survives reload & feeds publish/pricing.
     // Cast: studio_projects isn't in the generated Supabase types yet.
+    const costCents = d.min_cost_cents || 0;
+    const retailCents = computeRetailCents(costCents);
     await (supabase as any).from("studio_projects").update({
       manufacturer: d.mfr,
       template_key: d.key,
-      price_cents: d.min_cost_cents || 0,
-      canvas: { layers: serializeLayers(), product: { ...ref, sizes: d.sizes } },
+      price_cents: retailCents,
+      canvas: { layers: serializeLayers(), product: { ...ref, sizes: d.sizes, cost_cents: costCents } },
       updated_at: new Date().toISOString(),
     }).eq("id", projectId);
     setMatchOpen(false);
-    toast.success(`Matched to ${d.label} (${d.mfr}) · $${((d.min_cost_cents || 0) / 100).toFixed(2)}`);
+    toast.success(`Matched to ${d.label} (${d.mfr}) · cost $${(costCents / 100).toFixed(2)} → retail $${(retailCents / 100).toFixed(2)}`);
   };
 
   // Mobile Sheets manager: "none" | "layers" | "ai" | "export" | "add"
