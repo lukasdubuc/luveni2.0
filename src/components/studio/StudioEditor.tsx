@@ -3377,18 +3377,27 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
             Animate
           </button>
 
-          {/* Placement switcher (front / back / sleeves — each a real Printful print space) */}
+          {/* Placement switcher — each chip is a real manufacturer print area
+              (Front, Back, Left sleeve, Inside label…). Switching changes which
+              surface you're designing; all of them publish on the final garment. */}
           {hasMulti && (
             <div className="flex items-center gap-1.5">
-              {placements.map((p, i) => (
-                <button 
-                  key={p.placement + i} 
-                  onClick={() => switchPlacement(i)}
-                  className={`text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${activeP === i ? "bg-indigo-50/20 text-indigo-400 border border-indigo-500/30" : "text-neutral-500"}`}
-                >
-                  {String(p.placement || `P${i+1}`).substring(0, 5)}
-                </button>
-              ))}
+              <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 select-none">Print&nbsp;area</span>
+              {placements.map((p, i) => {
+                const friendly = String(p.placement || `Area ${i + 1}`)
+                  .replace(/_/g, " ")
+                  .replace(/\b\w/g, (c) => c.toUpperCase());
+                return (
+                  <button
+                    key={p.placement + i}
+                    onClick={() => switchPlacement(i)}
+                    title={`Design the ${friendly} print area`}
+                    className={`text-[9px] capitalize font-bold tracking-wide px-2.5 py-0.5 rounded-full ${activeP === i ? "bg-indigo-500 text-white" : "bg-neutral-100 dark:bg-neutral-800 text-neutral-500"}`}
+                  >
+                    {friendly}
+                  </button>
+                );
+              })}
             </div>
           )}
 
