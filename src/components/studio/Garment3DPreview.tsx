@@ -1,17 +1,15 @@
 // ─────────────────────────────────────────────────────────────
-//  Garment3DPreview — CLO-3D-quality live 3D garment viewer
+//  Garment3DPreview — CLO-3D-quality live 3D product viewer
 //
-//  Features:
-//  • Anatomically-detailed procedural human mannequin (LatheGeometry
-//    torso + CapsuleGeometry limbs + spheroid head with face features)
-//  • Full artboard (garment template + design layers) projected onto
-//    the shirt front as a flat plane — exactly what CLO-3D does
-//  • Live canvas sync via useFrame + CanvasTexture every paint stroke
-//  • PBR fabric material (MeshPhysicalMaterial) with sheen for cloth feel
-//  • Camera presets: Front · Back · Left · 3/4
-//  • Wireframe toggle · auto-spin · PNG export
-//  • Environment presets: Studio · Soft · Outdoor
-//  • Default tab: 3D (realistic/mockup tab optional)
+//  • Type-aware geometry: apparel (mannequin + tee/hoodie), cap/hat,
+//    poster/wall-art, tote, mug — the right object for the product.
+//  • Projects ONLY the design artwork (transparent, print-area cropped)
+//    onto each product's real print surface, at correct aspect ratio —
+//    no white product photo, no stretched art.
+//  • Live canvas sync via useFrame + CanvasTexture every paint stroke.
+//  • PBR fabric/skin/ceramic materials (MeshPhysicalMaterial).
+//  • Camera presets, wireframe, floor grid, auto-spin, PNG export,
+//    environment presets, garment color swatches.
 // ─────────────────────────────────────────────────────────────
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -27,11 +25,13 @@ import {
 import * as THREE from "three";
 import {
   X, Loader2, RotateCcw, Box, User, Download,
-  Camera, Grid3X3, Eye, ChevronLeft, ChevronRight,
+  Camera, Grid3X3, Eye,
 } from "lucide-react";
 
 // Optional real avatar GLB
 const HUMAN_GLB: string = (import.meta as any).env?.VITE_STUDIO_HUMAN_GLB || "";
+
+export type GarmentType = "apparel" | "hoodie" | "hat" | "poster" | "tote" | "mug";
 
 // ── Garment color swatch palette ──────────────────────────────────────────────
 const GARMENT_COLORS = [
@@ -46,12 +46,14 @@ const GARMENT_COLORS = [
 ];
 
 // ── Body calibration constants ─────────────────────────────────────────────────
-const BODY_H = 3.4;         // total body height in scene units
-const HEAD_R = 0.225;       // skull sphere radius
-const TORSO_Z = 0.60;       // depth squash (front-to-back / side-to-side ratio)
-const SHIRT_FRONT_Z = 0.295; // Z of shirt surface at chest
-const SHIRT_W = 0.92;       // projected shirt front width
-const SHIRT_H = 1.30;       // projected shirt front height
+const BODY_H = 3.4;
+const HEAD_R = 0.225;
+const TORSO_Z = 0.60;
+const SHIRT_FRONT_Z = 0.295;
+const SHIRT_W = 0.92;
+const SHIRT_H = 1.30;
+
+const TRANSPARENT_PX = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
 // ── Utility: build LatheGeometry from profile points ─────────────────────────
 function lathe(profile: [number, number][], segs = 64): THREE.BufferGeometry {
@@ -59,6 +61,40 @@ function lathe(profile: [number, number][], segs = 64): THREE.BufferGeometry {
   const g = new THREE.LatheGeometry(pts, segs);
   g.computeVertexNormals();
   return g;
+}
+
+// ── Fit a design rect into a max box, preserving the artwork aspect (w/h) ─────
+function fitPlane(maxW: number, maxH: number, aspect: number): [number, number] {
+  if (!aspect || !isFinite(aspect) || aspect <= 0) aspect = 1;
+  let w = maxW, h = w / aspect;
+  if (h > maxH) { h = maxH; w = h * aspect; }
+  return [w, h];
+}
+
+// ── Shared live/static design material hook ──────────────────────────────────
+function useDesignMaterial(liveCanvas?: HTMLCanvasElement | null, staticDesign?: string) {
+  const liveTexRef = useRef<THREE.CanvasTexture | null>(null);
+  useEffect(() => {
+    if (!liveCanvas) return;
+    const t = new THREE.CanvasTexture(liveCanvas);
+    t.anisotropy = 8;
+    t.flipY = true;
+    t.colorSpace = THREE.SRGBColorSpace;
+    liveTexRef.current = t;
+    return () => { t.dispose(); liveTexRef.current = null; };
+  }, [liveCanvas]);
+  useFrame(() => { if (liveTexRef.current) liveTexRef.current.needsUpdate = true; });
+
+  const staticTex = useTexture(staticDesign || TRANSPARENT_PX);
+  const designTex = liveCanvas ? liveTexRef.current : (staticDesign ? staticTex : null);
+
+  return useMemo(() => designTex ? new THREE.MeshBasicMaterial({
+    map: designTex,
+    transparent: true,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+  }) : null, [designTex]);
 }
 
 // ── Camera preset controller (inside Canvas) ─────────────────────────────────
@@ -82,52 +118,29 @@ function CameraPreset({ preset, onDone }: { preset: string | null; onDone: () =>
   return null;
 }
 
-// ── Realistic human mannequin ─────────────────────────────────────────────────
+// ── Realistic human mannequin (tee / hoodie) ─────────────────────────────────
 function Mannequin({
-  color,
-  liveCanvas,
-  staticDesign,
-  isDark,
-  showWire,
+  color, liveCanvas, staticDesign, isDark, showWire, designAspect, hoodie,
 }: {
   color: string;
   liveCanvas?: HTMLCanvasElement | null;
   staticDesign?: string;
   isDark: boolean;
   showWire: boolean;
+  designAspect: number;
+  hoodie?: boolean;
 }) {
-  // ── Live canvas texture ─────────────────────────────────────────────────────
-  const liveTexRef = useRef<THREE.CanvasTexture | null>(null);
-  useEffect(() => {
-    if (!liveCanvas) return;
-    const t = new THREE.CanvasTexture(liveCanvas);
-    t.anisotropy = 8;
-    t.flipY = true;
-    liveTexRef.current = t;
-    return () => { t.dispose(); liveTexRef.current = null; };
-  }, [liveCanvas]);
-  useFrame(() => { if (liveTexRef.current) liveTexRef.current.needsUpdate = true; });
+  const designMat = useDesignMaterial(liveCanvas, staticDesign);
 
-  // Static fallback texture
-  const staticTex = useTexture(staticDesign || "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==");
-  const designTex = liveTexRef.current ?? (staticDesign ? staticTex : null);
-
-  // ── Materials ───────────────────────────────────────────────────────────────
   const skinHex = isDark ? "#c9a882" : "#ddb896";
   const skin = useMemo(() => new THREE.MeshPhysicalMaterial({
-    color: skinHex,
-    roughness: 0.68,
-    metalness: 0,
-    sheen: 0.12,
-    sheenColor: new THREE.Color("#f0c8a8"),
-    clearcoat: 0.04,
-    clearcoatRoughness: 0.82,
+    color: skinHex, roughness: 0.68, metalness: 0,
+    sheen: 0.12, sheenColor: new THREE.Color("#f0c8a8"),
+    clearcoat: 0.04, clearcoatRoughness: 0.82,
   }), [skinHex]);
 
   const hairMat = useMemo(() => new THREE.MeshStandardMaterial({
-    color: isDark ? "#1a0a00" : "#2c1800",
-    roughness: 0.98,
-    metalness: 0,
+    color: isDark ? "#1a0a00" : "#2c1800", roughness: 0.98, metalness: 0,
   }), [isDark]);
 
   const eyeMat = useMemo(() => new THREE.MeshStandardMaterial({ color: "#1a1a2e", roughness: 0.2, metalness: 0.1 }), []);
@@ -135,65 +148,32 @@ function Mannequin({
   const lipMat = useMemo(() => new THREE.MeshStandardMaterial({ color: "#c87070", roughness: 0.6 }), []);
 
   const shirt = useMemo(() => new THREE.MeshPhysicalMaterial({
-    color,
-    roughness: 0.82,
-    metalness: 0.01,
-    sheen: 0.25,
-    sheenColor: new THREE.Color(color),
-    sheenRoughness: 0.6,
-    side: THREE.DoubleSide,
-    wireframe: showWire,
+    color, roughness: 0.82, metalness: 0.01,
+    sheen: 0.25, sheenColor: new THREE.Color(color), sheenRoughness: 0.6,
+    side: THREE.DoubleSide, wireframe: showWire,
   }), [color, showWire]);
 
-  const designMat = useMemo(() => designTex ? new THREE.MeshBasicMaterial({
-    map: designTex,
-    transparent: true,
-    depthWrite: false,
-    polygonOffset: true,
-    polygonOffsetFactor: -4,
-  }) : null, [designTex]);
-
-  // ── Procedural geometry ─────────────────────────────────────────────────────
   const geo = useMemo(() => {
-    // Skull: ovoid – taller than wide, narrower front-to-back
     const skull = new THREE.SphereGeometry(HEAD_R, 64, 48);
-
-    // Jaw: slightly oblate sphere blending into skull base
     const jaw = new THREE.SphereGeometry(HEAD_R * 0.82, 32, 24);
-
-    // Ear: flattened torus
     const ear = new THREE.TorusGeometry(0.055, 0.028, 12, 28);
-
-    // Eyelid groove: small flattened sphere
     const eyeSphere = new THREE.SphereGeometry(0.033, 16, 12);
-
-    // Nose: oblate bump
     const nose = new THREE.SphereGeometry(0.028, 12, 10);
-
-    // Lip segment
     const lip = new THREE.SphereGeometry(0.048, 12, 8);
-
-    // Hair cap: upper hemisphere, scaled taller for volume
     const hair = new THREE.SphereGeometry(HEAD_R * 1.05, 32, 32, 0, Math.PI * 2, 0, Math.PI * 0.52);
-
-    // Neck: tapered cylinder section
     const neck = lathe([
       [0.0, 1.54], [0.09, 1.555], [0.10, 1.64],
       [0.115, 1.725], [0.16, 1.77], [0.0, 1.775],
     ]);
-
-    // Torso: highly detailed silhouette — shoulder peak, chest, waist pinch, hip flare, pelvis
     const torso = lathe([
       [0.00, 1.615],
-      [0.22, 1.605], [0.36, 1.57], [0.435, 1.50],  // shoulder into chest
-      [0.445, 1.38], [0.435, 1.24],                  // upper chest
-      [0.41,  1.10], [0.37,  0.96], [0.335, 0.82],  // ribcage
-      [0.305, 0.68], [0.298, 0.58],                  // waist
-      [0.315, 0.46], [0.365, 0.34], [0.405, 0.20],  // hips
+      [0.22, 1.605], [0.36, 1.57], [0.435, 1.50],
+      [0.445, 1.38], [0.435, 1.24],
+      [0.41,  1.10], [0.37,  0.96], [0.335, 0.82],
+      [0.305, 0.68], [0.298, 0.58],
+      [0.315, 0.46], [0.365, 0.34], [0.405, 0.20],
       [0.41,  0.08], [0.36,  -0.02], [0.22, -0.07], [0.0, -0.09],
     ], 80);
-
-    // Fitted tee shell: slightly larger than torso, has realistic hem/cuff shape
     const shirtBody = lathe([
       [0.00, 1.505],
       [0.245, 1.495], [0.38, 1.46], [0.46, 1.395],
@@ -202,11 +182,9 @@ function Mannequin({
       [0.37,  0.63],  [0.365, 0.525],
       [0.385, 0.40],  [0.42,  0.30],  [0.445, 0.22],
     ], 80);
-
-    // Limb helper (tapered capsule profile)
     const capsule = (rTop: number, rBot: number, len: number, segs = 40) =>
       lathe([
-        [0.0, len],      [rTop * 0.65, len],      [rTop, len - rTop * 0.55],
+        [0.0, len], [rTop * 0.65, len], [rTop, len - rTop * 0.55],
         [rTop * 0.98, len * 0.70], [(rTop + rBot) / 2, len * 0.45],
         [rBot, rBot * 0.55], [rBot * 0.65, 0], [0.0, 0],
       ], segs);
@@ -222,114 +200,94 @@ function Mannequin({
     };
   }, []);
 
+  // Design fitted to the chest print box, preserving artwork aspect.
+  const [dW, dH] = fitPlane(SHIRT_W, SHIRT_H, designAspect);
+
   return (
     <Center>
       <group>
-        {/* ── HEAD ─────────────────────────────────────────────────────────── */}
+        {/* HEAD */}
         <group position={[0, 1.84, 0]}>
-          {/* Skull */}
           <mesh geometry={geo.skull} material={skin} scale={[0.87, 1.0, 0.82]} castShadow />
-          {/* Jaw: slightly lower, blends into skull */}
           <mesh geometry={geo.jaw} material={skin} position={[0, -0.09, 0.02]} scale={[0.88, 0.68, 0.84]} castShadow />
-          {/* Ears */}
           {[-1, 1].map((s) => (
             <mesh key={`ear-${s}`} geometry={geo.ear} material={skin}
-              position={[s * HEAD_R * 0.87, 0.02, 0]}
-              rotation={[0, s * Math.PI / 2, 0]}
+              position={[s * HEAD_R * 0.87, 0.02, 0]} rotation={[0, s * Math.PI / 2, 0]}
               scale={[0.5, 1, 0.28]} castShadow />
           ))}
-          {/* Eye whites */}
           {[-1, 1].map((s) => (
             <group key={`eye-${s}`} position={[s * 0.075, 0.04, HEAD_R * 0.68]}>
               <mesh geometry={geo.eyeSphere} material={eyeWhite} scale={[1, 0.72, 0.52]} />
-              {/* Iris */}
               <mesh geometry={geo.eyeSphere} material={eyeMat} scale={[0.58, 0.42, 0.60]} position={[0, 0, 0.01]} />
             </group>
           ))}
-          {/* Nose bridge + tip */}
           <mesh geometry={geo.nose} material={skin} position={[0, -0.03, HEAD_R * 0.76]} scale={[1.1, 1.6, 1.2]} />
           <mesh geometry={geo.nose} material={skin} position={[0, -0.07, HEAD_R * 0.78]} scale={[1.4, 0.9, 1.3]} />
-          {/* Lips */}
           <mesh geometry={geo.lip} material={lipMat} position={[0, -0.135, HEAD_R * 0.74]} scale={[1.6, 0.55, 0.85]} />
           <mesh geometry={geo.lip} material={lipMat} position={[0, -0.158, HEAD_R * 0.73]} scale={[1.3, 0.48, 0.78]} />
-          {/* Hair cap */}
-          <mesh geometry={geo.hair} material={hairMat}
-            position={[0, 0.045, -0.012]}
-            scale={[0.88, 1.05, 0.86]}
-            rotation={[0, 0, 0]}
-            castShadow />
-          {/* Short hair sides */}
+          <mesh geometry={geo.hair} material={hairMat} position={[0, 0.045, -0.012]} scale={[0.88, 1.05, 0.86]} castShadow />
           {[-1, 1].map((s) => (
             <mesh key={`hair-s-${s}`} geometry={geo.hair} material={hairMat}
-              position={[s * HEAD_R * 0.62, -0.06, -0.03]}
-              scale={[0.46, 0.65, 0.44]}
-              rotation={[0.1, s * 0.4, s * 0.15]}
-              castShadow />
+              position={[s * HEAD_R * 0.62, -0.06, -0.03]} scale={[0.46, 0.65, 0.44]}
+              rotation={[0.1, s * 0.4, s * 0.15]} castShadow />
           ))}
         </group>
 
-        {/* ── NECK ─────────────────────────────────────────────────────────── */}
+        {/* NECK + TORSO */}
         <mesh geometry={geo.neck} material={skin} castShadow />
-
-        {/* ── TORSO (under shirt) ──────────────────────────────────────────── */}
         <mesh geometry={geo.torso} material={skin} scale={[1, 1, TORSO_Z]} castShadow receiveShadow />
 
-        {/* ── ARMS ─────────────────────────────────────────────────────────── */}
+        {/* ARMS */}
         {[-1, 1].map((s) => (
           <group key={`arm-${s}`} position={[s * 0.455, 1.52, 0]} rotation={[0.04, 0, s * 0.18]}>
             <mesh geometry={geo.upperArm} material={skin} position={[0, -0.64, 0]} castShadow />
             <group position={[s * 0.055, -0.64, 0.038]} rotation={[0.20, 0, s * 0.06]}>
               <mesh geometry={geo.foreArm} material={skin} position={[0, -0.60, 0]} castShadow />
-              {/* Hand */}
               <mesh geometry={geo.hand} material={skin} position={[0, -0.68, 0]} scale={[0.72, 0.58, 0.48]} castShadow />
-              {/* Thumb */}
               <mesh geometry={geo.hand} material={skin} position={[s * 0.038, -0.66, 0.03]} scale={[0.28, 0.42, 0.28]} castShadow />
             </group>
           </group>
         ))}
 
-        {/* ── LEGS ─────────────────────────────────────────────────────────── */}
+        {/* LEGS */}
         {[-1, 1].map((s) => (
           <group key={`leg-${s}`} position={[s * 0.175, -0.04, 0]}>
             <mesh geometry={geo.thigh} material={skin} position={[0, -0.84, 0]} castShadow />
             <group position={[0, -0.84, 0]}>
               <mesh geometry={geo.calf} material={skin} position={[0, -0.84, 0]} castShadow />
-              {/* Foot */}
-              <mesh geometry={geo.foot} material={skin}
-                position={[s * 0.02, -0.90, 0.08]}
-                scale={[0.62, 0.38, 1.45]}
-                castShadow />
+              <mesh geometry={geo.foot} material={skin} position={[s * 0.02, -0.90, 0.08]} scale={[0.62, 0.38, 1.45]} castShadow />
             </group>
           </group>
         ))}
 
-        {/* ── FITTED TEE ──────────────────────────────────────────────────── */}
+        {/* GARMENT (tee or hoodie) */}
         <mesh geometry={geo.shirtBody} material={shirt} scale={[1, 1, TORSO_Z * 1.07]} castShadow receiveShadow />
-
-        {/* Crew collar ring */}
         <mesh position={[0, 1.49, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[1, TORSO_Z * 1.12, 1]} material={shirt} castShadow>
           <torusGeometry args={[0.162, 0.029, 16, 52]} />
         </mesh>
-
-        {/* Short sleeves — cuffed cylinders over upper arms */}
         {[-1, 1].map((s) => (
-          <mesh key={`slv-${s}`}
-            position={[s * 0.445, 1.29, 0]}
-            rotation={[0, 0, s * 0.44]}
-            scale={[1, 1, 0.80]}
-            material={shirt} castShadow>
+          <mesh key={`slv-${s}`} position={[s * 0.445, 1.29, 0]} rotation={[0, 0, s * 0.44]}
+            scale={[1, 1, 0.80]} material={shirt} castShadow>
             <cylinderGeometry args={[0.170, 0.145, 0.48, 38, 1, true]} />
           </mesh>
         ))}
 
-        {/* ── DESIGN + TEMPLATE PROJECTION (full artboard canvas onto shirt front) ── */}
+        {/* Hoodie extras: hood pooled at the neck + kangaroo pocket band */}
+        {hoodie && (
+          <>
+            <mesh position={[0, 1.52, -0.16]} rotation={[0.5, 0, 0]} material={shirt} castShadow>
+              <sphereGeometry args={[0.23, 28, 20, 0, Math.PI * 2, 0, Math.PI * 0.6]} />
+            </mesh>
+            <mesh position={[0, 0.55, SHIRT_FRONT_Z - 0.01]} material={shirt}>
+              <boxGeometry args={[0.5, 0.26, 0.04]} />
+            </mesh>
+          </>
+        )}
+
+        {/* DESIGN — chest print, aspect-correct, design-only (no white) */}
         {designMat && (
-          <mesh
-            position={[0, 0.62, SHIRT_FRONT_Z + 0.002]}
-            rotation={[0, 0, 0]}
-            renderOrder={1}
-          >
-            <planeGeometry args={[SHIRT_W, SHIRT_H]} />
+          <mesh position={[0, 0.62, SHIRT_FRONT_Z + 0.004]} renderOrder={2}>
+            <planeGeometry args={[dW, dH]} />
             <primitive object={designMat} attach="material" />
           </mesh>
         )}
@@ -338,21 +296,163 @@ function Mannequin({
   );
 }
 
-// ── GLB avatar with design plane overlay ─────────────────────────────────────
-function AvatarFigure({ url, liveCanvas, staticDesign }: { url: string; liveCanvas?: HTMLCanvasElement | null; staticDesign?: string }) {
-  const { scene } = useGLTF(url, true) as unknown as { scene: THREE.Object3D };
-  const liveTexRef = useRef<THREE.CanvasTexture | null>(null);
-  useEffect(() => {
-    if (!liveCanvas) return;
-    const t = new THREE.CanvasTexture(liveCanvas);
-    t.anisotropy = 8; t.flipY = true;
-    liveTexRef.current = t;
-    return () => { t.dispose(); liveTexRef.current = null; };
-  }, [liveCanvas]);
-  useFrame(() => { if (liveTexRef.current) liveTexRef.current.needsUpdate = true; });
+// ── Cap / hat ─────────────────────────────────────────────────────────────────
+function CapModel({ color, liveCanvas, staticDesign, showWire, designAspect }: {
+  color: string; liveCanvas?: HTMLCanvasElement | null; staticDesign?: string;
+  showWire: boolean; designAspect: number;
+}) {
+  const designMat = useDesignMaterial(liveCanvas, staticDesign);
+  const fabric = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color, roughness: 0.78, metalness: 0.02, sheen: 0.2,
+    sheenColor: new THREE.Color(color), side: THREE.DoubleSide, wireframe: showWire,
+  }), [color, showWire]);
 
-  const staticTex = useTexture(staticDesign || "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==");
-  const designTex = liveTexRef.current ?? (staticDesign ? staticTex : null);
+  // Crown: half-sphere slightly squashed; brim: flattened curved disc.
+  const [dW, dH] = fitPlane(1.5, 0.9, designAspect);
+
+  return (
+    <Center>
+      <group rotation={[0.12, 0, 0]}>
+        {/* Crown */}
+        <mesh material={fabric} position={[0, 0.18, 0]} scale={[1, 0.82, 1]} castShadow receiveShadow>
+          <sphereGeometry args={[1.15, 48, 36, 0, Math.PI * 2, 0, Math.PI * 0.52]} />
+        </mesh>
+        {/* Crown base band */}
+        <mesh material={fabric} position={[0, 0.16, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+          <torusGeometry args={[1.13, 0.07, 20, 60]} />
+        </mesh>
+        {/* Button on top */}
+        <mesh material={fabric} position={[0, 0.78, 0]}>
+          <sphereGeometry args={[0.07, 16, 12]} />
+        </mesh>
+        {/* Brim — curved flattened half-disc at the front */}
+        <mesh material={fabric} position={[0, 0.12, 1.0]} rotation={[-0.34, 0, 0]} scale={[1.25, 1, 1.5]} castShadow receiveShadow>
+          <cylinderGeometry args={[1.05, 1.05, 0.06, 48, 1, false, -Math.PI / 2, Math.PI]} />
+        </mesh>
+        {/* DESIGN — front crown panel, curved to face camera */}
+        {designMat && (
+          <mesh position={[0, 0.42, 1.04]} rotation={[-0.18, 0, 0]} renderOrder={2}>
+            <planeGeometry args={[dW, dH, 24, 12]} />
+            <primitive object={designMat} attach="material" />
+          </mesh>
+        )}
+      </group>
+    </Center>
+  );
+}
+
+// ── Poster / wall-art / canvas print ─────────────────────────────────────────
+function PosterModel({ liveCanvas, staticDesign, designAspect, isDark }: {
+  liveCanvas?: HTMLCanvasElement | null; staticDesign?: string;
+  designAspect: number; isDark: boolean;
+}) {
+  const designMat = useDesignMaterial(liveCanvas, staticDesign);
+  const frameMat = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: isDark ? "#2a2a2e" : "#1a1a1c", roughness: 0.5, metalness: 0.3, clearcoat: 0.3,
+  }), [isDark]);
+  const paperMat = useMemo(() => new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: 0.95 }), []);
+
+  const [dW, dH] = fitPlane(2.4, 2.4, designAspect);
+  const fb = 0.12;
+
+  return (
+    <Center>
+      <group>
+        {/* Frame */}
+        <mesh material={frameMat} position={[0, 0, -0.06]} castShadow receiveShadow>
+          <boxGeometry args={[dW + fb * 2, dH + fb * 2, 0.08]} />
+        </mesh>
+        {/* Paper */}
+        <mesh material={paperMat} position={[0, 0, 0.0]}>
+          <planeGeometry args={[dW, dH]} />
+        </mesh>
+        {/* Design */}
+        {designMat && (
+          <mesh position={[0, 0, 0.012]} renderOrder={2}>
+            <planeGeometry args={[dW, dH]} />
+            <primitive object={designMat} attach="material" />
+          </mesh>
+        )}
+      </group>
+    </Center>
+  );
+}
+
+// ── Tote bag ──────────────────────────────────────────────────────────────────
+function ToteModel({ color, liveCanvas, staticDesign, showWire, designAspect }: {
+  color: string; liveCanvas?: HTMLCanvasElement | null; staticDesign?: string;
+  showWire: boolean; designAspect: number;
+}) {
+  const designMat = useDesignMaterial(liveCanvas, staticDesign);
+  const canvasMat = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color, roughness: 0.92, metalness: 0, sheen: 0.3, side: THREE.DoubleSide, wireframe: showWire,
+  }), [color, showWire]);
+  const [dW, dH] = fitPlane(1.5, 1.6, designAspect);
+
+  return (
+    <Center>
+      <group>
+        <mesh material={canvasMat} castShadow receiveShadow>
+          <boxGeometry args={[2.0, 2.2, 0.5]} />
+        </mesh>
+        {/* Handles */}
+        {[-1, 1].map((s) => (
+          <mesh key={s} material={canvasMat} position={[s * 0.5, 1.5, 0.2]} rotation={[0, 0, 0]}>
+            <torusGeometry args={[0.4, 0.04, 12, 32, Math.PI]} />
+          </mesh>
+        ))}
+        {designMat && (
+          <mesh position={[0, 0.05, 0.255]} renderOrder={2}>
+            <planeGeometry args={[dW, dH]} />
+            <primitive object={designMat} attach="material" />
+          </mesh>
+        )}
+      </group>
+    </Center>
+  );
+}
+
+// ── Mug ─────────────────────────────────────────────────────────────────────
+function MugModel({ color, liveCanvas, staticDesign, designAspect }: {
+  color: string; liveCanvas?: HTMLCanvasElement | null; staticDesign?: string; designAspect: number;
+}) {
+  const designMat = useDesignMaterial(liveCanvas, staticDesign);
+  const ceramic = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color, roughness: 0.2, metalness: 0.05, clearcoat: 0.6, clearcoatRoughness: 0.2, side: THREE.DoubleSide,
+  }), [color]);
+  const [dW, dH] = fitPlane(1.9, 1.2, designAspect);
+
+  return (
+    <Center>
+      <group rotation={[0, -0.3, 0]}>
+        <mesh material={ceramic} castShadow receiveShadow>
+          <cylinderGeometry args={[0.95, 0.9, 2.0, 48, 1, true]} />
+        </mesh>
+        <mesh material={ceramic} position={[0, -1.0, 0]}>
+          <cylinderGeometry args={[0.9, 0.9, 0.05, 48]} />
+        </mesh>
+        {/* Handle */}
+        <mesh material={ceramic} position={[1.0, 0, 0]} rotation={[0, 0, 0]}>
+          <torusGeometry args={[0.5, 0.1, 16, 32, Math.PI]} />
+        </mesh>
+        {/* Design wraps the front — gentle cylindrical curve */}
+        {designMat && (
+          <mesh position={[0, 0, 0.97]} renderOrder={2}>
+            <planeGeometry args={[dW, dH, 24, 1]} />
+            <primitive object={designMat} attach="material" />
+          </mesh>
+        )}
+      </group>
+    </Center>
+  );
+}
+
+// ── GLB avatar (optional, design on chest) ────────────────────────────────────
+function AvatarFigure({ url, liveCanvas, staticDesign, designAspect }: {
+  url: string; liveCanvas?: HTMLCanvasElement | null; staticDesign?: string; designAspect: number;
+}) {
+  const { scene } = useGLTF(url, true) as unknown as { scene: THREE.Object3D };
+  const designMat = useDesignMaterial(liveCanvas, staticDesign);
 
   const model = useMemo(() => {
     const c = scene.clone(true);
@@ -366,17 +466,14 @@ function AvatarFigure({ url, liveCanvas, staticDesign }: { url: string; liveCanv
     return { model: c, chestZ: (sz.z * 0.5 * s) * 0.78 + 0.02 };
   }, [scene]);
 
-  const designMat = useMemo(() => designTex ? new THREE.MeshBasicMaterial({
-    map: designTex, transparent: true, depthWrite: false,
-    polygonOffset: true, polygonOffsetFactor: -4,
-  }) : null, [designTex]);
+  const [dW, dH] = fitPlane(SHIRT_W, SHIRT_H, designAspect);
 
   return (
     <group>
       <primitive object={model.model} />
       {designMat && (
-        <mesh position={[0, 0.62, model.chestZ + 0.002]}>
-          <planeGeometry args={[SHIRT_W, SHIRT_H]} />
+        <mesh position={[0, 0.62, model.chestZ + 0.004]}>
+          <planeGeometry args={[dW, dH]} />
           <primitive object={designMat} attach="material" />
         </mesh>
       )}
@@ -393,10 +490,10 @@ class FigureBoundary extends Component<{ fallback: ReactNode; children: ReactNod
 
 // ── Camera angle presets ──────────────────────────────────────────────────────
 const CAM_PRESETS = [
-  { id: "front", label: "Front",  icon: "↑" },
-  { id: "q3d",   label: "3/4",    icon: "↗" },
-  { id: "left",  label: "Left",   icon: "←" },
-  { id: "back",  label: "Back",   icon: "↓" },
+  { id: "front", label: "Front" },
+  { id: "q3d",   label: "3/4" },
+  { id: "left",  label: "Left" },
+  { id: "back",  label: "Back" },
 ];
 
 // ── Main export ───────────────────────────────────────────────────────────────
@@ -410,6 +507,8 @@ export default function Garment3DPreview({
   fetchMockups,
   liveCanvas = null,
   productColor = null,
+  garmentType = "apparel",
+  designAspect = 1,
 }: {
   design: string;
   onClose: () => void;
@@ -420,8 +519,9 @@ export default function Garment3DPreview({
   fetchMockups?: () => Promise<string[]>;
   liveCanvas?: HTMLCanvasElement | null;
   productColor?: string | null;
+  garmentType?: GarmentType;
+  designAspect?: number;
 }) {
-  // Map product color name → hex swatch
   const matchedColor = useMemo(() => {
     if (!productColor) return GARMENT_COLORS[0].hex;
     const lc = productColor.toLowerCase();
@@ -436,13 +536,13 @@ export default function Garment3DPreview({
   const [showWire, setShowWire] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
   const [envPreset, setEnvPreset] = useState<"studio" | "sunset" | "dawn">("studio");
-  const [tab, setTab] = useState<"3d" | "real">("3d"); // 3D first per requirements
+  const [tab, setTab] = useState<"3d" | "real">("3d");
   const [mockups, setMockups] = useState<string[] | null>(null);
   const [mockBusy, setMockBusy] = useState(false);
   const [camPreset, setCamPreset] = useState<string | null>("front");
   const glRef = useRef<HTMLDivElement>(null);
+  const orbitRef = useRef<any>(null);
 
-  // Sync to product color when prop changes
   useEffect(() => { setColor(matchedColor); }, [matchedColor]);
 
   const loadMockups = async () => {
@@ -451,7 +551,6 @@ export default function Garment3DPreview({
     try { setMockups(await fetchMockups()); }
     finally { setMockBusy(false); }
   };
-
   const openReal = () => { setTab("real"); loadMockups(); };
 
   const export3d = () => {
@@ -463,14 +562,47 @@ export default function Garment3DPreview({
     a.click();
   };
 
-  const orbitRef = useRef<any>(null);
+  // Pick the model + default camera distance per product type.
+  const distance = garmentType === "hat" ? 4.6 : garmentType === "poster" ? 4.2
+    : garmentType === "mug" ? 4.4 : garmentType === "tote" ? 5.0 : 5.8;
+
+  const renderModel = () => {
+    const common = { liveCanvas, staticDesign: design, designAspect };
+    switch (garmentType) {
+      case "hat":
+        return <CapModel color={color} showWire={showWire} {...common} />;
+      case "poster":
+        return <PosterModel isDark={isDark} {...common} />;
+      case "tote":
+        return <ToteModel color={color} showWire={showWire} {...common} />;
+      case "mug":
+        return <MugModel color={color} {...common} />;
+      case "hoodie":
+      case "apparel":
+      default:
+        if (HUMAN_GLB) {
+          return (
+            <FigureBoundary fallback={<Mannequin color={color} isDark={isDark} showWire={showWire} hoodie={garmentType === "hoodie"} {...common} />}>
+              <Suspense fallback={<Mannequin color={color} isDark={isDark} showWire={showWire} hoodie={garmentType === "hoodie"} {...common} />}>
+                <AvatarFigure url={HUMAN_GLB} {...common} />
+              </Suspense>
+            </FigureBoundary>
+          );
+        }
+        return <Mannequin color={color} isDark={isDark} showWire={showWire} hoodie={garmentType === "hoodie"} {...common} />;
+    }
+  };
+
+  const showColorSwatches = garmentType !== "poster";
+  const typeLabel = garmentType === "hat" ? "Cap" : garmentType === "poster" ? "Wall art"
+    : garmentType === "tote" ? "Tote" : garmentType === "mug" ? "Mug"
+    : garmentType === "hoodie" ? "Hoodie" : "Apparel";
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-black/96 backdrop-blur-md select-none">
-      {/* ── Top bar ────────────────────────────────────────────────────────── */}
+      {/* Top bar */}
       <div className="flex items-center justify-between px-5 py-3.5 shrink-0 border-b border-white/5">
         <div className="flex items-center gap-2">
-          {/* Tab switcher */}
           <div className="flex gap-0.5 rounded-full bg-white/10 p-1">
             <button onClick={() => setTab("3d")}
               className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-colors ${tab === "3d" ? "bg-white text-black" : "text-white/60 hover:text-white"}`}>
@@ -483,12 +615,10 @@ export default function Garment3DPreview({
               </button>
             )}
           </div>
-
           {tab === "3d" && (
             <span className="hidden sm:inline text-[9px] uppercase tracking-widest text-white/35">
-              {printWidthIn && printHeightIn
-                ? `print area ${printWidthIn}″ × ${printHeightIn}″ · drag to orbit`
-                : "drag to orbit · scroll to zoom"}
+              {typeLabel}
+              {printWidthIn && printHeightIn ? ` · print ${printWidthIn}″ × ${printHeightIn}″` : ""} · drag to orbit
             </span>
           )}
         </div>
@@ -507,7 +637,7 @@ export default function Garment3DPreview({
         </div>
       </div>
 
-      {/* ── Realistic mockup tab ─────────────────────────────────────────── */}
+      {/* Realistic mockup tab */}
       {tab === "real" && (
         <div className="flex-1 overflow-y-auto px-5 pb-6">
           {mockBusy ? (
@@ -536,17 +666,16 @@ export default function Garment3DPreview({
         </div>
       )}
 
-      {/* ── 3D viewport ───────────────────────────────────────────────────── */}
+      {/* 3D viewport */}
       <div ref={glRef} className={`relative flex-1 ${tab !== "3d" ? "hidden" : ""}`}>
         <Canvas
           shadows
-          camera={{ position: [0, 0.2, 5.8], fov: 36 }}
+          camera={{ position: [0, 0.2, distance], fov: 36 }}
           dpr={[1, 2]}
           gl={{ preserveDrawingBuffer: true, antialias: true }}
         >
           <color attach="background" args={[isDark ? "#080809" : "#0d0e10"]} />
 
-          {/* Lighting — key/fill/rim setup for realistic skin */}
           <ambientLight intensity={0.55} />
           <directionalLight position={[4, 7, 5]} intensity={1.8} castShadow
             shadow-mapSize={[2048, 2048]} shadow-bias={-0.0004} />
@@ -555,19 +684,7 @@ export default function Garment3DPreview({
           <pointLight position={[0, 3.5, 3]} intensity={0.4} color="#fff8f0" />
 
           <Suspense fallback={null}>
-            {HUMAN_GLB ? (
-              <FigureBoundary fallback={
-                <Mannequin color={color} liveCanvas={liveCanvas} staticDesign={design} isDark={isDark} showWire={showWire} />
-              }>
-                <Suspense fallback={
-                  <Mannequin color={color} liveCanvas={liveCanvas} staticDesign={design} isDark={isDark} showWire={showWire} />
-                }>
-                  <AvatarFigure url={HUMAN_GLB} liveCanvas={liveCanvas} staticDesign={design} />
-                </Suspense>
-              </FigureBoundary>
-            ) : (
-              <Mannequin color={color} liveCanvas={liveCanvas} staticDesign={design} isDark={isDark} showWire={showWire} />
-            )}
+            {renderModel()}
             <Environment preset={envPreset} />
           </Suspense>
 
@@ -586,13 +703,13 @@ export default function Garment3DPreview({
             autoRotate={spin}
             autoRotateSpeed={1.4}
             target={[0, 0.2, 0]}
-            minDistance={2.8}
-            maxDistance={11}
+            minDistance={2.4}
+            maxDistance={12}
             onStart={() => setSpin(false)}
           />
         </Canvas>
 
-        {/* Camera angle preset pills (CLO-3D style) */}
+        {/* Camera angle pills */}
         <div className="absolute top-4 left-1/2 -translate-x-1/2 flex gap-1 rounded-full bg-black/60 backdrop-blur-sm px-2 py-1.5 border border-white/10">
           {CAM_PRESETS.map((p) => (
             <button key={p.id} onClick={() => { setSpin(false); setCamPreset(p.id); }}
@@ -602,10 +719,10 @@ export default function Garment3DPreview({
           ))}
         </div>
 
-        {/* CLO-3D style control toolbar */}
+        {/* Control toolbar */}
         <div className="absolute top-4 right-4 flex flex-col gap-2">
           <button onClick={() => setShowWire((v) => !v)}
-            className={`p-2 rounded-lg text-[10px] uppercase font-bold tracking-wider transition-colors border ${showWire ? "bg-white text-black border-white" : "bg-black/60 text-white/60 border-white/10 hover:text-white"}`}
+            className={`p-2 rounded-lg transition-colors border ${showWire ? "bg-white text-black border-white" : "bg-black/60 text-white/60 border-white/10 hover:text-white"}`}
             title="Wireframe">
             <Grid3X3 size={13} />
           </button>
@@ -620,25 +737,20 @@ export default function Garment3DPreview({
             <RotateCcw size={13} />
           </button>
         </div>
-
-        {/* Loading spinner overlay */}
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <Suspense fallback={<Loader2 className="animate-spin text-white/30" size={28} />}>{null}</Suspense>
-        </div>
       </div>
 
-      {/* ── Bottom controls ───────────────────────────────────────────────── */}
+      {/* Bottom controls */}
       <div className={`flex items-center justify-between gap-3 px-5 py-4 shrink-0 border-t border-white/5 ${tab !== "3d" ? "hidden" : ""}`}>
-        {/* Garment color swatches */}
-        <div className="flex items-center gap-1.5 rounded-full bg-white/8 px-3 py-2 border border-white/10">
-          {GARMENT_COLORS.map((c) => (
-            <button key={c.key} onClick={() => setColor(c.hex)} aria-label={c.label} title={c.label}
-              className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${color === c.hex ? "border-white ring-2 ring-white/40 scale-110" : "border-transparent hover:border-white/40"}`}
-              style={{ backgroundColor: c.hex }} />
-          ))}
-        </div>
+        {showColorSwatches ? (
+          <div className="flex items-center gap-1.5 rounded-full bg-white/8 px-3 py-2 border border-white/10">
+            {GARMENT_COLORS.map((c) => (
+              <button key={c.key} onClick={() => setColor(c.hex)} aria-label={c.label} title={c.label}
+                className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${color === c.hex ? "border-white ring-2 ring-white/40 scale-110" : "border-transparent hover:border-white/40"}`}
+                style={{ backgroundColor: c.hex }} />
+            ))}
+          </div>
+        ) : <div />}
 
-        {/* Environment presets */}
         <div className="flex gap-1 rounded-full bg-white/8 px-2 py-1.5 border border-white/10">
           {(["studio", "sunset", "dawn"] as const).map((e) => (
             <button key={e} onClick={() => setEnvPreset(e)}
@@ -648,7 +760,6 @@ export default function Garment3DPreview({
           ))}
         </div>
 
-        {/* Print dims badge */}
         {printWidthIn && printHeightIn && (
           <div className="hidden sm:flex items-center gap-1 text-[9px] text-white/35 font-mono uppercase">
             <Camera size={10} /> {printWidthIn}″ × {printHeightIn}″

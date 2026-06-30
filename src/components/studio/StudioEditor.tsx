@@ -357,6 +357,10 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
 
   const stageRef = useRef<Konva.Stage>(null);
   const artboardGroupRef = useRef<Konva.Group>(null);
+  const designGroupRef = useRef<Konva.Group>(null);
+  // Persistent offscreen canvas that holds ONLY the design artwork (print-area,
+  // transparent background) for live 3D projection — never the garment photo.
+  const designCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const trRef = useRef<Konva.Transformer>(null);
   const nodeRefs = useRef<Record<string, Konva.Node | null>>({});
   
@@ -1327,16 +1331,54 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
   };
 
   // ─── 3D preview & mockups ──────────────────────────────────────────────────
+  // Capture ONLY the design artwork inside the print area (transparent bg, no
+  // garment photo) into a persistent offscreen canvas. This is what gets
+  // projected onto the 3D garment — so the white product photo never appears.
+  const updateDesignCanvas = useCallback((): HTMLCanvasElement | null => {
+    const grp = designGroupRef.current;
+    if (!grp) return null;
+    const w = Math.max(1, pa.w * artboardW);
+    const h = Math.max(1, pa.h * artboardH);
+    const pr = Math.min(1400 / w, 2);
+    let src: HTMLCanvasElement;
+    try {
+      src = grp.toCanvas({ x: pa.x * artboardW, y: pa.y * artboardH, width: w, height: h, pixelRatio: pr });
+    } catch { return null; }
+    let dst = designCanvasRef.current;
+    if (!dst) { dst = document.createElement("canvas"); designCanvasRef.current = dst; }
+    if (dst.width !== src.width || dst.height !== src.height) { dst.width = src.width; dst.height = src.height; }
+    const ctx = dst.getContext("2d");
+    if (!ctx) return null;
+    ctx.clearRect(0, 0, dst.width, dst.height);
+    ctx.drawImage(src, 0, 0);
+    return dst;
+  }, [pa.x, pa.y, pa.w, pa.h, artboardW, artboardH]);
+
   const open3d = async () => {
     const stg = stageRef.current;
     if (!stg) { toast.error("Canvas not ready"); return; }
     try {
-      const dataUrl = stg.toDataURL({ mimeType: "image/png", pixelRatio: Math.min(2048 / artboardW, 2) });
+      // Seed the design-only canvas so the 3D viewer has artwork on first frame.
+      updateDesignCanvas();
+      // A flat fallback PNG (design only) for environments without live sync.
+      const grp = designGroupRef.current;
+      const dataUrl = grp
+        ? grp.toCanvas({ x: pa.x * artboardW, y: pa.y * artboardH, width: Math.max(1, pa.w * artboardW), height: Math.max(1, pa.h * artboardH), pixelRatio: Math.min(2048 / (pa.w * artboardW), 2) }).toDataURL("image/png")
+        : stg.toDataURL({ mimeType: "image/png", pixelRatio: Math.min(2048 / artboardW, 2) });
       setPreview3d(dataUrl);
     } catch {
       toast.error("Could not render preview");
     }
   };
+
+  // Keep the design-only canvas live-refreshed while the 3D viewer is open.
+  useEffect(() => {
+    if (!preview3d) return;
+    let raf = 0;
+    const tick = () => { updateDesignCanvas(); raf = requestAnimationFrame(tick); };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [preview3d, updateDesignCanvas]);
 
   const fetchMockups = async (): Promise<string[]> => {
     if (!product?.mfr || product.mfr !== "printful" || !product.variant_id) return [];
@@ -2405,17 +2447,21 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                       )}
                     </Group>
 
-                    {layers.map((l) => l.type === "paint" ? (
-                      <PaintNode key={l.id} layer={l} canvas={getPaintCanvas(l)} />
-                    ) : l.type === "image" ? (
-                      <ImageNode key={l.id} layer={l} listening={!regionMode && tool === "select"}
-                        nodeRef={(n: any) => (nodeRefs.current[l.id] = n)} onDragMove={snapDrag}
-                        onSelect={() => setSelectedId(l.id)} onChange={(patch: any) => { patchLayer(l.id, patch); setGuides({ v: false, h: false }); }} />
-                    ) : (
-                      <TextNode key={l.id} layer={l} listening={!regionMode && tool === "select"}
-                        nodeRef={(n: any) => (nodeRefs.current[l.id] = n)} onDragMove={snapDrag}
-                        onSelect={() => setSelectedId(l.id)} onChange={(patch: any) => { patchLayer(l.id, patch); setGuides({ v: false, h: false }); }} />
-                    ))}
+                    {/* Design artwork group — exported on its own (transparent, no
+                        garment photo) for accurate 3D projection. */}
+                    <Group ref={designGroupRef} name="design-group">
+                      {layers.map((l) => l.type === "paint" ? (
+                        <PaintNode key={l.id} layer={l} canvas={getPaintCanvas(l)} />
+                      ) : l.type === "image" ? (
+                        <ImageNode key={l.id} layer={l} listening={!regionMode && tool === "select"}
+                          nodeRef={(n: any) => (nodeRefs.current[l.id] = n)} onDragMove={snapDrag}
+                          onSelect={() => setSelectedId(l.id)} onChange={(patch: any) => { patchLayer(l.id, patch); setGuides({ v: false, h: false }); }} />
+                      ) : (
+                        <TextNode key={l.id} layer={l} listening={!regionMode && tool === "select"}
+                          nodeRef={(n: any) => (nodeRefs.current[l.id] = n)} onDragMove={snapDrag}
+                          onSelect={() => setSelectedId(l.id)} onChange={(patch: any) => { patchLayer(l.id, patch); setGuides({ v: false, h: false }); }} />
+                      ))}
+                    </Group>
 
                     {(tool === "brush" || tool === "eraser" || tool === "smudge") && symmetry === "v" && <Rect name="symmetry-guide" x={artboardW / 2 - 1} y={0} width={2} height={artboardH} fill="#6366f1" opacity={0.5} listening={false} />}
                     {(tool === "brush" || tool === "eraser" || tool === "smudge") && symmetry === "h" && <Rect name="symmetry-guide" x={0} y={artboardH / 2 - 1} width={artboardW} height={2} fill="#6366f1" opacity={0.5} listening={false} />}
@@ -2640,11 +2686,17 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
             printHeightIn={product?.print?.height_in ?? null}
             fetchMockups={fetchMockups}
             productColor={product?.color ?? null}
-            liveCanvas={(() => {
-              const content = stageRef.current?.content;
-              if (!content) return null;
-              return (content.querySelector("canvas") as HTMLCanvasElement | null);
-            })()} />
+            garmentType={(() => {
+              const k = `${templateKey || ""} ${(product as any)?.type || ""}`.toLowerCase();
+              if (/hat|cap|beanie|trucker/.test(k)) return "hat";
+              if (/poster|canvas|print|frame|wall/.test(k)) return "poster";
+              if (/tote|bag/.test(k)) return "tote";
+              if (/mug|bottle|tumbler/.test(k)) return "mug";
+              if (/hoodie|sweat|crewneck/.test(k)) return "hoodie";
+              return "apparel";
+            })()}
+            designAspect={(pa.w * artboardW) / (pa.h * artboardH)}
+            liveCanvas={designCanvasRef.current} />
         </Suspense>
       )}
 
