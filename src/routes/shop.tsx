@@ -1,12 +1,18 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { fetchProducts, useProducts } from "@/lib/useProducts";
-import { useMemo, memo, useEffect, useState, useCallback } from "react";
+import { useMemo, memo, useEffect } from "react";
 import { trackEvent } from "@/lib/track";
 import { proxyImageUrl } from "@/lib/img";
-import { GarmentSilhouette, garmentKindFromTitle } from "@/components/site/GarmentSilhouette";
-import { ProductModal, type ModalProduct } from "@/components/site/ProductModal";
 
-type Product = ModalProduct;
+type Product = {
+  id: string;
+  title: string;
+  slug: string;
+  price_cents: number;
+  price_cents_discounted?: number | null;
+  discounted_price_cents?: number | null;
+  image_urls?: string[];
+};
 
 export const Route = createFileRoute("/shop")({
   loader: async () => {
@@ -31,13 +37,6 @@ function ShopPage() {
       : ((loader?.products as Product[]) ?? []);
   }, [clientProducts, loader?.products]);
 
-  // Tamed-Psychotic single-page modal: opening a product never navigates.
-  const [active, setActive] = useState<Product | null>(null);
-  const open = useCallback((p: Product) => {
-    setActive(p);
-    trackEvent("product_click", { product_id: p.id });
-  }, []);
-
   useEffect(() => {
     trackEvent("page_view");
   }, []);
@@ -53,27 +52,25 @@ function ShopPage() {
       ) : (
         <div className="grid grid-cols-2 overflow-visible bg-inherit sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
           {products.map((product, index) => (
-            <ProductCell key={product.id} product={product} index={index} onOpen={open} />
+            <ProductCell key={product.id} product={product} index={index} />
           ))}
         </div>
       )}
-      {active && <ProductModal product={active} onClose={() => setActive(null)} />}
     </div>
   );
 }
 
-const ProductCell = memo(({ product, index, onOpen }: { product: Product; index: number; onOpen: (p: Product) => void }) => {
-  // Grid prefers the flat transparent mockup (image_urls[1] is Printful's
-  // flat preview when present, else [0]).
-  const rawImageUrl =
-    Array.isArray(product.image_urls) && product.image_urls.length > 1
-      ? product.image_urls[1]
-      : Array.isArray(product.image_urls) && product.image_urls.length === 1
-      ? product.image_urls[0]
-      : null;
+// Choose the storefront thumbnail: the flat product mockup, never the bare
+// design/logo (Printful lists the print file first, so skip index 0 when
+// there's a real mockup after it).
+function gridImage(images?: string[]): string | null {
+  if (!Array.isArray(images) || images.length === 0) return null;
+  return images.length > 1 ? images[1] : images[0];
+}
 
-  const imageUrl = rawImageUrl ? proxyImageUrl(rawImageUrl) : null;
-  const kind = garmentKindFromTitle(product.title);
+const ProductCell = memo(({ product, index }: { product: Product; index: number }) => {
+  const raw = gridImage(product.image_urls);
+  const imageUrl = raw ? proxyImageUrl(raw) : null;
 
   const discounted = product.price_cents_discounted ?? product.discounted_price_cents ?? null;
   const hasDiscount = discounted != null && discounted < product.price_cents;
@@ -83,18 +80,15 @@ const ProductCell = memo(({ product, index, onOpen }: { product: Product; index:
   const isAboveFold = index < 6;
 
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(product)}
-      aria-label={`View ${product.title}`}
-      className="group relative z-0 block cursor-pointer border-none bg-transparent text-left outline-none transition-transform duration-300 ease-in-out hover:z-10 hover:scale-105 focus:outline-none focus-visible:outline-none"
+    <Link
+      to="/offer/$slug"
+      params={{ slug: product.slug }}
+      preload="intent"
+      viewTransition
+      onClick={() => trackEvent("product_click", { product_id: product.id })}
+      className="group relative z-0 block border-none bg-transparent outline-none transition-transform duration-300 ease-in-out hover:z-10 hover:scale-105 focus:outline-none focus-visible:outline-none"
     >
       <div className="relative flex aspect-square items-center justify-center overflow-hidden bg-transparent p-6 sm:p-8 md:p-10">
-        {/* Instant vector silhouette underlay — reserves the box, zero CLS. */}
-        <GarmentSilhouette
-          kind={kind}
-          className="pointer-events-none absolute inset-0 m-auto h-2/3 w-2/3 text-current"
-        />
         {imageUrl ? (
           <img
             src={imageUrl}
@@ -102,12 +96,14 @@ const ProductCell = memo(({ product, index, onOpen }: { product: Product; index:
             width={600}
             height={600}
             sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
-            className="relative max-h-full max-w-full object-contain aspect-square"
+            className="max-h-full max-w-full object-contain aspect-square"
             loading={isAboveFold ? "eager" : "lazy"}
             decoding="async"
             {...(isAboveFold ? { fetchPriority: "high" } : {})}
           />
-        ) : null}
+        ) : (
+          <span className="text-[7px] uppercase tracking-[0.3em] opacity-20">No Image</span>
+        )}
         {hasDiscount && (
           <span className="absolute right-3 top-3 text-[8px] font-bold uppercase tracking-[0.15em] text-current">
             Sale
@@ -129,7 +125,7 @@ const ProductCell = memo(({ product, index, onOpen }: { product: Product; index:
           )}
         </div>
       </div>
-    </button>
+    </Link>
   );
 });
 ProductCell.displayName = "ProductCell";
