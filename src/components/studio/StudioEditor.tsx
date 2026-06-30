@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { computeRetailCents } from "@/lib/pricing";
+import { downloadDxf, type PatternPiece } from "@/lib/studio/dxf";
 
 const Garment3DPreview = lazy(() => import("./Garment3DPreview"));
 const PrintfulDesignMaker = lazy(() => import("./PrintfulDesignMaker"));
@@ -1670,6 +1671,30 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
     a.click();
   };
 
+  // Export the artboard + print area as a CAD-ready DXF sewing pattern (mm).
+  const exportDxf = () => {
+    const pa: any = printArea ?? {};
+    const dpi = Number(pa.dpi) || 150;
+    const toMm = (px: number) => +((px / dpi) * 25.4).toFixed(2);
+    const pieces: PatternPiece[] = [{
+      name: `${projectName} artboard`,
+      points: [
+        { x: 0, y: 0 }, { x: toMm(artboardW), y: 0 },
+        { x: toMm(artboardW), y: toMm(artboardH) }, { x: 0, y: toMm(artboardH) },
+      ],
+    }];
+    const pw = pa.width ?? pa.w, ph = pa.height ?? pa.h;
+    if (pw && ph) {
+      const x = toMm(pa.x ?? pa.left ?? 0), y = toMm(pa.y ?? pa.top ?? 0);
+      const w = toMm(pw), h = toMm(ph);
+      pieces.push({ name: "print area", points: [
+        { x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h },
+      ] });
+    }
+    downloadDxf(pieces, `${projectName.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.dxf`);
+    toast.success("DXF pattern exported");
+  };
+
   const publish = async () => {
     if (publishing) return;
     setPublishing(true);
@@ -2469,6 +2494,9 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                         {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save State
                       </button>
                     </div>
+                    <button onClick={exportDxf} className="w-full flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-bold border border-[#1c1c1e] dark:border-neutral-700 hover:bg-[#1c1c1e] dark:hover:bg-[#09090b]">
+                      <Download size={13} /> Export DXF (CAD Pattern)
+                    </button>
                     <button onClick={publish} disabled={publishing} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold uppercase bg-[#007aff] text-white hover:bg-[#005bb5]">
                       {publishing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} Publish Design
                     </button>

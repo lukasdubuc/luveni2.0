@@ -30,6 +30,8 @@ import {
   Camera, Grid3X3, Eye, ChevronLeft, ChevronRight,
 } from "lucide-react";
 
+import { useMeasurementSystem, formatLength } from "@/lib/units";
+
 // Optional real avatar GLB
 const HUMAN_GLB: string = (import.meta as any).env?.VITE_STUDIO_HUMAN_GLB || "";
 
@@ -62,6 +64,64 @@ const TORSO_Z = 0.60;       // depth squash (front-to-back / side-to-side ratio)
 const SHIRT_FRONT_Z = 0.295; // Z of shirt surface at chest
 const SHIRT_W = 0.92;       // projected shirt front width
 const SHIRT_H = 1.30;       // projected shirt front height
+
+// ── Procedural fabric normal map (weave + soft wrinkles) ─────────────────────
+//  Generates a tiling normal map on a canvas so the shirt catches light like
+//  real cloth — a woven micro-texture plus low-frequency folds. No external
+//  asset needed. Cached per fabric so it's built once.
+const _normalCache = new Map<FabricKey, THREE.CanvasTexture>();
+function fabricNormalMap(fabric: FabricKey): THREE.CanvasTexture {
+  const cached = _normalCache.get(fabric);
+  if (cached) return cached;
+  const S = 256;
+  const cvs = document.createElement("canvas");
+  cvs.width = cvs.height = S;
+  const ctx = cvs.getContext("2d")!;
+  // Base normal = flat surface (R,G = 128, B = 255).
+  ctx.fillStyle = "rgb(128,128,255)";
+  ctx.fillRect(0, 0, S, S);
+
+  // Weave period + amplitude per fabric.
+  const weave: Record<FabricKey, { period: number; amp: number; wrinkle: number }> = {
+    cotton: { period: 6, amp: 26, wrinkle: 18 },
+    denim:  { period: 5, amp: 40, wrinkle: 14 },
+    knit:   { period: 9, amp: 34, wrinkle: 22 },
+    silk:   { period: 4, amp: 10, wrinkle: 26 },
+    fleece: { period: 11, amp: 30, wrinkle: 30 },
+  };
+  const { period, amp, wrinkle } = weave[fabric];
+
+  // Woven thread micro-normals: perturb the R (x) and G (y) channels.
+  const img = ctx.getImageData(0, 0, S, S);
+  const d = img.data;
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      const i = (y * S + x) * 4;
+      const warp = Math.sin((x / period) * Math.PI * 2) * amp;
+      const weft = Math.sin((y / period) * Math.PI * 2) * amp;
+      // Low-frequency folds via layered sines (organic wrinkle direction).
+      const foldX = Math.sin((x / 70) + Math.cos(y / 90)) * wrinkle;
+      const foldY = Math.cos((y / 64) + Math.sin(x / 110)) * wrinkle;
+      d[i]     = Math.max(0, Math.min(255, 128 + warp + foldX));
+      d[i + 1] = Math.max(0, Math.min(255, 128 + weft + foldY));
+      // Keep B high so normals stay mostly surface-facing.
+      d[i + 2] = 235 + ((x ^ y) & 7);
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+
+  const tex = new THREE.CanvasTexture(cvs);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(3, 4);
+  tex.needsUpdate = true;
+  _normalCache.set(fabric, tex);
+  return tex;
+}
+
+// Normal-map strength per fabric (denim/fleece read rougher/foldier).
+const NORMAL_STRENGTH: Record<FabricKey, number> = {
+  cotton: 0.5, denim: 0.85, knit: 0.7, silk: 0.28, fleece: 0.9,
+};
 
 // ── Utility: build LatheGeometry from profile points ─────────────────────────
 function lathe(profile: [number, number][], segs = 64): THREE.BufferGeometry {
@@ -147,6 +207,7 @@ function Mannequin({
   const eyeWhite = useMemo(() => new THREE.MeshStandardMaterial({ color: "#f5f5f5", roughness: 0.5 }), []);
   const lipMat = useMemo(() => new THREE.MeshStandardMaterial({ color: "#c87070", roughness: 0.6 }), []);
 
+  const fabricNormal = useMemo(() => fabricNormalMap(fabric ?? "cotton"), [fabric]);
   const shirt = useMemo(() => new THREE.MeshPhysicalMaterial({
     color,
     roughness: fab.roughness,
@@ -154,9 +215,15 @@ function Mannequin({
     sheen: fab.sheen,
     sheenColor: new THREE.Color(color),
     sheenRoughness: fab.sheenRoughness,
+    // High-fidelity fabric folds/wrinkles via procedural normal map.
+    normalMap: fabricNormal,
+    normalScale: new THREE.Vector2(
+      NORMAL_STRENGTH[fabric ?? "cotton"],
+      NORMAL_STRENGTH[fabric ?? "cotton"],
+    ),
     side: THREE.DoubleSide,
     wireframe: showWire,
-  }), [color, showWire, fab]);
+  }), [color, showWire, fab, fabricNormal, fabric]);
 
   const designMat = useMemo(() => designTex ? new THREE.MeshBasicMaterial({
     map: designTex,
@@ -454,7 +521,11 @@ export default function Garment3DPreview({
   const [mockups, setMockups] = useState<string[] | null>(null);
   const [mockBusy, setMockBusy] = useState(false);
   const [camPreset, setCamPreset] = useState<string | null>("front");
+  const [units] = useMeasurementSystem();
   const glRef = useRef<HTMLDivElement>(null);
+  const printDims = printWidthIn && printHeightIn
+    ? `${formatLength(printWidthIn, units)} × ${formatLength(printHeightIn, units)}`
+    : null;
 
   // Sync to product color when prop changes
   useEffect(() => { setColor(matchedColor); }, [matchedColor]);
@@ -500,8 +571,8 @@ export default function Garment3DPreview({
 
           {tab === "3d" && (
             <span className="hidden sm:inline text-[9px] uppercase tracking-widest text-white/35">
-              {printWidthIn && printHeightIn
-                ? `print area ${printWidthIn}″ × ${printHeightIn}″ · drag to orbit`
+              {printDims
+                ? `print area ${printDims} · drag to orbit`
                 : "drag to orbit · scroll to zoom"}
             </span>
           )}
@@ -675,7 +746,7 @@ export default function Garment3DPreview({
         {/* Print dims badge */}
         {printWidthIn && printHeightIn && (
           <div className="hidden sm:flex items-center gap-1 text-[9px] text-white/35 font-mono uppercase">
-            <Camera size={10} /> {printWidthIn}″ × {printHeightIn}″
+            <Camera size={10} /> {printDims}
           </div>
         )}
       </div>
