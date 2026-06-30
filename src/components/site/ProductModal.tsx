@@ -110,19 +110,19 @@ export function ProductModal({ product, onClose }: { product: ModalProduct; onCl
       <motion.div
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         transition={{ duration: 0.2 }}
-        className="fixed inset-0 z-[100] flex flex-col bg-white/95 font-mono backdrop-blur-md dark:bg-black/95 md:flex-row"
+        className="fixed inset-0 z-[100] flex flex-col bg-white font-mono text-neutral-900 dark:bg-black dark:text-white md:flex-row"
         role="dialog" aria-modal="true" aria-label={product.title}
       >
         <button
           onClick={onClose}
           aria-label="Close"
-          className="absolute right-4 top-4 z-10 rounded-full p-2 text-current opacity-60 transition hover:opacity-100"
+          className="absolute right-3 top-3 z-20 rounded-full bg-black/5 p-2 text-current opacity-70 transition hover:opacity-100 dark:bg-white/10"
         >
           <X size={20} />
         </button>
 
-        {/* Stage: pan-zoom canvas with silhouette underlay (no CLS). */}
-        <div className="relative flex-1 md:h-full">
+        {/* Stage: capped height on mobile so the rail stays reachable. */}
+        <div className="relative h-[48vh] w-full shrink-0 md:h-full md:flex-1">
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-10">
             <GarmentSilhouette kind={kind} className="h-2/3 w-2/3 text-current" />
           </div>
@@ -136,7 +136,7 @@ export function ProductModal({ product, onClose }: { product: ModalProduct; onCl
         </div>
 
         {/* Rail: thumbnails + variant pickers + add to cart. */}
-        <div className="flex w-full flex-col gap-6 overflow-y-auto p-6 md:w-[360px] md:p-8">
+        <div className="flex min-h-0 w-full flex-1 flex-col gap-5 overflow-y-auto border-t border-black/10 p-5 dark:border-white/10 md:flex-none md:w-[380px] md:border-l md:border-t-0 md:p-8">
           <div>
             <h2 className="text-sm uppercase tracking-[0.15em]">{product.title}</h2>
             <div className="mt-2 flex items-center gap-2 text-sm">
@@ -168,8 +168,11 @@ export function ProductModal({ product, onClose }: { product: ModalProduct; onCl
                   <button
                     key={c}
                     onClick={() => setColor(c)}
-                    className={`px-3 py-1 text-[11px] uppercase tracking-[0.1em] transition ${c === color ? "bg-current text-[var(--background,#fff)]" : "border border-current/30 hover:border-current"}`}
-                    style={c === color ? { color: "var(--background)" } : undefined}
+                    className={`rounded-sm px-3 py-1.5 text-[11px] uppercase tracking-[0.1em] transition ${
+                      c === color
+                        ? "bg-neutral-900 text-white dark:bg-white dark:text-black"
+                        : "border border-neutral-300 text-neutral-900 hover:border-neutral-900 dark:border-white/30 dark:text-white dark:hover:border-white"
+                    }`}
                   >
                     {c}
                   </button>
@@ -186,7 +189,11 @@ export function ProductModal({ product, onClose }: { product: ModalProduct; onCl
                   <button
                     key={s}
                     onClick={() => setSize(s)}
-                    className={`min-w-[40px] px-2 py-1 text-[11px] uppercase tracking-[0.1em] transition ${s === size ? "bg-current text-[var(--background,#fff)]" : "border border-current/30 hover:border-current"}`}
+                    className={`min-w-[44px] rounded-sm px-3 py-1.5 text-[11px] uppercase tracking-[0.1em] transition ${
+                      s === size
+                        ? "bg-neutral-900 text-white dark:bg-white dark:text-black"
+                        : "border border-neutral-300 text-neutral-900 hover:border-neutral-900 dark:border-white/30 dark:text-white dark:hover:border-white"
+                    }`}
                   >
                     {s}
                   </button>
@@ -197,8 +204,7 @@ export function ProductModal({ product, onClose }: { product: ModalProduct; onCl
 
           <button
             onClick={addToCart}
-            className="mt-auto w-full bg-current py-3 text-[11px] uppercase tracking-[0.25em]"
-            style={{ color: "var(--background, #fff)" }}
+            className="mt-auto w-full rounded-sm bg-neutral-900 py-3.5 text-[11px] uppercase tracking-[0.25em] text-white transition hover:opacity-90 dark:bg-white dark:text-black"
           >
             Add to cart
           </button>
