@@ -215,12 +215,22 @@ Deno.serve(async (req) => {
         if (imageUrls.length === 0 && item.thumbnail_url) imageUrls.push(item.thumbnail_url);
 
         const variants = syncVariants.map((v: any) => {
+          // Printful sync_variant.name is formatted "{Product Name} - {Color} / {Size}".
+          // Splitting on "/" gives parts[0] = "{Product Name} - {Color}" and
+          // parts[1] = "{Size}". The previous code assigned these to the wrong
+          // keys (size got the color-with-prefix, color got the size) — fixed
+          // below, and the product-name prefix is stripped from the color.
           const parts = (v.name ?? "").split("/").map((p: string) => p.trim());
           const attributes: Record<string, string> = {};
           parts.forEach((part: string, i: number) => {
-            if (i === 0) attributes["size"] = part;
-            else if (i === 1) attributes["color"] = part;
-            else attributes[`option_${i}`] = part;
+            if (i === 0) {
+              const dashIdx = part.lastIndexOf(" - ");
+              attributes["color"] = dashIdx !== -1 ? part.slice(dashIdx + 3).trim() : part;
+            } else if (i === 1) {
+              attributes["size"] = part;
+            } else {
+              attributes[`option_${i}`] = part;
+            }
           });
           return {
             sku: v.sku ?? String(v.id),
