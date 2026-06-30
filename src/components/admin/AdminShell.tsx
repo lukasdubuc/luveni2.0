@@ -97,9 +97,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
             </div>
           </div>
 
-          {/* Fullscreen overlay — same structure/typography as the shop menu */}
+          {/* Fullscreen overlay — identical structure/typography to the shop menu */}
           {open && (
-            <div className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-8 bg-background">
+            <div className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-6 overflow-y-auto bg-background py-16 text-center">
               {nav.map((item) => {
                 const active = item.exact ? path === item.to : path.startsWith(item.to);
                 return (
@@ -107,8 +107,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
                     key={item.to}
                     to={item.to}
                     onClick={() => setOpen(false)}
-                    className={`text-[13px] font-normal tracking-[0em] transition-colors ${
-                      active ? "text-foreground" : "text-foreground/40"
+                    className={`text-2xl font-normal tracking-tight transition-opacity hover:opacity-60 ${
+                      active ? "text-foreground" : "text-foreground/60"
                     }`}
                     style={{ fontFamily: NAV_FONT }}
                   >
@@ -121,7 +121,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
                   setOpen(false);
                   logout();
                 }}
-                className="text-[13px] font-normal tracking-[0em] text-foreground/40 transition-colors hover:text-foreground"
+                className="text-2xl font-normal tracking-tight text-foreground/60 transition-opacity hover:opacity-60 hover:text-foreground"
                 style={{ fontFamily: NAV_FONT }}
               >
                 SIGN OUT
