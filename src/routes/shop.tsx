@@ -1,16 +1,12 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { fetchProducts, useProducts } from "@/lib/useProducts";
-import { useMemo, memo, useEffect } from "react";
+import { useMemo, memo, useEffect, useState, useCallback } from "react";
 import { trackEvent } from "@/lib/track";
+import { proxyImageUrl } from "@/lib/img";
+import { GarmentSilhouette, garmentKindFromTitle } from "@/components/site/GarmentSilhouette";
+import { ProductModal, type ModalProduct } from "@/components/site/ProductModal";
 
-type Product = {
-  id: string;
-  title: string;
-  slug: string;
-  price_cents: number;
-  discounted_price_cents?: number | null;
-  image_urls: string[];
-};
+type Product = ModalProduct;
 
 export const Route = createFileRoute("/shop")({
   loader: async () => {
@@ -26,15 +22,6 @@ export const Route = createFileRoute("/shop")({
   component: ShopPage,
 });
 
-/** Proxy Printful CDN images through wsrv.nl to avoid CORS blocks. */
-function proxyImageUrl(url: string): string {
-  if (!url) return url;
-  if (url.includes("files.cdn.printful.com")) {
-    return `https://wsrv.nl/?url=${encodeURIComponent(url)}&n=-1`;
-  }
-  return url;
-}
-
 function ShopPage() {
   const loader = Route.useLoaderData();
   const { products: clientProducts } = useProducts({ onlyPublished: true });
@@ -43,6 +30,13 @@ function ShopPage() {
       ? (clientProducts as Product[])
       : ((loader?.products as Product[]) ?? []);
   }, [clientProducts, loader?.products]);
+
+  // Tamed-Psychotic single-page modal: opening a product never navigates.
+  const [active, setActive] = useState<Product | null>(null);
+  const open = useCallback((p: Product) => {
+    setActive(p);
+    trackEvent("product_click", { product_id: p.id });
+  }, []);
 
   useEffect(() => {
     trackEvent("page_view");
@@ -59,15 +53,18 @@ function ShopPage() {
       ) : (
         <div className="grid grid-cols-2 overflow-visible bg-inherit sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
           {products.map((product, index) => (
-            <ProductCell key={product.id} product={product} index={index} />
+            <ProductCell key={product.id} product={product} index={index} onOpen={open} />
           ))}
         </div>
       )}
+      {active && <ProductModal product={active} onClose={() => setActive(null)} />}
     </div>
   );
 }
 
-const ProductCell = memo(({ product, index }: { product: Product; index: number }) => {
+const ProductCell = memo(({ product, index, onOpen }: { product: Product; index: number; onOpen: (p: Product) => void }) => {
+  // Grid prefers the flat transparent mockup (image_urls[1] is Printful's
+  // flat preview when present, else [0]).
   const rawImageUrl =
     Array.isArray(product.image_urls) && product.image_urls.length > 1
       ? product.image_urls[1]
@@ -76,27 +73,29 @@ const ProductCell = memo(({ product, index }: { product: Product; index: number 
       : null;
 
   const imageUrl = rawImageUrl ? proxyImageUrl(rawImageUrl) : null;
+  const kind = garmentKindFromTitle(product.title);
 
   const hasDiscount =
     product.discounted_price_cents != null &&
     product.discounted_price_cents < product.price_cents;
-  const displayPrice = hasDiscount
-    ? product.discounted_price_cents!
-    : product.price_cents;
+  const displayPrice = hasDiscount ? product.discounted_price_cents! : product.price_cents;
 
-  // First 6 products load eagerly and with high priority (above the fold)
+  // First 6 products load eagerly and with high priority (above the fold).
   const isAboveFold = index < 6;
 
   return (
-    <Link
-      to="/offer/$slug"
-      params={{ slug: product.slug }}
-      preload="intent"
-      viewTransition
-      onClick={() => trackEvent("product_click", { product_id: product.id })}
-      className="group relative z-0 block border-none bg-transparent outline-none transition-transform duration-300 ease-in-out hover:z-10 hover:scale-105 hover:border-transparent focus:outline-none focus-visible:outline-none"
+    <button
+      type="button"
+      onClick={() => onOpen(product)}
+      aria-label={`View ${product.title}`}
+      className="group relative z-0 block cursor-pointer border-none bg-transparent text-left outline-none transition-transform duration-300 ease-in-out hover:z-10 hover:scale-105 focus:outline-none focus-visible:outline-none"
     >
       <div className="relative flex aspect-square items-center justify-center overflow-hidden bg-transparent p-6 sm:p-8 md:p-10">
+        {/* Instant vector silhouette underlay — reserves the box, zero CLS. */}
+        <GarmentSilhouette
+          kind={kind}
+          className="pointer-events-none absolute inset-0 m-auto h-2/3 w-2/3 text-current"
+        />
         {imageUrl ? (
           <img
             src={imageUrl}
@@ -104,18 +103,12 @@ const ProductCell = memo(({ product, index }: { product: Product; index: number 
             width={600}
             height={600}
             sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
-            className="max-h-full max-w-full object-contain aspect-square"
+            className="relative max-h-full max-w-full object-contain aspect-square"
             loading={isAboveFold ? "eager" : "lazy"}
             decoding="async"
             {...(isAboveFold ? { fetchPriority: "high" } : {})}
           />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-transparent">
-            <span className="text-[7px] uppercase tracking-[0.3em] opacity-20">
-              No Image
-            </span>
-          </div>
-        )}
+        ) : null}
         {hasDiscount && (
           <span className="absolute right-3 top-3 text-[8px] font-bold uppercase tracking-[0.15em] text-current">
             Sale
@@ -137,7 +130,7 @@ const ProductCell = memo(({ product, index }: { product: Product; index: number 
           )}
         </div>
       </div>
-    </Link>
+    </button>
   );
 });
 ProductCell.displayName = "ProductCell";
