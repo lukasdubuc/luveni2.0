@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { requireAdmin } from "@/lib/admin-guard";
+import { IntegrationsSettings } from "@/components/admin/IntegrationsSettings";
 
 export const Route = createFileRoute("/admin/settings")({
   beforeLoad: requireAdmin,
@@ -35,6 +36,8 @@ function SettingsPage() {
           checkout.session.async_payment_failed.
         </p>
       </div>
+      <IntegrationsSettings />
+
       <div className="rounded-xl border border-border bg-card p-5">
         <h2 className="text-sm font-semibold">Brand &amp; copy</h2>
         <p className="mt-2 text-sm text-muted-foreground">
