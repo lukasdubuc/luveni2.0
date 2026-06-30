@@ -3465,16 +3465,6 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
             printHeightIn={product?.print?.height_in ?? null}
             fetchMockups={fetchMockups}
             productColor={product?.color ?? null}
-            garmentType={(() => {
-              const k = `${templateKey || ""} ${(product as any)?.type || ""}`.toLowerCase();
-              if (/hat|cap|beanie|trucker/.test(k)) return "hat";
-              if (/poster|canvas|print|frame|wall/.test(k)) return "poster";
-              if (/tote|bag/.test(k)) return "tote";
-              if (/mug|bottle|tumbler/.test(k)) return "mug";
-              if (/hoodie|sweat|crewneck/.test(k)) return "hoodie";
-              return "apparel";
-            })()}
-            designAspect={(pa.w * artboardW) / (pa.h * artboardH)}
             liveCanvas={designCanvasRef.current} />
         </Suspense>
       )}
