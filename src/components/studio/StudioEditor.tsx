@@ -288,6 +288,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
   const [aiStyle, setAiStyle] = useState<"apparel" | "streetwear" | "vintage" | "lineart" | "embroidery" | "watercolor" | "anime" | "3d" | "photoreal" | "none">("apparel");
@@ -508,9 +509,17 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
     return c;
   }, [artboardW, artboardH]);
 
+  // Redraw the Konva layer every call (cheap, GPU-composited), but coalesce
+  // the React state bump to at most once per frame. Bumping paintVersion on
+  // every dab re-rendered this whole component mid-stroke — the source of the
+  // drawing lag. rAF throttling keeps strokes smooth on low-power tablets.
+  const redrawRaf = useRef(false);
   const redrawStage = useCallback(() => {
     stageRef.current?.getLayers()?.[0]?.batchDraw();
-    setPaintVersion((v) => v + 1);
+    if (!redrawRaf.current) {
+      redrawRaf.current = true;
+      requestAnimationFrame(() => { redrawRaf.current = false; setPaintVersion((v) => v + 1); });
+    }
   }, []);
 
   const recordLayers = useCallback((snapshot: StudioLayer[]) => {
@@ -633,6 +642,22 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
     const touches = e.evt?.touches;
     if (touches && touches.length === 2) {
       e.evt.preventDefault();
+      // A second finger means this is a gesture, not a stroke. Silently
+      // revert the stray dab the first finger started (and drop its history
+      // entry) so a two-finger TAP undoes real prior work, not its own mark.
+      if (painting.current) {
+        painting.current = false;
+        lastPt.current = null;
+        strokeStartImg.current = null;
+        const entry = undoStack.current.pop();
+        if (entry?.kind === "paint") {
+          const c = paintCanvases.current[entry.id];
+          if (c) restorePaint(c, entry.data);
+        } else if (entry?.kind === "layers") {
+          setLayers(entry.layers);
+        }
+        redrawStage();
+      }
       const t1 = touches[0];
       const t2 = touches[1];
       const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
@@ -1695,14 +1720,38 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
     toast.success("DXF pattern exported");
   };
 
-  const publish = async () => {
+  // Flatten the full artboard (design only, transparent bg) to a PNG blob.
+  const flattenToBlob = async (): Promise<Blob | null> => {
+    const stg = stageRef.current;
+    if (!stg) return null;
+    const dataUrl = stg.toDataURL({ mimeType: "image/png", pixelRatio: Math.min(3072 / artboardW, 2) });
+    return await (await fetch(dataUrl)).blob();
+  };
+
+  // Publish to the STORE: upload the print file, create a real fulfillable
+  // product via the publish-design edge function, and mark the project
+  // published. This actually puts a product in the shop (not just a project).
+  const publishToStore = async () => {
     if (publishing) return;
     setPublishing(true);
     try {
       await save();
-      const { error } = await (supabase as any).from("studio_projects").update({ status: "published" }).eq("id", projectId);
+      const blob = await flattenToBlob();
+      if (!blob) throw new Error("Could not flatten the design");
+      const path = `prints/${projectId}-${Date.now()}.png`;
+      const { data: up, error: upErr } = await supabase.storage.from("designs")
+        .upload(path, blob, { upsert: true, contentType: "image/png" });
+      if (upErr) throw upErr;
+      const { data: { publicUrl } } = supabase.storage.from("designs").getPublicUrl(up.path);
+
+      const { data, error } = await supabase.functions.invoke("publish-design", {
+        body: { projectId, imageUrl: publicUrl, title: projectName, retailPriceCents: priceCents, templateKey },
+      });
       if (error) throw error;
-      toast.success("Published!");
+      if ((data as any)?.error) throw new Error((data as any).error);
+
+      toast.success("Published to store — your product is being created.");
+      setPublishOpen(false);
     } catch (e: any) {
       toast.error(e.message || "Publish failed");
     } finally {
@@ -2077,9 +2126,27 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
 
           {/* Right Cluster: Artistic Tools, Layers, Colors */}
           <div className="flex items-center gap-1.5">
+            {/* Undo / Redo */}
+            <button
+              onClick={handleUndo}
+              disabled={undoStack.current.length === 0}
+              className="p-2 rounded-lg transition-all text-neutral-400 enabled:hover:text-neutral-100 dark:enabled:hover:text-[#efeff1] disabled:opacity-30"
+              title="Undo (⌘Z · two-finger tap)"
+            >
+              <Undo2 size={18} />
+            </button>
+            <button
+              onClick={handleRedo}
+              disabled={redoStack.current.length === 0}
+              className="p-2 rounded-lg transition-all text-neutral-400 enabled:hover:text-neutral-100 dark:enabled:hover:text-[#efeff1] disabled:opacity-30"
+              title="Redo (⌘⇧Z · three-finger tap)"
+            >
+              <Redo2 size={18} />
+            </button>
+            <span className="mx-0.5 h-5 w-px bg-neutral-300 dark:bg-neutral-700" />
             {/* Paint brush */}
-            <button 
-              onClick={() => { setTool("brush"); setRegionMode(false); }} 
+            <button
+              onClick={() => { setTool("brush"); setRegionMode(false); }}
               className={`p-2 rounded-lg transition-all ${tool === "brush" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-neutral-100 dark:hover:text-[#efeff1]"}`}
               title="Paint Tool"
             >
@@ -2497,7 +2564,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                     <button onClick={exportDxf} className="w-full flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-bold border border-[#1c1c1e] dark:border-neutral-700 hover:bg-[#1c1c1e] dark:hover:bg-[#09090b]">
                       <Download size={13} /> Export DXF (CAD Pattern)
                     </button>
-                    <button onClick={publish} disabled={publishing} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold uppercase bg-[#007aff] text-white hover:bg-[#005bb5]">
+                    <button onClick={() => setPublishOpen(true)} disabled={publishing} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold uppercase bg-[#007aff] text-white hover:bg-[#005bb5]">
                       {publishing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} Publish Design
                     </button>
                   </div>
@@ -3514,6 +3581,34 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
             onDesign={(url, name) => addImageAtDirect(url, name)}
             onClose={() => setEdmOpen(false)} />
         </Suspense>
+      )}
+
+      {/* ── Publish destination dialog (prevents accidental publish) ── */}
+      {publishOpen && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          onClick={() => { if (!publishing) setPublishOpen(false); }}>
+          <div className="w-full max-w-sm rounded-2xl border border-neutral-200 bg-white p-6 text-neutral-900 shadow-2xl dark:border-neutral-700 dark:bg-[#111] dark:text-white"
+            onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-bold uppercase tracking-widest">Publish design</h3>
+            <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+              Choose where to send “{projectName}”.
+            </p>
+            <div className="mt-3 rounded-lg bg-neutral-100 p-3 text-[11px] leading-relaxed text-neutral-600 dark:bg-white/5 dark:text-neutral-300">
+              <b>Store</b> creates a real, fulfillable product (${(priceCents / 100).toFixed(2)}) and adds it to your shop’s Products.
+              You can then push it to <b>TikTok / Etsy</b> from Admin → Products when you’re ready (nothing auto-syncs).
+            </div>
+            <div className="mt-4 flex flex-col gap-2">
+              <button onClick={publishToStore} disabled={publishing}
+                className="flex items-center justify-center gap-2 rounded-xl bg-[#007aff] py-3 text-xs font-bold uppercase tracking-widest text-white hover:bg-[#005bb5] disabled:opacity-60">
+                {publishing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} Publish to Store
+              </button>
+              <button onClick={() => setPublishOpen(false)} disabled={publishing}
+                className="rounded-xl border border-neutral-300 py-2.5 text-xs font-semibold uppercase tracking-widest text-neutral-600 hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-white/5">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>
