@@ -3,7 +3,7 @@
 //  Free, Konva-powered design editor. Layers, text, images,
 //  transform, undo/redo, AI new-layer, and region-select AI.
 // ─────────────────────────────────────────────────────────────
-import { useEffect, useRef, useState, useCallback, lazy, Suspense } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } from "react";
 import { Stage, Layer, Image as KImage, Text as KText, Rect, Transformer, Group, Line } from "react-konva";
 import Konva from "konva";
 import {
@@ -259,6 +259,19 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
 
   const [preview3d, setPreview3d] = useState<string | null>(null);
   const [edmOpen, setEdmOpen] = useState(false);
+
+  // Grid / drawing guide overlay
+  const [showGrid, setShowGrid] = useState(false);
+  const [gridSize, setGridSize] = useState(100);
+
+  // Adjustment values (applied live to selected paint layer via offscreen canvas)
+  const [adjHue, setAdjHue] = useState(0);
+  const [adjSat, setAdjSat] = useState(100);
+  const [adjBri, setAdjBri] = useState(100);
+  const [adjContrast, setAdjContrast] = useState(0);
+
+  // Color harmony mode
+  const [harmonyMode, setHarmonyMode] = useState<"none"|"comp"|"split"|"triadic"|"tetradic"|"analogous">("none");
   
   type PrintDims = { placement: string; width_px: number; height_px: number; dpi: number; width_in: number; height_in: number };
   type ProductRef = { id?: number | string; mfr?: string; variant_id?: number | null; color?: string | null; print?: PrintDims | null };
@@ -947,6 +960,67 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
     };
     return `#${f(0)}${f(8)}${f(4)}`;
   };
+
+  // ─── Color harmony computation ────────────────────────────────────────────
+  const harmonyColors = useMemo((): string[] => {
+    if (harmonyMode === "none") return [];
+    const h = colorH;
+    const offsets: Record<typeof harmonyMode, number[]> = {
+      none: [],
+      comp:     [180],
+      split:    [150, 210],
+      triadic:  [120, 240],
+      tetradic: [90, 180, 270],
+      analogous:[30, -30, 60, -60],
+    };
+    return (offsets[harmonyMode] || []).map((o) => hsbToHex((h + o + 360) % 360, colorS, colorB));
+  }, [harmonyMode, colorH, colorS, colorB]);
+
+  // ─── Adjustments (Hue/Sat/Brightness/Contrast on active paint layer) ───────
+  const applyAdjustments = useCallback(() => {
+    if (!selectedLayer || selectedLayer.type !== "paint") return;
+    const c = paintCanvases.current[selectedLayer.id]; if (!c) return;
+    snapshotPaint(selectedLayer.id);
+    const ctx = c.getContext("2d")!;
+    const imageData = ctx.getImageData(0, 0, c.width, c.height);
+    const d = imageData.data;
+    const hueDelta = adjHue / 360;
+    const satMul = adjSat / 100;
+    const briMul = adjBri / 100;
+    const conFac = (259 * (adjContrast + 255)) / (255 * (259 - adjContrast));
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] === 0) continue;
+      // RGB → HSV
+      let r = d[i] / 255, g = d[i+1] / 255, b = d[i+2] / 255;
+      const max = Math.max(r, g, b), min = Math.min(r, g, b), delta = max - min;
+      let H = 0, S = max ? delta / max : 0, V = max;
+      if (delta) {
+        if (max === r) H = ((g - b) / delta) % 6;
+        else if (max === g) H = (b - r) / delta + 2;
+        else H = (r - g) / delta + 4;
+        H /= 6; if (H < 0) H += 1;
+      }
+      H = (H + hueDelta + 1) % 1;
+      S = Math.min(1, S * satMul);
+      V = Math.min(1, V * briMul);
+      // HSV → RGB
+      const hi = Math.floor(H * 6), f = H * 6 - hi;
+      const p = V * (1 - S), q = V * (1 - f * S), t2 = V * (1 - (1 - f) * S);
+      let nr = 0, ng = 0, nb = 0;
+      switch (hi % 6) {
+        case 0: nr=V; ng=t2; nb=p; break; case 1: nr=q; ng=V; nb=p; break;
+        case 2: nr=p; ng=V; nb=t2; break; case 3: nr=p; ng=q; nb=V; break;
+        case 4: nr=t2; ng=p; nb=V; break; default: nr=V; ng=p; nb=q;
+      }
+      // Contrast
+      d[i]   = Math.min(255, Math.max(0, Math.round(conFac * (nr * 255 - 128) + 128)));
+      d[i+1] = Math.min(255, Math.max(0, Math.round(conFac * (ng * 255 - 128) + 128)));
+      d[i+2] = Math.min(255, Math.max(0, Math.round(conFac * (nb * 255 - 128) + 128)));
+    }
+    ctx.putImageData(imageData, 0, 0);
+    redrawStage();
+    setAdjHue(0); setAdjSat(100); setAdjBri(100); setAdjContrast(0);
+  }, [selectedLayer, adjHue, adjSat, adjBri, adjContrast]);
 
   // ─── Core layer mutators ───────────────────────────────────────────────────
   const patchLayer = (id: string, patch: Partial<StudioLayer>) => {
@@ -1799,6 +1873,18 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                         {symmetry === "off" ? "Disabled" : symmetry === "v" ? "Vertical" : "Horizontal"}
                       </button>
                     </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="opacity-60 font-semibold text-neutral-400">Drawing Grid</span>
+                      <button onClick={() => setShowGrid((g) => !g)} className={`font-bold hover:underline uppercase text-[11px] font-mono ${showGrid ? "text-[#007aff]" : "text-neutral-400"}`}>
+                        {showGrid ? "On" : "Off"}
+                      </button>
+                    </div>
+                    {showGrid && (
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="opacity-60 font-semibold text-neutral-400">Grid Size</span>
+                        <input type="range" min={20} max={400} step={20} value={gridSize} onChange={(e) => setGridSize(parseInt(e.target.value))} className="w-24 accent-[#007aff]" />
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1875,51 +1961,112 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
               </div>
             )}
 
-            {/* Adjustments Popover */}
+            {/* Adjustments Popover — Procreate-complete: Hue/Sat/Bri/Contrast, Blur, Opacity, AI */}
             {activePopover === "adjustments" && (
-              <div className="space-y-4">
-                <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Filters & AI</p>
+              <div className="space-y-4 font-sans">
+                <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Adjustments</p>
+
+                {/* ── Layer colour adjustments ── */}
                 {selectedLayer ? (
-                  <div className="space-y-3">
-                    <p className="text-[11px] font-bold">Selected: {selectedLayer.name}</p>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-[10px] font-bold opacity-60">
-                        <span>Gaussian Blur filter</span>
-                        <span>{selectedLayer.blur || 0}%</span>
+                  <div className="space-y-3.5">
+                    <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide">{selectedLayer.name}</p>
+
+                    {selectedLayer.type === "paint" && (
+                      <>
+                        {/* Hue */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[10px] font-semibold text-neutral-400">
+                            <span>Hue</span><span className="font-mono">{adjHue > 0 ? "+" : ""}{adjHue}°</span>
+                          </div>
+                          <div className="relative h-2.5 rounded-full overflow-hidden" style={{ background: "conic-gradient(from 0deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)" }}>
+                            <input type="range" min={-180} max={180} value={adjHue} className="absolute inset-0 w-full opacity-0 cursor-pointer h-full" onChange={(e) => setAdjHue(parseInt(e.target.value))} />
+                            <div className="absolute top-0 bottom-0 w-2 -translate-x-1/2 rounded-full bg-white border border-neutral-600 shadow pointer-events-none" style={{ left: `${((adjHue + 180) / 360) * 100}%` }} />
+                          </div>
+                        </div>
+                        {/* Saturation */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[10px] font-semibold text-neutral-400">
+                            <span>Saturation</span><span className="font-mono">{adjSat}%</span>
+                          </div>
+                          <div className="relative h-2.5 rounded-full overflow-hidden" style={{ background: `linear-gradient(to right, #808080, hsl(${colorH},100%,50%))` }}>
+                            <input type="range" min={0} max={200} value={adjSat} className="absolute inset-0 w-full opacity-0 cursor-pointer h-full" onChange={(e) => setAdjSat(parseInt(e.target.value))} />
+                            <div className="absolute top-0 bottom-0 w-2 -translate-x-1/2 rounded-full bg-white border border-neutral-600 shadow pointer-events-none" style={{ left: `${(adjSat / 200) * 100}%` }} />
+                          </div>
+                        </div>
+                        {/* Brightness */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[10px] font-semibold text-neutral-400">
+                            <span>Brightness</span><span className="font-mono">{adjBri}%</span>
+                          </div>
+                          <div className="relative h-2.5 rounded-full overflow-hidden" style={{ background: "linear-gradient(to right, #000, #fff)" }}>
+                            <input type="range" min={0} max={200} value={adjBri} className="absolute inset-0 w-full opacity-0 cursor-pointer h-full" onChange={(e) => setAdjBri(parseInt(e.target.value))} />
+                            <div className="absolute top-0 bottom-0 w-2 -translate-x-1/2 rounded-full bg-white border border-neutral-600 shadow pointer-events-none" style={{ left: `${(adjBri / 200) * 100}%` }} />
+                          </div>
+                        </div>
+                        {/* Contrast */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[10px] font-semibold text-neutral-400">
+                            <span>Contrast</span><span className="font-mono">{adjContrast > 0 ? "+" : ""}{adjContrast}</span>
+                          </div>
+                          <div className="relative h-2.5 rounded-full overflow-hidden" style={{ background: "linear-gradient(to right, #666, #fff)" }}>
+                            <input type="range" min={-128} max={128} value={adjContrast} className="absolute inset-0 w-full opacity-0 cursor-pointer h-full" onChange={(e) => setAdjContrast(parseInt(e.target.value))} />
+                            <div className="absolute top-0 bottom-0 w-2 -translate-x-1/2 rounded-full bg-white border border-neutral-600 shadow pointer-events-none" style={{ left: `${((adjContrast + 128) / 256) * 100}%` }} />
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={applyAdjustments} className="flex-1 py-2 rounded-xl bg-[#007aff] text-white text-[10px] font-bold uppercase tracking-wider hover:bg-[#005bb5] transition-colors">
+                            Apply
+                          </button>
+                          <button onClick={() => { setAdjHue(0); setAdjSat(100); setAdjBri(100); setAdjContrast(0); }} className="px-4 py-2 rounded-xl border border-neutral-700 text-[10px] font-bold text-neutral-400 hover:text-neutral-200 transition-colors">
+                            Reset
+                          </button>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Blur (all layer types) */}
+                    <div className="space-y-1 pt-1 border-t border-neutral-800">
+                      <div className="flex justify-between text-[10px] font-semibold text-neutral-400">
+                        <span>Gaussian Blur</span><span>{selectedLayer.blur || 0}px</span>
                       </div>
-                      <input 
-                        type="range" min={0} max={100} value={selectedLayer.blur || 0}
+                      <input type="range" min={0} max={100} value={selectedLayer.blur || 0}
                         onMouseDown={() => recordLayers(layers)}
                         onChange={(e) => livePatch(selectedLayer.id, { blur: parseInt(e.target.value) })}
-                        className="w-full accent-[#007aff]"
-                      />
+                        className="w-full accent-[#007aff]" />
+                    </div>
+
+                    {/* Opacity */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[10px] font-semibold text-neutral-400">
+                        <span>Layer Opacity</span><span>{Math.round(selectedLayer.opacity * 100)}%</span>
+                      </div>
+                      <input type="range" min={0} max={100} value={Math.round(selectedLayer.opacity * 100)}
+                        onMouseDown={() => recordLayers(layers)}
+                        onChange={(e) => livePatch(selectedLayer.id, { opacity: parseInt(e.target.value) / 100 })}
+                        className="w-full accent-[#007aff]" />
                     </div>
                   </div>
                 ) : (
-                  <p className="text-[10px] opacity-50 py-2">Select an image/text layer to adjust filters.</p>
+                  <p className="text-[10px] opacity-40 py-2">Select a layer to adjust.</p>
                 )}
 
-                <span className="block h-px bg-neutral-200 dark:bg-neutral-850" />
-                
-                <div className="space-y-3 font-sans">
-                  <p className="text-[11px] font-bold uppercase tracking-wide">AI Generation Suite</p>
-                  <textarea 
-                    value={aiPrompt} 
-                    onChange={(e) => setAiPrompt(e.target.value)}
-                    placeholder="Describe design layers or lasso regions to generate..."
-                    className="w-full h-16 bg-[#1c1c1e] border-0 rounded-xl p-3 text-[10px] focus:outline-none focus:ring-1 focus:ring-indigo-500 text-neutral-200 font-mono" 
-                  />
-                  <div className="flex gap-2">
-                    {lassoPoints.length >= 3 ? (
-                      <button onClick={handleLassoRegionAi} disabled={aiBusy} className="w-full py-2.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500 text-white hover:bg-indigo-600 flex items-center justify-center gap-1 font-sans">
-                        {aiBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Generate Into Lasso
-                      </button>
-                    ) : (
-                      <button onClick={aiNewLayer} disabled={aiBusy} className="flex-1 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500 text-white hover:bg-indigo-600 flex items-center justify-center gap-1 font-sans">
-                        {aiBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Generate Layer
-                      </button>
-                    )}
-                  </div>
+                <span className="block h-px bg-neutral-800" />
+
+                {/* ── AI Generation Suite ── */}
+                <div className="space-y-3">
+                  <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">AI Generative Suite</p>
+                  <textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)}
+                    placeholder="Describe design, or draw a lasso then generate into it…"
+                    className="w-full h-14 bg-neutral-900 border border-neutral-800 rounded-xl p-3 text-[10px] focus:outline-none focus:ring-1 focus:ring-indigo-500 text-neutral-200 font-mono resize-none" />
+                  {lassoPoints.length >= 3 ? (
+                    <button onClick={handleLassoRegionAi} disabled={aiBusy} className="w-full py-2.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500 text-white hover:bg-indigo-600 flex items-center justify-center gap-1">
+                      {aiBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Generate Into Lasso
+                    </button>
+                  ) : (
+                    <button onClick={aiNewLayer} disabled={aiBusy} className="w-full py-2.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500 text-white hover:bg-indigo-600 flex items-center justify-center gap-1">
+                      {aiBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Generate New Layer
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -2153,10 +2300,32 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                 {/* PALETTES TAB */}
                 {colorSelectorTab === "palette" && (
                   <div className="space-y-3 animate-fade-in">
-                    <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93] font-sans">Presets Matrix</p>
+                    <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93] font-sans">Colour Palette</p>
+                    {/* Harmony mode pills */}
+                    <div className="flex flex-wrap gap-1">
+                      {([["none","Off"],["comp","Comp"],["split","Split"],["triadic","Triadic"],["tetradic","Tetra"],["analogous","Analog"]] as const).map(([m,l]) => (
+                        <button key={m} onClick={() => setHarmonyMode(m as any)}
+                          className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider transition-colors border ${harmonyMode === m ? "bg-[#007aff] text-white border-[#007aff]" : "text-neutral-400 border-neutral-700 hover:border-neutral-500"}`}>
+                          {l}
+                        </button>
+                      ))}
+                    </div>
                     <div className="grid grid-cols-6 gap-2">
                       {["#1c1c1e", "#3a3a3c", "#5c5c5e", "#aeaeaf", "#e5e5ea", "#ffffff", "#ff3b30", "#ff9500", "#ffcc00", "#4cd964", "#5ac8fa", "#007aff", "#5856d6", "#af52de", "#ff2d55", "#a2845e", "#34aadc", "#4cd964"].map((c) => (
                         <button key={c} onClick={() => setColorFromHex(c)} className="w-8 h-8 rounded border border-[#1c1c1e] dark:border-neutral-850 transition-transform active:scale-90" style={{ backgroundColor: c }} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* HARMONY TAB */}
+                {colorSelectorTab === "palette" && harmonyMode !== "none" && harmonyColors.length > 0 && (
+                  <div className="space-y-2 border-t border-neutral-800 pt-3 animate-fade-in">
+                    <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Harmony — {harmonyMode}</p>
+                    <div className="flex gap-2 items-center">
+                      <div className="w-7 h-7 rounded-lg border border-neutral-700 shrink-0 ring-2 ring-white/20" style={{ backgroundColor: brushColor }} />
+                      {harmonyColors.map((c, i) => (
+                        <button key={i} onClick={() => setColorFromHex(c)} className="w-7 h-7 rounded-lg border border-neutral-700 hover:scale-110 transition-transform" style={{ backgroundColor: c }} />
                       ))}
                     </div>
                   </div>
@@ -2246,6 +2415,18 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
 
                     {(tool === "brush" || tool === "eraser" || tool === "smudge") && symmetry === "v" && <Rect name="symmetry-guide" x={artboardW / 2 - 1} y={0} width={2} height={artboardH} fill="#6366f1" opacity={0.5} listening={false} />}
                     {(tool === "brush" || tool === "eraser" || tool === "smudge") && symmetry === "h" && <Rect name="symmetry-guide" x={0} y={artboardH / 2 - 1} width={artboardW} height={2} fill="#6366f1" opacity={0.5} listening={false} />}
+
+                    {/* Drawing grid overlay */}
+                    {showGrid && (
+                      <>
+                        {Array.from({ length: Math.floor(artboardW / gridSize) - 1 }, (_, i) => (
+                          <Rect key={`gv${i}`} x={(i + 1) * gridSize} y={0} width={1} height={artboardH} fill={isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)"} listening={false} />
+                        ))}
+                        {Array.from({ length: Math.floor(artboardH / gridSize) - 1 }, (_, i) => (
+                          <Rect key={`gh${i}`} x={0} y={(i + 1) * gridSize} width={artboardW} height={1} fill={isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)"} listening={false} />
+                        ))}
+                      </>
+                    )}
 
                     {guides.v && <Rect name="align-guide" x={artboardW / 2 - 1} y={0} width={2} height={artboardH} fill="#22d3ee" listening={false} />}
                     {guides.h && <Rect name="align-guide" x={0} y={artboardH / 2 - 1} width={artboardW} height={2} fill="#22d3ee" listening={false} />}
@@ -2454,7 +2635,12 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
             printWidthIn={product?.print?.width_in ?? null}
             printHeightIn={product?.print?.height_in ?? null}
             fetchMockups={fetchMockups}
-            liveCanvas={stageRef.current?.content?.children?.[0] as HTMLCanvasElement | null ?? null} />
+            productColor={product?.color ?? null}
+            liveCanvas={(() => {
+              const content = stageRef.current?.content;
+              if (!content) return null;
+              return (content.querySelector("canvas") as HTMLCanvasElement | null);
+            })()} />
         </Suspense>
       )}
 
