@@ -145,6 +145,49 @@ function useHtmlImage(src?: string) {
   return img;
 }
 
+// Remove the studio-white backdrop from a product template photo by flood-filling
+// near-white pixels that are connected to the image border. The garment body
+// (even a white one) is kept because it isn't edge-connected. Returns a canvas
+// usable directly as a Konva image, or null when disabled / not ready.
+function useBackdropRemovedImage(img: HTMLImageElement | null, enabled: boolean): HTMLCanvasElement | null {
+  const [out, setOut] = useState<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    if (!img || !enabled) { setOut(null); return; }
+    try {
+      const w = img.naturalWidth || img.width;
+      const h = img.naturalHeight || img.height;
+      if (!w || !h) { setOut(null); return; }
+      const c = document.createElement("canvas");
+      c.width = w; c.height = h;
+      const ctx = c.getContext("2d", { willReadFrequently: true } as any)!;
+      ctx.drawImage(img, 0, 0, w, h);
+      const data = ctx.getImageData(0, 0, w, h);
+      const px = data.data;
+      const TH = 232;             // near-white threshold
+      const visited = new Uint8Array(w * h);
+      const stack: number[] = [];
+      const isWhite = (i: number) => px[i] >= TH && px[i + 1] >= TH && px[i + 2] >= TH;
+      const tryPush = (x: number, y: number) => {
+        if (x < 0 || y < 0 || x >= w || y >= h) return;
+        const idx = y * w + x;
+        if (visited[idx]) return;
+        visited[idx] = 1;
+        const i = idx * 4;
+        if (isWhite(i)) { px[i + 3] = 0; stack.push(x, y); }
+      };
+      for (let x = 0; x < w; x++) { tryPush(x, 0); tryPush(x, h - 1); }
+      for (let y = 0; y < h; y++) { tryPush(0, y); tryPush(w - 1, y); }
+      while (stack.length) {
+        const y = stack.pop()!; const x = stack.pop()!;
+        tryPush(x + 1, y); tryPush(x - 1, y); tryPush(x, y + 1); tryPush(x, y - 1);
+      }
+      ctx.putImageData(data, 0, 0);
+      setOut(c);
+    } catch { setOut(null); } // CORS-tainted or oversized — fall back to raw image
+  }, [img, enabled]);
+  return out;
+}
+
 function ImageNode({ layer, onChange, onSelect, onDragMove, nodeRef, listening }: any) {
   const img = useHtmlImage(layer.src);
   const innerRef = useRef<Konva.Image>(null);
@@ -247,7 +290,11 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
   const printArea = ap?.print_area || printAreaProp;
   const placementLayers = useRef<Record<number, StudioLayer[]>>({});
 
-  const garment = useHtmlImage(getProxyImageUrl(templateImage || null) || undefined);
+  const garmentRaw = useHtmlImage(getProxyImageUrl(templateImage || null) || undefined);
+  // Strip the white studio backdrop so the garment itself is the canvas.
+  const [removeWhiteBg, setRemoveWhiteBg] = useState(true);
+  const garmentKeyed = useBackdropRemovedImage(garmentRaw, removeWhiteBg && !showPhoto);
+  const garment = garmentKeyed || garmentRaw;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -1602,8 +1649,8 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
       const tag = (e.target as HTMLElement).tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
       const mod = e.metaKey || e.ctrlKey;
-      if (mod && e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
-      else if (mod && (e.key === "y" || (e.key === "z" && e.shiftKey))) { e.preventDefault(); redo(); }
+      if (mod && (e.key === "z" || e.key === "Z") && !e.shiftKey) { e.preventDefault(); handleUndo(); }
+      else if (mod && (e.key === "y" || e.key === "Y" || ((e.key === "z" || e.key === "Z") && e.shiftKey))) { e.preventDefault(); handleRedo(); }
       else if (mod && e.key === "s") { e.preventDefault(); save(); }
       else if (mod && e.key === "e") { e.preventDefault(); exportPng(); }
       else if (e.key === " ") { e.preventDefault(); setTool((t) => t === "select" ? "select" : t); }
@@ -2780,6 +2827,17 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
           </button>
 
           <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
+
+          {/* White-backdrop removal toggle (product templates only) */}
+          {canvasKind !== "canvas" && !showPhoto && garmentRaw && (
+            <button
+              onClick={() => setRemoveWhiteBg((v) => !v)}
+              title="Remove the white studio backdrop so the garment is the canvas"
+              className={`text-[9px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full ${removeWhiteBg ? "bg-emerald-500 text-white" : "bg-neutral-100 dark:bg-neutral-800 text-neutral-500"}`}
+            >
+              {removeWhiteBg ? "BG removed" : "Remove BG"}
+            </button>
+          )}
 
           {/* Dynamic view switchers */}
           {(hasMulti || productPhoto) && (
