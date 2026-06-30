@@ -32,6 +32,7 @@ export type StudioLayer = {
   clip?: boolean;   
   blur?: number;    
   reference?: boolean; 
+  alphaLock?: boolean; 
 };
 
 const getProxyImageUrl = (url: string | null): string => {
@@ -232,6 +233,9 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
   const [, setPaintVersion] = useState(0);
   const [guides, setGuides] = useState<{ v: boolean; h: boolean }>({ v: false, h: false });
 
+  // Color selection history stack
+  const [colorHistory, setColorHistory] = useState<string[]>(["#000000", "#ffffff", "#3b82f6", "#ef4444", "#10b981", "#f59e0b"]);
+
   // Selections and Transform Sub-Menu States
   const [selectionModeType, setSelectionModeType] = useState<"freehand" | "rectangle">("freehand");
   const [uniformScaling, setUniformScaling] = useState(true);
@@ -316,7 +320,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
     if (l.src && !loadedPaint.current.has(l.id)) {
       loadedPaint.current.add(l.id);
       const im = new window.Image(); im.crossOrigin = "anonymous"; 
-      im.src = l.src.includes("?") ? `${src => src}&cors=1` : `${l.src}?cors=1`;
+      im.src = l.src.includes("?") ? `${l.src}&cors=1` : `${l.src}?cors=1`;
       im.onload = () => { c!.getContext("2d")!.drawImage(im, 0, 0); redrawStage(); };
     }
     return c;
@@ -441,8 +445,40 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
       const hex = "#" + ((1 << 24) + (d[0] << 16) + (d[1] << 8) + d[2]).toString(16).slice(1);
       setBrushColor(hex);
       setEyedropperColorHex(hex);
+      
+      // Update color selection history
+      setColorHistory((prev) => {
+        const next = prev.filter((c) => c !== hex);
+        next.unshift(hex);
+        return next.slice(0, 12);
+      });
     } catch {
       // safe fallback on CORS restrictions
+    }
+  };
+
+  // Realistic color blending Smudge algorithm (draws sampled patches offset along path direction)
+  const applySmudgeBrushDab = (ctx: CanvasRenderingContext2D, px: number, py: number, r: number, alpha: number) => {
+    if (!lastPt.current) return;
+    const lx = lastPt.current.x;
+    const ly = lastPt.current.y;
+    
+    try {
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = r * 2;
+      tempCanvas.height = r * 2;
+      const tctx = tempCanvas.getContext("2d")!;
+      
+      // Sample existing layout color space
+      tctx.drawImage(ctx.canvas, lx - r, ly - r, r * 2, r * 2, 0, 0, r * 2, r * 2);
+      
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.45;
+      ctx.globalCompositeOperation = "source-over";
+      ctx.drawImage(tempCanvas, px - r, py - r, r * 2, r * 2);
+      ctx.restore();
+    } catch {
+      // safe fallback
     }
   };
 
@@ -495,6 +531,8 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
     const c = paintCanvases.current[id]; if (!c) return;
     const ctx = c.getContext("2d")!;
     const r = (brushSize / 2) * (0.4 + pressure * 0.6);
+    
+    const activeLayer = layers.find((l) => l.id === id);
     ctx.save();
     
     // Lasso Boundary Masking Clip Path
@@ -507,19 +545,22 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
       ctx.closePath();
       ctx.clip();
     }
-    
-    if (tool === "eraser") {
+
+    // Alpha Lock implementation (claps paint inside existing layout boundaries)
+    if (activeLayer?.alphaLock) {
+      ctx.globalCompositeOperation = "source-atop";
+    } else if (tool === "eraser") {
       ctx.globalCompositeOperation = "destination-out";
-      ctx.globalAlpha = brushOpacity * (0.5 + pressure * 0.5);
     } else {
       ctx.globalCompositeOperation = "source-over";
-      ctx.globalAlpha = Math.max(0, Math.min(1, brushOpacity * (0.5 + pressure * 0.5)));
     }
 
     const draw = (px: number, py: number) => {
       if (tool === "eraser") {
         ctx.fillStyle = "rgba(0,0,0,1)";
         ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+      } else if (tool === "smudge") {
+        applySmudgeBrushDab(ctx, px, py, r, brushOpacity);
       } else {
         applyBrushProceduralDab(ctx, px, py, r, brushOpacity);
       }
@@ -610,117 +651,121 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
     redrawStage();
   };
 
-  const serializeLayers = (): StudioLayer[] =>
-    layers.map((l) => (l.type === "paint" && paintCanvases.current[l.id]) ? { ...l, src: paintCanvases.current[l.id].toDataURL() } : l);
-
-  const switchPlacement = (idx: number) => {
-    if (!hasMulti || idx === activeP) return;
-    placementLayers.current[activeP] = serializeLayers();
-    setSelectedId(null);
-    undoStack.current = []; redoStack.current = [];
-    const next = placementLayers.current[idx] ?? (placements[idx]?.layers as StudioLayer[]) ?? [];
-    setActiveP(idx);
-    setLayers(next);
-  };
-
-  const buildCanvasPayload = () => {
-    const serialized = serializeLayers();
-    const productNow = ((initialCanvas as any)?.product) || {};
-    if (!hasMulti) return { layers: serialized, product: productNow };
-    placementLayers.current[activeP] = serialized;
-    const placementsPayload = placements.map((p, i) => ({
-      ...p,
-      layers: i === activeP ? serialized : (placementLayers.current[i] ?? p.layers ?? []),
-    }));
-    return { layers: serialized, product: { ...productNow, placements: placementsPayload } };
-  };
-
-  const captureStage = (targetWidth: number, hideChrome: boolean): string | undefined => {
-    const stage = stageRef.current; if (!stage) return undefined;
-    const sw = stage.width() || 1;
-    const pixelRatio = Math.max(0.05, targetWidth / sw);
-    const hidden: any[] = [];
-    const hide = (sel: string) => stage.find(sel).forEach((n: any) => { if (n.visible()) { n.visible(false); hidden.push(n); } });
-    hide(".symmetry-guide"); hide(".align-guide"); hide("Transformer");
-    if (hideChrome) hide(".background-group");
-    stage.getLayers()[0]?.batchDraw();
-    let url: string | undefined;
-    try { url = stage.toDataURL({ pixelRatio, mimeType: hideChrome ? "image/png" : "image/jpeg", quality: 0.9 }); }
-    catch { url = undefined; }
-    if (hidden.length) { hidden.forEach((n) => n.visible(true)); stage.getLayers()[0]?.batchDraw(); }
-    return url;
-  };
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      const thumbnail = captureStage(720, false);
-      const { error } = await supabase.from("studio_projects").update({ canvas: buildCanvasPayload(), thumbnail_url: thumbnail, updated_at: new Date().toISOString() }).eq("id", projectId);
-      if (error) { toast.error(error.message); return; }
-      toast.success("Saved.");
-    } finally { setSaving(false); }
-  };
-
-  const publish = async () => {
-    if (layers.length === 0) { toast.error("Design something first"); return; }
-    setPublishing(true);
-    setSelectedId(null);
-    try {
-      await new Promise((r) => setTimeout(r, 60));
-      const dataUrl = captureStage(artboardW, true);
-      if (!dataUrl) { toast.error("Could not render the design"); return; }
-      const blob = await (await fetch(dataUrl)).blob();
-      const path = `published/${projectId}-${Date.now()}.png`;
-      const up = await supabase.storage.from("designs").upload(path, blob, { contentType: "image/png", upsert: true });
-      if (up.error) { toast.error(`Upload failed: ${up.error.message}`); return; }
-      toast.success("Design published successfully.");
-    } catch (e: any) {
-      toast.error(e.message || "Failed to publish.");
-    } finally {
-      setPublishing(false);
+  // Merge active layer down onto the paint layer beneath it
+  const handleMergeDown = (id: string) => {
+    const idx = layers.findIndex((l) => l.id === id);
+    if (idx <= 0) return; // Cannot merge bottom layer
+    const lowerLayer = layers[idx - 1];
+    const activeLayer = layers[idx];
+    
+    if (lowerLayer.type === "paint" && activeLayer.type === "paint") {
+      const lowerCanvas = paintCanvases.current[lowerLayer.id];
+      const activeCanvas = paintCanvases.current[activeLayer.id];
+      if (lowerCanvas && activeCanvas) {
+        snapshotPaint(lowerLayer.id);
+        const ctx = lowerCanvas.getContext("2d")!;
+        ctx.save();
+        ctx.globalAlpha = activeLayer.opacity;
+        ctx.globalCompositeOperation = gco(activeLayer);
+        ctx.drawImage(activeCanvas, 0, 0);
+        ctx.restore();
+        
+        // Remove merged active layer
+        setLayers((cur) => cur.filter((l) => l.id !== id));
+        setSelectedId(lowerLayer.id);
+        redrawStage();
+        toast.success("Layers merged successfully.");
+      }
+    } else {
+      toast.error("Can only merge paint layers together.");
     }
   };
 
-  const exportPng = () => {
-    const uri = captureStage(artboardW, true);
-    if (!uri) {
-      toast.error("Could not render the design");
+  const aiNewLayer = async () => {
+    if (aiPrompt.trim().length < 3) { toast.error("Prompt too short"); return; }
+    setAiBusy(true);
+    try { const url = await runAi({ prompt: aiPrompt.trim(), width: 1024, height: 1024, persist: true, style: aiStyle }); if (url) { addImageAtDirect(url, aiPrompt.slice(0, 24)); setAiPrompt(""); toast.success("AI layer added."); } }
+    finally { setAiBusy(false); }
+  };
+
+  const aiRegenerateSelected = async () => {
+    const sel = layers.find((l) => l.id === selectedId);
+    if (!sel || sel.type !== "image" || !sel.src) { toast.error("Select an image layer first"); return; }
+    if (aiPrompt.trim().length < 3) { toast.error("Enter a prompt"); return; }
+    setAiBusy(true);
+    try { const url = await runAi({ prompt: aiPrompt.trim(), image: sel.src, width: 1024, height: 1024, persist: false }); if (url) { patchLayer(sel.id, { src: url }); setAiPrompt(""); toast.success("Layer reimagined."); } }
+    finally { setAiBusy(false); }
+  };
+
+  // Convert Lasso coordinates to set a generation mask region
+  const handleLassoRegionAi = async () => {
+    if (lassoPoints.length < 3) {
+      toast.error("Trace a lasso region before generating.");
       return;
     }
-    const a = document.createElement("a");
-    a.download = `${projectName.toLowerCase().replace(/\s+/g, "-")}-design.png`;
-    a.href = uri;
-    a.click();
-  };
-
-  const open3d = () => {
-    if (layers.length === 0) { toast.error("Design something first"); return; }
-    setSelectedId(null);
-    requestAnimationFrame(() => {
-      const uri = captureStage(1024, true);
-      if (!uri) { toast.error("Could not render the design"); return; }
-      setPreview3d(uri);
-    });
-  };
-
-  const fetchMockups = async (): Promise<string[]> => {
-    if (product?.mfr !== "printful" || !product?.id || !product?.variant_id) {
-      toast.error("Realistic mockups require a matched Printful product variant.");
-      return [];
+    if (aiPrompt.trim().length < 3) {
+      toast.error("Describe the image to generate inside your lasso selection.");
+      return;
     }
-    const dataUrl = captureStage(1800, true);
-    if (!dataUrl) { toast.error("Could not render the design"); return []; }
-    const blob = await (await fetch(dataUrl)).blob();
-    const path = `mockup-src/${projectId}-${Date.now()}.png`;
-    const up = await supabase.storage.from("designs").upload(path, blob, { contentType: "image/png", upsert: true });
-    if (up.error) { toast.error(`Upload failed: ${up.error.message}`); return []; }
-    const { data: pub } = supabase.storage.from("designs").getPublicUrl(path);
-    const { data, error = null } = await supabase.functions.invoke("printful-catalog", {
-      body: { action: "mockup", manufacturer: product.mfr, productId: product.id, variantId: product.variant_id, imageUrl: pub.publicUrl },
-    });
-    const msg = await extractFnError(error, data);
-    if (msg) { toast.error(msg); return []; }
-    return (data.mockups as string[]) || [];
+    setAiBusy(true);
+    try {
+      const xs = lassoPoints.map(p => p.x);
+      const ys = lassoPoints.map(p => p.y);
+      const minX = Math.max(0, Math.min(...xs)), maxX = Math.min(artboardW, Math.max(...xs));
+      const minY = Math.max(0, Math.min(...ys)), maxY = Math.min(artboardH, Math.max(...ys));
+      const w = maxX - minX;
+      const h = maxY - minY;
+      
+      const longest = Math.max(w, h); const k = Math.min(1, 1024 / longest);
+      const gw = Math.round(w * k); const gh = Math.round(h * k);
+      const url = await runAi({ prompt: aiPrompt.trim(), width: gw, height: gh, persist: false, style: aiStyle });
+      if (url) {
+        addImageAtDirect(url, aiPrompt.slice(0, 24), { x: minX, y: minY, w, h });
+        setAiPrompt("");
+        setLassoPoints([]);
+        toast.success("Generated directly into selection.");
+      }
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const finalizeRegionDirect = async (r: { x: number; y: number; w: number; h: number }) => {
+    if (r.w < 40 || r.h < 40) { setRegion(null); return; }
+    if (aiPrompt.trim().length < 3) { toast.error("Type a prompt first"); setRegion(null); return; }
+    setAiBusy(true);
+    try {
+      const longest = Math.max(r.w, r.h); const k = Math.min(1, 1024 / longest);
+      const gw = Math.round(r.w * k); const gh = Math.round(r.h * k);
+      const url = await runAi({ prompt: aiPrompt.trim(), width: gw, height: gh, persist: false, style: aiStyle });
+      if (url) {
+        addImageAtDirect(url, aiPrompt.slice(0, 24), r);
+        setAiPrompt("");
+        toast.success("Generated into region.");
+      }
+    } finally {
+      setAiBusy(false);
+      setRegion(null);
+      setRegionMode(false);
+    }
+  };
+
+  const addImageAtDirect = (src: string, name: string, box?: { x: number; y: number; w: number; h: number }, blend?: BlendMode) => {
+    const place = (w: number, h: number, x: number, y: number) => {
+      const l: StudioLayer = { id: uid(), type: "image", name, visible: true, x, y, rotation: 0, opacity: 1, src, width: w, height: h, blend };
+      commit((ls) => [...ls, l]); setSelectedId(l.id);
+    };
+    if (box) { place(box.w, box.h, box.x, box.y); return; }
+    const im = new window.Image(); im.crossOrigin = "anonymous";
+    im.src = src.startsWith("data:") ? src : (src.includes("?") ? `${src}&cors=1` : `${src}?cors=1`);
+    im.onload = () => {
+      let iw = im.naturalWidth || im.width, ih = im.naturalHeight || im.height;
+      if (!iw || !ih) { iw = 1200; ih = 1200; }
+      const ratio = iw / ih;
+      const w = Math.min(artboardW * 0.7, iw);
+      const h = w / ratio;
+      place(w, h, (artboardW - w) / 2, (artboardH - h) / 2);
+    };
   };
 
   // Drag handler for custom vertical track pill sliders (matches visual feel of native iPadOS HUD element)
@@ -750,11 +795,29 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
     window.addEventListener("pointerup", onPointerUp);
   };
 
-  const selected = layers.find((l) => l.id === selectedId);
+  const selectedLayer = layers.find((l) => l.id === selectedId);
   const getFlatLassoPoints = (): number[] => {
     const pts: number[] = [];
     lassoPoints.forEach((p) => pts.push(p.x, p.y));
     return pts;
+  };
+
+  // Restored missing print guide constraints
+  const isHat = templateKey?.startsWith("hat");
+  const isPoster = templateKey?.startsWith("poster");
+  const defaultPa = isHat ? { x: 0.28, y: 0.32, w: 0.44, h: 0.36 } : isPoster ? { x: 0.06, y: 0.05, w: 0.88, h: 0.9 } : { x: 0.2, y: 0.14, w: 0.6, h: 0.62 };
+  const pa = printArea || defaultPa;
+
+  // Convert HSL values to exact HEX string
+  const hslToHex = (h: number, s: number, l: number): string => {
+    l /= 100;
+    const a = (s * Math.min(l, 1 - l)) / 100;
+    const f = (n: number) => {
+      const k = (n + h / 30) % 12;
+      const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+      return Math.round(255 * color).toString(16).padStart(2, "0");
+    };
+    return `#${f(0)}${f(8)}${f(4)}`;
   };
 
   return (
@@ -854,7 +917,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
               <PaintBucket size={18} />
             </button>
 
-            <span className="w-px h-5 bg-neutral-300 dark:bg-neutral-800 mx-1" />
+            <span className="w-px h-5 bg-neutral-300 dark:bg-neutral-850 mx-1" />
 
             {/* Layers panel toggler */}
             <button 
@@ -1058,7 +1121,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
       {/* ─────────────────────────────────────────────────────────────
          THE TRANSFORM COMPACT CONTROL PANEL (Cursor Transform HUD Action Bar)
          ───────────────────────────────────────────────────────────── */}
-      {tool === "select" && selected && !fullScreenCanvas && (
+      {tool === "select" && selectedLayer && !fullScreenCanvas && (
         <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-45 flex items-center gap-3 px-5 py-2.5 rounded-full bg-white/95 dark:bg-[#1c1c1e]/95 backdrop-blur-md shadow-xl border border-neutral-200/20 pointer-events-auto">
           <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 select-none">Scale</span>
           <button 
@@ -1076,13 +1139,13 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
 
           <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
 
-          <button onClick={() => { patchLayer(selected.id, { rotation: (selected.rotation + 45) % 360 }); }} className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded text-neutral-400"><RefreshCcw size={13} /></button>
-          <button onClick={() => { const sx = nodeRefs.current[selected.id]?.scaleX() || 1; patchLayer(selected.id, { x: selected.x + selected.width! * sx, width: selected.width, scaleX: -sx }); }} className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded text-neutral-400"><FlipHorizontal2 size={13} /></button>
-          <button onClick={() => { const sy = nodeRefs.current[selected.id]?.scaleY() || 1; patchLayer(selected.id, { y: selected.y + selected.height! * sy, height: selected.height, scaleY: -sy }); }} className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded text-neutral-400"><FlipVertical2 size={13} /></button>
+          <button onClick={() => { patchLayer(selectedLayer.id, { rotation: (selectedLayer.rotation + 45) % 360 }); }} className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded text-neutral-400"><RefreshCcw size={13} /></button>
+          <button onClick={() => { const sx = nodeRefs.current[selectedLayer.id]?.scaleX() || 1; patchLayer(selectedLayer.id, { x: selectedLayer.x + selectedLayer.width! * sx, width: selectedLayer.width, scaleX: -sx }); }} className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded text-neutral-400"><FlipHorizontal2 size={13} /></button>
+          <button onClick={() => { const sy = nodeRefs.current[selectedLayer.id]?.scaleY() || 1; patchLayer(selectedLayer.id, { y: selectedLayer.y + selectedLayer.height! * sy, height: selectedLayer.height, scaleY: -sy }); }} className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded text-neutral-400"><FlipVertical2 size={13} /></button>
           
           <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
 
-          <button onClick={() => { patchLayer(selected.id, { x: 0, y: 0, width: artboardW, height: artboardH }); }} className="text-[9px] font-bold text-indigo-500 hover:underline uppercase">Fit to canvas</button>
+          <button onClick={() => { patchLayer(selectedLayer.id, { x: 0, y: 0, width: artboardW, height: artboardH }); }} className="text-[9px] font-bold text-indigo-500 hover:underline uppercase">Fit to canvas</button>
         </div>
       )}
 
@@ -1102,7 +1165,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
 
             {/* Actions Popover (Tabs match iPad Wrench options) */}
             {activePopover === "actions" && (
-              <div className="space-y-4">
+              <div className="space-y-4 font-sans">
                 <div className="flex border-b border-neutral-200 dark:border-neutral-850 pb-2 mb-2">
                   {["add", "canvas", "share", "prefs"].map((tab) => (
                     <button
@@ -1111,7 +1174,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                       className={`flex-1 text-center py-1 text-xs font-bold uppercase tracking-wider transition-all ${
                         activePopoverTab === tab 
                           ? "text-[#007aff] border-b-2 border-[#007aff]" 
-                          : "text-neutral-400 hover:text-neutral-200"
+                          : "text-neutral-400 hover:text-neutral-250"
                       }`}
                     >
                       {tab}
@@ -1121,7 +1184,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
 
                 {/* ADD TAB */}
                 {activePopoverTab === "add" && (
-                  <div className="space-y-3 animate-fade-in">
+                  <div className="space-y-3 animate-fade-in font-mono">
                     <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Insert Elements</p>
                     <div className="grid grid-cols-2 gap-2">
                       <button onClick={() => { addText(); setActivePopover("none"); }} className="flex flex-col items-center gap-2 p-4 rounded-xl border border-dashed text-neutral-500 hover:text-[#007aff] hover:border-[#007aff]/40 transition-colors">
@@ -1145,7 +1208,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                     <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Sandbox Actions</p>
                     <button onClick={() => { open3d(); setActivePopover("none"); }} className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
                       <span className="flex items-center gap-2.5"><Box size={14} /> 3D Garment Sandbox</span>
-                      <span className="text-[8px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full font-bold uppercase">3D</span>
+                      <span className="text-[8px] bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-full font-bold uppercase">3D</span>
                     </button>
                     {product?.mfr === "printful" && (
                       <button onClick={() => { setEdmOpen(true); setActivePopover("none"); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
@@ -1239,18 +1302,18 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
             {activePopover === "adjustments" && (
               <div className="space-y-4">
                 <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Filters & AI</p>
-                {selected ? (
+                {selectedLayer ? (
                   <div className="space-y-3">
-                    <p className="text-[11px] font-bold">Selected: {selected.name}</p>
+                    <p className="text-[11px] font-bold">Selected: {selectedLayer.name}</p>
                     <div className="space-y-2">
                       <div className="flex justify-between text-[10px] font-bold opacity-60">
                         <span>Gaussian Blur filter</span>
-                        <span>{selected.blur || 0}%</span>
+                        <span>{selectedLayer.blur || 0}%</span>
                       </div>
                       <input 
-                        type="range" min={0} max={100} value={selected.blur || 0}
+                        type="range" min={0} max={100} value={selectedLayer.blur || 0}
                         onMouseDown={() => recordLayers(layers)}
-                        onChange={(e) => livePatch(selected.id, { blur: parseInt(e.target.value) })}
+                        onChange={(e) => livePatch(selectedLayer.id, { blur: parseInt(e.target.value) })}
                         className="w-full accent-[#007aff]"
                       />
                     </div>
@@ -1328,15 +1391,20 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                           <div className="flex items-center justify-between text-xs">
                             <span className="font-semibold text-neutral-400">Align Elements</span>
                             <div className="flex gap-1">
-                              <button onClick={(e) => { e.stopPropagation(); align("h"); }} className="p-1 hover:bg-neutral-200 dark:hover:bg-neutral-800 rounded"><AlignCenterVertical size={11} /></button>
-                              <button onClick={(e) => { e.stopPropagation(); align("v"); }} className="p-1 hover:bg-neutral-200 dark:hover:bg-neutral-800 rounded"><AlignCenterHorizontal size={11} /></button>
-                              <button onClick={(e) => { e.stopPropagation(); align("both"); }} className="p-1 hover:bg-neutral-200 dark:hover:bg-neutral-800 rounded"><AlignVerticalJustifyCenter size={11} /></button>
+                              <button onClick={(e) => { e.stopPropagation(); align("h"); }} className="p-1 hover:bg-neutral-200 dark:hover:bg-[#1a1a1c] rounded"><AlignCenterVertical size={11} /></button>
+                              <button onClick={(e) => { e.stopPropagation(); align("v"); }} className="p-1 hover:bg-neutral-200 dark:hover:bg-[#1a1a1c] rounded"><AlignCenterHorizontal size={11} /></button>
+                              <button onClick={(e) => { e.stopPropagation(); align("both"); }} className="p-1 hover:bg-neutral-200 dark:hover:bg-[#1a1a1c] rounded"><AlignVerticalJustifyCenter size={11} /></button>
                             </div>
                           </div>
                           <span className="block h-px bg-neutral-200 dark:bg-neutral-800" />
                           <div className="flex items-center justify-between">
                             <span>Clipping mask:</span>
                             <input type="checkbox" checked={!!l.clip} onChange={(e) => patchLayer(l.id, { clip: e.target.checked })} />
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <span>Alpha lock:</span>
+                            <input type="checkbox" checked={!!l.alphaLock} onChange={(e) => patchLayer(l.id, { alphaLock: e.target.checked })} />
                           </div>
                           
                           {l.type === "paint" && (
@@ -1363,6 +1431,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                               <button onClick={(e) => { e.stopPropagation(); move(l.id, 1); }} className="hover:text-indigo-400 font-bold uppercase text-[8px]">Up</button>
                               <button onClick={(e) => { e.stopPropagation(); move(l.id, -1); }} className="hover:text-indigo-400 font-bold uppercase text-[8px]">Down</button>
                             </div>
+                            <button onClick={(e) => { e.stopPropagation(); handleMergeDown(l.id); }} className="hover:text-indigo-400 font-bold uppercase text-[8px]">Merge Down</button>
                             <button onClick={(e) => { e.stopPropagation(); commit((ls) => ls.filter((x) => x.id !== l.id)); setSelectedId(null); }} className="text-rose-500 font-bold uppercase text-[8px]">Delete</button>
                           </div>
                         </div>
@@ -1376,17 +1445,99 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
             {/* Colors Swatches Popover */}
             {activePopover === "colors" && (
               <div className="space-y-4">
-                <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Swatches Matrix</p>
-                <div className="grid grid-cols-6 gap-2">
-                  {["#000000", "#ffffff", "#e02424", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#6366f1", "#a855f7", "#ec4899", "#6b7280"].map((c) => (
-                    <button 
-                      key={c} 
-                      onClick={() => setBrushColor(c)} 
-                      className="w-8 h-8 rounded-full border border-neutral-200 dark:border-neutral-800 shadow transition-transform active:scale-90"
-                      style={{ backgroundColor: c }}
-                    />
+                <div className="flex border-b border-neutral-200 dark:border-neutral-800 pb-2 mb-2 text-[10px] font-bold uppercase tracking-wider">
+                  {["disc", "classic", "palette", "history"].map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setColorSelectorTab(t as any)}
+                      className={`flex-1 text-center py-1 transition-all ${
+                        colorSelectorTab === t 
+                          ? "text-[#007aff] border-b-2 border-[#007aff]" 
+                          : "text-neutral-400 hover:text-neutral-200"
+                      }`}
+                    >
+                      {t}
+                    </button>
                   ))}
                 </div>
+
+                {/* COLOR DISC TAB */}
+                {colorSelectorTab === "disc" && (
+                  <div className="space-y-3 animate-fade-in flex flex-col items-center">
+                    <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400 font-mono">Interactive Disc</p>
+                    
+                    {/* High-fidelity color picker circular disk */}
+                    <div className="relative w-44 h-44 rounded-full border border-neutral-300 dark:border-neutral-850 overflow-hidden shadow-inner flex items-center justify-center">
+                      <div 
+                        onPointerDown={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const cx = rect.left + rect.width / 2;
+                          const cy = rect.top + rect.height / 2;
+                          const dx = e.clientX - cx;
+                          const dy = e.clientY - cy;
+                          const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+                          const deg = angle < 0 ? angle + 360 : angle;
+                          
+                          // procedurally resolve HSL vectors mapping to HEX
+                          const hexColor = hslToHex(deg, 85, 50);
+                          setBrushColor(hexColor);
+                        }}
+                        className="absolute inset-0 cursor-crosshair"
+                        style={{
+                          background: `conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)`
+                        }}
+                      />
+                      <div className="w-24 h-24 rounded-full bg-white dark:bg-[#1c1c1e] z-10 border border-neutral-350 dark:border-neutral-800 relative flex items-center justify-center">
+                        <div className="w-16 h-16 rounded-full border border-neutral-350 dark:border-neutral-800" style={{ backgroundColor: brushColor }} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* CLASSIC HSB SLIDERS TAB */}
+                {colorSelectorTab === "classic" && (
+                  <div className="space-y-4 animate-fade-in font-sans">
+                    <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Classic Sliders</p>
+                    <div className="space-y-3 text-[11px] font-semibold text-neutral-400">
+                      <div className="space-y-1">
+                        <div className="flex justify-between">
+                          <span>Hue</span>
+                        </div>
+                        <input type="range" min={0} max={360} className="w-full accent-[#007aff]" onChange={(e) => setBrushColor(hslToHex(parseInt(e.target.value), 85, 50))} />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex justify-between">
+                          <span>Saturation</span>
+                        </div>
+                        <input type="range" min={0} max={100} className="w-full accent-[#007aff]" onChange={(e) => setBrushColor(hslToHex(180, parseInt(e.target.value), 50))} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* PALETTES TAB */}
+                {colorSelectorTab === "palette" && (
+                  <div className="space-y-3 animate-fade-in">
+                    <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Presets Matrix</p>
+                    <div className="grid grid-cols-6 gap-2">
+                      {["#1c1c1e", "#3a3a3c", "#5c5c5e", "#aeaeaf", "#e5e5ea", "#ffffff", "#ff3b30", "#ff9500", "#ffcc00", "#4cd964", "#5ac8fa", "#007aff"].map((c) => (
+                        <button key={c} onClick={() => setBrushColor(c)} className="w-8 h-8 rounded border border-neutral-300 dark:border-neutral-800 transition-transform active:scale-90" style={{ backgroundColor: c }} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* HISTORY PANEL TAB */}
+                {colorSelectorTab === "history" && (
+                  <div className="space-y-3 animate-fade-in">
+                    <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Sampled History</p>
+                    <div className="grid grid-cols-6 gap-2">
+                      {colorHistory.map((c, i) => (
+                        <button key={c + i} onClick={() => setBrushColor(c)} className="w-8 h-8 rounded-full border border-neutral-350 dark:border-neutral-850 transition-transform active:scale-90" style={{ backgroundColor: c }} />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1487,7 +1638,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                     return;
                   }
                   if (painting.current) { painting.current = false; lastPt.current = null; return; }
-                  if (regionMode && drawing.current && region) { drawing.current = null; finalizeRegion(region); }
+                  if (regionMode && drawing.current && region) { finalizeRegionDirect(region); }
                 }}
               >
                 <Layer>
@@ -1740,7 +1891,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
         <Suspense fallback={<div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 text-white"><Loader2 className="animate-spin animate-infinite" /></div>}>
           <PrintfulDesignMaker
             productId={product?.id}
-            onDesign={(url, name) => addImageAt(url, name)}
+            onDesign={(url, name) => addImageAtDirect(url, name)}
             onClose={() => setEdmOpen(false)} />
         </Suspense>
       )}
