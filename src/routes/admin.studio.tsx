@@ -37,6 +37,7 @@ type Design = { id: string; title: string | null; prompt: string | null; image_u
 // to go through our Supabase Edge Function proxy, avoiding canvas/WebGL CORS blocks.
 export const getProxyImageUrl = (url: string | null): string => {
   if (!url) return "";
+  if (url.includes("/functions/v1/proxy-image")) return url;
   if (url.includes("files.cdn.printful.com") || url.includes("apliiq.com")) {
     const supabaseUrl = (supabase as any).supabaseUrl || import.meta.env.VITE_SUPABASE_URL || "";
     if (supabaseUrl) {

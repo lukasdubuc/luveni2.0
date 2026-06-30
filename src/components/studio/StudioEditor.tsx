@@ -56,6 +56,8 @@ type GalleryProject = {
 
 const getProxyImageUrl = (url: string | null): string => {
   if (!url) return "";
+  // Already proxied — don't double-wrap.
+  if (url.includes("/functions/v1/proxy-image")) return url;
   if (url.includes("files.cdn.printful.com") || url.includes("apliiq.com")) {
     const supabaseUrl = (supabase as any).supabaseUrl || import.meta.env.VITE_SUPABASE_URL || "";
     if (supabaseUrl) {
@@ -128,10 +130,12 @@ function useHtmlImage(src?: string) {
     if (!src) { setImg(null); return; }
     const im = new window.Image();
     im.crossOrigin = "anonymous";
-    if (src.startsWith("data:")) {
+    // Proxy URLs already set CORS headers — don't add extra query params that corrupt them.
+    // For direct CDN URLs we append a cache-buster/CORS hint.
+    if (src.startsWith("data:") || src.includes("/functions/v1/proxy-image")) {
       im.src = src;
     } else {
-      im.src = src.includes("?") ? `${src}&cors=1` : `${src}?cors=1`;
+      im.src = src.includes("?") ? `${src}&_c=1` : `${src}?_c=1`;
     }
     im.onload = () => setImg(im);
     im.onerror = () => setImg(null);
