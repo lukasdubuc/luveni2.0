@@ -126,6 +126,12 @@ type Props = {
 const uid = () => crypto.randomUUID();
 const clone = (ls: StudioLayer[]) => ls.map((l) => ({ ...l }));
 
+// Brush size uses a logarithmic slider so the lower (small-brush) range gets
+// most of the travel — fine control where you actually need it.
+const SIZE_MIN = 1, SIZE_MAX = 600;
+const sizeToPct = (s: number) => Math.log(Math.max(SIZE_MIN, s) / SIZE_MIN) / Math.log(SIZE_MAX / SIZE_MIN);
+const pctToSize = (p: number) => Math.round(SIZE_MIN * Math.pow(SIZE_MAX / SIZE_MIN, Math.max(0, Math.min(1, p))));
+
 function useHtmlImage(src?: string) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   useEffect(() => {
@@ -163,17 +169,30 @@ function useBackdropRemovedImage(img: HTMLImageElement | null, enabled: boolean)
       ctx.drawImage(img, 0, 0, w, h);
       const data = ctx.getImageData(0, 0, w, h);
       const px = data.data;
-      const TH = 232;             // near-white threshold
+      // Flood propagates through anything brighter than SOFT. Pixels brighter
+      // than HARD are fully cleared; the SOFT→HARD band is feathered to alpha so
+      // the anti-aliased garment edge fades cleanly with no white/grey halo.
+      const HARD = 244, SOFT = 205;
+      const lum = (i: number) => 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+      // Reject pixels that are clearly chromatic (coloured garment) even if bright.
+      const neutral = (i: number) => {
+        const mx = Math.max(px[i], px[i + 1], px[i + 2]);
+        const mn = Math.min(px[i], px[i + 1], px[i + 2]);
+        return mx - mn < 26;
+      };
       const visited = new Uint8Array(w * h);
       const stack: number[] = [];
-      const isWhite = (i: number) => px[i] >= TH && px[i + 1] >= TH && px[i + 2] >= TH;
       const tryPush = (x: number, y: number) => {
         if (x < 0 || y < 0 || x >= w || y >= h) return;
         const idx = y * w + x;
         if (visited[idx]) return;
-        visited[idx] = 1;
         const i = idx * 4;
-        if (isWhite(i)) { px[i + 3] = 0; stack.push(x, y); }
+        const L = lum(i);
+        if (L < SOFT || !neutral(i)) return;   // stop at the garment
+        visited[idx] = 1;
+        // Feather: HARD+ → fully gone, SOFT → keep, linear between.
+        px[i + 3] = L >= HARD ? 0 : Math.round(255 * (1 - (L - SOFT) / (HARD - SOFT)));
+        stack.push(x, y);
       };
       for (let x = 0; x < w; x++) { tryPush(x, 0); tryPush(x, h - 1); }
       for (let y = 0; y < h; y++) { tryPush(0, y); tryPush(w - 1, y); }
@@ -293,6 +312,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
   const garmentRaw = useHtmlImage(getProxyImageUrl(templateImage || null) || undefined);
   // Strip the white studio backdrop so the garment itself is the canvas.
   const [removeWhiteBg, setRemoveWhiteBg] = useState(true);
+  const [showCanvasGrid, setShowCanvasGrid] = useState(true);
   const garmentKeyed = useBackdropRemovedImage(garmentRaw, removeWhiteBg && !showPhoto);
   const garment = garmentKeyed || garmentRaw;
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -366,7 +386,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
   // State Expansion for Procreate specifications
   const [tool, setTool] = useState<"select" | "brush" | "smudge" | "eraser" | "fill" | "eyedropper" | "lasso">("select");
   const [brushType, setBrushType] = useState<BrushType>("round");
-  const [brushSize, setBrushSize] = useState(120);
+  const [brushSize, setBrushSize] = useState(36);
   const [brushColor, setBrushColor] = useState("#000000");
   const [colorH, setColorH] = useState(0);
   const [colorS, setColorS] = useState(0);
@@ -1104,7 +1124,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
       const relativeY = clientY - rect.top;
       const percent = Math.max(0, Math.min(1, 1 - (relativeY / rect.height)));
       if (type === "size") {
-        setBrushSize(Math.round(percent * 599) + 1);
+        setBrushSize(pctToSize(percent));
       } else {
         setBrushOpacity(percent);
       }
@@ -1667,6 +1687,41 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedLayer, layers]);
 
+  // Procreate touch gestures: two-finger tap = undo, three-finger tap = redo.
+  // (A tap = quick, near-stationary; panning/pinching moves and is ignored.)
+  useEffect(() => {
+    const el = scrollOuterRef.current;
+    if (!el) return;
+    let startT = 0, maxFingers = 0, moved = false, sx = 0, sy = 0;
+    const onStart = (e: TouchEvent) => {
+      if (maxFingers === 0) { startT = Date.now(); moved = false; const t = e.touches[0]; sx = t.clientX; sy = t.clientY; }
+      maxFingers = Math.max(maxFingers, e.touches.length);
+    };
+    const onMove = (e: TouchEvent) => {
+      const t = e.touches[0]; if (!t) return;
+      if (Math.hypot(t.clientX - sx, t.clientY - sy) > 16) moved = true;
+    };
+    const onEnd = (e: TouchEvent) => {
+      if (e.touches.length > 0) return; // wait until all fingers lift
+      const dt = Date.now() - startT;
+      if (dt < 320 && !moved) {
+        if (maxFingers === 2) handleUndo();
+        else if (maxFingers === 3) handleRedo();
+      }
+      maxFingers = 0;
+    };
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchmove", onMove, { passive: true });
+    el.addEventListener("touchend", onEnd, { passive: true });
+    el.addEventListener("touchcancel", onEnd, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove", onMove);
+      el.removeEventListener("touchend", onEnd);
+      el.removeEventListener("touchcancel", onEnd);
+    };
+  }, [handleUndo, handleRedo]);
+
   return (
     <div className={`fixed inset-0 z-50 flex flex-col select-none overflow-hidden transition-colors duration-200 touch-none ${
       isDark ? "bg-[#09090b] text-[#efeff1]" : "bg-[#f4f5f7] text-[#1c1c1e]"
@@ -1891,11 +1946,11 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
             >
               <div 
                 className="absolute bottom-0 left-0 right-0 bg-[#007aff]/85 pointer-events-none transition-all duration-75"
-                style={{ height: `${(brushSize / 600) * 100}%` }}
+                style={{ height: `${sizeToPct(brushSize) * 100}%` }}
               />
-              <div 
+              <div
                 className="absolute left-0 right-0 h-1 bg-white border border-neutral-400 pointer-events-none"
-                style={{ bottom: `calc(${(brushSize / 600) * 100}% - 2px)` }}
+                style={{ bottom: `calc(${sizeToPct(brushSize) * 100}% - 2px)` }}
               />
             </div>
             <span className="text-[9px] font-semibold text-neutral-400 dark:text-neutral-500 tabular-nums">{brushSize}px</span>
@@ -2638,10 +2693,23 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
       {currentView === "editor" && (
         <div className="flex-1 flex items-center justify-center relative overflow-hidden bg-black select-none h-full w-full">
           <div 
-            ref={scrollOuterRef} 
+            ref={scrollOuterRef}
             className="w-full h-full flex items-center justify-center overflow-hidden relative canvas-scroll-container"
             style={{ touchAction: 'none' }}
           >
+            {/* Procreate-style grid backdrop behind the canvas */}
+            {showCanvasGrid && (
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  backgroundColor: isDark ? "#0b0b0d" : "#e9e9ee",
+                  backgroundImage: isDark
+                    ? "linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)"
+                    : "linear-gradient(rgba(0,0,0,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.06) 1px, transparent 1px)",
+                  backgroundSize: "26px 26px, 26px 26px",
+                }}
+              />
+            )}
             {/* Real centering elements mapping to templates */}
             <div 
               className={`transition-transform duration-75 flex items-center justify-center ${
@@ -2827,6 +2895,15 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
           </button>
 
           <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
+
+          {/* Procreate-style canvas grid backdrop toggle */}
+          <button
+            onClick={() => setShowCanvasGrid((v) => !v)}
+            title="Toggle the grid behind the canvas"
+            className={`text-[9px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full ${showCanvasGrid ? "bg-[#007aff] text-white" : "bg-neutral-100 dark:bg-neutral-800 text-neutral-500"}`}
+          >
+            Grid
+          </button>
 
           {/* White-backdrop removal toggle (product templates only) */}
           {canvasKind !== "canvas" && !showPhoto && garmentRaw && (
