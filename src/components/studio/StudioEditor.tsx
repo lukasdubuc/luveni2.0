@@ -225,15 +225,16 @@ function TextNode({ layer, onChange, onSelect, onDragMove, nodeRef, listening }:
   );
 }
 
-function PaintNode({ layer, canvas }: any) {
+function PaintNode({ layer, canvas, opacityOverride }: any) {
   const innerRef = useRef<Konva.Image>(null);
   useBlur(() => innerRef.current, layer.blur || 0, [layer.blur]);
   if (!layer.visible || !canvas) return null;
+  if (opacityOverride === 0) return null;
   return (
     <KImage
       ref={innerRef}
       image={canvas} x={0} y={0} listening={false}
-      opacity={layer.opacity} globalCompositeOperation={gco(layer)}
+      opacity={opacityOverride ?? layer.opacity} globalCompositeOperation={gco(layer)}
     />
   );
 }
@@ -311,10 +312,24 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
   const [adjBri, setAdjBri] = useState(100);
   const [adjContrast, setAdjContrast] = useState(0);
   // Adjustments suite (Procreate-style): which adjustment is active + its params.
-  const [adjMode, setAdjMode] = useState<"color" | "curves" | "balance" | "noise" | "sharpen" | "liquify">("color");
-  const [curveBlack, setCurveBlack] = useState(0);    // 0..100 input black point
-  const [curveWhite, setCurveWhite] = useState(100);  // 0..100 input white point
-  const [curveGamma, setCurveGamma] = useState(100);  // 50..200 midtone gamma (100 = linear)
+  const [adjMode, setAdjMode] = useState<"color" | "curves" | "balance" | "noise" | "sharpen" | "liquify" | "gradient" | "motion">("color");
+  // Curves graph: draggable control points per channel (input/output 0..255).
+  const [curveChannel, setCurveChannel] = useState<"rgb" | "r" | "g" | "b">("rgb");
+  const [curvePts, setCurvePts] = useState<Record<string, { x: number; y: number }[]>>({
+    rgb: [{ x: 0, y: 0 }, { x: 255, y: 255 }],
+    r: [{ x: 0, y: 0 }, { x: 255, y: 255 }],
+    g: [{ x: 0, y: 0 }, { x: 255, y: 255 }],
+    b: [{ x: 0, y: 0 }, { x: 255, y: 255 }],
+  });
+  const [gradMapLo, setGradMapLo] = useState("#1e1b4b");
+  const [gradMapHi, setGradMapHi] = useState("#fde68a");
+  const [motionAngle, setMotionAngle] = useState(0);
+  const [motionDist, setMotionDist] = useState(12);
+  // Animation Assist: treat each paint layer as a frame; onion-skin + playback.
+  const [animOn, setAnimOn] = useState(false);
+  const [animPlaying, setAnimPlaying] = useState(false);
+  const [animFps, setAnimFps] = useState(8);
+  const [animFrame, setAnimFrame] = useState(0);
   const [balR, setBalR] = useState(0);
   const [balG, setBalG] = useState(0);
   const [balB, setBalB] = useState(0);
@@ -1291,22 +1306,63 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
     redrawStage();
   };
 
-  // Curves: input black/white point remap + midtone gamma (luminance-preserving per channel).
-  const applyCurves = () => {
-    const bp = curveBlack / 100, wp = curveWhite / 100, g = 100 / Math.max(1, curveGamma);
+  // Curves: build a piecewise-linear LUT from a channel's draggable control points.
+  const buildLut = (pts: { x: number; y: number }[]): Uint8ClampedArray => {
+    const s = [...pts].sort((a, b) => a.x - b.x);
     const lut = new Uint8ClampedArray(256);
-    for (let v = 0; v < 256; v++) {
-      let n = (v / 255 - bp) / Math.max(0.001, wp - bp);
-      n = Math.max(0, Math.min(1, n));
-      lut[v] = Math.round(Math.pow(n, g) * 255);
+    for (let i = 0; i < 256; i++) {
+      let p0 = s[0], p1 = s[s.length - 1];
+      for (let j = 0; j < s.length - 1; j++) { if (i >= s[j].x && i <= s[j + 1].x) { p0 = s[j]; p1 = s[j + 1]; break; } }
+      const t = p1.x === p0.x ? 0 : (i - p0.x) / (p1.x - p0.x);
+      lut[i] = Math.max(0, Math.min(255, Math.round(p0.y + (p1.y - p0.y) * t)));
     }
+    return lut;
+  };
+  const applyCurves = () => {
+    const lrgb = buildLut(curvePts.rgb), lr = buildLut(curvePts.r), lg = buildLut(curvePts.g), lb = buildLut(curvePts.b);
     withPaintPixels((d) => {
       for (let i = 0; i < d.length; i += 4) {
         if (d[i + 3] === 0) continue;
-        d[i] = lut[d[i]]; d[i + 1] = lut[d[i + 1]]; d[i + 2] = lut[d[i + 2]];
+        d[i] = lrgb[lr[d[i]]]; d[i + 1] = lrgb[lg[d[i + 1]]]; d[i + 2] = lrgb[lb[d[i + 2]]];
       }
     });
-    setCurveBlack(0); setCurveWhite(100); setCurveGamma(100);
+  };
+
+  // Gradient Map: remap luminance onto a low→high colour gradient.
+  const applyGradientMap = () => {
+    const lo = hexToRgb(gradMapLo), hi = hexToRgb(gradMapHi);
+    withPaintPixels((d) => {
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 3] === 0) continue;
+        const t = (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) / 255;
+        d[i] = lo.r + (hi.r - lo.r) * t;
+        d[i + 1] = lo.g + (hi.g - lo.g) * t;
+        d[i + 2] = lo.b + (hi.b - lo.b) * t;
+      }
+    });
+  };
+
+  // Motion Blur: directional average along an angle.
+  const applyMotionBlur = () => {
+    const steps = Math.max(1, Math.round(motionDist));
+    const ang = (motionAngle * Math.PI) / 180;
+    const ux = Math.cos(ang), uy = Math.sin(ang);
+    withPaintPixels((d, w, h) => {
+      const src = new Uint8ClampedArray(d);
+      const at = (x: number, y: number, c: number) => src[(Math.max(0, Math.min(h - 1, y)) * w + Math.max(0, Math.min(w - 1, x))) * 4 + c];
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const idx = (y * w + x) * 4;
+          if (src[idx + 3] === 0) continue;
+          let r = 0, g = 0, b = 0, n = 0;
+          for (let s = -steps; s <= steps; s++) {
+            const sx = Math.round(x + ux * s), sy = Math.round(y + uy * s);
+            r += at(sx, sy, 0); g += at(sx, sy, 1); b += at(sx, sy, 2); n++;
+          }
+          d[idx] = r / n; d[idx + 1] = g / n; d[idx + 2] = b / n;
+        }
+      }
+    });
   };
 
   // Color Balance: shift channels weighted toward midtones.
@@ -1802,6 +1858,17 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedLayer, layers]);
+
+  // Animation Assist playback: cycle the current frame at the chosen FPS.
+  useEffect(() => {
+    if (!animPlaying) return;
+    const paintCount = layers.filter((l) => l.type === "paint").length;
+    if (paintCount < 2) { setAnimPlaying(false); return; }
+    const id = setInterval(() => setAnimFrame((f) => (f + 1) % paintCount), 1000 / Math.max(1, animFps));
+    return () => clearInterval(id);
+  }, [animPlaying, animFps, layers]);
+
+  useEffect(() => { redrawStage(); }, [animFrame, animOn, animPlaying, redrawStage]);
 
   // Procreate touch gestures: two-finger tap = undo, three-finger tap = redo.
   // (A tap = quick, near-stationary; panning/pinching moves and is ignored.)
@@ -2463,7 +2530,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                     {/* Adjustment mode switcher (Procreate-style) */}
                     {selectedLayer.type === "paint" && (
                       <div className="flex flex-wrap gap-1">
-                        {(["color","curves","balance","noise","sharpen","liquify"] as const).map((m) => (
+                        {(["color","curves","balance","gradient","motion","noise","sharpen","liquify"] as const).map((m) => (
                           <button key={m} onClick={() => { setAdjMode(m); if (m === "liquify") { setTool("liquify"); setActivePopover("none"); } else if (tool === "liquify") setTool("brush"); }}
                             className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border transition-colors ${adjMode === m ? "bg-[#007aff] text-white border-[#007aff]" : "text-neutral-400 border-neutral-700 hover:border-neutral-500"}`}>
                             {m}
@@ -2474,13 +2541,72 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
 
                     {selectedLayer.type === "paint" && adjMode === "curves" && (
                       <div className="space-y-3 text-[10px] font-semibold text-neutral-400">
-                        <div className="space-y-1"><div className="flex justify-between"><span>Black point</span><span className="font-mono">{curveBlack}</span></div>
-                          <input type="range" min={0} max={90} value={curveBlack} onChange={(e)=>setCurveBlack(parseInt(e.target.value))} className="w-full accent-[#007aff]" /></div>
-                        <div className="space-y-1"><div className="flex justify-between"><span>White point</span><span className="font-mono">{curveWhite}</span></div>
-                          <input type="range" min={10} max={100} value={curveWhite} onChange={(e)=>setCurveWhite(parseInt(e.target.value))} className="w-full accent-[#007aff]" /></div>
-                        <div className="space-y-1"><div className="flex justify-between"><span>Midtones (gamma)</span><span className="font-mono">{(curveGamma/100).toFixed(2)}</span></div>
-                          <input type="range" min={40} max={250} value={curveGamma} onChange={(e)=>setCurveGamma(parseInt(e.target.value))} className="w-full accent-[#007aff]" /></div>
-                        <button onClick={applyCurves} className="w-full py-2 rounded-xl bg-[#007aff] text-white text-[10px] font-bold uppercase tracking-wider hover:bg-[#005bb5]">Apply Curves</button>
+                        {/* Channel tabs */}
+                        <div className="flex gap-1">
+                          {([["rgb","RGB","#e5e5ea"],["r","R","#ff5b5b"],["g","G","#4cd964"],["b","B","#5ac8fa"]] as const).map(([ch,lbl,col]) => (
+                            <button key={ch} onClick={()=>setCurveChannel(ch)}
+                              className={`flex-1 py-1 rounded-md text-[9px] font-bold uppercase border ${curveChannel===ch ? "border-current" : "border-neutral-700"}`}
+                              style={{ color: curveChannel===ch ? col : undefined }}>{lbl}</button>
+                          ))}
+                        </div>
+                        {/* Draggable curve graph */}
+                        {(() => {
+                          const SZ = 196, pts = curvePts[curveChannel];
+                          const toSvg = (p:{x:number;y:number}) => ({ cx: (p.x/255)*SZ, cy: SZ - (p.y/255)*SZ });
+                          const setPts = (np:{x:number;y:number}[]) => setCurvePts((cur)=>({ ...cur, [curveChannel]: np }));
+                          const dragPoint = (idx:number, e:React.PointerEvent<SVGSVGElement>) => {
+                            const svg = e.currentTarget; svg.setPointerCapture(e.pointerId);
+                            const move = (ev:PointerEvent) => {
+                              const r = svg.getBoundingClientRect();
+                              let nx = Math.max(0, Math.min(255, Math.round(((ev.clientX-r.left)/r.width)*255)));
+                              const ny = Math.max(0, Math.min(255, Math.round((1-(ev.clientY-r.top)/r.height)*255)));
+                              setPts((cur=>{ const a=[...cur]; if(idx>0&&idx<a.length-1){ nx=Math.max(a[idx-1].x+1, Math.min(a[idx+1].x-1, nx)); } else if(idx===0){ nx=0; } else { nx=255; } a[idx]={x:nx,y:ny}; return a; })(pts));
+                            };
+                            const up=()=>{ window.removeEventListener("pointermove",move); window.removeEventListener("pointerup",up); };
+                            window.addEventListener("pointermove",move); window.addEventListener("pointerup",up); e.stopPropagation();
+                          };
+                          const addPoint = (e:React.PointerEvent<SVGSVGElement>) => {
+                            const r=e.currentTarget.getBoundingClientRect();
+                            const nx=Math.max(1,Math.min(254,Math.round(((e.clientX-r.left)/r.width)*255)));
+                            const ny=Math.max(0,Math.min(255,Math.round((1-(e.clientY-r.top)/r.height)*255)));
+                            const a=[...pts, {x:nx,y:ny}].sort((p,q)=>p.x-q.x); setPts(a);
+                          };
+                          const path = [...pts].sort((a,b)=>a.x-b.x).map((p,i)=>{ const s=toSvg(p); return `${i?"L":"M"}${s.cx},${s.cy}`; }).join(" ");
+                          return (
+                            <svg width="100%" viewBox={`0 0 ${SZ} ${SZ}`} className="rounded-lg bg-neutral-950 border border-neutral-800 touch-none" onPointerDown={addPoint}>
+                              {[0.25,0.5,0.75].map((g)=>(<g key={g}><line x1={g*SZ} y1={0} x2={g*SZ} y2={SZ} stroke="#ffffff14" /><line x1={0} y1={g*SZ} x2={SZ} y2={g*SZ} stroke="#ffffff14" /></g>))}
+                              <line x1={0} y1={SZ} x2={SZ} y2={0} stroke="#ffffff22" strokeDasharray="3 3" />
+                              <path d={path} fill="none" stroke="#007aff" strokeWidth={2} />
+                              {pts.map((p,i)=>{ const s=toSvg(p); return <circle key={i} cx={s.cx} cy={s.cy} r={6} fill="#fff" stroke="#007aff" strokeWidth={2} className="cursor-grab" onPointerDown={(ev)=>dragPoint(i,ev)} />; })}
+                            </svg>
+                          );
+                        })()}
+                        <div className="flex gap-2">
+                          <button onClick={applyCurves} className="flex-1 py-2 rounded-xl bg-[#007aff] text-white text-[10px] font-bold uppercase tracking-wider hover:bg-[#005bb5]">Apply Curves</button>
+                          <button onClick={()=>setCurvePts((c)=>({ ...c, [curveChannel]: [{x:0,y:0},{x:255,y:255}] }))} className="px-3 py-2 rounded-xl border border-neutral-700 text-[10px] font-bold text-neutral-400">Reset</button>
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedLayer.type === "paint" && adjMode === "gradient" && (
+                      <div className="space-y-3 text-[10px] font-semibold text-neutral-400">
+                        <p className="text-[9px] uppercase tracking-wider text-neutral-500">Gradient Map (shadows → highlights)</p>
+                        <div className="h-6 rounded-full border border-neutral-700" style={{ background: `linear-gradient(to right, ${gradMapLo}, ${gradMapHi})` }} />
+                        <div className="flex items-center justify-between gap-3">
+                          <label className="flex items-center gap-2"><span>Shadows</span><input type="color" value={gradMapLo} onChange={(e)=>setGradMapLo(e.target.value)} className="w-7 h-7 rounded cursor-pointer bg-transparent" /></label>
+                          <label className="flex items-center gap-2"><span>Highlights</span><input type="color" value={gradMapHi} onChange={(e)=>setGradMapHi(e.target.value)} className="w-7 h-7 rounded cursor-pointer bg-transparent" /></label>
+                        </div>
+                        <button onClick={applyGradientMap} className="w-full py-2 rounded-xl bg-[#007aff] text-white text-[10px] font-bold uppercase tracking-wider hover:bg-[#005bb5]">Apply Gradient Map</button>
+                      </div>
+                    )}
+
+                    {selectedLayer.type === "paint" && adjMode === "motion" && (
+                      <div className="space-y-3 text-[10px] font-semibold text-neutral-400">
+                        <div className="space-y-1"><div className="flex justify-between"><span>Angle</span><span className="font-mono">{motionAngle}°</span></div>
+                          <input type="range" min={0} max={180} value={motionAngle} onChange={(e)=>setMotionAngle(parseInt(e.target.value))} className="w-full accent-[#007aff]" /></div>
+                        <div className="space-y-1"><div className="flex justify-between"><span>Distance</span><span className="font-mono">{motionDist}px</span></div>
+                          <input type="range" min={1} max={50} value={motionDist} onChange={(e)=>setMotionDist(parseInt(e.target.value))} className="w-full accent-[#007aff]" /></div>
+                        <button onClick={applyMotionBlur} className="w-full py-2 rounded-xl bg-[#007aff] text-white text-[10px] font-bold uppercase tracking-wider hover:bg-[#005bb5]">Apply Motion Blur</button>
                       </div>
                     )}
 
@@ -2966,6 +3092,24 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
             className="w-full h-full flex items-center justify-center overflow-hidden relative canvas-scroll-container"
             style={{ touchAction: 'none' }}
           >
+            {/* Animation Assist playback bar */}
+            {animOn && (() => {
+              const frames = layers.filter((l) => l.type === "paint");
+              return (
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 rounded-full bg-black/70 backdrop-blur-md border border-white/10 px-4 py-2 text-white">
+                  <button onClick={() => setAnimPlaying((v) => !v)} className="text-[10px] font-bold uppercase tracking-wider px-2">
+                    {animPlaying ? "❚❚ Pause" : "▶ Play"}
+                  </button>
+                  <span className="text-[10px] font-mono opacity-70">Frame {Math.min(animFrame + 1, frames.length || 1)}/{frames.length || 1}</span>
+                  <input type="range" min={0} max={Math.max(0, frames.length - 1)} value={animFrame}
+                    onChange={(e) => { setAnimPlaying(false); setAnimFrame(parseInt(e.target.value)); }}
+                    className="w-32 accent-[#007aff]" />
+                  <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider opacity-70">
+                    FPS <input type="number" min={1} max={30} value={animFps} onChange={(e) => setAnimFps(Math.max(1, Math.min(30, parseInt(e.target.value) || 8)))} className="w-10 bg-white/10 rounded px-1 py-0.5 text-white" />
+                  </div>
+                </div>
+              );
+            })()}
             {/* Procreate-style grid backdrop behind the canvas */}
             {showCanvasGrid && (
               <div
@@ -3025,8 +3169,15 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                     {/* Design artwork group — exported on its own (transparent, no
                         garment photo) for accurate 3D projection. */}
                     <Group ref={designGroupRef} name="design-group">
-                      {layers.map((l) => l.type === "paint" ? (
-                        <PaintNode key={l.id} layer={l} canvas={getPaintCanvas(l)} />
+                      {(() => { const paintIds = layers.filter((x) => x.type === "paint").map((x) => x.id);
+                      return layers.map((l) => l.type === "paint" ? (
+                        <PaintNode key={l.id} layer={l} canvas={getPaintCanvas(l)}
+                          opacityOverride={animOn ? (() => {
+                            const fi = paintIds.indexOf(l.id);
+                            if (fi === animFrame) return l.opacity;
+                            if (animPlaying) return 0;
+                            return Math.abs(fi - animFrame) === 1 ? 0.22 : 0;
+                          })() : undefined} />
                       ) : l.type === "image" ? (
                         <ImageNode key={l.id} layer={l} listening={!regionMode && tool === "select"}
                           nodeRef={(n: any) => (nodeRefs.current[l.id] = n)} onDragMove={snapDrag}
@@ -3035,7 +3186,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                         <TextNode key={l.id} layer={l} listening={!regionMode && tool === "select"}
                           nodeRef={(n: any) => (nodeRefs.current[l.id] = n)} onDragMove={snapDrag}
                           onSelect={() => setSelectedId(l.id)} onChange={(patch: any) => { patchLayer(l.id, patch); setGuides({ v: false, h: false }); }} />
-                      ))}
+                      )); })()}
                     </Group>
 
                     {(tool === "brush" || tool === "eraser" || tool === "smudge") && symmetry === "v" && <Rect name="symmetry-guide" x={artboardW / 2 - 1} y={0} width={2} height={artboardH} fill="#6366f1" opacity={0.5} listening={false} />}
@@ -3172,6 +3323,15 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
             className={`text-[9px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full ${showCanvasGrid ? "bg-[#007aff] text-white" : "bg-neutral-100 dark:bg-neutral-800 text-neutral-500"}`}
           >
             Grid
+          </button>
+
+          {/* Animation Assist toggle (each paint layer = a frame) */}
+          <button
+            onClick={() => { setAnimOn((v) => !v); setAnimPlaying(false); setAnimFrame(0); }}
+            title="Animation Assist — onion-skin & play your paint layers as frames"
+            className={`text-[9px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full ${animOn ? "bg-[#007aff] text-white" : "bg-neutral-100 dark:bg-neutral-800 text-neutral-500"}`}
+          >
+            Animate
           </button>
 
           {/* Dynamic view switchers */}
