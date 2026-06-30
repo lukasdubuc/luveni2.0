@@ -80,16 +80,67 @@ const REF_PRINT_W_IN = 12;
 const REF_DECAL_W = 0.62;
 const CHEST_R = 0.42; // torso half-width; the flattened front carries the decal
 
-// A realistic display mannequin (smooth, neutral, featureless — like a CLO/store
-// dress form) WEARING the tee: neutral body underneath, coloured shirt over the
-// torso, and the design mapped onto the chest true-to-print. Reliable, no asset.
+// Builds a smooth, anatomically-proportioned human torso as a lathed surface of
+// revolution: a vertical profile of (radius, height) control points lofted around
+// Y, then squashed front-to-back so it reads like a real chest/waist/hip taper
+// rather than a plain cylinder. One welded mesh = no seams between body segments.
+function lathedBody(profile: [number, number][], segments = 64): THREE.BufferGeometry {
+  const points = profile.map(([r, y]) => new THREE.Vector2(Math.max(r, 0.001), y));
+  const geo = new THREE.LatheGeometry(points, segments);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+// A realistic display figure — a smooth, neutral human form (like a CLO/Browzwear
+// avatar or a high-end store mannequin) WEARING the tee. The body is built from
+// lathed anatomical profiles (head, neck, torso, arms, legs) so the silhouette
+// reads as a real person; the fitted shirt drapes over the torso and the design
+// is mapped onto the chest true-to-print. Reliable, no external asset required.
 function Mannequin({ color, design, printWidthIn, printHeightIn, isDark }: { color: string; design: string; printWidthIn?: number | null; printHeightIn?: number | null; isDark: boolean }) {
   const texture = useTexture(design);
   texture.anisotropy = 8;
 
-  const skinColor = isDark ? "#3b3b40" : "#dcd5cb"; // matte mannequin material
-  const skin = useMemo(() => new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.85, metalness: 0.03 }), [skinColor]);
-  const shirt = useMemo(() => new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0.03, side: THREE.DoubleSide }), [color]);
+  const skinColor = isDark ? "#caa890" : "#e8c9b0"; // warm neutral mannequin skin
+  const skin = useMemo(() => new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.62, metalness: 0.0 }), [skinColor]);
+  const shirt = useMemo(() => new THREE.MeshStandardMaterial({ color, roughness: 0.78, metalness: 0.02, side: THREE.DoubleSide }), [color]);
+
+  // ── Anatomical geometry (built once) ──────────────────────────────────────
+  const geo = useMemo(() => {
+    // Head: rounded ovoid (jaw narrows toward chin, crown rounds off).
+    const head = lathedBody([
+      [0.0, 1.78], [0.11, 1.80], [0.18, 1.86], [0.205, 1.95],
+      [0.205, 2.05], [0.18, 2.14], [0.11, 2.20], [0.0, 2.22],
+    ]);
+    // Neck → trapezius slope into the shoulders.
+    const neck = lathedBody([
+      [0.0, 1.56], [0.095, 1.57], [0.10, 1.66], [0.12, 1.74], [0.16, 1.78], [0.0, 1.79],
+    ]);
+    // Torso: shoulders → chest → narrowing waist → flaring hips → pelvis.
+    const torso = lathedBody([
+      [0.0, 1.62], [0.30, 1.58], [0.40, 1.50], [0.43, 1.36], // shoulder/chest
+      [0.40, 1.20], [0.35, 1.00], [0.315, 0.80],             // ribcage → waist
+      [0.33, 0.60], [0.39, 0.40], [0.41, 0.22],              // hips
+      [0.36, 0.06], [0.22, -0.04], [0.0, -0.06],             // pelvis floor
+    ]);
+    // Limb segment helper (tapered capsule-like profile).
+    const limb = (rTop: number, rBot: number, len: number) => lathedBody([
+      [0.0, len], [rTop * 0.7, len], [rTop, len - rTop * 0.6],
+      [rBot, rBot * 0.6], [rBot * 0.7, 0], [0.0, 0],
+    ], 40);
+    // Fitted tee shell — slightly larger than the torso so it drapes over it.
+    const shirtBody = lathedBody([
+      [0.0, 1.50], [0.33, 1.46], [0.44, 1.36],
+      [0.45, 1.18], [0.40, 0.96], [0.375, 0.74],
+      [0.40, 0.56], [0.46, 0.40], [0.47, 0.30],
+    ]);
+    return {
+      head, neck, torso, shirtBody,
+      upperArm: limb(0.10, 0.085, 0.62),
+      foreArm: limb(0.083, 0.062, 0.58),
+      thigh: limb(0.155, 0.11, 0.82),
+      calf: limb(0.115, 0.07, 0.82),
+    };
+  }, []);
 
   // True-to-print decal: width from the real print width vs a 12" baseline.
   const decalScale = useMemo<[number, number, number]>(() => {
@@ -99,58 +150,64 @@ function Mannequin({ color, design, printWidthIn, printHeightIn, isDark }: { col
       : (texture.image ? (texture.image as any).height / (texture.image as any).width : 1.25);
     return [w, w * aspect, 0.6];
   }, [printWidthIn, printHeightIn, texture]);
-  const decalY = 0.92 - decalScale[1] * 0.5; // anchor just below the collar
+  const decalY = 0.95 - decalScale[1] * 0.5; // anchor just below the collar
+
+  // Front-to-back squash so lathed bodies read as a human (deeper than wide → no).
+  const torsoZ = 0.62;
 
   return (
     <Center>
       <group>
-        {/* ── Mannequin body (neutral) ── */}
-        {/* Head — smooth featureless ovoid */}
-        <mesh position={[0, 1.9, 0]} scale={[0.8, 1, 0.84]} material={skin} castShadow>
-          <sphereGeometry args={[0.26, 48, 40]} />
-        </mesh>
-        {/* Neck */}
-        <mesh position={[0, 1.55, 0]} material={skin}>
-          <cylinderGeometry args={[0.1, 0.12, 0.28, 32]} />
-        </mesh>
-        {/* Pelvis / hips below the shirt hem */}
-        <mesh position={[0, -0.12, 0]} scale={[1, 1, 0.72]} material={skin} castShadow>
-          <sphereGeometry args={[0.33, 40, 32]} />
-        </mesh>
-        {/* Upper legs (taper down, framing a full human form) */}
+        {/* ── Body (neutral human form) ── */}
+        <mesh geometry={geo.head} material={skin} castShadow />
+        <mesh geometry={geo.neck} material={skin} castShadow />
+        {/* Torso underneath the shirt — gives the shirt a real body to drape on */}
+        <mesh geometry={geo.torso} material={skin} scale={[1, 1, torsoZ]} castShadow receiveShadow />
+
+        {/* Arms — upper arm at the shoulder, slight outward angle, then forearm */}
         {[-1, 1].map((s) => (
-          <mesh key={`leg-${s}`} position={[s * 0.16, -0.85, 0]} material={skin} castShadow>
-            <capsuleGeometry args={[0.15, 1.0, 16, 28]} />
-          </mesh>
-        ))}
-        {/* Upper arms (neutral, at the sides) */}
-        {[-1, 1].map((s) => (
-          <mesh key={`uarm-${s}`} position={[s * 0.5, 0.62, 0]} rotation={[0, 0, s * 0.13]} material={skin} castShadow>
-            <capsuleGeometry args={[0.1, 0.78, 16, 28]} />
-          </mesh>
+          <group key={`arm-${s}`} position={[s * 0.43, 1.5, 0]} rotation={[0, 0, s * 0.16]}>
+            <mesh geometry={geo.upperArm} material={skin} position={[0, -0.62, 0]} castShadow />
+            <group position={[s * 0.06, -0.62, 0.04]} rotation={[0.18, 0, s * 0.05]}>
+              <mesh geometry={geo.foreArm} material={skin} position={[0, -0.58, 0]} castShadow />
+              {/* Hand — simple rounded paddle */}
+              <mesh position={[0, -0.66, 0]} scale={[0.6, 1, 0.4]} material={skin} castShadow>
+                <sphereGeometry args={[0.08, 24, 20]} />
+              </mesh>
+            </group>
+          </group>
         ))}
 
-        {/* ── Shirt worn over the torso ── */}
-        {/* Shoulders / upper chest cap */}
-        <mesh position={[0, 1.26, 0]} scale={[1.16, 0.72, 0.78]} material={shirt} castShadow>
-          <sphereGeometry args={[0.42, 48, 36]} />
-        </mesh>
-        {/* Torso shirt body — flattened front/back so it reads like a chest */}
-        <mesh position={[0, 0.62, 0]} scale={[1, 1, 0.66]} material={shirt} castShadow receiveShadow>
-          <cylinderGeometry args={[CHEST_R, 0.36, 1.3, 64, 1, false]} />
+        {/* Legs — thigh then calf, slight stance */}
+        {[-1, 1].map((s) => (
+          <group key={`leg-${s}`} position={[s * 0.17, -0.02, 0]}>
+            <mesh geometry={geo.thigh} material={skin} position={[0, -0.82, 0]} castShadow />
+            <group position={[0, -0.82, 0]}>
+              <mesh geometry={geo.calf} material={skin} position={[0, -0.82, 0]} castShadow />
+              {/* Foot */}
+              <mesh position={[0, -0.86, 0.06]} scale={[0.6, 0.4, 1.3]} material={skin} castShadow>
+                <sphereGeometry args={[0.1, 24, 20]} />
+              </mesh>
+            </group>
+          </group>
+        ))}
+
+        {/* ── Fitted tee worn over the torso ── */}
+        {/* Shirt body: lathed shell slightly larger than the torso so it drapes */}
+        <mesh material={shirt} geometry={geo.shirtBody} scale={[1, 1, torsoZ * 1.06]} castShadow receiveShadow>
           {/* Chest decal — the user's design, true-to-print */}
-          <Decal position={[0, decalY, CHEST_R]} rotation={[0, 0, 0]} scale={decalScale}>
-            <meshStandardMaterial map={texture} transparent polygonOffset polygonOffsetFactor={-4} roughness={0.85} depthTest />
+          <Decal position={[0, decalY, CHEST_R * torsoZ * 1.06]} rotation={[0, 0, 0]} scale={decalScale}>
+            <meshStandardMaterial map={texture} transparent polygonOffset polygonOffsetFactor={-4} roughness={0.78} depthTest />
           </Decal>
         </mesh>
-        {/* Collar */}
-        <mesh position={[0, 1.46, 0]} rotation={[Math.PI / 2, 0, 0]} material={shirt}>
-          <torusGeometry args={[0.13, 0.035, 16, 48]} />
+        {/* Ribbed crew collar */}
+        <mesh position={[0, 1.48, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[1, torsoZ * 1.1, 1]} material={shirt}>
+          <torusGeometry args={[0.16, 0.028, 16, 48]} />
         </mesh>
-        {/* Short sleeves */}
+        {/* Short sleeves — angled down over the upper arms */}
         {[-1, 1].map((s) => (
-          <mesh key={`slv-${s}`} position={[s * 0.5, 1.0, 0]} rotation={[0, 0, s * 0.5]} material={shirt} castShadow>
-            <cylinderGeometry args={[0.17, 0.155, 0.42, 32, 1, true]} />
+          <mesh key={`slv-${s}`} position={[s * 0.42, 1.28, 0]} rotation={[0, 0, s * 0.42]} scale={[1, 1, 0.82]} material={shirt} castShadow>
+            <cylinderGeometry args={[0.165, 0.135, 0.46, 36, 1, true]} />
           </mesh>
         ))}
       </group>
@@ -260,11 +317,13 @@ export default function Garment3DPreview({
 
       {/* 3D viewport */}
       <div className={`relative flex-1 ${tab === "real" ? "hidden" : ""}`}>
-        <Canvas shadows camera={{ position: [0, 0, 5.0], fov: 40 }} dpr={[1, 2]}>
+        <Canvas shadows camera={{ position: [0, 0, 6.4], fov: 38 }} dpr={[1, 2]}>
           <color attach="background" args={[isDark ? "#0a0a0b" : "#101012"]} />
-          <ambientLight intensity={0.6} />
-          <directionalLight position={[3, 5, 4]} intensity={1.4} castShadow shadow-mapSize={[1024, 1024]} />
-          <directionalLight position={[-4, 2, -2]} intensity={0.5} />
+          <ambientLight intensity={0.5} />
+          <directionalLight position={[3, 5, 4]} intensity={1.5} castShadow shadow-mapSize={[2048, 2048]} />
+          <directionalLight position={[-4, 2, -2]} intensity={0.55} />
+          {/* Soft rim from behind to separate the figure from the dark backdrop */}
+          <directionalLight position={[0, 3, -5]} intensity={0.4} />
           <Suspense fallback={null}>
             {HUMAN_GLB ? (
               <FigureBoundary fallback={<Mannequin color={color} design={design} isDark={isDark} printWidthIn={printWidthIn} printHeightIn={printHeightIn} />}>
@@ -277,15 +336,15 @@ export default function Garment3DPreview({
             )}
             <Environment preset="studio" />
           </Suspense>
-          <ContactShadows position={[0, -1.75, 0]} opacity={0.4} scale={8} blur={2.6} far={3.2} />
+          <ContactShadows position={[0, -2.5, 0]} opacity={0.45} scale={8} blur={2.6} far={3.2} />
           {/* Orbit around the body's centre (not the feet). */}
           <OrbitControls
             enablePan={false}
             autoRotate={spin}
             autoRotateSpeed={1.6}
             target={[0, 0, 0]}
-            minDistance={2.8}
-            maxDistance={7}
+            minDistance={3.2}
+            maxDistance={9}
             onStart={() => setSpin(false)}
           />
         </Canvas>
