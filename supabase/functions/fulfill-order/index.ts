@@ -16,11 +16,21 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { apliiqFetch } from "../_shared/apliiq.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "authorization, content-type",
 };
+
+const APLIIQ_APP_ID = Deno.env.get("APLIIQ_APP_ID") || "";
+const APLIIQ_SHARED_SECRET = Deno.env.get("APLIIQ_SHARED_SECRET") || "";
+// Safety switch: only auto-submit Apliiq once creds are verified live.
+const APLIIQ_AUTO = (Deno.env.get("APLIIQ_AUTO") || "").toLowerCase() === "true";
+const ZENDROP_API_KEY = Deno.env.get("ZENDROP_API_KEY") || "";
+const ZENDROP_BASE = Deno.env.get("ZENDROP_API_BASE") || "https://api.zendrop.com";
+const ZENDROP_AUTO = (Deno.env.get("ZENDROP_AUTO") || "").toLowerCase() === "true";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -122,17 +132,72 @@ async function submitPrintful(
   }
 }
 
-// Apliiq order submission uses HMAC signing. Until creds + scheme are
-// verified live, flag for manual fulfillment rather than fire blind on a
-// real paid order. Enable by setting APLIIQ_AUTO=true once implemented.
-function submitApliiq(items: any[]): any {
-  return {
-    provider: "apliq",
-    ok: false,
-    skipped: true,
-    error: "Apliiq auto-fulfillment not yet enabled — flagged for manual",
-    items: items.length,
-  };
+// Apliiq order submission via the signed (HMAC-SHA256) client. Guarded by
+// APLIIQ_AUTO so a real paid order isn't fired blind before creds are
+// verified live; until then it records "flagged for manual".
+async function submitApliiq(externalId: string, recipient: Recipient, items: any[]): Promise<any> {
+  if (!APLIIQ_AUTO || !APLIIQ_APP_ID || !APLIIQ_SHARED_SECRET) {
+    return { provider: "apliiq", ok: false, skipped: true, error: "Apliiq auto-fulfillment disabled (set APLIIQ_AUTO=true + creds)", items: items.length };
+  }
+  const lineItems = items
+    .map((i) => {
+      const id = String(i.external_sku || "");
+      return id ? { variantId: id, quantity: i.quantity } : null;
+    })
+    .filter(Boolean);
+  if (lineItems.length === 0) {
+    return { provider: "apliiq", ok: false, error: "No valid Apliiq variantId on items", items: items.length };
+  }
+  const res = await apliiqFetch(APLIIQ_APP_ID, APLIIQ_SHARED_SECRET, {
+    method: "POST",
+    path: "/v1/Order",
+    body: {
+      externalId,
+      shippingAddress: {
+        name: recipient.name, address1: recipient.address1, address2: recipient.address2 || undefined,
+        city: recipient.city, state: recipient.state_code || undefined,
+        country: recipient.country_code, zip: recipient.zip,
+        email: recipient.email || undefined, phone: recipient.phone || undefined,
+      },
+      lineItems,
+    },
+  });
+  if (!res.ok) return { provider: "apliiq", ok: false, error: `Apliiq ${res.status}: ${JSON.stringify(res.data).slice(0, 300)}`, items: items.length };
+  return { provider: "apliiq", ok: true, ref: String(res.data?.id ?? res.data?.orderId ?? ""), items: items.length };
+}
+
+// Zendrop order submission (Bearer auth). Guarded by ZENDROP_AUTO.
+async function submitZendrop(externalId: string, recipient: Recipient, items: any[]): Promise<any> {
+  if (!ZENDROP_AUTO || !ZENDROP_API_KEY) {
+    return { provider: "zendrop", ok: false, skipped: true, error: "Zendrop auto-fulfillment disabled (set ZENDROP_AUTO=true + key)", items: items.length };
+  }
+  const lineItems = items
+    .map((i) => (i.external_sku ? { variant_id: String(i.external_sku), quantity: i.quantity } : null))
+    .filter(Boolean);
+  if (lineItems.length === 0) {
+    return { provider: "zendrop", ok: false, error: "No valid Zendrop variant_id on items", items: items.length };
+  }
+  try {
+    const res = await fetch(`${ZENDROP_BASE}/v1/orders`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${ZENDROP_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        external_id: externalId,
+        shipping_address: {
+          name: recipient.name, address1: recipient.address1, address2: recipient.address2 || undefined,
+          city: recipient.city, province: recipient.state_code || undefined,
+          country: recipient.country_code, zip: recipient.zip,
+          email: recipient.email || undefined, phone: recipient.phone || undefined,
+        },
+        line_items: lineItems,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { provider: "zendrop", ok: false, error: `Zendrop ${res.status}: ${JSON.stringify(data).slice(0, 300)}`, items: items.length };
+    return { provider: "zendrop", ok: true, ref: String(data?.id ?? data?.order_id ?? ""), items: items.length };
+  } catch (e: any) {
+    return { provider: "zendrop", ok: false, error: `Zendrop request failed: ${e.message}`, items: items.length };
+  }
 }
 
 Deno.serve(async (req) => {
@@ -170,7 +235,8 @@ Deno.serve(async (req) => {
     const results: any[] = [];
     for (const [provider, groupItems] of Object.entries(groups)) {
       if (provider === "printful") results.push(await submitPrintful(orderId, recipient, groupItems));
-      else if (provider === "apliq" || provider === "apliiq") results.push(submitApliiq(groupItems));
+      else if (provider === "apliq" || provider === "apliiq") results.push(await submitApliiq(orderId, recipient, groupItems));
+      else if (provider === "zendrop") results.push(await submitZendrop(orderId, recipient, groupItems));
       else results.push({ provider, ok: false, skipped: true, error: `Unknown provider "${provider}"`, items: groupItems.length });
     }
 

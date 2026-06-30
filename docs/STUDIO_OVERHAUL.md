@@ -107,3 +107,50 @@ is achievable in-browser vs. via the manufacturer mockup API.
 - Verify every slice with `npm run build` AND a real in-app pass — the sandbox
   used to author this could not render the app, so visual sign-off is required
   before each phase is considered done.
+
+---
+
+## D. Engine modules (built, tested, ready to wire)
+
+These are standalone, unit-tested modules under `src/lib/studio/`. They are
+intentionally decoupled from the 3500-line `StudioEditor.tsx` so they can be
+wired incrementally and verified with `npm run build` + an in-app pass (the
+authoring sandbox can't install the private npm registry, so do the build
+pass locally before shipping).
+
+### `pressureBrush.ts` — Procreate pressure dynamics
+- `sampleFromPointer(e, rect)` normalizes a `PointerEvent` (pen pressure, mouse
+  fallback to full).
+- `buildStamps(brush, samples, carry)` interpolates input into evenly-spaced
+  stamps (no gaps at any input rate) with per-stamp width/opacity from pressure
+  + velocity. `widthFor` / `opacityFor` are the pure dynamics.
+- Wire: in the existing brush `handlePointerMove`, collect `sampleFromPointer`
+  into a buffer, call `buildStamps`, and stamp each onto the active paint canvas
+  (the editor already keeps `paintCanvases.current[id]`). Keep the returned
+  `carry` between move events.
+
+### `gestures.ts` — two-finger undo / three-finger redo
+- `useStudioGestures({ onUndo, onRedo, onPinch })` → spread the returned
+  `{ onTouchStart, onTouchMove, onTouchEnd }` on the Konva stage wrapper `div`.
+- Wire: pass the editor's existing `handleUndo` / `handleRedo`. A tap = N fingers
+  down+up within 300ms and <14px travel, so it won't fire during pan/zoom.
+
+### `textureBinding.ts` — CLO-3D live 2D→3D binding
+- `bindCanvasToGarment(root, sourceCanvas)` sets the flattened design canvas as
+  the `.map` of every mesh material under the loaded glTF garment; call the
+  returned `update()` after each 2D edit (or every RAF) to push to the GPU.
+- `applyFabricNormalMap(root, url, repeat, strength)` adds tiling normal maps
+  for realistic fabric folds/wrinkles.
+- Wire: in `Garment3DPreview.tsx`, after the garment mesh loads, call
+  `bindCanvasToGarment(scene, flattenedCanvas)` and drive `update()` from the
+  same redraw signal the 2D stage already emits.
+
+### `dxf.ts` — CAD pattern export (DXF R12, mm)
+- `buildDxf(pieces)` / `downloadDxf(pieces, filename)` emit one closed
+  `LWPOLYLINE` layer per pattern piece + `POINT` notch markers — importable by
+  any CAD / sewing-pattern tool.
+- Wire: add a "Export DXF" action that maps the current print-area pattern
+  pieces (mm) into `PatternPiece[]`.
+
+Tests: `bun scripts/test_studio.ts` (13 assertions — DXF validity + brush
+dynamics) and `bun scripts/test_media_pipeline.ts`.
