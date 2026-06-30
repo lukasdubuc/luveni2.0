@@ -35,6 +35,18 @@ export type StudioLayer = {
   alphaLock?: boolean; 
 };
 
+type GalleryProject = {
+  id: string;
+  projectName: string;
+  priceCents: number;
+  templateKey: string;
+  canvasKind: string;
+  artboardW: number;
+  artboardH: number;
+  layers: StudioLayer[];
+  updatedAt: string;
+};
+
 const getProxyImageUrl = (url: string | null): string => {
   if (!url) return "";
   if (url.includes("files.cdn.printful.com") || url.includes("apliiq.com")) {
@@ -151,7 +163,35 @@ function PaintNode({ layer, canvas }: any) {
   );
 }
 
-export default function StudioEditor({ projectId, initialCanvas, artboardW: artboardWProp, artboardH: artboardHProp, templateKey, templateImage: templateImageProp, canvasKind, projectName, priceCents, printArea: printAreaProp, onClose, isDark: isDarkProp }: Props) {
+export default function StudioEditor({ projectId: initialProjectId, initialCanvas, artboardW: artboardWProp, artboardH: artboardHProp, templateKey: templateKeyProp, templateImage: templateImageProp, canvasKind: canvasKindProp, projectName: projectNameProp, priceCents: priceCentsProp, printArea: printAreaProp, onClose, isDark: isDarkProp }: Props) {
+  
+  // Navigation: "gallery" | "editor"
+  const [currentView, setCurrentView] = useState<"gallery" | "editor">("editor");
+  const [showPresetDropdown, setShowPresetDropdown] = useState(false);
+
+  // Gallery Context States
+  const [galleryProjects, setGalleryProjects] = useState<GalleryProject[]>([
+    {
+      id: initialProjectId,
+      projectName: projectNameProp,
+      priceCents: priceCentsProp,
+      templateKey: templateKeyProp,
+      canvasKind: canvasKindProp || "canvas",
+      artboardW: artboardWProp,
+      artboardH: artboardHProp,
+      layers: initialCanvas?.layers ?? [],
+      updatedAt: new Date().toLocaleDateString()
+    }
+  ]);
+
+  // Selected Active Editor States
+  const [projectId, setProjectId] = useState(initialProjectId);
+  const [projectName, setProjectName] = useState(projectNameProp);
+  const [priceCents, setPriceCents] = useState(priceCentsProp);
+  const [templateKey, setTemplateKey] = useState(templateKeyProp);
+  const [canvasKind, setCanvasKind] = useState(canvasKindProp || "canvas");
+  const [layers, setLayers] = useState<StudioLayer[]>(initialCanvas?.layers ?? []);
+
   const placements: any[] = ((initialCanvas as any)?.product?.placements) || [];
   const hasMulti = placements.length > 1;
   const [activeP, setActiveP] = useState(0);
@@ -167,7 +207,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
   const placementLayers = useRef<Record<number, StudioLayer[]>>({});
 
   const garment = useHtmlImage(getProxyImageUrl(templateImage || null) || undefined);
-  const [layers, setLayers] = useState<StudioLayer[]>(initialCanvas?.layers ?? []);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -179,6 +218,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
   const [fullScreenCanvas, setFullScreenCanvas] = useState(false);
   const [activePopover, setActivePopover] = useState<"none" | "actions" | "adjustments" | "layers" | "colors">("none");
   const [activePopoverTab, setActivePopoverTab] = useState<string>("add"); 
+  const [colorSelectorTab, setColorSelectorTab] = useState<"disc" | "classic" | "palette" | "history">("disc");
   const [activeLayerSettingsId, setActiveLayerSettingsId] = useState<string | null>(null);
 
   const [preview3d, setPreview3d] = useState<string | null>(null);
@@ -320,7 +360,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
     if (l.src && !loadedPaint.current.has(l.id)) {
       loadedPaint.current.add(l.id);
       const im = new window.Image(); im.crossOrigin = "anonymous"; 
-      im.src = l.src.includes("?") ? `${l.src}&cors=1` : `${l.src}?cors=1`;
+      im.src = l.src.includes("?") ? `${src => src}&cors=1` : `${l.src}?cors=1`;
       im.onload = () => { c!.getContext("2d")!.drawImage(im, 0, 0); redrawStage(); };
     }
     return c;
@@ -768,6 +808,39 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
     };
   };
 
+  const createNewProject = (type: "canvas" | "apparel", templateKeyChoice: string, w = 1200, h = 1200) => {
+    const id = uid();
+    const newProj: GalleryProject = {
+      id,
+      projectName: `Untitled Canvas ${galleryProjects.length + 1}`,
+      priceCents: 2400,
+      templateKey: templateKeyChoice,
+      canvasKind: type,
+      artboardW: w,
+      artboardH: h,
+      layers: [
+        { id: uid(), type: "paint", name: "Layer 1", visible: true, x: 0, y: 0, rotation: 0, opacity: 1, blend: "source-over" }
+      ],
+      updatedAt: new Date().toLocaleDateString()
+    };
+    
+    setGalleryProjects((prev) => [newProj, ...prev]);
+    loadProjectToEditor(newProj);
+  };
+
+  const loadProjectToEditor = (p: GalleryProject) => {
+    setProjectId(p.id);
+    setProjectName(p.projectName);
+    setPriceCents(p.priceCents);
+    setTemplateKey(p.templateKey);
+    setCanvasKind(p.canvasKind);
+    setLayers(p.layers);
+    setSelectedId(null);
+    setPanOffset({ x: 0, y: 0 });
+    setCanvasRotation(0);
+    setCurrentView("editor");
+  };
+
   // Drag handler for custom vertical track pill sliders (matches visual feel of native iPadOS HUD element)
   const handleSliderDrag = (e: React.PointerEvent<HTMLDivElement>, type: "size" | "opacity") => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -826,26 +899,103 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
     }`}>
       
       {/* ─────────────────────────────────────────────────────────────
+         THE ICONIC PROCREATE GALLERY VIEW (Restored & Highly Polished)
+         ───────────────────────────────────────────────────────────── */}
+      {currentView === "gallery" && (
+        <div className="flex-1 flex flex-col overflow-y-auto bg-black p-8 animate-fade-in z-50 font-sans">
+          
+          {/* Gallery Top Navigation bar */}
+          <div className="flex justify-between items-center mb-8 border-b border-neutral-900 pb-4">
+            <span className="text-xl font-light tracking-wide text-neutral-300">Procreate Gallery</span>
+            <div className="flex items-center gap-4 text-xs font-semibold text-neutral-400 relative">
+              <button onClick={() => {
+                const urlStr = prompt("Enter Custom Template Image URL:");
+                if (urlStr) createNewProject("apparel", "custom-apliiq", 1200, 1200);
+              }} className="hover:text-white uppercase tracking-wider">Import</button>
+              
+              <button 
+                onClick={() => setShowPresetDropdown(!showPresetDropdown)} 
+                className="hover:text-white uppercase tracking-wider flex items-center gap-1 bg-neutral-900 px-3 py-1.5 rounded-lg border border-neutral-800"
+              >
+                <Plus size={14} /> New Canvas
+              </button>
+
+              {showPresetDropdown && (
+                <div className="absolute right-0 top-10 bg-[#1c1c1e] border border-neutral-800 rounded-xl p-2 w-56 shadow-2xl flex flex-col z-[100] animate-fade-in text-left">
+                  <span className="text-[9px] uppercase tracking-widest text-neutral-500 p-2 block border-b border-neutral-900">Preset Templates</span>
+                  <button onClick={() => { createNewProject("canvas", "canvas", 1400, 1400); setShowPresetDropdown(false); }} className="p-2 text-xs text-neutral-200 hover:bg-neutral-900 rounded text-left">Screen Square (1400 x 1400)</button>
+                  <button onClick={() => { createNewProject("canvas", "canvas-a4", 2480, 3508); setShowPresetDropdown(false); }} className="p-2 text-xs text-neutral-200 hover:bg-neutral-900 rounded text-left">High-Res A4 (2480 x 3508)</button>
+                  <button onClick={() => { createNewProject("apparel", "front-tshirt", 1200, 1200); setShowPresetDropdown(false); }} className="p-2 text-xs text-neutral-200 hover:bg-neutral-900 rounded text-left">T-Shirt Artboard (1200 x 1200)</button>
+                  <button onClick={() => { createNewProject("apparel", "hat-blank", 1000, 1000); setShowPresetDropdown(false); }} className="p-2 text-xs text-[#007aff] hover:bg-neutral-900 rounded text-left">Cap/Hat Canvas (1000 x 1000)</button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Grid stack of gallery project cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+            {galleryProjects.map((p) => (
+              <div 
+                key={p.id} 
+                onClick={() => loadProjectToEditor(p)}
+                className="group flex flex-col cursor-pointer bg-[#1c1c1e] rounded-xl overflow-hidden border border-neutral-900 hover:border-indigo-500/50 hover:shadow-2xl transition-all p-3"
+              >
+                <div className="aspect-square bg-neutral-950 rounded-lg flex items-center justify-center overflow-hidden border border-neutral-900 relative">
+                  {p.canvasKind === "canvas" ? (
+                    <div className="w-4/5 h-4/5 bg-white rounded-md shadow-lg flex items-center justify-center">
+                      <span className="text-[10px] text-neutral-400 uppercase tracking-widest font-mono">Artboard</span>
+                    </div>
+                  ) : (
+                    <div className="w-full h-full p-2 flex items-center justify-center relative">
+                      <Shirt size={48} className="text-indigo-400/30" />
+                    </div>
+                  )}
+                  <span className="absolute bottom-1 right-2 text-[8px] bg-black/60 px-1.5 py-0.5 rounded text-neutral-400 font-mono">
+                    {p.artboardW}x{p.artboardH}
+                  </span>
+                </div>
+                <div className="mt-3 flex justify-between items-start">
+                  <div>
+                    <h3 className="text-xs font-bold text-neutral-200 truncate max-w-[110px]">{p.projectName}</h3>
+                    <p className="text-[9px] text-neutral-500 font-mono mt-0.5">{p.updatedAt}</p>
+                  </div>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setGalleryProjects((prev) => prev.filter((x) => x.id !== p.id));
+                    }}
+                    className="p-1 text-neutral-600 hover:text-rose-500 transition-colors"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
          THE ICONIC PROCREATE SYSTEM HEADER BAR
          ───────────────────────────────────────────────────────────── */}
-      {!fullScreenCanvas && (
+      {currentView === "editor" && !fullScreenCanvas && (
         <div className={`flex items-center justify-between px-6 h-14 border-b shrink-0 z-50 transition-all ${isDark ? "bg-[#1c1c1e]/95 border-neutral-900" : "bg-white/95 border-neutral-200 shadow-sm"}`}>
           
           {/* Left Cluster: Gallery & Utilities */}
           <div className="flex items-center gap-1">
             <button 
-              onClick={onClose} 
+              onClick={() => setCurrentView("gallery")} 
               className="px-4 py-2 rounded-lg text-sm font-semibold tracking-wide text-indigo-500 hover:bg-indigo-500/10 transition-colors font-sans"
             >
               Gallery
             </button>
             
-            <span className="w-px h-5 bg-neutral-300 dark:bg-neutral-800 mx-2" />
+            <span className="w-px h-5 bg-neutral-300 dark:bg-neutral-850 mx-2" />
 
             {/* Actions (Wrench Popover) */}
             <button 
               onClick={() => togglePopover("actions")} 
-              className={`p-2.5 rounded-lg transition-colors ${activePopover === "actions" ? "text-indigo-500 bg-indigo-500/10 shadow-sm" : "text-neutral-400 hover:text-neutral-100 dark:hover:text-neutral-800"}`}
+              className={`p-2.5 rounded-lg transition-colors ${activePopover === "actions" ? "text-indigo-500 bg-indigo-500/10 shadow-sm" : "text-neutral-400 hover:text-[#1c1c1e] dark:hover:text-[#efeff1]"}`}
               title="Actions (Wrench)"
             >
               <Wrench size={18} />
@@ -854,7 +1004,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
             {/* Adjustments (Wand Popover: AI & Filters) */}
             <button 
               onClick={() => togglePopover("adjustments")} 
-              className={`p-2.5 rounded-lg transition-colors ${activePopover === "adjustments" ? "text-indigo-500 bg-indigo-500/10 shadow-sm" : "text-neutral-400 hover:text-neutral-100 dark:hover:text-neutral-800"}`}
+              className={`p-2.5 rounded-lg transition-colors ${activePopover === "adjustments" ? "text-indigo-500 bg-indigo-500/10 shadow-sm" : "text-neutral-400 hover:text-[#1c1c1e] dark:hover:text-[#efeff1]"}`}
               title="Adjustments (Filters & AI)"
             >
               <Wand2 size={18} />
@@ -863,7 +1013,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
             {/* Selection Lasso tool (marching ants ribbon) */}
             <button 
               onClick={() => { setTool("lasso"); setRegionMode(false); setSelectedId(null); }} 
-              className={`p-2.5 rounded-lg transition-colors ${tool === "lasso" ? "text-indigo-500 bg-indigo-500/10 shadow-sm" : "text-neutral-400 hover:text-neutral-100 dark:hover:text-neutral-800"}`}
+              className={`p-2.5 rounded-lg transition-colors ${tool === "lasso" ? "text-indigo-500 bg-indigo-500/10 shadow-sm" : "text-neutral-400 hover:text-[#1c1c1e] dark:hover:text-[#efeff1]"}`}
               title="Selection Ribbon"
             >
               <SquareDashed size={18} />
@@ -872,19 +1022,23 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
             {/* Transform selection arrow */}
             <button 
               onClick={() => { setTool("select"); setRegionMode(false); }} 
-              className={`p-2.5 rounded-lg transition-colors ${tool === "select" && !regionMode ? "text-indigo-500 bg-indigo-500/10 shadow-sm" : "text-neutral-400 hover:text-neutral-100 dark:hover:text-neutral-800"}`}
+              className={`p-2.5 rounded-lg transition-colors ${tool === "select" && !regionMode ? "text-indigo-500 bg-indigo-500/10 shadow-sm" : "text-neutral-400 hover:text-[#1c1c1e] dark:hover:text-[#efeff1]"}`}
               title="Transform"
             >
               <MousePointer2 size={18} />
             </button>
           </div>
 
+          <span className="hidden xl:inline text-xs font-semibold uppercase tracking-widest text-neutral-400 dark:text-neutral-500 max-w-[150px] truncate">
+            {projectName}
+          </span>
+
           {/* Right Cluster: Artistic Tools, Layers, Colors */}
           <div className="flex items-center gap-1.5">
             {/* Paint brush */}
             <button 
               onClick={() => { setTool("brush"); setRegionMode(false); }} 
-              className={`p-2 rounded-lg transition-all ${tool === "brush" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-neutral-100 dark:hover:text-neutral-800"}`}
+              className={`p-2 rounded-lg transition-all ${tool === "brush" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-[#1c1c1e] dark:hover:text-[#efeff1]"}`}
               title="Paint Tool"
             >
               <Paintbrush size={18} />
@@ -893,7 +1047,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
             {/* Smudge tool */}
             <button 
               onClick={() => { setTool("smudge"); setRegionMode(false); }} 
-              className={`p-2 rounded-lg transition-all ${tool === "smudge" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-neutral-100 dark:hover:text-neutral-800"}`}
+              className={`p-2 rounded-lg transition-all ${tool === "smudge" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-[#1c1c1e] dark:hover:text-[#efeff1]"}`}
               title="Smudge Tool"
             >
               <Hand size={18} />
@@ -902,7 +1056,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
             {/* Eraser */}
             <button 
               onClick={() => { setTool("eraser"); setRegionMode(false); }} 
-              className={`p-2 rounded-lg transition-all ${tool === "eraser" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-neutral-100 dark:hover:text-neutral-800"}`}
+              className={`p-2 rounded-lg transition-all ${tool === "eraser" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-[#1c1c1e] dark:hover:text-[#efeff1]"}`}
               title="Eraser Tool"
             >
               <Eraser size={18} />
@@ -911,7 +1065,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
             {/* Paint Bucket fill */}
             <button 
               onClick={() => { setTool("fill"); setRegionMode(false); }} 
-              className={`p-2 rounded-lg transition-all ${tool === "fill" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-neutral-100 dark:hover:text-neutral-800"}`}
+              className={`p-2 rounded-lg transition-all ${tool === "fill" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-[#1c1c1e] dark:hover:text-[#efeff1]"}`}
               title="Flood Fill"
             >
               <PaintBucket size={18} />
@@ -949,78 +1103,80 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
       {/* ─────────────────────────────────────────────────────────────
          THE ICONIC FLOATING DOUBLE BAR (Custom dragging tracks - Left-handed or Right-handed layout)
          ───────────────────────────────────────────────────────────── */}
-      <div className={`absolute top-[20%] bottom-[20%] flex flex-col items-center justify-between py-6 w-14 z-40 select-none pointer-events-none procreate-sidebar ${
-        rightHandedInterface ? "right-6" : "left-6"
-      }`}>
-        
-        {/* Procedural Size Slider */}
-        <div className="flex flex-col items-center gap-2 group pointer-events-auto">
-          <span className="text-[8px] font-bold opacity-45 uppercase tracking-wider text-neutral-500 select-none">Size</span>
-          <div 
-            onPointerDown={(e) => handleSliderDrag(e, "size")}
-            className="h-32 w-5 bg-neutral-200/50 dark:bg-neutral-900/50 backdrop-blur-md rounded-full relative flex items-center justify-center overflow-hidden border border-neutral-350/10 shadow-lg cursor-ns-resize touch-none"
-          >
+      {currentView === "editor" && (
+        <div className={`absolute top-[20%] bottom-[20%] flex flex-col items-center justify-between py-6 w-14 z-40 select-none pointer-events-none procreate-sidebar ${
+          rightHandedInterface ? "right-6" : "left-6"
+        }`}>
+          
+          {/* Procedural Size Slider */}
+          <div className="flex flex-col items-center gap-2 group pointer-events-auto">
+            <span className="text-[8px] font-bold opacity-45 uppercase tracking-wider text-neutral-500 select-none">Size</span>
             <div 
-              className="absolute bottom-0 left-0 right-0 bg-[#007aff]/85 pointer-events-none transition-all duration-75"
-              style={{ height: `${(brushSize / 600) * 100}%` }}
-            />
-            <div 
-              className="absolute left-0 right-0 h-1 bg-white border border-neutral-400 pointer-events-none"
-              style={{ bottom: `calc(${(brushSize / 600) * 100}% - 2px)` }}
-            />
+              onPointerDown={(e) => handleSliderDrag(e, "size")}
+              className="h-32 w-5 bg-neutral-200/50 dark:bg-neutral-900/50 backdrop-blur-md rounded-full relative flex items-center justify-center overflow-hidden border border-neutral-350/10 shadow-lg cursor-ns-resize touch-none"
+            >
+              <div 
+                className="absolute bottom-0 left-0 right-0 bg-[#007aff]/85 pointer-events-none transition-all duration-75"
+                style={{ height: `${(brushSize / 600) * 100}%` }}
+              />
+              <div 
+                className="absolute left-0 right-0 h-1 bg-white border border-neutral-400 pointer-events-none"
+                style={{ bottom: `calc(${(brushSize / 600) * 100}% - 2px)` }}
+              />
+            </div>
+            <span className="text-[9px] font-semibold text-neutral-400 dark:text-neutral-500 tabular-nums">{brushSize}px</span>
           </div>
-          <span className="text-[9px] font-semibold text-neutral-400 dark:text-neutral-500 tabular-nums">{brushSize}px</span>
-        </div>
 
-        {/* Central square modify shortcut (Eyedropper) */}
-        <div className="flex flex-col items-center gap-2 pointer-events-auto">
-          <button 
-            onClick={() => {
-              setTool(tool === "eyedropper" ? "brush" : "eyedropper");
-              toast(tool === "eyedropper" ? "Brush active" : "Sample color: Tap on canvas", { duration: 1500 });
-            }}
-            className={`w-9 h-9 rounded-xl backdrop-blur-md border border-neutral-350/10 shadow-md flex items-center justify-center transition-all ${
-              tool === "eyedropper" ? "bg-[#007aff] text-white shadow-[#007aff]/20" : "bg-neutral-200/70 dark:bg-neutral-900/70 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-350/50 dark:hover:bg-neutral-800/50"
-            }`}
-            title="Modify / Eyedropper"
-          >
-            <Pipette size={15} />
-          </button>
-        </div>
-
-        {/* Procedural Opacity Slider */}
-        <div className="flex flex-col items-center gap-2 group pointer-events-auto">
-          <span className="text-[8px] font-bold opacity-45 uppercase tracking-wider text-neutral-500 select-none">Opac</span>
-          <div 
-            onPointerDown={(e) => handleSliderDrag(e, "opacity")}
-            className="h-32 w-5 bg-neutral-200/50 dark:bg-neutral-900/50 backdrop-blur-md rounded-full relative flex items-center justify-center overflow-hidden border border-neutral-350/10 shadow-lg cursor-ns-resize touch-none"
-          >
-            <div 
-              className="absolute bottom-0 left-0 right-0 bg-[#007aff]/85 pointer-events-none transition-all duration-75"
-              style={{ height: `${brushOpacity * 100}%` }}
-            />
-            <div 
-              className="absolute left-0 right-0 h-1 bg-white border border-neutral-400 pointer-events-none"
-              style={{ bottom: `calc(${brushOpacity * 100}% - 2px)` }}
-            />
+          {/* Central square modify shortcut (Eyedropper) */}
+          <div className="flex flex-col items-center gap-2 pointer-events-auto">
+            <button 
+              onClick={() => {
+                setTool(tool === "eyedropper" ? "brush" : "eyedropper");
+                toast(tool === "eyedropper" ? "Brush active" : "Sample color: Tap on canvas", { duration: 1500 });
+              }}
+              className={`w-9 h-9 rounded-xl backdrop-blur-md border border-neutral-350/10 shadow-md flex items-center justify-center transition-all ${
+                tool === "eyedropper" ? "bg-[#007aff] text-white shadow-[#007aff]/20" : "bg-neutral-200/70 dark:bg-neutral-900/70 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-350/50 dark:hover:bg-neutral-800/50"
+              }`}
+              title="Modify / Eyedropper"
+            >
+              <Pipette size={15} />
+            </button>
           </div>
-          <span className="text-[9px] font-semibold text-neutral-400 dark:text-neutral-500 tabular-nums">{Math.round(brushOpacity * 100)}%</span>
+
+          {/* Procedural Opacity Slider */}
+          <div className="flex flex-col items-center gap-2 group pointer-events-auto">
+            <span className="text-[8px] font-bold opacity-45 uppercase tracking-wider text-neutral-500 select-none">Opac</span>
+            <div 
+              onPointerDown={(e) => handleSliderDrag(e, "opacity")}
+              className="h-32 w-5 bg-neutral-200/50 dark:bg-neutral-900/50 backdrop-blur-md rounded-full relative flex items-center justify-center overflow-hidden border border-[#1c1c1e]/10 shadow-lg cursor-ns-resize touch-none"
+            >
+              <div 
+                className="absolute bottom-0 left-0 right-0 bg-[#007aff]/85 pointer-events-none transition-all duration-75"
+                style={{ height: `${brushOpacity * 100}%` }}
+              />
+              <div 
+                className="absolute left-0 right-0 h-1 bg-white border border-[#1c1c1e] pointer-events-none"
+                style={{ bottom: `calc(${brushOpacity * 100}% - 2px)` }}
+              />
+            </div>
+            <span className="text-[9px] font-semibold text-[#8e8e93] tabular-nums">{Math.round(brushOpacity * 100)}%</span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ─────────────────────────────────────────────────────────────
          CONTEXT-SENSITIVE HORIZONTAL TWEAK BAR (Always visible under header)
          ───────────────────────────────────────────────────────────── */}
-      {!fullScreenCanvas && (
-        <div className={`px-6 py-2 border-b shrink-0 flex items-center justify-between gap-3 flex-wrap ${isDark ? "bg-[#18181b] border-neutral-900" : "bg-[#f4f5f7] border-neutral-200"}`}>
+      {currentView === "editor" && !fullScreenCanvas && (
+        <div className={`px-6 py-2 border-[#1c1c1e] border-b shrink-0 flex items-center justify-between gap-3 flex-wrap ${isDark ? "bg-[#18181b] border-neutral-900" : "bg-[#f4f5f7] border-neutral-200"}`}>
           
           {/* Brush/Eraser Settings */}
           {(tool === "brush" || tool === "eraser" || tool === "smudge") && (
             <div className="flex items-center gap-4 flex-wrap text-xs font-semibold animate-fade-in">
               <span className="text-[10px] opacity-50 uppercase tracking-widest">Brush tip</span>
-              <div className="flex bg-neutral-200 dark:bg-neutral-800 p-0.5 rounded-full">
+              <div className="flex bg-[#1c1c1e] p-0.5 rounded-full border border-neutral-850">
                 {(["round", "textured", "ink", "charcoal"] as const).map((b) => (
-                  <button key={b} onClick={() => setBrushType(b)} className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${brushType === b ? "bg-[#007aff] text-white" : "text-neutral-500"}`}>
+                  <button key={b} onClick={() => setBrushType(b)} className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${brushType === b ? "bg-[#007aff] text-white" : "text-[#8e8e93]"}`}>
                     {b}
                   </button>
                 ))}
@@ -1064,7 +1220,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                   </button>
                 </div>
               ) : (
-                <span className="text-neutral-400 font-normal animate-pulse">Freehand draw a loop. Strokes clip within lasso.</span>
+                <span className="text-[#8e8e93] font-normal animate-pulse">Freehand draw a loop. Strokes clip within lasso.</span>
               )}
             </div>
           )}
@@ -1079,12 +1235,12 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
       {/* ─────────────────────────────────────────────────────────────
          THE SELECTIONS COMPACT CONTROL PANEL (Ribbon HUD Action Bar)
          ───────────────────────────────────────────────────────────── */}
-      {tool === "lasso" && !fullScreenCanvas && (
+      {currentView === "editor" && tool === "lasso" && !fullScreenCanvas && (
         <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-45 flex items-center gap-3 px-5 py-2.5 rounded-full bg-white/95 dark:bg-[#1c1c1e]/95 backdrop-blur-md shadow-xl border border-neutral-200/20 pointer-events-auto">
           <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 select-none">Selection Modes</span>
           <button 
             onClick={() => setSelectionModeType("freehand")} 
-            className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-full transition-all ${selectionModeType === "freehand" ? "bg-[#007aff] text-white" : "text-neutral-500"}`}
+            className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-full transition-all ${selectionModeType === "freehand" ? "bg-[#007aff] text-white" : "text-[#8e8e93]"}`}
           >
             Freehand (Lasso)
           </button>
@@ -1093,7 +1249,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
               setSelectionModeType("rectangle");
               setRegionMode(true);
             }} 
-            className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-full transition-all ${selectionModeType === "rectangle" && regionMode ? "bg-[#007aff] text-white" : "text-neutral-500"}`}
+            className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-full transition-all ${selectionModeType === "rectangle" && regionMode ? "bg-[#007aff] text-white" : "text-[#8e8e93]"}`}
           >
             Rectangle
           </button>
@@ -1121,29 +1277,29 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
       {/* ─────────────────────────────────────────────────────────────
          THE TRANSFORM COMPACT CONTROL PANEL (Cursor Transform HUD Action Bar)
          ───────────────────────────────────────────────────────────── */}
-      {tool === "select" && selectedLayer && !fullScreenCanvas && (
+      {currentView === "editor" && tool === "select" && selectedLayer && !fullScreenCanvas && (
         <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-45 flex items-center gap-3 px-5 py-2.5 rounded-full bg-white/95 dark:bg-[#1c1c1e]/95 backdrop-blur-md shadow-xl border border-neutral-200/20 pointer-events-auto">
           <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 select-none">Scale</span>
           <button 
             onClick={() => setUniformScaling(true)} 
-            className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-full transition-all ${uniformScaling ? "bg-[#007aff] text-white" : "text-neutral-500"}`}
+            className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-full transition-all ${uniformScaling ? "bg-[#007aff] text-white" : "text-[#8e8e93]"}`}
           >
             Uniform
           </button>
           <button 
             onClick={() => setUniformScaling(false)} 
-            className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-full transition-all ${!uniformScaling ? "bg-[#007aff] text-white" : "text-neutral-500"}`}
+            className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-full transition-all ${!uniformScaling ? "bg-[#007aff] text-white" : "text-[#8e8e93]"}`}
           >
             Freeform
           </button>
 
-          <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
+          <span className="w-px h-5 bg-[#1c1c1e] dark:bg-neutral-800" />
 
-          <button onClick={() => { patchLayer(selectedLayer.id, { rotation: (selectedLayer.rotation + 45) % 360 }); }} className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded text-neutral-400"><RefreshCcw size={13} /></button>
-          <button onClick={() => { const sx = nodeRefs.current[selectedLayer.id]?.scaleX() || 1; patchLayer(selectedLayer.id, { x: selectedLayer.x + selectedLayer.width! * sx, width: selectedLayer.width, scaleX: -sx }); }} className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded text-neutral-400"><FlipHorizontal2 size={13} /></button>
-          <button onClick={() => { const sy = nodeRefs.current[selectedLayer.id]?.scaleY() || 1; patchLayer(selectedLayer.id, { y: selectedLayer.y + selectedLayer.height! * sy, height: selectedLayer.height, scaleY: -sy }); }} className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded text-neutral-400"><FlipVertical2 size={13} /></button>
+          <button onClick={() => { patchLayer(selectedLayer.id, { rotation: (selectedLayer.rotation + 45) % 360 }); }} className="p-1 hover:bg-[#1c1c1e] dark:hover:bg-neutral-800 rounded text-neutral-400"><RefreshCcw size={13} /></button>
+          <button onClick={() => { const sx = nodeRefs.current[selectedLayer.id]?.scaleX() || 1; patchLayer(selectedLayer.id, { x: selectedLayer.x + selectedLayer.width! * sx, width: selectedLayer.width, scaleX: -sx }); }} className="p-1 hover:bg-[#1c1c1e] dark:hover:bg-[#09090b] rounded text-neutral-400"><FlipHorizontal2 size={13} /></button>
+          <button onClick={() => { const sy = nodeRefs.current[selectedLayer.id]?.scaleY() || 1; patchLayer(selectedLayer.id, { y: selectedLayer.y + selectedLayer.height! * sy, height: selectedLayer.height, scaleY: -sy }); }} className="p-1 hover:bg-[#1c1c1e] dark:hover:bg-neutral-800 rounded text-neutral-400"><FlipVertical2 size={13} /></button>
           
-          <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
+          <span className="w-px h-5 bg-[#1c1c1e] dark:bg-neutral-800" />
 
           <button onClick={() => { patchLayer(selectedLayer.id, { x: 0, y: 0, width: artboardW, height: artboardH }); }} className="text-[9px] font-bold text-indigo-500 hover:underline uppercase">Fit to canvas</button>
         </div>
@@ -1152,7 +1308,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
       {/* ─────────────────────────────────────────────────────────────
          THE ICONIC FLOATING POP-OVER DROPDOWNS (Wrench / Wand / Layers / Colors)
          ───────────────────────────────────────────────────────────── */}
-      {activePopover !== "none" && !fullScreenCanvas && (
+      {currentView === "editor" && activePopover !== "none" && !fullScreenCanvas && (
         <div className="absolute inset-0 z-[100] bg-transparent" onClick={() => setActivePopover("none")}>
           <div 
             onClick={(e) => e.stopPropagation()}
@@ -1166,15 +1322,15 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
             {/* Actions Popover (Tabs match iPad Wrench options) */}
             {activePopover === "actions" && (
               <div className="space-y-4 font-sans">
-                <div className="flex border-b border-neutral-200 dark:border-neutral-850 pb-2 mb-2">
+                <div className="flex border-[#1c1c1e] dark:border-neutral-850 pb-2 mb-2">
                   {["add", "canvas", "share", "prefs"].map((tab) => (
                     <button
                       key={tab}
                       onClick={() => setActivePopoverTab(tab)}
                       className={`flex-1 text-center py-1 text-xs font-bold uppercase tracking-wider transition-all ${
                         activePopoverTab === tab 
-                          ? "text-[#007aff] border-b-2 border-[#007aff]" 
-                          : "text-neutral-400 hover:text-neutral-250"
+                          ? "text-[#007aff] border-[#007aff]" 
+                          : "text-[#8e8e93] hover:text-[#007aff]"
                       }`}
                     >
                       {tab}
@@ -1185,7 +1341,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                 {/* ADD TAB */}
                 {activePopoverTab === "add" && (
                   <div className="space-y-3 animate-fade-in font-mono">
-                    <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Insert Elements</p>
+                    <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Insert Elements</p>
                     <div className="grid grid-cols-2 gap-2">
                       <button onClick={() => { addText(); setActivePopover("none"); }} className="flex flex-col items-center gap-2 p-4 rounded-xl border border-dashed text-neutral-500 hover:text-[#007aff] hover:border-[#007aff]/40 transition-colors">
                         <Type size={18} /> <span className="text-[10px] font-bold uppercase">Insert Text</span>
@@ -1205,7 +1361,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                 {/* CANVAS TAB */}
                 {activePopoverTab === "canvas" && (
                   <div className="space-y-3 animate-fade-in">
-                    <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Sandbox Actions</p>
+                    <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Sandbox Actions</p>
                     <button onClick={() => { open3d(); setActivePopover("none"); }} className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
                       <span className="flex items-center gap-2.5"><Box size={14} /> 3D Garment Sandbox</span>
                       <span className="text-[8px] bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-full font-bold uppercase">3D</span>
@@ -1243,7 +1399,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                   </div>
                 )}
 
-                {/* PREFS TAB - Identical custom toggles from Procreate Preferences section */}
+                {/* PREFS TAB */}
                 {activePopoverTab === "prefs" && (
                   <div className="space-y-4 animate-fade-in text-xs font-semibold text-neutral-400">
                     <p className="text-[10px] uppercase font-bold tracking-widest">Interface Appearance</p>
@@ -1275,7 +1431,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                       />
                     </div>
                     
-                    <span className="block h-px bg-neutral-200 dark:bg-neutral-800" />
+                    <span className="block h-px bg-[#1c1c1e] dark:bg-neutral-800" />
 
                     <div className="space-y-2">
                       <div className="flex justify-between">
@@ -1301,7 +1457,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
             {/* Adjustments Popover */}
             {activePopover === "adjustments" && (
               <div className="space-y-4">
-                <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Filters & AI</p>
+                <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Filters & AI</p>
                 {selectedLayer ? (
                   <div className="space-y-3">
                     <p className="text-[11px] font-bold">Selected: {selectedLayer.name}</p>
@@ -1330,7 +1486,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                     value={aiPrompt} 
                     onChange={(e) => setAiPrompt(e.target.value)}
                     placeholder="Describe design layers or lasso regions to generate..."
-                    className="w-full h-16 bg-neutral-100 dark:bg-neutral-900 border-0 rounded-xl p-3 text-[10px] focus:outline-none focus:ring-1 focus:ring-indigo-500 text-neutral-900 dark:text-neutral-100 font-mono" 
+                    className="w-full h-16 bg-[#18181b] border-0 rounded-xl p-3 text-[10px] focus:outline-none focus:ring-1 focus:ring-indigo-500 text-neutral-200 font-mono border-neutral-850" 
                   />
                   <div className="flex gap-2">
                     {lassoPoints.length >= 3 ? (
@@ -1350,8 +1506,8 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
             {/* LAYERS POPOVER */}
             {activePopover === "layers" && (
               <div className="space-y-4 font-sans">
-                <div className="flex justify-between items-center border-b border-neutral-200 dark:border-neutral-850 pb-2">
-                  <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Layers stack</p>
+                <div className="flex justify-between items-center border-b border-[#1c1c1e] dark:border-neutral-850 pb-2">
+                  <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Layers stack</p>
                   <button onClick={addPaintLayer} className="text-xs font-bold text-indigo-500 hover:underline flex items-center gap-1">
                     <Plus size={12} /> New Layer
                   </button>
@@ -1368,7 +1524,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                       className={`flex flex-col p-2.5 rounded-xl border cursor-pointer transition-colors relative ${
                         selectedId === l.id 
                           ? "bg-indigo-50/70 border-indigo-100 dark:bg-[#2c2c2e] dark:border-neutral-700" 
-                          : "border-transparent hover:bg-neutral-100 dark:hover:bg-neutral-850"
+                          : "border-transparent hover:bg-neutral-150 dark:hover:bg-neutral-850"
                       }`}
                     >
                       <div className="flex items-center gap-2">
@@ -1380,23 +1536,23 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                           {l.type === "text" ? (l.text || "Text") : l.name}
                         </span>
                         
-                        <span className="text-[10px] font-bold bg-neutral-200 dark:bg-neutral-800 px-2 py-0.5 rounded-full text-neutral-400">
+                        <span className="text-[10px] font-bold bg-[#1c1c1e] dark:bg-neutral-800 px-2 py-0.5 rounded-full text-neutral-400">
                           {BLEND_ABBR[l.blend || "source-over"]}
                         </span>
                       </div>
 
                       {/* Sliding Actions Flyout */}
                       {activeLayerSettingsId === l.id && selectedId === l.id && (
-                        <div className="mt-2.5 pt-2 border-t border-neutral-200 dark:border-neutral-800 space-y-2 text-[10px] text-neutral-500 animate-fade-in font-mono">
+                        <div className="mt-2.5 pt-2 border-t border-[#1c1c1e] dark:border-neutral-800 space-y-2 text-[10px] text-neutral-500 animate-fade-in font-mono">
                           <div className="flex items-center justify-between text-xs">
                             <span className="font-semibold text-neutral-400">Align Elements</span>
                             <div className="flex gap-1">
-                              <button onClick={(e) => { e.stopPropagation(); align("h"); }} className="p-1 hover:bg-neutral-200 dark:hover:bg-[#1a1a1c] rounded"><AlignCenterVertical size={11} /></button>
-                              <button onClick={(e) => { e.stopPropagation(); align("v"); }} className="p-1 hover:bg-neutral-200 dark:hover:bg-[#1a1a1c] rounded"><AlignCenterHorizontal size={11} /></button>
-                              <button onClick={(e) => { e.stopPropagation(); align("both"); }} className="p-1 hover:bg-neutral-200 dark:hover:bg-[#1a1a1c] rounded"><AlignVerticalJustifyCenter size={11} /></button>
+                              <button onClick={(e) => { e.stopPropagation(); align("h"); }} className="p-1 hover:bg-[#1c1c1e] dark:hover:bg-[#1a1a1c] rounded"><AlignCenterVertical size={11} /></button>
+                              <button onClick={(e) => { e.stopPropagation(); align("v"); }} className="p-1 hover:bg-[#1c1c1e] dark:hover:bg-[#1a1a1c] rounded"><AlignCenterHorizontal size={11} /></button>
+                              <button onClick={(e) => { e.stopPropagation(); align("both"); }} className="p-1 hover:bg-[#1c1c1e] dark:hover:bg-[#1a1a1c] rounded"><AlignVerticalJustifyCenter size={11} /></button>
                             </div>
                           </div>
-                          <span className="block h-px bg-neutral-200 dark:bg-neutral-800" />
+                          <span className="block h-px bg-[#1c1c1e] dark:bg-neutral-800" />
                           <div className="flex items-center justify-between">
                             <span>Clipping mask:</span>
                             <input type="checkbox" checked={!!l.clip} onChange={(e) => patchLayer(l.id, { clip: e.target.checked })} />
@@ -1415,7 +1571,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                           )}
 
                           {l.type === "text" && (
-                            <div className="space-y-1.5 mt-1 pt-1 border-t border-neutral-100 dark:border-neutral-800">
+                            <div className="space-y-1.5 mt-1 pt-1 border-t border-[#1c1c1e] dark:border-neutral-800">
                               <input value={l.text} onChange={(e) => patchLayer(l.id, { text: e.target.value })} className="w-full text-[10px] bg-transparent border rounded p-1 text-neutral-200" />
                               <div className="flex justify-between items-center">
                                 <input type="color" value={l.fill} onChange={(e) => patchLayer(l.id, { fill: e.target.value })} className="w-5 h-5 rounded cursor-pointer" />
@@ -1424,15 +1580,13 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                             </div>
                           )}
 
-                          <span className="block h-px bg-neutral-200 dark:bg-neutral-800" />
+                          <span className="block h-px bg-[#1c1c1e] dark:bg-neutral-800" />
 
-                          <div className="flex justify-between items-center">
-                            <div className="flex gap-2">
-                              <button onClick={(e) => { e.stopPropagation(); move(l.id, 1); }} className="hover:text-indigo-400 font-bold uppercase text-[8px]">Up</button>
-                              <button onClick={(e) => { e.stopPropagation(); move(l.id, -1); }} className="hover:text-indigo-400 font-bold uppercase text-[8px]">Down</button>
-                            </div>
-                            <button onClick={(e) => { e.stopPropagation(); handleMergeDown(l.id); }} className="hover:text-indigo-400 font-bold uppercase text-[8px]">Merge Down</button>
-                            <button onClick={(e) => { e.stopPropagation(); commit((ls) => ls.filter((x) => x.id !== l.id)); setSelectedId(null); }} className="text-rose-500 font-bold uppercase text-[8px]">Delete</button>
+                          <div className="flex justify-between items-center text-[9px] font-bold uppercase tracking-wider gap-3">
+                            <button onClick={(e) => { e.stopPropagation(); move(l.id, 1); }} className="hover:text-indigo-400">Up</button>
+                            <button onClick={(e) => { e.stopPropagation(); move(l.id, -1); }} className="hover:text-indigo-400">Down</button>
+                            <button onClick={(e) => { e.stopPropagation(); handleMergeDown(l.id); }} className="hover:text-indigo-400">Merge Down</button>
+                            <button onClick={(e) => { e.stopPropagation(); commit((ls) => ls.filter((x) => x.id !== l.id)); setSelectedId(null); }} className="text-rose-500">Delete</button>
                           </div>
                         </div>
                       )}
@@ -1445,15 +1599,15 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
             {/* Colors Swatches Popover */}
             {activePopover === "colors" && (
               <div className="space-y-4">
-                <div className="flex border-b border-neutral-200 dark:border-neutral-800 pb-2 mb-2 text-[10px] font-bold uppercase tracking-wider">
+                <div className="flex border-b border-[#1c1c1e] dark:border-neutral-800 pb-2 mb-2 text-[10px] font-bold uppercase tracking-wider">
                   {["disc", "classic", "palette", "history"].map((t) => (
                     <button
                       key={t}
                       onClick={() => setColorSelectorTab(t as any)}
                       className={`flex-1 text-center py-1 transition-all ${
                         colorSelectorTab === t 
-                          ? "text-[#007aff] border-b-2 border-[#007aff]" 
-                          : "text-neutral-400 hover:text-neutral-200"
+                          ? "text-[#007aff] border-[#007aff]" 
+                          : "text-[#8e8e93] hover:text-[#007aff]"
                       }`}
                     >
                       {t}
@@ -1467,7 +1621,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                     <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400 font-mono">Interactive Disc</p>
                     
                     {/* High-fidelity color picker circular disk */}
-                    <div className="relative w-44 h-44 rounded-full border border-neutral-300 dark:border-neutral-850 overflow-hidden shadow-inner flex items-center justify-center">
+                    <div className="relative w-44 h-44 rounded-full border border-neutral-350 dark:border-neutral-850 overflow-hidden shadow-inner flex items-center justify-center">
                       <div 
                         onPointerDown={(e) => {
                           const rect = e.currentTarget.getBoundingClientRect();
@@ -1487,8 +1641,8 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                           background: `conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)`
                         }}
                       />
-                      <div className="w-24 h-24 rounded-full bg-white dark:bg-[#1c1c1e] z-10 border border-neutral-350 dark:border-neutral-800 relative flex items-center justify-center">
-                        <div className="w-16 h-16 rounded-full border border-neutral-350 dark:border-neutral-800" style={{ backgroundColor: brushColor }} />
+                      <div className="w-24 h-24 rounded-full bg-white dark:bg-[#1c1c1e] z-10 border border-[#1c1c1e] dark:border-neutral-800 relative flex items-center justify-center">
+                        <div className="w-16 h-16 rounded-full border border-[#1c1c1e] dark:border-neutral-800" style={{ backgroundColor: brushColor }} />
                       </div>
                     </div>
                   </div>
@@ -1497,7 +1651,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                 {/* CLASSIC HSB SLIDERS TAB */}
                 {colorSelectorTab === "classic" && (
                   <div className="space-y-4 animate-fade-in font-sans">
-                    <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Classic Sliders</p>
+                    <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Classic Sliders</p>
                     <div className="space-y-3 text-[11px] font-semibold text-neutral-400">
                       <div className="space-y-1">
                         <div className="flex justify-between">
@@ -1518,10 +1672,10 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                 {/* PALETTES TAB */}
                 {colorSelectorTab === "palette" && (
                   <div className="space-y-3 animate-fade-in">
-                    <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Presets Matrix</p>
+                    <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Presets Matrix</p>
                     <div className="grid grid-cols-6 gap-2">
                       {["#1c1c1e", "#3a3a3c", "#5c5c5e", "#aeaeaf", "#e5e5ea", "#ffffff", "#ff3b30", "#ff9500", "#ffcc00", "#4cd964", "#5ac8fa", "#007aff"].map((c) => (
-                        <button key={c} onClick={() => setBrushColor(c)} className="w-8 h-8 rounded border border-neutral-300 dark:border-neutral-800 transition-transform active:scale-90" style={{ backgroundColor: c }} />
+                        <button key={c} onClick={() => setBrushColor(c)} className="w-8 h-8 rounded border border-[#1c1c1e] dark:border-neutral-800 transition-transform active:scale-90" style={{ backgroundColor: c }} />
                       ))}
                     </div>
                   </div>
@@ -1533,7 +1687,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                     <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Sampled History</p>
                     <div className="grid grid-cols-6 gap-2">
                       {colorHistory.map((c, i) => (
-                        <button key={c + i} onClick={() => setBrushColor(c)} className="w-8 h-8 rounded-full border border-neutral-350 dark:border-neutral-850 transition-transform active:scale-90" style={{ backgroundColor: c }} />
+                        <button key={c + i} onClick={() => setBrushColor(c)} className="w-8 h-8 rounded-full border border-[#1c1c1e] dark:border-[#1c1c1e] transition-transform active:scale-90" style={{ backgroundColor: c }} />
                       ))}
                     </div>
                   </div>
@@ -1547,191 +1701,194 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
       {/* ─────────────────────────────────────────────────────────────
          MAIN DIGITAL ARTWORK VIEWPORT (Supports Rotational & Gesture Offsets)
          ───────────────────────────────────────────────────────────── */}
-      <div className="flex-1 flex overflow-hidden relative">
-        <div 
-          ref={scrollOuterRef} 
-          className="flex-1 overflow-auto p-4 min-h-[380px] canvas-scroll-container bg-[radial-gradient(ellipse_at_center,#18181a_0%,#09090b_65%,#000000_100%)] select-none"
-        >
+      {currentView === "editor" && (
+        <div className="flex-1 flex overflow-hidden relative">
           <div 
-            className="relative block"
-            style={{
-              width: `${Math.max(workspaceSize.w, artboardW * scale)}px`,
-              height: `${Math.max(workspaceSize.h, artboardH * scale)}px`,
-            }}
+            ref={scrollOuterRef} 
+            className="flex-1 overflow-auto p-4 min-h-[380px] canvas-scroll-container bg-[radial-gradient(ellipse_at_center,#18181a_0%,#09090b_65%,#000000_100%)] select-none"
           >
             <div 
-              className="absolute rounded-[24px] overflow-hidden shadow-2xl border border-neutral-850 bg-[#ffffff] transition-transform duration-75"
+              className="relative block"
               style={{
-                left: `${Math.max(0, (workspaceSize.w - artboardW * scale) / 2) + panOffset.x}px`,
-                top: `${Math.max(0, (workspaceSize.h - artboardH * scale) / 2) + panOffset.y}px`,
-                width: `${artboardW * scale}px`,
-                height: `${artboardH * scale}px`,
+                width: `${Math.max(workspaceSize.w, artboardW * scale)}px`,
+                height: `${Math.max(workspaceSize.h, artboardH * scale)}px`,
               }}
             >
-              <Stage
-                ref={stageRef}
-                width={artboardW * scale} height={artboardH * scale} scaleX={scale} scaleY={scale}
-                style={{ cursor: tool === "brush" ? "crosshair" : tool === "eraser" ? "cell" : tool === "lasso" ? "crosshair" : "default" }}
-                onTouchStart={handleStageTouchStart}
-                onTouchMove={handleStageTouchMove}
-                onTouchEnd={handleStageTouchEnd}
-                onMouseDown={(e) => {
-                  const p = getArtboardPointerPos();
-                  if (!p) return;
-
-                  if (tool === "eyedropper") {
-                    sampleColorAtPos(p);
-                    setEyedropperActive(true);
-                    setEyedropperActivePos(stageRef.current!.getPointerPosition() || { x: 0, y: 0 });
-                    return;
-                  }
-                  if (tool === "lasso") {
-                    setLassoPoints([p]);
-                    return;
-                  }
-                  if (tool === "fill") {
-                    floodFill(p.x, p.y);
-                    return;
-                  }
-                  if (tool === "brush" || tool === "eraser" || tool === "smudge") {
-                    const id = ensurePaintTarget(true);
-                    if (!id) { toast.error("Could not create a paint layer"); return; }
-                    snapshotPaint(id); painting.current = true; lastPt.current = null;
-                    strokeTo(id, p.x, p.y, (e.evt as any).pressure || 0.5);
-                    return;
-                  }
-                  if (regionMode) { drawing.current = { x: p.x, y: p.y }; setRegion({ x: p.x, y: p.y, w: 0, h: 0 }); return; }
-                  if (e.target === e.target.getStage() || (e.target as any).attrs?.name === "bg") setSelectedId(null);
-                }}
-                onMouseMove={(e) => {
-                  const p = getArtboardPointerPos();
-                  if (!p) return;
-
-                  if (tool === "lasso" && e.evt.buttons === 1) {
-                    setLassoPoints((pts) => [...pts, p]);
-                    return;
-                  }
-                  if (tool === "eyedropper") {
-                    if (e.evt.buttons === 1) {
-                      sampleColorAtPos(p);
-                      setEyedropperActivePos(stageRef.current!.getPointerPosition() || { x: 0, y: 0 });
-                    }
-                    return;
-                  }
-                  if ((tool === "brush" || tool === "eraser" || tool === "smudge") && painting.current) {
-                    const id = layers.find((l) => l.id === selectedId)?.type === "paint" ? selectedId! : ensurePaintTarget();
-                    if (id) { strokeTo(id, p.x, p.y, (e.evt as any).pressure || 0.5); }
-                    return;
-                  }
-                  if (regionMode && drawing.current) { const s = drawing.current; setRegion({ x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), w: Math.abs(p.x - s.x), h: Math.abs(p.y - s.y) }); }
-                }}
-                onMouseUp={() => {
-                  if (tool === "lasso") {
-                    if (lassoPoints.length > 2) {
-                      setLassoPoints((pts) => [...pts, pts[0]]);
-                    }
-                    return;
-                  }
-                  if (tool === "eyedropper") {
-                    setEyedropperActive(false);
-                    setTool("brush");
-                    return;
-                  }
-                  if (painting.current) { painting.current = false; lastPt.current = null; return; }
-                  if (regionMode && drawing.current && region) { finalizeRegionDirect(region); }
+              <div 
+                className="absolute rounded-[24px] overflow-hidden shadow-2xl border border-neutral-850 transition-transform duration-75"
+                style={{
+                  left: `${Math.max(0, (workspaceSize.w - artboardW * scale) / 2) + panOffset.x}px`,
+                  top: `${Math.max(0, (workspaceSize.h - artboardH * scale) / 2) + panOffset.y}px`,
+                  width: `${artboardW * scale}px`,
+                  height: `${artboardH * scale}px`,
+                  backgroundColor: canvasKind === "canvas" ? "#ffffff" : "transparent"
                 }}
               >
-                <Layer>
-                  {/* Absolute transformed layout group */}
-                  <Group 
-                    ref={artboardGroupRef}
-                    rotation={canvasRotation} 
-                    x={artboardW / 2} y={artboardH / 2} 
-                    offsetX={artboardW / 2} offsetY={artboardH / 2}
-                  >
-                    <Group name="background-group">
-                      <Rect name="bg" x={0} y={0} width={artboardW} height={artboardH} fill="#ffffff" listening />
-                      {canvasKind === "canvas" ? null : garment ? (
-                        <>
-                          <KImage name="garment" image={garment} x={0} y={0} width={artboardW} height={artboardH} listening={false} />
-                          <Rect name="guide" x={artboardW * pa.x} y={artboardH * pa.y} width={artboardW * pa.w} height={artboardH * pa.h} stroke="#6366f1" strokeWidth={4} dash={[26, 18]} cornerRadius={20} listening={false} opacity={0.6} />
-                        </>
+                <Stage
+                  ref={stageRef}
+                  width={artboardW * scale} height={artboardH * scale} scaleX={scale} scaleY={scale}
+                  style={{ cursor: tool === "brush" ? "crosshair" : tool === "eraser" ? "cell" : tool === "lasso" ? "crosshair" : "default" }}
+                  onTouchStart={handleStageTouchStart}
+                  onTouchMove={handleStageTouchMove}
+                  onTouchEnd={handleStageTouchEnd}
+                  onMouseDown={(e) => {
+                    const p = getArtboardPointerPos();
+                    if (!p) return;
+
+                    if (tool === "eyedropper") {
+                      sampleColorAtPos(p);
+                      setEyedropperActive(true);
+                      setEyedropperActivePos(stageRef.current!.getPointerPosition() || { x: 0, y: 0 });
+                      return;
+                    }
+                    if (tool === "lasso") {
+                      setLassoPoints([p]);
+                      return;
+                    }
+                    if (tool === "fill") {
+                      floodFill(p.x, p.y);
+                      return;
+                    }
+                    if (tool === "brush" || tool === "eraser" || tool === "smudge") {
+                      const id = ensurePaintTarget(true);
+                      if (!id) { toast.error("Could not create a paint layer"); return; }
+                      snapshotPaint(id); painting.current = true; lastPt.current = null;
+                      strokeTo(id, p.x, p.y, (e.evt as any).pressure || 0.5);
+                      return;
+                    }
+                    if (regionMode) { drawing.current = { x: p.x, y: p.y }; setRegion({ x: p.x, y: p.y, w: 0, h: 0 }); return; }
+                    if (e.target === e.target.getStage() || (e.target as any).attrs?.name === "bg") setSelectedId(null);
+                  }}
+                  onMouseMove={(e) => {
+                    const p = getArtboardPointerPos();
+                    if (!p) return;
+
+                    if (tool === "lasso" && e.evt.buttons === 1) {
+                      setLassoPoints((pts) => [...pts, p]);
+                      return;
+                    }
+                    if (tool === "eyedropper") {
+                      if (e.evt.buttons === 1) {
+                        sampleColorAtPos(p);
+                        setEyedropperActivePos(stageRef.current!.getPointerPosition() || { x: 0, y: 0 });
+                      }
+                      return;
+                    }
+                    if ((tool === "brush" || tool === "eraser" || tool === "smudge") && painting.current) {
+                      const id = layers.find((l) => l.id === selectedId)?.type === "paint" ? selectedId! : ensurePaintTarget();
+                      if (id) { strokeTo(id, p.x, p.y, (e.evt as any).pressure || 0.5); }
+                      return;
+                    }
+                    if (regionMode && drawing.current) { const s = drawing.current; setRegion({ x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), w: Math.abs(p.x - s.x), h: Math.abs(p.y - s.y) }); }
+                  }}
+                  onMouseUp={() => {
+                    if (tool === "lasso") {
+                      if (lassoPoints.length > 2) {
+                        setLassoPoints((pts) => [...pts, pts[0]]);
+                      }
+                      return;
+                    }
+                    if (tool === "eyedropper") {
+                      setEyedropperActive(false);
+                      setTool("brush");
+                      return;
+                    }
+                    if (painting.current) { painting.current = false; lastPt.current = null; return; }
+                    if (regionMode && drawing.current && region) { finalizeRegionDirect(region); }
+                  }}
+                >
+                  <Layer>
+                    {/* Absolute transformed layout group */}
+                    <Group 
+                      ref={artboardGroupRef}
+                      rotation={canvasRotation} 
+                      x={artboardW / 2} y={artboardH / 2} 
+                      offsetX={artboardW / 2} offsetY={artboardH / 2}
+                    >
+                      <Group name="background-group">
+                        <Rect name="bg" x={0} y={0} width={artboardW} height={artboardH} fill={canvasKind === "canvas" ? "#ffffff" : "rgba(0,0,0,0)"} listening />
+                        {canvasKind === "canvas" ? null : garment ? (
+                          <>
+                            <KImage name="garment" image={garment} x={0} y={0} width={artboardW} height={artboardH} listening={false} />
+                            <Rect name="guide" x={artboardW * pa.x} y={artboardH * pa.y} width={artboardW * pa.w} height={artboardH * pa.h} stroke="#6366f1" strokeWidth={4} dash={[26, 18]} cornerRadius={20} listening={false} opacity={0.6} />
+                          </>
+                        ) : (
+                          <>
+                            <Rect name="garment" x={artboardW * 0.06} y={artboardH * 0.05} width={artboardW * 0.88} height={artboardH * 0.9} cornerRadius={artboardW * 0.06} fill={isDark ? "#161616" : "#f1f1f3"} listening={false} />
+                            <Rect name="guide" x={artboardW * pa.x} y={artboardH * pa.y} width={artboardW * pa.w} height={artboardH * pa.h} stroke="#9ca3af" strokeWidth={4} dash={[26, 18]} cornerRadius={20} listening={false} />
+                          </>
+                        )}
+                      </Group>
+
+                      {layers.map((l) => l.type === "paint" ? (
+                        <PaintNode key={l.id} layer={l} canvas={getPaintCanvas(l)} />
+                      ) : l.type === "image" ? (
+                        <ImageNode key={l.id} layer={l} listening={!regionMode && tool === "select"}
+                          nodeRef={(n: any) => (nodeRefs.current[l.id] = n)} onDragMove={snapDrag}
+                          onSelect={() => setSelectedId(l.id)} onChange={(patch: any) => { patchLayer(l.id, patch); setGuides({ v: false, h: false }); }} />
                       ) : (
-                        <>
-                          <Rect name="garment" x={artboardW * 0.06} y={artboardH * 0.05} width={artboardW * 0.88} height={artboardH * 0.9} cornerRadius={artboardW * 0.06} fill={isDark ? "#161616" : "#f1f1f3"} listening={false} />
-                          <Rect name="guide" x={artboardW * pa.x} y={artboardH * pa.y} width={artboardW * pa.w} height={artboardH * pa.h} stroke="#9ca3af" strokeWidth={4} dash={[26, 18]} cornerRadius={20} listening={false} />
-                        </>
+                        <TextNode key={l.id} layer={l} listening={!regionMode && tool === "select"}
+                          nodeRef={(n: any) => (nodeRefs.current[l.id] = n)} onDragMove={snapDrag}
+                          onSelect={() => setSelectedId(l.id)} onChange={(patch: any) => { patchLayer(l.id, patch); setGuides({ v: false, h: false }); }} />
+                      ))}
+
+                      {(tool === "brush" || tool === "eraser" || tool === "smudge") && symmetry === "v" && <Rect name="symmetry-guide" x={artboardW / 2 - 1} y={0} width={2} height={artboardH} fill="#6366f1" opacity={0.5} listening={false} />}
+                      {(tool === "brush" || tool === "eraser" || tool === "smudge") && symmetry === "h" && <Rect name="symmetry-guide" x={0} y={artboardH / 2 - 1} width={artboardW} height={2} fill="#6366f1" opacity={0.5} listening={false} />}
+
+                      {guides.v && <Rect name="align-guide" x={artboardW / 2 - 1} y={0} width={2} height={artboardH} fill="#22d3ee" listening={false} />}
+                      {guides.h && <Rect name="align-guide" x={0} y={artboardH / 2 - 1} width={artboardW} height={2} fill="#22d3ee" listening={false} />}
+
+                      {region && <Rect x={region.x} y={region.y} width={region.w} height={region.h} stroke="#6366f1" strokeWidth={4} dash={[16, 12]} fill="rgba(99,102,241,0.08)" listening={false} />}
+                      
+                      {/* Render active Lasso selection polygon path */}
+                      {lassoPoints.length > 1 && (
+                        <Line 
+                          points={getFlatLassoPoints()} 
+                          stroke="#007aff" 
+                          strokeWidth={2.5} 
+                          dash={[6, 6]} 
+                          dashOffset={dashOffset}
+                          closed={lassoPoints.length > 2}
+                          listening={false}
+                        />
                       )}
+                      
+                      {/* Custom brush diameter preview outline cursor */}
+                      {brushCursorEnabled && (tool === "brush" || tool === "eraser" || tool === "smudge") && stageRef.current && (
+                        <Line 
+                          points={(() => {
+                            const pts: number[] = [];
+                            const artboardPointer = getArtboardPointerPos();
+                            if (!artboardPointer) return [];
+                            const cx = artboardPointer.x;
+                            const cy = artboardPointer.y;
+                            const r = brushSize / 2;
+                            for (let angle = 0; angle <= Math.PI * 2; angle += 0.2) {
+                              pts.push(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
+                            }
+                            return pts;
+                          })()}
+                          stroke={isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.3)"}
+                          strokeWidth={1}
+                          closed
+                          listening={false}
+                        />
+                      )}
+
+                      <Transformer
+                        ref={trRef} rotateEnabled keepRatio={uniformScaling}
+                        enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right", "middle-left", "middle-right", "top-center", "bottom-center"]}
+                        anchorCornerRadius={20} borderStroke="#6366f1" anchorStroke="#6366f1" anchorSize={14}
+                        boundBoxFunc={(oldBox, newBox) => (newBox.width < 10 || newBox.height < 10 ? oldBox : newBox)}
+                      />
                     </Group>
-
-                    {layers.map((l) => l.type === "paint" ? (
-                      <PaintNode key={l.id} layer={l} canvas={getPaintCanvas(l)} />
-                    ) : l.type === "image" ? (
-                      <ImageNode key={l.id} layer={l} listening={!regionMode && tool === "select"}
-                        nodeRef={(n: any) => (nodeRefs.current[l.id] = n)} onDragMove={snapDrag}
-                        onSelect={() => setSelectedId(l.id)} onChange={(patch: any) => { patchLayer(l.id, patch); setGuides({ v: false, h: false }); }} />
-                    ) : (
-                      <TextNode key={l.id} layer={l} listening={!regionMode && tool === "select"}
-                        nodeRef={(n: any) => (nodeRefs.current[l.id] = n)} onDragMove={snapDrag}
-                        onSelect={() => setSelectedId(l.id)} onChange={(patch: any) => { patchLayer(l.id, patch); setGuides({ v: false, h: false }); }} />
-                    ))}
-
-                    {(tool === "brush" || tool === "eraser" || tool === "smudge") && symmetry === "v" && <Rect name="symmetry-guide" x={artboardW / 2 - 1} y={0} width={2} height={artboardH} fill="#6366f1" opacity={0.5} listening={false} />}
-                    {(tool === "brush" || tool === "eraser" || tool === "smudge") && symmetry === "h" && <Rect name="symmetry-guide" x={0} y={artboardH / 2 - 1} width={artboardW} height={2} fill="#6366f1" opacity={0.5} listening={false} />}
-
-                    {guides.v && <Rect name="align-guide" x={artboardW / 2 - 1} y={0} width={2} height={artboardH} fill="#22d3ee" listening={false} />}
-                    {guides.h && <Rect name="align-guide" x={0} y={artboardH / 2 - 1} width={artboardW} height={2} fill="#22d3ee" listening={false} />}
-
-                    {region && <Rect x={region.x} y={region.y} width={region.w} height={region.h} stroke="#6366f1" strokeWidth={4} dash={[16, 12]} fill="rgba(99,102,241,0.08)" listening={false} />}
-                    
-                    {/* Render active Lasso selection polygon path */}
-                    {lassoPoints.length > 1 && (
-                      <Line 
-                        points={getFlatLassoPoints()} 
-                        stroke="#007aff" 
-                        strokeWidth={2.5} 
-                        dash={[6, 6]} 
-                        dashOffset={dashOffset}
-                        closed={lassoPoints.length > 2}
-                        listening={false}
-                      />
-                    )}
-                    
-                    {/* Custom brush diameter preview outline cursor */}
-                    {brushCursorEnabled && (tool === "brush" || tool === "eraser" || tool === "smudge") && stageRef.current && (
-                      <Line 
-                        points={(() => {
-                          const pts: number[] = [];
-                          const artboardPointer = getArtboardPointerPos();
-                          if (!artboardPointer) return [];
-                          const cx = artboardPointer.x;
-                          const cy = artboardPointer.y;
-                          const r = brushSize / 2;
-                          for (let angle = 0; angle <= Math.PI * 2; angle += 0.2) {
-                            pts.push(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
-                          }
-                          return pts;
-                        })()}
-                        stroke={isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.3)"}
-                        strokeWidth={1}
-                        closed
-                        listening={false}
-                      />
-                    )}
-
-                    <Transformer
-                      ref={trRef} rotateEnabled keepRatio={uniformScaling}
-                      enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right", "middle-left", "middle-right", "top-center", "bottom-center"]}
-                      anchorCornerRadius={20} borderStroke="#6366f1" anchorStroke="#6366f1" anchorSize={14}
-                      boundBoxFunc={(oldBox, newBox) => (newBox.width < 10 || newBox.height < 10 ? oldBox : newBox)}
-                    />
-                  </Group>
-                </Layer>
-              </Stage>
+                  </Layer>
+                </Stage>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ─────────────────────────────────────────────────────────────
          THE PROCREATE SAMPLING MAGNIFICATION HUD
@@ -1758,84 +1915,86 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
       {/* ─────────────────────────────────────────────────────────────
          INTEGRATED SYSTEM ZOOM, PAN, AND ROTATE CONTROLLERS
          ───────────────────────────────────────────────────────────── */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-2.5 rounded-full bg-white/95 dark:bg-[#1c1c1e]/95 backdrop-blur-md shadow-xl border border-neutral-200/20 pointer-events-auto">
-        
-        {/* Zoom Control Slider */}
-        <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 select-none">Zoom</span>
-        <input 
-          type="range" min={50} max={1000} step={10} value={zoomPercent} 
-          onChange={(e) => setZoomPercent(parseInt(e.target.value))} 
-          className="w-20 sm:w-36 accent-indigo-500 cursor-pointer"
-        />
-        <span className="text-[10px] font-bold text-neutral-500 select-none w-8 tabular-nums">{zoomPercent}%</span>
-        
-        <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
+      {currentView === "editor" && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-2.5 rounded-full bg-white/95 dark:bg-[#1c1c1e]/95 backdrop-blur-md shadow-xl border border-neutral-200/20 pointer-events-auto">
+          
+          {/* Zoom Control Slider */}
+          <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 select-none">Zoom</span>
+          <input 
+            type="range" min={50} max={1000} step={10} value={zoomPercent} 
+            onChange={(e) => setZoomPercent(parseInt(e.target.value))} 
+            className="w-20 sm:w-36 accent-indigo-500 cursor-pointer"
+          />
+          <span className="text-[10px] font-bold text-neutral-500 select-none w-8 tabular-nums">{zoomPercent}%</span>
+          
+          <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
 
-        {/* Rotate Control Slider */}
-        <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 select-none">Rotate</span>
-        <input 
-          type="range" min={0} max={360} step={1} value={canvasRotation} 
-          onChange={(e) => setCanvasRotation(parseInt(e.target.value))} 
-          className="w-20 sm:w-36 accent-[#007aff] cursor-pointer"
-        />
-        <span className="text-[10px] font-bold text-neutral-500 select-none w-10 tabular-nums">{canvasRotation}°</span>
+          {/* Rotate Control Slider */}
+          <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 select-none">Rotate</span>
+          <input 
+            type="range" min={0} max={360} step={1} value={canvasRotation} 
+            onChange={(e) => setCanvasRotation(parseInt(e.target.value))} 
+            className="w-20 sm:w-36 accent-[#007aff] cursor-pointer"
+          />
+          <span className="text-[10px] font-bold text-neutral-500 select-none w-10 tabular-nums">{canvasRotation}°</span>
 
-        <button 
-          onClick={() => { setCanvasRotation(0); setPanOffset({ x: 0, y: 0 }); }} 
-          className="p-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-[#007aff]"
-          title="Reset Alignment"
-        >
-          <RefreshCcw size={12} />
-        </button>
+          <button 
+            onClick={() => { setCanvasRotation(0); setPanOffset({ x: 0, y: 0 }); }} 
+            className="p-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-[#007aff]"
+            title="Reset Alignment"
+          >
+            <RefreshCcw size={12} />
+          </button>
 
-        <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
+          <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
 
-        {/* Dynamic view switchers */}
-        {(hasMulti || productPhoto) && (
-          <div className="flex items-center gap-1.5">
-            {productPhoto && (!hasMulti || activeP === 0) && (
+          {/* Dynamic view switchers */}
+          {(hasMulti || productPhoto) && (
+            <div className="flex items-center gap-1.5">
+              {productPhoto && (!hasMulti || activeP === 0) && (
+                <button 
+                  onClick={() => setShowPhoto(!showPhoto)}
+                  className={`text-[9px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full ${showPhoto ? "bg-indigo-500 text-white" : "bg-neutral-100 dark:bg-neutral-800 text-neutral-500"}`}
+                >
+                  {showPhoto ? "Mockup" : "Template"}
+                </button>
+              )}
+              {hasMulti && placements.map((p, i) => (
+                <button 
+                  key={p.placement + i} 
+                  onClick={() => switchPlacement(i)}
+                  className={`text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${activeP === i ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30" : "text-neutral-500"}`}
+                >
+                  {String(p.placement || `P${i+1}`).substring(0, 5)}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {lassoPoints.length > 0 && (
+            <>
+              <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
               <button 
-                onClick={() => setShowPhoto(!showPhoto)}
-                className={`text-[9px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full ${showPhoto ? "bg-indigo-500 text-white" : "bg-neutral-100 dark:bg-neutral-800 text-neutral-500"}`}
+                onClick={() => setLassoPoints([])} 
+                className="text-[9px] uppercase font-bold text-rose-500 hover:underline px-2"
+                title="Clear lasso selection loop"
               >
-                {showPhoto ? "Mockup" : "Template"}
+                Clear Loop
               </button>
-            )}
-            {hasMulti && placements.map((p, i) => (
-              <button 
-                key={p.placement + i} 
-                onClick={() => switchPlacement(i)}
-                className={`text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${activeP === i ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30" : "text-neutral-500"}`}
-              >
-                {String(p.placement || `P${i+1}`).substring(0, 5)}
-              </button>
-            ))}
-          </div>
-        )}
+            </>
+          )}
 
-        {lassoPoints.length > 0 && (
-          <>
-            <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
-            <button 
-              onClick={() => setLassoPoints([])} 
-              className="text-[9px] uppercase font-bold text-rose-500 hover:underline px-2"
-              title="Clear lasso selection loop"
-            >
-              Clear Loop
-            </button>
-          </>
-        )}
+          <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
 
-        <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
-
-        <button 
-          onClick={() => setFullScreenCanvas(!fullScreenCanvas)}
-          className="text-neutral-400 hover:text-[#007aff] transition-colors"
-          title="Toggle Fullscreen Canvas"
-        >
-          {fullScreenCanvas ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
-        </button>
-      </div>
+          <button 
+            onClick={() => setFullScreenCanvas(!fullScreenCanvas)}
+            className="text-neutral-400 hover:text-[#007aff] transition-colors"
+            title="Toggle Fullscreen Canvas"
+          >
+            {fullScreenCanvas ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
+          </button>
+        </div>
+      )}
 
       {/* ─────────────────────────────────────────────────────────────
          MODALS & PORTALS (Attach Blanks / 3D previews / Printful Maker)
