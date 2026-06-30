@@ -1,17 +1,17 @@
 // ─────────────────────────────────────────────────────────────
-//  Luveni GM — StudioEditor (Procreate-Accurate Edition)
+//  Luveni GM — StudioEditor (Procreate Hand-Book Edition)
 //  Free, Konva-powered design editor. Layers, text, images,
 //  transform, undo/redo, AI new-layer, and region-select AI.
 // ─────────────────────────────────────────────────────────────
 import { useEffect, useRef, useState, useCallback, lazy, Suspense } from "react";
-import { Stage, Layer, Image as KImage, Text as KText, Rect, Transformer, Group } from "react-konva";
+import { Stage, Layer, Image as KImage, Text as KText, Rect, Transformer, Group, Line } from "react-konva";
 import Konva from "konva";
 import {
   Type, ImagePlus, Sparkles, Trash2, Eye, EyeOff, ArrowUp, ArrowDown,
   Save, Download, Loader2, Wand2, X, RefreshCw, Undo2, Redo2, SquareDashed,
   Paintbrush, FlipHorizontal2, FlipVertical2, MousePointer2, PaintBucket,
   AlignCenterHorizontal, AlignCenterVertical, AlignVerticalJustifyCenter, Layers, Plus,
-  Maximize2, Minimize2, Box, Shirt, Wrench, Eraser, Pipette, Grid, Share2, EyeClosed
+  Maximize2, Minimize2, Box, Shirt, Wrench, Eraser, Pipette, Grid, RefreshCcw
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,6 +21,7 @@ const Garment3DPreview = lazy(() => import("./Garment3DPreview"));
 const PrintfulDesignMaker = lazy(() => import("./PrintfulDesignMaker"));
 
 export type BlendMode = "source-over" | "multiply" | "screen" | "overlay" | "darken" | "lighten";
+export type BrushType = "round" | "textured" | "ink" | "charcoal";
 
 export type StudioLayer = {
   id: string; type: "image" | "text" | "paint"; name: string; visible: boolean;
@@ -176,7 +177,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
 
   const [fullScreenCanvas, setFullScreenCanvas] = useState(false);
   const [activePopover, setActivePopover] = useState<"none" | "actions" | "adjustments" | "layers" | "colors">("none");
-  const [activePopoverTab, setActivePopoverTab] = useState<string>("add"); // For wrench Actions: add, canvas, share
+  const [activePopoverTab, setActivePopoverTab] = useState<string>("add"); 
 
   const [preview3d, setPreview3d] = useState<string | null>(null);
   const [edmOpen, setEdmOpen] = useState(false);
@@ -218,7 +219,9 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
     toast.success(`Matched to ${d.label} (${d.mfr}) · cost $${(costCents / 100).toFixed(2)} → retail $${(retailCents / 100).toFixed(2)}`);
   };
 
-  const [tool, setTool] = useState<"select" | "brush" | "eraser" | "fill" | "eyedropper">("select");
+  // State Expansion for Procreate Handbook specifications
+  const [tool, setTool] = useState<"select" | "brush" | "eraser" | "fill" | "eyedropper" | "lasso">("select");
+  const [brushType, setBrushType] = useState<BrushType>("round");
   const [brushSize, setBrushSize] = useState(120);
   const [brushColor, setBrushColor] = useState("#000000");
   const [brushOpacity, setBrushOpacity] = useState(1);     
@@ -228,7 +231,15 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
   const [, setPaintVersion] = useState(0);
   const [guides, setGuides] = useState<{ v: boolean; h: boolean }>({ v: false, h: false });
 
+  // Freehand Lasso Selection Polygons
+  const [lassoPoints, setLassoPoints] = useState<{ x: number; y: number }[]>([]);
+  const [dashOffset, setDashOffset] = useState(0);
+
+  // Viewport transformation offsets
+  const [canvasRotation, setCanvasRotation] = useState(0);
+
   const stageRef = useRef<Konva.Stage>(null);
+  const artboardGroupRef = useRef<Konva.Group>(null);
   const trRef = useRef<Konva.Transformer>(null);
   const nodeRefs = useRef<Record<string, Konva.Node | null>>({});
   
@@ -247,6 +258,19 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
   const scrollOuterRef = useRef<HTMLDivElement>(null);
 
   const scale = fitScale * (zoomPercent / 100);
+
+  // Marching ants selection line animation loop
+  useEffect(() => {
+    let id: any;
+    if (tool === "lasso" && lassoPoints.length > 0) {
+      const step = () => {
+        setDashOffset((d) => (d - 0.4) % 12);
+        id = requestAnimationFrame(step);
+      };
+      id = requestAnimationFrame(step);
+    }
+    return () => cancelAnimationFrame(id);
+  }, [tool, lassoPoints]);
 
   const move = (id: string, dir: number) => {
     commit((ls) => {
@@ -322,37 +346,50 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
     }
   }, [redrawStage]);
 
-  // Procreate Native Gestures: Multi-Touch Trackers
+  // Gestures system: multi-finger mapping on standard target elements
   const handleStageTouchStart = (e: any) => {
     const numTouches = e.evt?.touches?.length || 0;
     if (numTouches === 2) {
-      // Two-finger tap: Undo
       handleUndo();
-      toast("Undo Action applied", { duration: 900 });
+      toast("Undo gesture registered", { duration: 900 });
     } else if (numTouches === 3) {
-      // Three-finger tap: Redo
       handleRedo();
-      toast("Redo Action applied", { duration: 900 });
+      toast("Redo gesture registered", { duration: 900 });
     } else if (numTouches === 4) {
-      // Four-finger tap: Clean Canvas toggle
       setFullScreenCanvas(prev => !prev);
-      toast(fullScreenCanvas ? "Interface Visible" : "Distraction-Free Mode Enabled", { duration: 900 });
+      toast(fullScreenCanvas ? "Interface revealed" : "Clean canvas activated", { duration: 900 });
     }
   };
 
-  const sampleColorAtPos = (x: number, y: number) => {
+  // Convert raw client coordinate vectors to dynamic artboard offsets through inverse matrices
+  const getArtboardPointerPos = (): { x: number; y: number } | null => {
+    const stage = stageRef.current;
+    const group = artboardGroupRef.current;
+    if (!stage || !group) return null;
+    
+    const pos = stage.getPointerPosition();
+    if (!pos) return null;
+    
+    try {
+      const transform = group.getAbsoluteTransform().copy().invert();
+      return transform.point(pos);
+    } catch {
+      return stage.getRelativePointerPosition();
+    }
+  };
+
+  const sampleColorAtPos = (pos: { x: number; y: number }) => {
     const stage = stageRef.current;
     if (!stage) return;
     const ctx = stage.getLayers()[0].getContext();
     if (!ctx) return;
     try {
-      // Convert viewport scale to physical pixel density offset
-      const d = ctx.getImageData(x * scale, y * scale, 1, 1).data;
-      if (d[3] === 0) return; // avoid transparent boundaries
+      const d = ctx.getImageData(pos.x * scale, pos.y * scale, 1, 1).data;
+      if (d[3] === 0) return; 
       const hex = "#" + ((1 << 24) + (d[0] << 16) + (d[1] << 8) + d[2]).toString(16).slice(1);
       setBrushColor(hex);
     } catch {
-      // ignore CORS-locked image triggers gracefully
+      // safe fallback on CORS restrictions
     }
   };
 
@@ -573,11 +610,67 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
     redoStack.current = [];
   };
 
+  // High-fidelity Procedural Tip Shader
+  const applyBrushProceduralDab = (ctx: CanvasRenderingContext2D, px: number, py: number, r: number, alpha: number) => {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    
+    if (brushType === "round") {
+      const g = ctx.createRadialGradient(px, py, 0, px, py, r);
+      g.addColorStop(0, brushColor);
+      g.addColorStop(0.75, brushColor);
+      g.addColorStop(1, brushColor + "00");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+    } else if (brushType === "textured") {
+      ctx.fillStyle = brushColor;
+      for (let i = 0; i < 6; i++) {
+        const ox = (Math.random() - 0.5) * r * 1.2;
+        const oy = (Math.random() - 0.5) * r * 1.2;
+        const sr = r * (0.2 + Math.random() * 0.4);
+        ctx.beginPath(); ctx.arc(px + ox, py + oy, sr, 0, Math.PI * 2); ctx.fill();
+      }
+    } else if (brushType === "ink") {
+      ctx.fillStyle = brushColor;
+      ctx.beginPath();
+      for (let angle = 0; angle < Math.PI * 2; angle += 0.4) {
+        const offset = (Math.random() - 0.5) * r * 0.3;
+        const rx = px + Math.cos(angle) * (r + offset);
+        const ry = py + Math.sin(angle) * (r + offset);
+        if (angle === 0) ctx.moveTo(rx, ry);
+        else ctx.lineTo(rx, ry);
+      }
+      ctx.closePath();
+      ctx.fill();
+    } else if (brushType === "charcoal") {
+      ctx.fillStyle = brushColor;
+      for (let i = 0; i < 20; i++) {
+        const ox = (Math.random() - 0.5) * r * 2;
+        const oy = (Math.random() - 0.5) * r * 2;
+        ctx.globalAlpha = alpha * 0.25;
+        ctx.fillRect(px + ox, py + oy, Math.max(1, r * 0.1), Math.max(1, r * 0.1));
+      }
+    }
+    
+    ctx.restore();
+  };
+
   const dab = (id: string, x: number, y: number, pressure: number) => {
     const c = paintCanvases.current[id]; if (!c) return;
     const ctx = c.getContext("2d")!;
     const r = (brushSize / 2) * (0.4 + pressure * 0.6);
     ctx.save();
+    
+    // Lasso Boundary Masking Clip Path
+    if (lassoPoints.length > 2) {
+      ctx.beginPath();
+      ctx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
+      for (let i = 1; i < lassoPoints.length; i++) {
+        ctx.lineTo(lassoPoints[i].x, lassoPoints[i].y);
+      }
+      ctx.closePath();
+      ctx.clip();
+    }
     
     if (tool === "eraser") {
       ctx.globalCompositeOperation = "destination-out";
@@ -592,12 +685,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
         ctx.fillStyle = "rgba(0,0,0,1)";
         ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
       } else {
-        const g = ctx.createRadialGradient(px, py, 0, px, py, r);
-        g.addColorStop(0, brushColor);
-        g.addColorStop(0.75, brushColor);
-        g.addColorStop(1, brushColor + "00");
-        ctx.fillStyle = g;
-        ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+        applyBrushProceduralDab(ctx, px, py, r, brushOpacity);
       }
     };
 
@@ -652,6 +740,21 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
     };
 
     snapshotPaint(destId);
+    
+    // Check if point inside Lasso Selection stencil bounding loop
+    const pointInLasso = (px: number, py: number): boolean => {
+      if (lassoPoints.length < 3) return true;
+      let inside = false;
+      for (let i = 0, j = lassoPoints.length - 1; i < lassoPoints.length; j = i++) {
+        const xi = lassoPoints[i].x, yi = lassoPoints[i].y;
+        const xj = lassoPoints[j].x, yj = lassoPoints[j].y;
+        const intersect = ((yi > py) !== (yj > py))
+            && (px < (xj - xi) * (py - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    };
+
     const stack = [[x, y]];
     const seen = new Uint8Array(W * H);
     while (stack.length) {
@@ -660,7 +763,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
       if (seen[fi]) continue;
       seen[fi] = 1;
       const i = fi * 4;
-      if (!match(i)) continue;
+      if (!match(i) || !pointInLasso(cx, cy)) continue;
       dp[i] = fill.r; dp[i + 1] = fill.g; dp[i + 2] = fill.b; dp[i + 3] = 255;
       if (cx > 0) stack.push([cx - 1, cy]);
       if (cx < W - 1) stack.push([cx + 1, cy]);
@@ -692,6 +795,39 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
     setAiBusy(true);
     try { const url = await runAi({ prompt: aiPrompt.trim(), image: sel.src, width: 1024, height: 1024, persist: false }); if (url) { patchLayer(sel.id, { src: url }); setAiPrompt(""); toast.success("Layer reimagined."); } }
     finally { setAiBusy(false); }
+  };
+
+  // Convert Lasso coordinates to set a generation mask region
+  const handleLassoRegionAi = async () => {
+    if (lassoPoints.length < 3) {
+      toast.error("Trace a lasso region before generating.");
+      return;
+    }
+    if (aiPrompt.trim().length < 3) {
+      toast.error("Describe the image to generate inside your lasso selection.");
+      return;
+    }
+    setAiBusy(true);
+    try {
+      const xs = lassoPoints.map(p => p.x);
+      const ys = lassoPoints.map(p => p.y);
+      const minX = Math.max(0, Math.min(...xs)), maxX = Math.min(artboardW, Math.max(...xs));
+      const minY = Math.max(0, Math.min(...ys)), maxY = Math.min(artboardH, Math.max(...ys));
+      const w = maxX - minX;
+      const h = maxY - minY;
+      
+      const longest = Math.max(w, h); const k = Math.min(1, 1024 / longest);
+      const gw = Math.round(w * k); const gh = Math.round(h * k);
+      const url = await runAi({ prompt: aiPrompt.trim(), width: gw, height: gh, persist: false, style: aiStyle });
+      if (url) {
+        addImageAt(url, aiPrompt.slice(0, 24), { x: minX, y: minY, w, h });
+        setAiPrompt("");
+        setLassoPoints([]);
+        toast.success("Generated directly into selection.");
+      }
+    } finally {
+      setAiBusy(false);
+    }
   };
 
   const finalizeRegion = async (r: { x: number; y: number; w: number; h: number }) => {
@@ -837,27 +973,33 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
   const defaultPa = isHat ? { x: 0.28, y: 0.32, w: 0.44, h: 0.36 } : isPoster ? { x: 0.06, y: 0.05, w: 0.88, h: 0.9 } : { x: 0.2, y: 0.14, w: 0.6, h: 0.62 };
   const pa = printArea || defaultPa;
 
+  // Flattened coordinate arrays for lasso tracing rendering
+  const getFlatLassoPoints = (): number[] => {
+    const pts: number[] = [];
+    lassoPoints.forEach((p) => pts.push(p.x, p.y));
+    return pts;
+  };
+
   return (
     <div className={`fixed inset-0 z-50 flex flex-col font-mono select-none overflow-hidden transition-colors duration-200 ${isDark ? "bg-[#121212] text-neutral-100" : "bg-[#f4f4f5] text-neutral-900"}`}>
       
       {/* ─────────────────────────────────────────────────────────────
-         THE STREAMLINED PROCREATE TOP NAVIGATION BAR (Adapts beautifully)
+         THE STREAMLINED PROCREATE TOP NAVIGATION BAR
          ───────────────────────────────────────────────────────────── */}
       {!fullScreenCanvas && (
         <div className={`flex items-center justify-between px-6 py-2 border-b shrink-0 z-50 transition-all ${isDark ? "bg-[#1c1c1e] border-neutral-800" : "bg-white border-neutral-200 shadow-sm"}`}>
           
-          {/* Left Section: Gallery Button & Modification Shortcuts */}
           <div className="flex items-center gap-1">
             <button 
               onClick={onClose} 
-              className="px-4 py-2 rounded-lg text-sm font-semibold tracking-wide text-indigo-500 hover:bg-indigo-500/10 transition-colors"
+              className="px-4 py-2 rounded-lg text-sm font-semibold tracking-wide text-indigo-500 hover:bg-indigo-500/10 transition-colors font-sans"
             >
               Gallery
             </button>
             
             <span className="w-px h-5 bg-neutral-300 dark:bg-neutral-700 mx-2" />
 
-            {/* Actions (Wrench Icon Popover) */}
+            {/* Actions (Wrench Popover) */}
             <button 
               onClick={() => togglePopover("actions")} 
               className={`p-2.5 rounded-lg transition-colors ${activePopover === "actions" ? "text-indigo-500 bg-indigo-500/10" : "text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"}`}
@@ -866,7 +1008,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
               <Wrench size={18} />
             </button>
 
-            {/* Adjustments (Wand Popover: AI & Filter modifiers) */}
+            {/* Adjustments (Wand Popover: AI & Filters) */}
             <button 
               onClick={() => togglePopover("adjustments")} 
               className={`p-2.5 rounded-lg transition-colors ${activePopover === "adjustments" ? "text-indigo-500 bg-indigo-500/10" : "text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"}`}
@@ -875,16 +1017,25 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
               <Wand2 size={18} />
             </button>
 
-            {/* Selection (Marquee / Region Tool) */}
+            {/* Lasso Selection Ribbon Icon */}
             <button 
-              onClick={() => { setRegionMode(v => !v); setTool("select"); setSelectedId(null); }} 
-              className={`p-2.5 rounded-lg transition-colors ${regionMode ? "text-indigo-500 bg-indigo-500/10" : "text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"}`}
-              title="Selection (Region AI)"
+              onClick={() => { setTool("lasso"); setRegionMode(false); setSelectedId(null); }} 
+              className={`p-2.5 rounded-lg transition-colors ${tool === "lasso" ? "text-indigo-500 bg-indigo-500/10" : "text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"}`}
+              title="Freehand Lasso Mask"
             >
               <SquareDashed size={18} />
             </button>
 
-            {/* Transform arrow selector */}
+            {/* Selection (Marquee Mode) */}
+            <button 
+              onClick={() => { setRegionMode(v => !v); setTool("select"); setSelectedId(null); }} 
+              className={`p-2.5 rounded-lg transition-colors ${regionMode ? "text-indigo-500 bg-indigo-500/10" : "text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"}`}
+              title="Region Selection AI"
+            >
+              <Grid size={18} />
+            </button>
+
+            {/* Transform Select Tool */}
             <button 
               onClick={() => { setTool("select"); setRegionMode(false); }} 
               className={`p-2.5 rounded-lg transition-colors ${tool === "select" && !regionMode ? "text-indigo-500 bg-indigo-500/10" : "text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"}`}
@@ -894,14 +1045,12 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
             </button>
           </div>
 
-          {/* Center Context Label */}
-          <span className="hidden md:inline text-xs font-medium uppercase tracking-widest text-neutral-400 dark:text-neutral-500 max-w-[200px] truncate">
+          <span className="hidden md:inline text-xs font-semibold uppercase tracking-widest text-neutral-400 dark:text-neutral-500 max-w-[200px] truncate">
             {projectName}
           </span>
 
-          {/* Right Section: Artist Pen tools, Layers & Color swatches */}
           <div className="flex items-center gap-1">
-            {/* Paint brush icon */}
+            {/* Paint brush tool */}
             <button 
               onClick={() => { setTool("brush"); setRegionMode(false); }} 
               className={`p-2.5 rounded-lg transition-colors ${tool === "brush" ? "text-indigo-500 bg-indigo-500/10" : "text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"}`}
@@ -928,7 +1077,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
               <PaintBucket size={18} />
             </button>
 
-            {/* Layers panel toggler */}
+            {/* Layers Panel toggler */}
             <button 
               onClick={() => togglePopover("layers")} 
               className={`p-2.5 rounded-lg transition-colors relative ${activePopover === "layers" ? "text-indigo-500 bg-indigo-500/10" : "text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"}`}
@@ -942,11 +1091,11 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
               )}
             </button>
 
-            {/* Procreate Circular Color Disk / Custom Input */}
+            {/* Color swatches disk preview */}
             <button 
               onClick={() => togglePopover("colors")} 
               className="p-1.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all flex items-center justify-center relative"
-              title="Color Ring"
+              title="Color Swatch Matrix"
             >
               <div 
                 className="w-6 h-6 rounded-full border border-neutral-300 dark:border-neutral-700 shadow-inner"
@@ -958,11 +1107,11 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-         PROCREATE ICONIC FLOAT SIDEBAR (Size & Opacity Vertical Tracks)
+         THE ICONIC FLOATING DOUBLE BAR (Size & Opacity Vertical Tracks)
          ───────────────────────────────────────────────────────────── */}
-      <div className="absolute left-6 top-[20%] bottom-[20%] flex flex-col items-center justify-between py-6 w-14 z-40 select-none pointer-events-none procreate-sidebar">
+      <div className="absolute left-6 top-[20%] bottom-[20%] flex flex-col items-center justify-between py-6 w-14 z-45 select-none pointer-events-none procreate-sidebar">
         
-        {/* Brush Size vertical selector */}
+        {/* Brush size slider */}
         <div className="flex flex-col items-center gap-1.5 group pointer-events-auto">
           <span className="text-[8px] font-bold opacity-45 uppercase tracking-wider text-neutral-500 select-none">Size</span>
           <div className="h-32 w-5 bg-neutral-200/50 dark:bg-neutral-900/50 backdrop-blur-md rounded-full relative flex items-center justify-center overflow-hidden border border-neutral-350/10 shadow-lg cursor-ns-resize">
@@ -975,7 +1124,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
               className="absolute inset-0 h-full w-full opacity-0 cursor-ns-resize rotate-180"
               style={{ writingMode: "bt-lr", WebkitAppearance: "slider-vertical" } as any}
             />
-            {/* Fluid fill meter */}
             <div 
               className="absolute bottom-0 left-0 right-0 bg-indigo-500/80 pointer-events-none transition-all duration-75"
               style={{ height: `${(brushSize / 600) * 100}%` }}
@@ -984,23 +1132,23 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
           <span className="text-[9px] font-bold text-neutral-400 dark:text-neutral-500 tabular-nums">{brushSize}px</span>
         </div>
 
-        {/* Procreate iconic central modifier square button */}
+        {/* Dynamic color sampling eyedropper tool */}
         <div className="flex flex-col items-center gap-2 pointer-events-auto">
           <button 
             onClick={() => {
               setTool(tool === "eyedropper" ? "brush" : "eyedropper");
-              toast(tool === "eyedropper" ? "Brush Activated" : "Tap on canvas to sample color", { duration: 1500 });
+              toast(tool === "eyedropper" ? "Brush Mode active" : "Sampling tool loaded: tap and drag across canvas", { duration: 1500 });
             }}
             className={`w-9 h-9 rounded-xl backdrop-blur-md border border-neutral-300/10 shadow-md flex items-center justify-center transition-all ${
               tool === "eyedropper" ? "bg-indigo-500 text-white shadow-indigo-500/20" : "bg-neutral-200/70 dark:bg-neutral-900/70 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-350/50 dark:hover:bg-neutral-800/50"
             }`}
-            title="Eyedropper Sample Color"
+            title="Eyedropper Color Sampler"
           >
             <Pipette size={15} />
           </button>
         </div>
 
-        {/* Brush Opacity vertical selector */}
+        {/* Brush opacity slider */}
         <div className="flex flex-col items-center gap-1.5 group pointer-events-auto">
           <span className="text-[8px] font-bold opacity-45 uppercase tracking-wider text-neutral-500 select-none">Opac</span>
           <div className="h-32 w-5 bg-neutral-200/50 dark:bg-neutral-900/50 backdrop-blur-md rounded-full relative flex items-center justify-center overflow-hidden border border-neutral-350/10 shadow-lg cursor-ns-resize">
@@ -1023,7 +1171,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
-         FLOATING MODAL OVERLAYS (Wrench / Wand / Layers / Colors)
+         FLOATING COMPACT POPOVER TRIGGERS
          ───────────────────────────────────────────────────────────── */}
       {activePopover !== "none" && !fullScreenCanvas && (
         <div className="absolute inset-0 z-[100] bg-transparent" onClick={() => setActivePopover("none")}>
@@ -1033,13 +1181,11 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
               activePopover === "colors" || activePopover === "layers" ? "right-6" : "left-6"
             } ${isDark ? "bg-[#1c1c1e] border-neutral-800 text-neutral-100" : "bg-white border-neutral-200 text-neutral-900"}`}
           >
-            {/* Popover slider bar decoration */}
             <div className="w-10 h-1 bg-neutral-300 dark:bg-neutral-800 rounded-full mx-auto mb-5" />
 
-            {/* Actions Menu Popovers */}
+            {/* popover configurations */}
             {activePopover === "actions" && (
               <div className="space-y-4">
-                {/* Actions Tabs (Add, Canvas, Share) */}
                 <div className="flex border-b border-neutral-200 dark:border-neutral-800 pb-2 mb-2">
                   {["add", "canvas", "share"].map((tab) => (
                     <button
@@ -1056,7 +1202,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                   ))}
                 </div>
 
-                {/* TAB CONTENT: Add */}
                 {activePopoverTab === "add" && (
                   <div className="space-y-3">
                     <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Insert Elements</p>
@@ -1076,7 +1221,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                   </div>
                 )}
 
-                {/* TAB CONTENT: Canvas */}
                 {activePopoverTab === "canvas" && (
                   <div className="space-y-3">
                     <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Canvas Tweaks</p>
@@ -1114,7 +1258,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                   </div>
                 )}
 
-                {/* TAB CONTENT: Share */}
                 {activePopoverTab === "share" && (
                   <div className="space-y-3">
                     <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Share Image</p>
@@ -1126,7 +1269,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                         {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save State
                       </button>
                     </div>
-                    <button onClick={publish} disabled={publishing} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold uppercase bg-indigo-500 text-white hover:bg-indigo-600">
+                    <button onClick={publish} disabled={publishing} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold uppercase bg-indigo-500 text-white hover:bg-indigo-600 font-sans">
                       {publishing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} Publish Design
                     </button>
                   </div>
@@ -1134,10 +1277,32 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
               </div>
             )}
 
-            {/* Adjustments Menu Popovers */}
             {activePopover === "adjustments" && (
               <div className="space-y-4">
                 <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Adjustments</p>
+                
+                {/* Dynamic Brush tip type switcher inside popover context */}
+                <div className="space-y-2">
+                  <p className="text-[10px] uppercase font-bold tracking-wide text-neutral-400">Active Brush Shader</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {(["round", "textured", "ink", "charcoal"] as const).map((b) => (
+                      <button 
+                        key={b} 
+                        onClick={() => { setBrushType(b); setTool("brush"); }}
+                        className={`py-1.5 px-2.5 rounded-lg text-[9px] font-bold uppercase tracking-wider text-center transition-all ${
+                          brushType === b 
+                            ? "bg-indigo-500 text-white" 
+                            : "bg-neutral-100 dark:bg-neutral-800 text-neutral-500 hover:bg-neutral-200 dark:hover:bg-neutral-750"
+                        }`}
+                      >
+                        {b}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <span className="block h-px bg-neutral-200 dark:bg-neutral-800" />
+
                 {selected ? (
                   <div className="space-y-3">
                     <p className="text-[11px] font-bold">Selected Element: {selected.name}</p>
@@ -1165,8 +1330,8 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                   <textarea 
                     value={aiPrompt} 
                     onChange={(e) => setAiPrompt(e.target.value)}
-                    placeholder="Describe design layers to generate..."
-                    className="w-full h-16 bg-neutral-100 dark:bg-neutral-900 border-0 rounded-xl p-3 text-[10px] focus:outline-none focus:ring-1 focus:ring-indigo-500 text-neutral-900 dark:text-neutral-100" 
+                    placeholder="Describe design layers or lasso regions to generate..."
+                    className="w-full h-16 bg-neutral-100 dark:bg-neutral-900 border-0 rounded-xl p-3 text-[10px] focus:outline-none focus:ring-1 focus:ring-indigo-500 text-neutral-900 dark:text-neutral-100 font-mono" 
                   />
                   <div className="flex flex-wrap items-center gap-1">
                     {(["apparel", "streetwear", "vintage", "lineart", "embroidery"] as const).map((s) => (
@@ -1176,9 +1341,15 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                     ))}
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={aiNewLayer} disabled={aiBusy} className="flex-1 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500 text-white hover:bg-indigo-600 flex items-center justify-center gap-1">
-                      {aiBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Generate
-                    </button>
+                    {lassoPoints.length >= 3 ? (
+                      <button onClick={handleLassoRegionAi} disabled={aiBusy} className="w-full py-2.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500 text-white hover:bg-indigo-600 flex items-center justify-center gap-1 font-sans">
+                        {aiBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Generate Into Lasso
+                      </button>
+                    ) : (
+                      <button onClick={aiNewLayer} disabled={aiBusy} className="flex-1 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500 text-white hover:bg-indigo-600 flex items-center justify-center gap-1 font-sans">
+                        {aiBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Generate Layer
+                      </button>
+                    )}
                     {selected?.type === "image" && (
                       <button onClick={aiRegenerateSelected} disabled={aiBusy} className="py-2.5 px-4 rounded-full text-[10px] font-bold uppercase border hover:bg-neutral-100 dark:hover:bg-neutral-800">
                         Reimagine
@@ -1189,12 +1360,11 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
               </div>
             )}
 
-            {/* Layers Dropdown Menu */}
             {activePopover === "layers" && (
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Layers</p>
-                  <button onClick={addPaintLayer} className="text-xs font-bold text-indigo-500 hover:underline flex items-center gap-1">
+                  <button onClick={addPaintLayer} className="text-xs font-bold text-indigo-500 hover:underline flex items-center gap-1 font-sans">
                     <Plus size={12} /> Add Paint
                   </button>
                 </div>
@@ -1219,7 +1389,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                           {l.type === "text" ? (l.text || "Text") : l.name}
                         </span>
                         
-                        {/* Blend mode visual tag inside layers */}
                         <span className="text-[10px] font-bold bg-neutral-200 dark:bg-neutral-800 px-2 py-0.5 rounded-full text-neutral-400">
                           {BLEND_ABBR[l.blend || "source-over"]}
                         </span>
@@ -1231,7 +1400,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                         </div>
                       </div>
 
-                      {/* Advanced sub-panels for selection */}
                       {selectedId === l.id && (
                         <div className="mt-2.5 pt-2.5 border-t border-neutral-200 dark:border-neutral-800 space-y-2 text-[10px] text-neutral-500">
                           <div className="flex items-center justify-between gap-1">
@@ -1260,7 +1428,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
               </div>
             )}
 
-            {/* Colors Menu Popovers */}
             {activePopover === "colors" && (
               <div className="space-y-4">
                 <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Color Swatch Disk</p>
@@ -1290,14 +1457,13 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-         MAIN DIGITAL ARTWORK VIEWPORT (Support zoom, physical panning)
+         MAIN DIGITAL ARTWORK VIEWPORT (With rotation, zoom, panning)
          ───────────────────────────────────────────────────────────── */}
       <div className="flex-1 flex overflow-hidden relative">
         <div 
           ref={scrollOuterRef} 
           className="flex-1 overflow-auto p-4 min-h-[380px] canvas-scroll-container bg-[radial-gradient(ellipse_at_center,#2c2c2e_0%,#1c1c1e_60%,#121212_100%)] select-none"
         >
-          {/* Dimension bounds to allow elastic panning space when zoomed in */}
           <div 
             className="relative block"
             style={{
@@ -1317,95 +1483,148 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
               <Stage
                 ref={stageRef}
                 width={artboardW * scale} height={artboardH * scale} scaleX={scale} scaleY={scale}
-                style={{ cursor: tool === "brush" ? "crosshair" : tool === "eraser" ? "cell" : "default" }}
+                style={{ cursor: tool === "brush" ? "crosshair" : tool === "eraser" ? "cell" : tool === "lasso" ? "crosshair" : "default" }}
                 onTouchStart={handleStageTouchStart}
                 onMouseDown={(e) => {
+                  const p = getArtboardPointerPos();
+                  if (!p) return;
+
                   if (tool === "eyedropper") {
-                    const p = e.target.getStage()!.getRelativePointerPosition()!;
-                    sampleColorAtPos(p.x, p.y);
+                    sampleColorAtPos(p);
                     setTool("brush");
                     return;
                   }
+                  if (tool === "lasso") {
+                    setLassoPoints([p]);
+                    return;
+                  }
                   if (tool === "fill") {
-                    const p = e.target.getStage()!.getRelativePointerPosition()!;
                     floodFill(p.x, p.y);
                     return;
                   }
                   if (tool === "brush" || tool === "eraser") {
                     const id = ensurePaintTarget(true);
                     if (!id) { toast.error("Could not create a paint layer"); return; }
-                    const p = e.target.getStage()!.getRelativePointerPosition()!;
                     snapshotPaint(id); painting.current = true; lastPt.current = null;
                     strokeTo(id, p.x, p.y, (e.evt as any).pressure || 0.5);
                     return;
                   }
-                  if (regionMode) { const p = e.target.getStage()!.getRelativePointerPosition()!; drawing.current = { x: p.x, y: p.y }; setRegion({ x: p.x, y: p.y, w: 0, h: 0 }); return; }
+                  if (regionMode) { drawing.current = { x: p.x, y: p.y }; setRegion({ x: p.x, y: p.y, w: 0, h: 0 }); return; }
                   if (e.target === e.target.getStage() || (e.target as any).attrs?.name === "bg") setSelectedId(null);
                 }}
                 onMouseMove={(e) => {
+                  const p = getArtboardPointerPos();
+                  if (!p) return;
+
+                  if (tool === "lasso" && e.evt.buttons === 1) {
+                    setLassoPoints((pts) => [...pts, p]);
+                    return;
+                  }
                   if (tool === "eyedropper") return;
                   if ((tool === "brush" || tool === "eraser") && painting.current) {
                     const id = layers.find((l) => l.id === selectedId)?.type === "paint" ? selectedId! : ensurePaintTarget();
-                    if (id) { const p = e.target.getStage()!.getRelativePointerPosition()!; strokeTo(id, p.x, p.y, (e.evt as any).pressure || 0.5); }
+                    if (id) { strokeTo(id, p.x, p.y, (e.evt as any).pressure || 0.5); }
                     return;
                   }
-                  if (regionMode && drawing.current) { const p = e.target.getStage()!.getRelativePointerPosition()!; const s = drawing.current; setRegion({ x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), w: Math.abs(p.x - s.x), h: Math.abs(p.y - s.y) }); }
+                  if (regionMode && drawing.current) { const s = drawing.current; setRegion({ x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), w: Math.abs(p.x - s.x), h: Math.abs(p.y - s.y) }); }
                 }}
                 onMouseUp={() => {
+                  if (tool === "lasso") {
+                    // Close polygon stencils
+                    if (lassoPoints.length > 2) {
+                      setLassoPoints((pts) => [...pts, pts[0]]);
+                    }
+                    return;
+                  }
                   if (painting.current) { painting.current = false; lastPt.current = null; return; }
                   if (regionMode && drawing.current && region) { drawing.current = null; finalizeRegion(region); }
                 }}
                 onTouchMove={(e) => {
+                  const p = getArtboardPointerPos();
+                  if (!p) return;
+
+                  if (tool === "lasso") {
+                    setLassoPoints((pts) => [...pts, p]);
+                    return;
+                  }
                   if ((tool === "brush" || tool === "eraser") && painting.current) {
                     const id = layers.find((l) => l.id === selectedId)?.type === "paint" ? selectedId! : ensurePaintTarget();
-                    if (id) { const p = e.target.getStage()!.getRelativePointerPosition()!; strokeTo(id, p.x, p.y, 0.5); }
+                    if (id) { strokeTo(id, p.x, p.y, 0.5); }
                   }
                 }}
                 onTouchEnd={() => {
+                  if (tool === "lasso") {
+                    if (lassoPoints.length > 2) {
+                      setLassoPoints((pts) => [...pts, pts[0]]);
+                    }
+                    return;
+                  }
                   if (painting.current) { painting.current = false; lastPt.current = null; }
                 }}
               >
                 <Layer>
-                  <Group name="background-group">
-                    <Rect name="bg" x={0} y={0} width={artboardW} height={artboardH} fill="#ffffff" listening />
-                    {canvasKind === "canvas" ? null : garment ? (
-                      <>
-                        <KImage name="garment" image={garment} x={0} y={0} width={artboardW} height={artboardH} listening={false} />
-                        <Rect name="guide" x={artboardW * pa.x} y={artboardH * pa.y} width={artboardW * pa.w} height={artboardH * pa.h} stroke="#6366f1" strokeWidth={4} dash={[26, 18]} cornerRadius={20} listening={false} opacity={0.6} />
-                      </>
+                  {/* Outer transformed workspace group (Handles 360 Rotation centered on artboard context) */}
+                  <Group 
+                    ref={artboardGroupRef}
+                    rotation={canvasRotation} 
+                    x={artboardW / 2} y={artboardH / 2} 
+                    offsetX={artboardW / 2} offsetY={artboardH / 2}
+                  >
+                    <Group name="background-group">
+                      <Rect name="bg" x={0} y={0} width={artboardW} height={artboardH} fill="#ffffff" listening />
+                      {canvasKind === "canvas" ? null : garment ? (
+                        <>
+                          <KImage name="garment" image={garment} x={0} y={0} width={artboardW} height={artboardH} listening={false} />
+                          <Rect name="guide" x={artboardW * pa.x} y={artboardH * pa.y} width={artboardW * pa.w} height={artboardH * pa.h} stroke="#6366f1" strokeWidth={4} dash={[26, 18]} cornerRadius={20} listening={false} opacity={0.6} />
+                        </>
+                      ) : (
+                        <>
+                          <Rect name="garment" x={artboardW * 0.06} y={artboardH * 0.05} width={artboardW * 0.88} height={artboardH * 0.9} cornerRadius={artboardW * 0.06} fill={isDark ? "#161616" : "#f1f1f3"} listening={false} />
+                          <Rect name="guide" x={artboardW * pa.x} y={artboardH * pa.y} width={artboardW * pa.w} height={artboardH * pa.h} stroke="#9ca3af" strokeWidth={4} dash={[26, 18]} cornerRadius={20} listening={false} />
+                        </>
+                      )}
+                    </Group>
+
+                    {layers.map((l) => l.type === "paint" ? (
+                      <PaintNode key={l.id} layer={l} canvas={getPaintCanvas(l)} />
+                    ) : l.type === "image" ? (
+                      <ImageNode key={l.id} layer={l} listening={!regionMode && tool === "select"}
+                        nodeRef={(n: any) => (nodeRefs.current[l.id] = n)} onDragMove={snapDrag}
+                        onSelect={() => setSelectedId(l.id)} onChange={(patch: any) => { patchLayer(l.id, patch); setGuides({ v: false, h: false }); }} />
                     ) : (
-                      <>
-                        <Rect name="garment" x={artboardW * 0.06} y={artboardH * 0.05} width={artboardW * 0.88} height={artboardH * 0.9} cornerRadius={artboardW * 0.06} fill={isDark ? "#161616" : "#f1f1f3"} listening={false} />
-                        <Rect name="guide" x={artboardW * pa.x} y={artboardH * pa.y} width={artboardW * pa.w} height={artboardH * pa.h} stroke="#9ca3af" strokeWidth={4} dash={[26, 18]} cornerRadius={20} listening={false} />
-                      </>
+                      <TextNode key={l.id} layer={l} listening={!regionMode && tool === "select"}
+                        nodeRef={(n: any) => (nodeRefs.current[l.id] = n)} onDragMove={snapDrag}
+                        onSelect={() => setSelectedId(l.id)} onChange={(patch: any) => { patchLayer(l.id, patch); setGuides({ v: false, h: false }); }} />
+                    ))}
+
+                    {(tool === "brush" || tool === "eraser") && symmetry === "v" && <Rect name="symmetry-guide" x={artboardW / 2 - 1} y={0} width={2} height={artboardH} fill="#6366f1" opacity={0.5} listening={false} />}
+                    {(tool === "brush" || tool === "eraser") && symmetry === "h" && <Rect name="symmetry-guide" x={0} y={artboardH / 2 - 1} width={artboardW} height={2} fill="#6366f1" opacity={0.5} listening={false} />}
+
+                    {guides.v && <Rect name="align-guide" x={artboardW / 2 - 1} y={0} width={2} height={artboardH} fill="#22d3ee" listening={false} />}
+                    {guides.h && <Rect name="align-guide" x={0} y={artboardH / 2 - 1} width={artboardW} height={2} fill="#22d3ee" listening={false} />}
+
+                    {region && <Rect x={region.x} y={region.y} width={region.w} height={region.h} stroke="#6366f1" strokeWidth={4} dash={[16, 12]} fill="rgba(99,102,241,0.08)" listening={false} />}
+                    
+                    {/* Render active Lasso selection polygon path (with marching ants dash offset logic) */}
+                    {lassoPoints.length > 1 && (
+                      <Line 
+                        points={getFlatLassoPoints()} 
+                        stroke="#6366f1" 
+                        strokeWidth={2} 
+                        dash={[6, 6]} 
+                        dashOffset={dashOffset}
+                        closed={lassoPoints.length > 2}
+                        listening={false}
+                      />
                     )}
+                    
+                    <Transformer
+                      ref={trRef} rotateEnabled keepRatio
+                      enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right", "middle-left", "middle-right", "top-center", "bottom-center"]}
+                      anchorCornerRadius={20} borderStroke="#6366f1" anchorStroke="#6366f1" anchorSize={14}
+                      boundBoxFunc={(oldBox, newBox) => (newBox.width < 10 || newBox.height < 10 ? oldBox : newBox)}
+                    />
                   </Group>
-
-                  {layers.map((l) => l.type === "paint" ? (
-                    <PaintNode key={l.id} layer={l} canvas={getPaintCanvas(l)} />
-                  ) : l.type === "image" ? (
-                    <ImageNode key={l.id} layer={l} listening={!regionMode && tool === "select"}
-                      nodeRef={(n: any) => (nodeRefs.current[l.id] = n)} onDragMove={snapDrag}
-                      onSelect={() => setSelectedId(l.id)} onChange={(patch: any) => { patchLayer(l.id, patch); setGuides({ v: false, h: false }); }} />
-                  ) : (
-                    <TextNode key={l.id} layer={l} listening={!regionMode && tool === "select"}
-                      nodeRef={(n: any) => (nodeRefs.current[l.id] = n)} onDragMove={snapDrag}
-                      onSelect={() => setSelectedId(l.id)} onChange={(patch: any) => { patchLayer(l.id, patch); setGuides({ v: false, h: false }); }} />
-                  ))}
-
-                  {(tool === "brush" || tool === "eraser") && symmetry === "v" && <Rect name="symmetry-guide" x={artboardW / 2 - 1} y={0} width={2} height={artboardH} fill="#6366f1" opacity={0.5} listening={false} />}
-                  {(tool === "brush" || tool === "eraser") && symmetry === "h" && <Rect name="symmetry-guide" x={0} y={artboardH / 2 - 1} width={artboardW} height={2} fill="#6366f1" opacity={0.5} listening={false} />}
-
-                  {guides.v && <Rect name="align-guide" x={artboardW / 2 - 1} y={0} width={2} height={artboardH} fill="#22d3ee" listening={false} />}
-                  {guides.h && <Rect name="align-guide" x={0} y={artboardH / 2 - 1} width={artboardW} height={2} fill="#22d3ee" listening={false} />}
-
-                  {region && <Rect x={region.x} y={region.y} width={region.w} height={region.h} stroke="#6366f1" strokeWidth={4} dash={[16, 12]} fill="rgba(99,102,241,0.08)" listening={false} />}
-                  <Transformer
-                    ref={trRef} rotateEnabled keepRatio
-                    enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right", "middle-left", "middle-right", "top-center", "bottom-center"]}
-                    anchorCornerRadius={20} borderStroke="#6366f1" anchorStroke="#6366f1" anchorSize={14}
-                    boundBoxFunc={(oldBox, newBox) => (newBox.width < 10 || newBox.height < 10 ? oldBox : newBox)}
-                  />
                 </Layer>
               </Stage>
             </div>
@@ -1414,20 +1633,41 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
-         INTEGRATED WORKSPACE FLOATING CONTROLLER (Zoom & Switchers)
+         INTEGRATED DUAL CONTROLLER (Rotation & Zoom HUD)
          ───────────────────────────────────────────────────────────── */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-2 rounded-full bg-white/95 dark:bg-[#1c1c1e]/95 backdrop-blur-md shadow-xl border border-neutral-200/20 pointer-events-auto">
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-2.5 rounded-full bg-white/95 dark:bg-[#1c1c1e]/95 backdrop-blur-md shadow-xl border border-neutral-200/20 pointer-events-auto">
+        
+        {/* Zoom Slider */}
         <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 select-none">Zoom</span>
         <input 
           type="range" min={100} max={800} step={10} value={zoomPercent} 
           onChange={(e) => setZoomPercent(parseInt(e.target.value))} 
-          className="w-28 sm:w-44 accent-indigo-500 cursor-pointer"
+          className="w-20 sm:w-36 accent-indigo-500 cursor-pointer"
         />
-        <span className="text-[10px] font-bold text-neutral-500 select-none w-8">{zoomPercent}%</span>
+        <span className="text-[10px] font-bold text-neutral-500 select-none w-8 tabular-nums">{zoomPercent}%</span>
         
-        <span className="w-px h-4 bg-neutral-200 dark:bg-neutral-800" />
+        <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
 
-        {/* Dynamic view switchers */}
+        {/* Dynamic Rotation Slider */}
+        <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 select-none">Rotate</span>
+        <input 
+          type="range" min={0} max={360} step={1} value={canvasRotation} 
+          onChange={(e) => setCanvasRotation(parseInt(e.target.value))} 
+          className="w-20 sm:w-36 accent-indigo-500 cursor-pointer"
+        />
+        <span className="text-[10px] font-bold text-neutral-500 select-none w-10 tabular-nums">{canvasRotation}°</span>
+
+        <button 
+          onClick={() => setCanvasRotation(0)} 
+          className="p-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-indigo-500"
+          title="Reset Rotation Align"
+        >
+          <RefreshCcw size={12} />
+        </button>
+
+        <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
+
+        {/* View switchers (Mockup vs Template) */}
         {(hasMulti || productPhoto) && (
           <div className="flex items-center gap-1.5">
             {productPhoto && (!hasMulti || activeP === 0) && (
@@ -1450,9 +1690,21 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
           </div>
         )}
 
-        <span className="w-px h-4 bg-neutral-200 dark:bg-neutral-800" />
+        {lassoPoints.length > 0 && (
+          <>
+            <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
+            <button 
+              onClick={() => setLassoPoints([])} 
+              className="text-[9px] uppercase font-bold text-rose-500 hover:underline px-2"
+              title="Clear lasso loop mask stencil"
+            >
+              Clear Loop
+            </button>
+          </>
+        )}
 
-        {/* Manual toggle for interface clean mode */}
+        <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
+
         <button 
           onClick={() => setFullScreenCanvas(!fullScreenCanvas)}
           className="text-neutral-400 hover:text-indigo-500 transition-colors"
@@ -1463,7 +1715,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
-         MODALS & DIALOGS (Attach Blanks / 3D previews / Printful Maker)
+         MODALS & DIALOGS
          ───────────────────────────────────────────────────────────── */}
       {matchOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setMatchOpen(false)}>
@@ -1476,7 +1728,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                 {["t-shirt", "hoodie", "sweatshirt", "tank", "long sleeve", "hat"].map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
               <button onClick={runMatch} disabled={matchBusy}
-                className="flex items-center gap-1.5 px-4 py-2 text-[10px] font-bold uppercase rounded-full bg-indigo-500 text-white hover:bg-indigo-600">
+                className="flex items-center gap-1.5 px-4 py-2 text-[10px] font-bold uppercase rounded-full bg-indigo-500 text-white hover:bg-indigo-600 font-sans">
                 {matchBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Find
               </button>
             </div>
