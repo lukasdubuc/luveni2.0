@@ -42,18 +42,21 @@ is achievable in-browser vs. via the manufacturer mockup API.
 - [x] **Multi-placement data**: detail returns ALL placements (front/back/
       sleeves…), each with template + print box, stored on the project.
 
-### Phase 1 — Multi-placement editor (NEXT — needs greenlight)
-- [ ] Project data model: `placements[]` each with `{ placement, template_image,
-      template_w/h, print_area, layers[] }`. Migrate single-canvas → placement 0.
-- [ ] Placement tab bar in the editor (Front / Back / Left / Right / …) that
-      swaps the active template image, print guide, and **layer set**.
+### Phase 1 — Multi-placement editor (IN PROGRESS)
+- [x] Project data model: `product.placements[]` each with `{ placement,
+      image_url, template_w/h, print_area, print_px, layers[] }`.
+- [x] Placement tab bar in the editor (Front / Back / Sleeves…) that swaps the
+      active template image, print guide, artboard, and **layer set**.
+- [x] Save persists every placement's layers + preserves the product ref
+      (fixes a bug where save wiped product/variant/placements).
 - [ ] Per-placement thumbnails in the project card + a "placements designed" badge.
 - [ ] Publish/fulfilment: send one print file per designed placement to Printful.
 - [ ] Validation: warn if a layer extends outside its placement's print box.
 
 ### Phase 2 — Procreate-grade paint engine
-- [ ] Brush engine: textured stamps, pressure→size/opacity curves, tilt, spacing,
-      smoothing/stabilizer, streamline. Replace the single radial-gradient dab.
+- [x] Stroke stabilizer (moving-average smoothing) — adjustable per brush panel.
+- [x] Pressure→size and pressure→opacity; brush opacity control.
+- [ ] Brush engine: textured stamps, tilt, spacing, streamline; brush presets/library.
 - [ ] Brush library (inking, pencil, airbrush, marker, texture) + import .brush-like presets.
 - [ ] Per-layer: blend modes (full set), alpha-lock, clipping masks, layer groups.
 - [ ] Selection tools: freehand/rect/ellipse, feather, transform within selection.

@@ -160,7 +160,21 @@ function PaintNode({ layer, canvas }: any) {
   );
 }
 
-export default function StudioEditor({ projectId, initialCanvas, artboardW, artboardH, templateKey, templateImage, canvasKind, projectName, priceCents, printArea, onClose, isDark }: Props) {
+export default function StudioEditor({ projectId, initialCanvas, artboardW: artboardWProp, artboardH: artboardHProp, templateKey, templateImage: templateImageProp, canvasKind, projectName, priceCents, printArea: printAreaProp, onClose, isDark }: Props) {
+  // Multi-placement: a product can have several real print locations (front,
+  // back, sleeves…), each with its own template surface, print box and layers.
+  // For single/no-placement projects this is inert and behaves exactly as before.
+  const placements: any[] = ((initialCanvas as any)?.product?.placements) || [];
+  const hasMulti = placements.length > 1;
+  const [activeP, setActiveP] = useState(0);
+  const ap = hasMulti ? placements[activeP] : null;
+  const artboardW = ap?.template_w || artboardWProp;
+  const artboardH = ap?.template_h || artboardHProp;
+  const templateImage = ap?.image_url || templateImageProp;
+  const printArea = ap?.print_area || printAreaProp;
+  // Per-placement layer sets, swapped when the active placement changes.
+  const placementLayers = useRef<Record<number, StudioLayer[]>>({});
+
   // Proxy the product/template image so it loads CORS-clean into Konva (raw
   // Printful/Apliiq CDN URLs don't send Access-Control headers, which would
   // leave the garment template blank).
@@ -234,6 +248,8 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const [tool, setTool] = useState<"select" | "brush" | "fill">("select");
   const [brushSize, setBrushSize] = useState(120);
   const [brushColor, setBrushColor] = useState("#000000");
+  const [brushOpacity, setBrushOpacity] = useState(1);     // 0–1, applied per stroke
+  const [stabilizer, setStabilizer] = useState(0.45);      // 0–0.9 stroke smoothing (Procreate-style)
   const [symmetry, setSymmetry] = useState<"off" | "v" | "h">("off");
   const [fillTolerance, setFillTolerance] = useState(48); // bucket color match tolerance (0–128)
   const [, setPaintVersion] = useState(0);
@@ -572,6 +588,9 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     const c = paintCanvases.current[id]; if (!c) return;
     const ctx = c.getContext("2d")!;
     const r = (brushSize / 2) * (0.4 + pressure * 0.6);
+    // Pressure-modulated opacity (Procreate-style), on top of the brush opacity.
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, brushOpacity * (0.5 + pressure * 0.5)));
     const draw = (px: number, py: number) => {
       const g = ctx.createRadialGradient(px, py, 0, px, py, r);
       g.addColorStop(0, brushColor);
@@ -583,18 +602,27 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     draw(x, y);
     if (symmetry === "v") draw(artboardW - x, y);
     if (symmetry === "h") draw(x, artboardH - y);
+    ctx.restore();
   };
 
-  // interpolate between last and current point so fast strokes stay continuous
+  // interpolate between last and current point so fast strokes stay continuous.
+  // The incoming point is first pulled toward the last drawn point by the
+  // stabilizer amount — a moving-average smoother, like Procreate's stabilization.
   const strokeTo = (id: string, x: number, y: number, pressure: number) => {
     const last = lastPt.current;
+    let tx = x, ty = y;
+    if (last && stabilizer > 0) {
+      const k = 1 - stabilizer; // higher stabilizer ⇒ smoother/laggier
+      tx = last.x + (x - last.x) * k;
+      ty = last.y + (y - last.y) * k;
+    }
     if (last) {
-      const dist = Math.hypot(x - last.x, y - last.y);
+      const dist = Math.hypot(tx - last.x, ty - last.y);
       const step = Math.max(2, brushSize * 0.18);
       const n = Math.ceil(dist / step);
-      for (let i = 1; i <= n; i++) dab(id, last.x + ((x - last.x) * i) / n, last.y + ((y - last.y) * i) / n, pressure);
-    } else dab(id, x, y, pressure);
-    lastPt.current = { x, y };
+      for (let i = 1; i <= n; i++) dab(id, last.x + ((tx - last.x) * i) / n, last.y + ((ty - last.y) * i) / n, pressure);
+    } else dab(id, tx, ty, pressure);
+    lastPt.current = { x: tx, y: ty };
     redrawStage();
   };
 
@@ -685,6 +713,32 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
   const serializeLayers = (): StudioLayer[] =>
     layers.map((l) => (l.type === "paint" && paintCanvases.current[l.id]) ? { ...l, src: paintCanvases.current[l.id].toDataURL() } : l);
 
+  // Switch the active print placement: stash the current layers, load the
+  // target placement's layers (or its persisted set), and reset history.
+  const switchPlacement = (idx: number) => {
+    if (!hasMulti || idx === activeP) return;
+    placementLayers.current[activeP] = serializeLayers();
+    setSelectedId(null);
+    undoStack.current = []; redoStack.current = [];
+    const next = placementLayers.current[idx] ?? (placements[idx]?.layers as StudioLayer[]) ?? [];
+    setActiveP(idx);
+    setLayers(next);
+  };
+
+  // Build the canvas payload for persistence: keep the product ref (variant,
+  // print dims, placements) and store every placement's layers.
+  const buildCanvasPayload = () => {
+    const serialized = serializeLayers();
+    const productNow = ((initialCanvas as any)?.product) || {};
+    if (!hasMulti) return { layers: serialized, product: productNow };
+    placementLayers.current[activeP] = serialized;
+    const placementsPayload = placements.map((p, i) => ({
+      ...p,
+      layers: i === activeP ? serialized : (placementLayers.current[i] ?? p.layers ?? []),
+    }));
+    return { layers: serialized, product: { ...productNow, placements: placementsPayload } };
+  };
+
   // Capture the artboard at a TRUE target pixel width. Konva's pixelRatio
   // multiplies the current (scaled-down) stage size, so we divide the target
   // by the live stage width. `hideChrome` strips the garment/guides/handles
@@ -709,7 +763,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
     setSaving(true);
     try {
       const thumbnail = captureStage(720, false);
-      const { error } = await supabase.from("studio_projects").update({ canvas: { layers: serializeLayers() }, thumbnail_url: thumbnail, updated_at: new Date().toISOString() }).eq("id", projectId);
+      const { error } = await supabase.from("studio_projects").update({ canvas: buildCanvasPayload(), thumbnail_url: thumbnail, updated_at: new Date().toISOString() }).eq("id", projectId);
       if (error) { toast.error(error.message); return; }
       toast.success("Saved.");
     } finally { setSaving(false); }
@@ -907,6 +961,21 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
         </div>
       </div>
 
+      {/* Print-placement tabs — front / back / sleeves, each its own surface */}
+      {hasMulti && (
+        <div className="px-4 pb-2 shrink-0">
+          <div className={`flex items-center gap-1 px-2 py-1.5 rounded-full w-fit ${isDark ? "bg-neutral-900/70" : "bg-[#e8e8ed]/70"}`}>
+            <span className="text-[8px] uppercase tracking-widest opacity-40 px-2">Print area</span>
+            {placements.map((p, i) => (
+              <button key={p.placement + i} onClick={() => switchPlacement(i)}
+                className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-full transition-all ${activeP === i ? (isDark ? "bg-white text-black" : "bg-white text-black shadow") : (isDark ? "text-neutral-400 hover:bg-white/10" : "text-neutral-600 hover:bg-black/[0.06]")}`}>
+                {String(p.placement || `Area ${i + 1}`).replace(/_/g, " ")}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Brush controls — visible on both desktop & mobile when brush is selected */}
       {tool === "brush" && (
         <div className={`px-4 pb-2 shrink-0 transition-all ${fullScreenCanvas ? "lg:hidden" : ""}`}>
@@ -916,8 +985,18 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW, artb
               <input type="color" value={brushColor} onChange={(e) => setBrushColor(e.target.value)} className="w-7 h-7 rounded-full bg-transparent border-0 cursor-pointer shrink-0" title="Brush color" />
               <div className="flex items-center gap-2">
                 <span className="text-[9px] opacity-50 uppercase tracking-widest">Size</span>
-                <input type="range" min={4} max={600} value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} className="w-32 sm:w-40" />
+                <input type="range" min={4} max={600} value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} className="w-24 sm:w-32" />
                 <span className="text-[9px] opacity-60 w-8">{brushSize}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] opacity-50 uppercase tracking-widest">Opacity</span>
+                <input type="range" min={0} max={100} value={Math.round(brushOpacity * 100)} onChange={(e) => setBrushOpacity(parseInt(e.target.value) / 100)} className="w-20 sm:w-28" />
+                <span className="text-[9px] opacity-60 w-8">{Math.round(brushOpacity * 100)}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] opacity-50 uppercase tracking-widest" title="Stroke stabilization">Smooth</span>
+                <input type="range" min={0} max={90} value={Math.round(stabilizer * 100)} onChange={(e) => setStabilizer(parseInt(e.target.value) / 100)} className="w-20 sm:w-28" />
+                <span className="text-[9px] opacity-60 w-8">{Math.round(stabilizer * 100)}</span>
               </div>
             </div>
             <span className="hidden md:block w-px h-4 opacity-10 bg-current" />
