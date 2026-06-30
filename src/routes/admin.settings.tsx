@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { requireAdmin } from "@/lib/admin-guard";
+import { IntegrationsSettings } from "@/components/admin/IntegrationsSettings";
 
 export const Route = createFileRoute("/admin/settings")({
   beforeLoad: requireAdmin,
@@ -42,6 +43,7 @@ function SettingsPage() {
           Edit that file to re-skin the public site for any niche.
         </p>
       </div>
+      <IntegrationsSettings />
     </div>
   );
 }
