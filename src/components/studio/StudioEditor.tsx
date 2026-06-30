@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────
-//  Luveni GM — StudioEditor (Procreate Hand-Book Edition)
+//  Luveni GM — StudioEditor (Procreate-Accurate Edition)
 //  Free, Konva-powered design editor. Layers, text, images,
 //  transform, undo/redo, AI new-layer, and region-select AI.
 // ─────────────────────────────────────────────────────────────
@@ -11,7 +11,7 @@ import {
   Save, Download, Loader2, Wand2, X, RefreshCw, Undo2, Redo2, SquareDashed,
   Paintbrush, FlipHorizontal2, FlipVertical2, MousePointer2, PaintBucket,
   AlignCenterHorizontal, AlignCenterVertical, AlignVerticalJustifyCenter, Layers, Plus,
-  Maximize2, Minimize2, Box, Shirt, Wrench, Eraser, Pipette, Grid, RefreshCcw
+  Maximize2, Minimize2, Box, Shirt, Wrench, Eraser, Pipette, Grid, RefreshCcw, Share2
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -219,7 +219,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
     toast.success(`Matched to ${d.label} (${d.mfr}) · cost $${(costCents / 100).toFixed(2)} → retail $${(retailCents / 100).toFixed(2)}`);
   };
 
-  // State Expansion for Procreate Handbook specifications
+  // State Expansion for Procreate specifications
   const [tool, setTool] = useState<"select" | "brush" | "eraser" | "fill" | "eyedropper" | "lasso">("select");
   const [brushType, setBrushType] = useState<BrushType>("round");
   const [brushSize, setBrushSize] = useState(120);
@@ -258,6 +258,9 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
   const scrollOuterRef = useRef<HTMLDivElement>(null);
 
   const scale = fitScale * (zoomPercent / 100);
+
+  // Mobile Sheets manager: "none" | "layers" | "ai" | "export" | "add"
+  const [mobileSheet, setMobileSheet] = useState<"none" | "layers" | "ai" | "export" | "add">("none");
 
   // Marching ants selection line animation loop
   useEffect(() => {
@@ -470,8 +473,8 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
   useEffect(() => {
     const fit = () => {
       const isMobile = window.innerWidth < 1024;
-      const padW = (isMobile || fullScreenCanvas) ? 32 : 120;
-      const padH = (isMobile || fullScreenCanvas) ? 140 : 180;
+      const padW = (isMobile || fullScreenCanvas) ? 32 : 420;
+      const padH = (isMobile || fullScreenCanvas) ? 140 : 220;
       const availW = Math.max(280, window.innerWidth - padW);
       const availH = Math.max(280, window.innerHeight - padH);
       
@@ -987,9 +990,9 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
          THE STREAMLINED PROCREATE TOP NAVIGATION BAR
          ───────────────────────────────────────────────────────────── */}
       {!fullScreenCanvas && (
-        <div className={`flex items-center justify-between px-6 py-2 border-b shrink-0 z-50 transition-all ${isDark ? "bg-[#1c1c1e] border-neutral-800" : "bg-white border-neutral-200 shadow-sm"}`}>
+        <div className={`flex flex-wrap lg:flex-nowrap items-center justify-between px-6 py-2 border-b shrink-0 z-50 transition-all ${isDark ? "bg-[#1c1c1e] border-neutral-800" : "bg-white border-neutral-200 shadow-sm"}`}>
           
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 flex-wrap">
             <button 
               onClick={onClose} 
               className="px-4 py-2 rounded-lg text-sm font-semibold tracking-wide text-indigo-500 hover:bg-indigo-500/10 transition-colors font-sans"
@@ -1045,62 +1048,56 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
             </button>
           </div>
 
-          <span className="hidden md:inline text-xs font-semibold uppercase tracking-widest text-neutral-400 dark:text-neutral-500 max-w-[200px] truncate">
+          <span className="hidden xl:inline text-xs font-semibold uppercase tracking-widest text-neutral-400 dark:text-neutral-500 max-w-[150px] truncate">
             {projectName}
           </span>
 
-          <div className="flex items-center gap-1">
+          {/* Quick Tools Panel */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button onClick={addText} className={pill}><Type size={13} /> Text</button>
+            <label className={pill + " cursor-pointer"}><ImagePlus size={13} /> Upload<input type="file" accept="image/*,.svg,.png,.jpg,.jpeg,.webp" className="hidden" onChange={(e) => e.target.files?.[0] && uploadImage(e.target.files[0])} /></label>
+            <label className={pill + " cursor-pointer"} title="Import texture (auto Multiply/Screen)"><Wand2 size={13} /> Texture<input type="file" accept="image/*,.svg,.png,.jpg,.jpeg,.webp" className="hidden" onChange={(e) => e.target.files?.[0] && importTexture(e.target.files[0])} /></label>
+            <button onClick={addPaintLayer} className={pill}><Paintbrush size={13} /> Paint Layer</button>
+            <span className="w-px h-5 bg-neutral-300 dark:bg-neutral-700 mx-1" />
+            
             {/* Paint brush tool */}
             <button 
               onClick={() => { setTool("brush"); setRegionMode(false); }} 
-              className={`p-2.5 rounded-lg transition-colors ${tool === "brush" ? "text-indigo-500 bg-indigo-500/10" : "text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"}`}
+              className={`p-2 bg-transparent rounded-lg transition-colors ${tool === "brush" ? "text-indigo-500 bg-indigo-500/10" : "text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"}`}
               title="Paint Tool"
             >
-              <Paintbrush size={18} />
+              <Paintbrush size={16} />
             </button>
 
             {/* Eraser Tool */}
             <button 
               onClick={() => { setTool("eraser"); setRegionMode(false); }} 
-              className={`p-2.5 rounded-lg transition-colors ${tool === "eraser" ? "text-indigo-500 bg-indigo-500/10" : "text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"}`}
+              className={`p-2 bg-transparent rounded-lg transition-colors ${tool === "eraser" ? "text-indigo-500 bg-indigo-500/10" : "text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"}`}
               title="Eraser Tool"
             >
-              <Eraser size={18} />
+              <Eraser size={16} />
             </button>
 
             {/* Paint Bucket tool */}
             <button 
               onClick={() => { setTool("fill"); setRegionMode(false); }} 
-              className={`p-2.5 rounded-lg transition-colors ${tool === "fill" ? "text-indigo-500 bg-indigo-500/10" : "text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"}`}
+              className={`p-2 bg-transparent rounded-lg transition-colors ${tool === "fill" ? "text-indigo-500 bg-indigo-500/10" : "text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"}`}
               title="Flood Fill"
             >
-              <PaintBucket size={18} />
+              <PaintBucket size={16} />
             </button>
 
-            {/* Layers Panel toggler */}
-            <button 
-              onClick={() => togglePopover("layers")} 
-              className={`p-2.5 rounded-lg transition-colors relative ${activePopover === "layers" ? "text-indigo-500 bg-indigo-500/10" : "text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"}`}
-              title="Layers Menu"
-            >
-              <Layers size={18} />
-              {layers.length > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-3.5 h-3.5 bg-indigo-500 text-white rounded-full text-[8px] flex items-center justify-center font-bold">
-                  {layers.length}
-                </span>
-              )}
+            {/* On-Screen Action buttons restored to match primary requirements */}
+            <span className="w-px h-5 bg-neutral-300 dark:bg-neutral-700 mx-1" />
+            {!product?.id && <button onClick={() => setMatchOpen(true)} className={pill}><Shirt size={13} /> Match blank</button>}
+            <button onClick={open3d} className={pill}><Box size={13} /> 3D View</button>
+            {product?.mfr === "printful" && <button onClick={() => setEdmOpen(true)} className={pill}><Wand2 size={13} /> Maker</button>}
+            <button onClick={exportPng} className={pill}><Download size={13} /> Export</button>
+            <button onClick={save} disabled={saving} className={pill}>
+              {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save
             </button>
-
-            {/* Color swatches disk preview */}
-            <button 
-              onClick={() => togglePopover("colors")} 
-              className="p-1.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all flex items-center justify-center relative"
-              title="Color Swatch Matrix"
-            >
-              <div 
-                className="w-6 h-6 rounded-full border border-neutral-300 dark:border-neutral-700 shadow-inner"
-                style={{ backgroundColor: brushColor }}
-              />
+            <button onClick={publish} disabled={publishing} className={`flex items-center gap-1 text-[10px] font-semibold px-3 py-1.5 rounded-full ${isDark ? "bg-white text-black" : "bg-black text-white"}`}>
+              {publishing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Publish
             </button>
           </div>
         </div>
@@ -1109,7 +1106,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
       {/* ─────────────────────────────────────────────────────────────
          THE ICONIC FLOATING DOUBLE BAR (Size & Opacity Vertical Tracks)
          ───────────────────────────────────────────────────────────── */}
-      <div className="absolute left-6 top-[20%] bottom-[20%] flex flex-col items-center justify-between py-6 w-14 z-45 select-none pointer-events-none procreate-sidebar">
+      <div className="absolute left-6 top-[20%] bottom-[20%] flex flex-col items-center justify-between py-6 w-14 z-40 select-none pointer-events-none procreate-sidebar">
         
         {/* Brush size slider */}
         <div className="flex flex-col items-center gap-1.5 group pointer-events-auto">
@@ -1171,13 +1168,83 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
-         FLOATING COMPACT POPOVER TRIGGERS
+         CONTEXT-DEPENDENT HORIZONTAL TWEAK BAR (Always visible under header)
+         ───────────────────────────────────────────────────────────── */}
+      {!fullScreenCanvas && (
+        <div className={`px-6 py-2 border-b shrink-0 flex items-center justify-between gap-3 flex-wrap ${isDark ? "bg-[#18181b] border-neutral-800" : "bg-[#f4f4f5] border-neutral-200"}`}>
+          {/* Brush/Eraser Settings */}
+          {(tool === "brush" || tool === "eraser") && (
+            <div className="flex items-center gap-4 flex-wrap text-xs font-semibold">
+              <span className="text-[10px] opacity-50 uppercase tracking-widest">Brush Shader</span>
+              <div className="flex bg-neutral-200 dark:bg-neutral-800 p-0.5 rounded-full">
+                {(["round", "textured", "ink", "charcoal"] as const).map((b) => (
+                  <button key={b} onClick={() => setBrushType(b)} className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${brushType === b ? "bg-indigo-500 text-white" : "text-neutral-500"}`}>
+                    {b}
+                  </button>
+                ))}
+              </div>
+              <span className="w-px h-4 bg-neutral-300 dark:bg-neutral-700" />
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] opacity-50 uppercase">Smoothness</span>
+                <input type="range" min={0} max={90} value={Math.round(stabilizer * 100)} onChange={(e) => setStabilizer(parseInt(e.target.value) / 100)} className="w-20 accent-indigo-500" />
+                <span className="tabular-nums">{Math.round(stabilizer * 100)}%</span>
+              </div>
+              <span className="w-px h-4 bg-neutral-300 dark:bg-neutral-700" />
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] opacity-50 uppercase">Symmetry</span>
+                <button onClick={() => setSymmetry((s) => (s === "off" ? "v" : s === "v" ? "h" : "off"))} className="text-indigo-500 hover:underline uppercase text-[10px]">
+                  {symmetry === "off" ? "Off" : symmetry === "v" ? "Vertical" : "Horizontal"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Bucket Fill Settings */}
+          {tool === "fill" && (
+            <div className="flex items-center gap-4 text-xs font-semibold">
+              <span className="text-[10px] opacity-50 uppercase tracking-widest">Flood fill</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] opacity-50 uppercase">Tolerance</span>
+                <input type="range" min={0} max={128} value={fillTolerance} onChange={(e) => setFillTolerance(parseInt(e.target.value))} className="w-24 accent-indigo-500" />
+                <span className="tabular-nums">{fillTolerance}</span>
+              </div>
+              <span className="text-[10px] opacity-50 font-normal">Tap areas inside selection boundary to color.</span>
+            </div>
+          )}
+
+          {/* Lasso Active State Indicators */}
+          {tool === "lasso" && (
+            <div className="flex items-center gap-4 text-xs font-semibold">
+              <span className="text-[10px] opacity-50 uppercase tracking-widest">Lasso Mask</span>
+              {lassoPoints.length > 2 ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-emerald-500">✓ Segment Loop Complete</span>
+                  <button onClick={() => setLassoPoints([])} className="text-[9px] uppercase font-bold text-rose-500 hover:underline px-2 border border-rose-500/20 py-0.5 rounded-full">
+                    Clear Selection
+                  </button>
+                </div>
+              ) : (
+                <span className="text-neutral-400 font-normal">Click and drag around elements to lock boundaries.</span>
+              )}
+            </div>
+          )}
+
+          {/* Default Context alignment and selection actions */}
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-[10px] opacity-50 uppercase tracking-widest">Active Color</span>
+            <input type="color" value={brushColor} onChange={(e) => setBrushColor(e.target.value)} className="w-6 h-6 rounded-md bg-transparent border-0 cursor-pointer shrink-0" />
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+         FLOATING MODAL OVERLAYS (Wrench / Wand / Layers / Colors)
          ───────────────────────────────────────────────────────────── */}
       {activePopover !== "none" && !fullScreenCanvas && (
         <div className="absolute inset-0 z-[100] bg-transparent" onClick={() => setActivePopover("none")}>
           <div 
             onClick={(e) => e.stopPropagation()}
-            className={`absolute top-16 rounded-[24px] border p-6 max-w-[350px] w-full shadow-2xl transition-all duration-150 animate-fade-in ${
+            className={`absolute top-28 rounded-[24px] border p-6 max-w-[350px] w-full shadow-2xl transition-all duration-150 animate-fade-in ${
               activePopover === "colors" || activePopover === "layers" ? "right-6" : "left-6"
             } ${isDark ? "bg-[#1c1c1e] border-neutral-800 text-neutral-100" : "bg-white border-neutral-200 text-neutral-900"}`}
           >
@@ -1211,48 +1278,21 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                       </button>
                       <label className="flex flex-col items-center gap-2 p-4 rounded-xl border border-dashed text-neutral-500 hover:text-indigo-500 hover:border-indigo-500/40 transition-colors cursor-pointer">
                         <ImagePlus size={18} /> <span className="text-[10px] font-bold uppercase">Insert Photo</span>
-                        <input type="file" accept="image/*,.svg,.png,.jpg,.jpeg,.webp,.gif,.bmp,.avif" className="hidden" onChange={(e) => { if (e.target.files?.[0]) { uploadImage(e.target.files[0]); setActivePopover("none"); } }} />
+                        <input type="file" accept="image/*,.svg,.png,.jpg,.jpeg,.webp" className="hidden" onChange={(e) => { if (e.target.files?.[0]) { uploadImage(e.target.files[0]); setActivePopover("none"); } }} />
                       </label>
                     </div>
-                    <label className="w-full flex items-center justify-center gap-2 py-3 border border-dashed rounded-xl cursor-pointer text-neutral-500 hover:text-indigo-500 hover:border-indigo-500/40 text-xs font-bold transition-all">
-                      <Wand2 size={14} /> Import Vector Texture
-                      <input type="file" accept="image/*,.svg,.png,.jpg,.jpeg,.webp" className="hidden" onChange={(e) => { if (e.target.files?.[0]) { importTexture(e.target.files[0]); setActivePopover("none"); } }} />
-                    </label>
                   </div>
                 )}
 
                 {activePopoverTab === "canvas" && (
                   <div className="space-y-3">
                     <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Canvas Tweaks</p>
-                    <div className="space-y-2">
-                      <button onClick={open3d} className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
-                        <span className="flex items-center gap-2.5"><Box size={14} /> 3D Garment Sandbox</span>
-                        <span className="text-[8px] bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-full font-bold">LIVE</span>
-                      </button>
-                      {product?.mfr === "printful" && (
-                        <button onClick={() => setEdmOpen(true)} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
-                          <Wand2 size={14} /> Printful Creator Suite
-                        </button>
-                      )}
-                      {!product?.id && (
-                        <button onClick={() => setMatchOpen(true)} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
-                          <Shirt size={14} /> Blank Garment Matcher
-                        </button>
-                      )}
-                    </div>
-                    
-                    <span className="block h-px bg-neutral-200 dark:bg-neutral-800" />
-
                     <div className="space-y-2 text-xs">
                       <div className="flex items-center justify-between">
                         <span className="opacity-60 font-semibold">Symmetry Type</span>
                         <button onClick={() => setSymmetry((s) => (s === "off" ? "v" : s === "v" ? "h" : "off"))} className="font-bold text-indigo-500 hover:underline">
                           {symmetry === "off" ? "Off" : symmetry === "v" ? "Vertical" : "Horizontal"}
                         </button>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="opacity-60 font-semibold">Symmetry Smoothness</span>
-                        <input type="range" min={0} max={90} value={Math.round(stabilizer * 100)} onChange={(e) => setStabilizer(parseInt(e.target.value) / 100)} className="w-24 accent-indigo-500" />
                       </div>
                     </div>
                   </div>
@@ -1265,13 +1305,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                       <button onClick={exportPng} className="flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-bold border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800">
                         <Download size={13} /> Clear PNG
                       </button>
-                      <button onClick={save} disabled={saving} className="flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-bold border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800">
-                        {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save State
-                      </button>
                     </div>
-                    <button onClick={publish} disabled={publishing} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold uppercase bg-indigo-500 text-white hover:bg-indigo-600 font-sans">
-                      {publishing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} Publish Design
-                    </button>
                   </div>
                 )}
               </div>
@@ -1280,51 +1314,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
             {activePopover === "adjustments" && (
               <div className="space-y-4">
                 <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Adjustments</p>
-                
-                {/* Dynamic Brush tip type switcher inside popover context */}
-                <div className="space-y-2">
-                  <p className="text-[10px] uppercase font-bold tracking-wide text-neutral-400">Active Brush Shader</p>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {(["round", "textured", "ink", "charcoal"] as const).map((b) => (
-                      <button 
-                        key={b} 
-                        onClick={() => { setBrushType(b); setTool("brush"); }}
-                        className={`py-1.5 px-2.5 rounded-lg text-[9px] font-bold uppercase tracking-wider text-center transition-all ${
-                          brushType === b 
-                            ? "bg-indigo-500 text-white" 
-                            : "bg-neutral-100 dark:bg-neutral-800 text-neutral-500 hover:bg-neutral-200 dark:hover:bg-neutral-750"
-                        }`}
-                      >
-                        {b}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <span className="block h-px bg-neutral-200 dark:bg-neutral-800" />
-
-                {selected ? (
-                  <div className="space-y-3">
-                    <p className="text-[11px] font-bold">Selected Element: {selected.name}</p>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-[10px] font-bold opacity-60">
-                        <span>Gaussian Blur filter</span>
-                        <span>{selected.blur || 0}%</span>
-                      </div>
-                      <input 
-                        type="range" min={0} max={100} value={selected.blur || 0}
-                        onMouseDown={() => recordLayers(layers)}
-                        onChange={(e) => livePatch(selected.id, { blur: parseInt(e.target.value) })}
-                        className="w-full accent-indigo-500"
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-[10px] opacity-50 py-2">Select an image/text layer to adjust filters.</p>
-                )}
-
-                <span className="block h-px bg-neutral-200 dark:bg-neutral-800" />
-                
                 <div className="space-y-3">
                   <p className="text-[11px] font-bold uppercase tracking-wide">AI Generation Suite</p>
                   <textarea 
@@ -1333,13 +1322,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                     placeholder="Describe design layers or lasso regions to generate..."
                     className="w-full h-16 bg-neutral-100 dark:bg-neutral-900 border-0 rounded-xl p-3 text-[10px] focus:outline-none focus:ring-1 focus:ring-indigo-500 text-neutral-900 dark:text-neutral-100 font-mono" 
                   />
-                  <div className="flex flex-wrap items-center gap-1">
-                    {(["apparel", "streetwear", "vintage", "lineart", "embroidery"] as const).map((s) => (
-                      <button key={s} onClick={() => setAiStyle(s)} className={`text-[8px] px-2 py-0.5 rounded-full uppercase tracking-wider ${aiStyle === s ? "bg-indigo-500 text-white" : "bg-neutral-100 dark:bg-neutral-800 text-neutral-400"}`}>
-                        {s}
-                      </button>
-                    ))}
-                  </div>
                   <div className="flex gap-2">
                     {lassoPoints.length >= 3 ? (
                       <button onClick={handleLassoRegionAi} disabled={aiBusy} className="w-full py-2.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500 text-white hover:bg-indigo-600 flex items-center justify-center gap-1 font-sans">
@@ -1348,11 +1330,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                     ) : (
                       <button onClick={aiNewLayer} disabled={aiBusy} className="flex-1 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500 text-white hover:bg-indigo-600 flex items-center justify-center gap-1 font-sans">
                         {aiBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Generate Layer
-                      </button>
-                    )}
-                    {selected?.type === "image" && (
-                      <button onClick={aiRegenerateSelected} disabled={aiBusy} className="py-2.5 px-4 rounded-full text-[10px] font-bold uppercase border hover:bg-neutral-100 dark:hover:bg-neutral-800">
-                        Reimagine
                       </button>
                     )}
                   </div>
@@ -1376,7 +1353,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                       onClick={() => setSelectedId(l.id)}
                       className={`flex flex-col p-2.5 rounded-xl border cursor-pointer transition-colors ${
                         selectedId === l.id 
-                          ? (isDark ? "bg-white/10 border-neutral-700" : "bg-indigo-50 border-indigo-100") 
+                          ? "bg-indigo-50 border-indigo-100 dark:bg-white/10 dark:border-neutral-700" 
                           : "border-transparent hover:bg-neutral-100 dark:hover:bg-neutral-800"
                       }`}
                     >
@@ -1392,36 +1369,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                         <span className="text-[10px] font-bold bg-neutral-200 dark:bg-neutral-800 px-2 py-0.5 rounded-full text-neutral-400">
                           {BLEND_ABBR[l.blend || "source-over"]}
                         </span>
-
-                        <div className="flex items-center gap-1 opacity-70">
-                          <button onClick={(e) => { e.stopPropagation(); move(l.id, 1); }} className="p-0.5"><ArrowUp size={11} /></button>
-                          <button onClick={(e) => { e.stopPropagation(); move(l.id, -1); }} className="p-0.5"><ArrowDown size={11} /></button>
-                          <button onClick={(e) => { e.stopPropagation(); commit((ls) => ls.filter((x) => x.id !== l.id)); if (selectedId === l.id) setSelectedId(null); }} className="p-0.5 text-rose-500"><Trash2 size={11} /></button>
-                        </div>
                       </div>
-
-                      {selectedId === l.id && (
-                        <div className="mt-2.5 pt-2.5 border-t border-neutral-200 dark:border-neutral-800 space-y-2 text-[10px] text-neutral-500">
-                          <div className="flex items-center justify-between gap-1">
-                            <span>Composite blend mode:</span>
-                            <select value={l.blend || "source-over"} onChange={(e) => patchLayer(l.id, { blend: e.target.value as BlendMode })} className="bg-transparent border-0 font-semibold focus:ring-0">
-                              {BLENDS.map((b) => <option key={b} value={b} className="text-black">{BLEND_LABEL[b]}</option>)}
-                            </select>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="flex items-center gap-1">
-                              <input type="checkbox" checked={!!l.clip} onChange={(e) => patchLayer(l.id, { clip: e.target.checked })} />
-                              Clipping mask to base
-                            </span>
-                            {l.type === "paint" && (
-                              <span className="flex items-center gap-1">
-                                <input type="checkbox" checked={!!l.reference} onChange={(e) => commit((ls) => ls.map((x) => x.type === "paint" ? { ...x, reference: x.id === l.id ? e.target.checked : false } : x))} />
-                                Fill reference boundary
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -1441,15 +1389,6 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                     />
                   ))}
                 </div>
-                <div className="flex items-center justify-between gap-2 pt-2 border-t border-neutral-200 dark:border-neutral-800">
-                  <span className="text-[10px] font-bold text-neutral-500 uppercase">Custom color hex</span>
-                  <input 
-                    type="color" 
-                    value={brushColor} 
-                    onChange={(e) => setBrushColor(e.target.value)} 
-                    className="w-10 h-7 rounded bg-transparent border-0 cursor-pointer"
-                  />
-                </div>
               </div>
             )}
           </div>
@@ -1457,7 +1396,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-         MAIN DIGITAL ARTWORK VIEWPORT (With rotation, zoom, panning)
+         MAIN DIGITAL ARTWORK VIEWPORT & FLOATING PROPERTIES SIDEBAR
          ───────────────────────────────────────────────────────────── */}
       <div className="flex-1 flex overflow-hidden relative">
         <div 
@@ -1605,7 +1544,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
 
                     {region && <Rect x={region.x} y={region.y} width={region.w} height={region.h} stroke="#6366f1" strokeWidth={4} dash={[16, 12]} fill="rgba(99,102,241,0.08)" listening={false} />}
                     
-                    {/* Render active Lasso selection polygon path (with marching ants dash offset logic) */}
+                    {/* Render active Lasso selection polygon path */}
                     {lassoPoints.length > 1 && (
                       <Line 
                         points={getFlatLassoPoints()} 
@@ -1630,10 +1569,103 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
             </div>
           </div>
         </div>
+
+        {/* ─────────────────────────────────────────────────────────────
+           RESTORED DESKTOP PROPERTIES & LAYERS PERMANENT SIDEBAR
+           ───────────────────────────────────────────────────────────── */}
+        <div className={`w-full lg:w-[320px] p-4 overflow-y-auto shrink-0 border-l bg-white dark:bg-[#121212] transition-all ${
+          fullScreenCanvas ? "hidden" : "hidden lg:block border-neutral-200 dark:border-neutral-900"
+        }`}>
+          {selected && (
+            <div className={`rounded-[20px] p-4 mb-3 border ${isDark ? "bg-neutral-900/60 border-neutral-800" : "bg-neutral-50/70 border-neutral-200"}`}>
+              <p className="text-[9px] uppercase tracking-widest opacity-50 mb-3">Layer Properties</p>
+              
+              {/* Direct alignment restoration */}
+              <div className="flex items-center gap-1.5 mb-3">
+                <span className="text-[8px] uppercase tracking-widest opacity-40 mr-1">Align</span>
+                <button onClick={() => align("h")} title="Center horizontally" className="p-1.5 hover:bg-neutral-200 dark:hover:bg-neutral-800 rounded-lg text-indigo-500"><AlignCenterVertical size={14} /></button>
+                <button onClick={() => align("v")} title="Center vertically" className="p-1.5 hover:bg-neutral-200 dark:hover:bg-neutral-800 rounded-lg text-indigo-500"><AlignCenterHorizontal size={14} /></button>
+                <button onClick={() => align("both")} title="Center on artboard" className="p-1.5 hover:bg-neutral-200 dark:hover:bg-neutral-800 rounded-lg text-indigo-500"><AlignVerticalJustifyCenter size={14} /></button>
+              </div>
+
+              {selected.type === "text" && (
+                <div className="space-y-2.5">
+                  <input value={selected.text} onChange={(e) => patchLayer(selected.id, { text: e.target.value })}
+                    className={`w-full bg-transparent border rounded-lg px-3 py-1.5 text-xs ${isDark ? "border-neutral-800" : "border-neutral-200"}`} />
+                  <div className="flex items-center gap-2 justify-between">
+                    <input type="color" value={selected.fill} onChange={(e) => patchLayer(selected.id, { fill: e.target.value })} className="w-8 h-8 rounded-full bg-transparent border-0 cursor-pointer" />
+                    <input type="number" value={Math.round(selected.fontSize || 0)} onChange={(e) => patchLayer(selected.id, { fontSize: parseInt(e.target.value) || 48 })}
+                      className={`w-20 bg-transparent border rounded-lg px-3 py-1 text-xs text-center ${isDark ? "border-neutral-800" : "border-neutral-200"}`} />
+                    <button onClick={() => patchLayer(selected.id, { fontStyle: selected.fontStyle === "bold" ? "normal" : "bold" })} className={`px-3 py-1.5 rounded-lg border text-xs font-bold ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>B</button>
+                  </div>
+                </div>
+              )}
+
+              {(selected.type === "image" || selected.type === "paint") && (
+                <>
+                  <div className="mt-3">
+                    <p className="text-[8px] uppercase tracking-widest opacity-40 mb-1">Blend mode</p>
+                    <select value={selected.blend || "source-over"} disabled={!!selected.clip} onChange={(e) => patchLayer(selected.id, { blend: e.target.value as BlendMode })}
+                      className={`w-full bg-transparent border rounded-lg px-3 py-1 text-xs ${isDark ? "border-neutral-800 text-white" : "border-neutral-200 text-black"} ${selected.clip ? "opacity-40" : ""}`}>
+                      {BLENDS.map((b) => <option key={b} value={b} className="text-black">{BLEND_LABEL[b]}</option>)}
+                    </select>
+                  </div>
+                  <label className="mt-3 flex items-center gap-2 text-[10px] cursor-pointer select-none font-semibold">
+                    <input type="checkbox" checked={!!selected.clip} onChange={(e) => patchLayer(selected.id, { clip: e.target.checked })} />
+                    Clip to layers below
+                  </label>
+                  {selected.type === "paint" && (
+                    <label className="mt-2 flex items-center gap-2 text-[10px] cursor-pointer select-none font-semibold">
+                      <input type="checkbox" checked={!!selected.reference}
+                        onChange={(e) => { const on = e.target.checked; commit((ls) => ls.map((l) => l.type === "paint" ? { ...l, reference: l.id === selected.id ? on : false } : l)); }} />
+                      Reference (bucket boundary)
+                    </label>
+                  )}
+                  <div className="mt-3">
+                    <p className="text-[8px] uppercase tracking-widest opacity-40 mb-1">Gaussian blur · {selected.blur || 0}</p>
+                    <input type="range" min={0} max={100} value={selected.blur || 0}
+                      onMouseDown={() => recordLayers(layers)}
+                      onChange={(e) => livePatch(selected.id, { blur: parseInt(e.target.value) })} className="w-full accent-indigo-500" />
+                  </div>
+                </>
+              )}
+              <div className="mt-3">
+                <p className="text-[8px] uppercase tracking-widest opacity-40 mb-1">Opacity</p>
+                <input type="range" min={0} max={1} step={0.05} value={selected.opacity}
+                  onMouseDown={() => recordLayers(layers)}
+                  onChange={(e) => livePatch(selected.id, { opacity: parseFloat(e.target.value) })} className="w-full accent-indigo-500" />
+              </div>
+            </div>
+          )}
+
+          {/* Core permanent Layers stack panel restored */}
+          <div className={`rounded-[20px] p-4 border ${isDark ? "bg-neutral-900/60 border-neutral-800" : "bg-neutral-50/70 border-neutral-200"}`}>
+            <div className="flex justify-between items-center mb-3">
+              <p className="text-[9px] uppercase tracking-widest opacity-50">Active Layers ({layers.length})</p>
+              <button onClick={addPaintLayer} className="text-xs text-indigo-500 hover:underline flex items-center gap-1 font-sans"><Plus size={11} /> Paint Layer</button>
+            </div>
+            {layers.length === 0 && <p className="text-[10px] opacity-40 py-2">Add text, images, or paint to begin.</p>}
+            <div className="space-y-1">
+              {[...layers].reverse().map((l) => (
+                <div key={l.id} onClick={() => setSelectedId(l.id)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl cursor-pointer text-[10px] ${selectedId === l.id ? (isDark ? "bg-white/10" : "bg-black/[0.06]") : "hover:bg-current/5"}`}>
+                  <button onClick={(e) => { e.stopPropagation(); patchLayer(l.id, { visible: !l.visible }); }}>{l.visible ? <Eye size={13} /> : <EyeOff size={13} className="opacity-40" />}</button>
+                  <span className="flex-1 truncate font-medium flex items-center gap-1">
+                    {l.clip && <span className="text-indigo-500">↳</span>}
+                    {l.type === "text" ? (l.text || "Text") : l.name}
+                  </span>
+                  <button onClick={(e) => { e.stopPropagation(); move(l.id, 1); }}><ArrowUp size={12} /></button>
+                  <button onClick={(e) => { e.stopPropagation(); move(l.id, -1); }}><ArrowDown size={12} /></button>
+                  <button onClick={(e) => { e.stopPropagation(); commit((ls) => ls.filter((x) => x.id !== l.id)); if (selectedId === l.id) setSelectedId(null); }} className="text-rose-500"><Trash2 size={12} /></button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
-         INTEGRATED DUAL CONTROLLER (Rotation & Zoom HUD)
+         INTEGRATED WORKSPACE FLOATING CONTROLLER (Zoom & Switchers)
          ───────────────────────────────────────────────────────────── */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-2.5 rounded-full bg-white/95 dark:bg-[#1c1c1e]/95 backdrop-blur-md shadow-xl border border-neutral-200/20 pointer-events-auto">
         
@@ -1667,7 +1699,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
 
         <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
 
-        {/* View switchers (Mockup vs Template) */}
+        {/* Dynamic view switchers */}
         {(hasMulti || productPhoto) && (
           <div className="flex items-center gap-1.5">
             {productPhoto && (!hasMulti || activeP === 0) && (
@@ -1695,7 +1727,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
             <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
             <button 
               onClick={() => setLassoPoints([])} 
-              className="text-[9px] uppercase font-bold text-rose-500 hover:underline px-2"
+              className="text-[9px] uppercase font-bold text-rose-500 hover:underline px-2 animate-pulse"
               title="Clear lasso loop mask stencil"
             >
               Clear Loop
@@ -1715,10 +1747,10 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
-         MODALS & DIALOGS
+         MODALS & SYSTEM PORTALS
          ───────────────────────────────────────────────────────────── */}
       {matchOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setMatchOpen(false)}>
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setMatchOpen(false)}>
           <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-md rounded-[24px] border p-6 ${isDark ? "bg-[#1c1c1e] border-neutral-800 text-neutral-100" : "bg-white border-neutral-200 text-neutral-900"}`}>
             <h2 className="text-[13px] font-semibold mb-1">Match to a real blank</h2>
             <p className="text-[10px] mb-4 text-neutral-500">Pick a garment category to fetch and match cheapest options.</p>
@@ -1755,7 +1787,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
       )}
 
       {preview3d && (
-        <Suspense fallback={<div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 text-white"><Loader2 className="animate-spin animate-infinite" /></div>}>
+        <Suspense fallback={<div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 text-white"><Loader2 className="animate-spin animate-infinite" /></div>}>
           <Garment3DPreview design={preview3d} isDark={isDark} onClose={() => setPreview3d(null)}
             canMockup={product?.mfr === "printful" && !!product?.variant_id}
             printWidthIn={product?.print?.width_in ?? null}
@@ -1765,7 +1797,7 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
       )}
 
       {edmOpen && (
-        <Suspense fallback={<div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 text-white"><Loader2 className="animate-spin animate-infinite" /></div>}>
+        <Suspense fallback={<div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 text-white"><Loader2 className="animate-spin animate-infinite" /></div>}>
           <PrintfulDesignMaker
             productId={product?.id}
             onDesign={(url, name) => addImageAt(url, name)}
