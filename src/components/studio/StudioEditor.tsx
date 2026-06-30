@@ -521,10 +521,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
       if (id) { strokeTo(id, p.x, p.y, (e.evt as any).pressure || 0.5); }
       return;
     }
-    if (regionMode && drawing.current) { 
-      const s = drawing.current; 
-      setRegion({ x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), w: Math.abs(p.x - s.x), h: Math.abs(p.y - s.y) }); 
-    }
+    if (regionMode && drawing.current) { const s = drawing.current; setRegion({ x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), w: Math.abs(p.x - s.x), h: Math.abs(p.y - s.y) }); }
   };
 
   const handlePointerUp = () => {
@@ -540,14 +537,8 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
       setTool("brush");
       return;
     }
-    if (painting.current) { 
-      painting.current = false; 
-      lastPt.current = null; 
-      return; 
-    }
-    if (regionMode && drawing.current && region) { 
-      finalizeRegionDirect(region); 
-    }
+    if (painting.current) { painting.current = false; lastPt.current = null; return; }
+    if (regionMode && drawing.current && region) { finalizeRegionDirect(region); }
   };
 
   // Convert raw client coordinate vectors to dynamic artboard offsets through inverse matrices
@@ -814,6 +805,55 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
     }
   };
 
+  const aiNewLayer = async () => {
+    if (aiPrompt.trim().length < 3) { toast.error("Prompt too short"); return; }
+    setAiBusy(true);
+    try { const url = await runAi({ prompt: aiPrompt.trim(), width: 1024, height: 1024, persist: true, style: aiStyle }); if (url) { addImageAtDirect(url, aiPrompt.slice(0, 24)); setAiPrompt(""); toast.success("AI layer added."); } }
+    finally { setAiBusy(false); }
+  };
+
+  const aiRegenerateSelected = async () => {
+    const sel = layers.find((l) => l.id === selectedId);
+    if (!sel || sel.type !== "image" || !sel.src) { toast.error("Select an image layer first"); return; }
+    if (aiPrompt.trim().length < 3) { toast.error("Enter a prompt"); return; }
+    setAiBusy(true);
+    try { const url = await runAi({ prompt: aiPrompt.trim(), image: sel.src, width: 1024, height: 1024, persist: false }); if (url) { patchLayer(sel.id, { src: url }); setAiPrompt(""); toast.success("Layer reimagined."); } }
+    finally { setAiBusy(false); }
+  };
+
+  // Convert Lasso coordinates to set a generation mask region
+  const handleLassoRegionAi = async () => {
+    if (lassoPoints.length < 3) {
+      toast.error("Trace a lasso region before generating.");
+      return;
+    }
+    if (aiPrompt.trim().length < 3) {
+      toast.error("Describe the image to generate inside your lasso selection.");
+      return;
+    }
+    setAiBusy(true);
+    try {
+      const xs = lassoPoints.map(p => p.x);
+      const ys = lassoPoints.map(p => p.y);
+      const minX = Math.max(0, Math.min(...xs)), maxX = Math.min(artboardW, Math.max(...xs));
+      const minY = Math.max(0, Math.min(...ys)), maxY = Math.min(artboardH, Math.max(...ys));
+      const w = maxX - minX;
+      const h = maxY - minY;
+      
+      const longest = Math.max(w, h); const k = Math.min(1, 1024 / longest);
+      const gw = Math.round(w * k); const gh = Math.round(h * k);
+      const url = await runAi({ prompt: aiPrompt.trim(), width: gw, height: gh, persist: false, style: aiStyle });
+      if (url) {
+        addImageAtDirect(url, aiPrompt.slice(0, 24), { x: minX, y: minY, w, h });
+        setAiPrompt("");
+        setLassoPoints([]);
+        toast.success("Generated directly into selection.");
+      }
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
   const finalizeRegionDirect = async (r: { x: number; y: number; w: number; h: number }) => {
     if (r.w < 40 || r.h < 40) { setRegion(null); return; }
     if (aiPrompt.trim().length < 3) { toast.error("Type a prompt first"); setRegion(null); return; }
@@ -822,8 +862,16 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
       const longest = Math.max(r.w, r.h); const k = Math.min(1, 1024 / longest);
       const gw = Math.round(r.w * k); const gh = Math.round(r.h * k);
       const url = await runAi({ prompt: aiPrompt.trim(), width: gw, height: gh, persist: false, style: aiStyle });
-      if (url) { addImageAtDirect(url, aiPrompt.slice(0, 24), r); setAiPrompt(""); toast.success("Generated into region."); }
-    } finally { setAiBusy(false); setRegion(null); setRegionMode(false); }
+      if (url) {
+        addImageAtDirect(url, aiPrompt.slice(0, 24), r);
+        setAiPrompt("");
+        toast.success("Generated into region.");
+      }
+    } finally {
+      setAiBusy(false);
+      setRegion(null);
+      setRegionMode(false);
+    }
   };
 
   const addImageAtDirect = (src: string, name: string, box?: { x: number; y: number; w: number; h: number }, blend?: BlendMode) => {
@@ -908,6 +956,11 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
     window.addEventListener("pointerup", onPointerUp);
   };
 
+  // Toggle dropdown layers popovers safely to avoid ReferenceError
+  const togglePopover = (type: "actions" | "adjustments" | "layers" | "colors") => {
+    setActivePopover((prev) => (prev === type ? "none" : type));
+  };
+
   const selectedLayer = layers.find((l) => l.id === selectedId);
   const getFlatLassoPoints = (): number[] => {
     const pts: number[] = [];
@@ -920,6 +973,9 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
   const isPoster = templateKey?.startsWith("poster");
   const defaultPa = isHat ? { x: 0.28, y: 0.32, w: 0.44, h: 0.36 } : isPoster ? { x: 0.06, y: 0.05, w: 0.88, h: 0.9 } : { x: 0.2, y: 0.14, w: 0.6, h: 0.62 };
   const pa = printArea || defaultPa;
+
+  // Verify and resolve template canvas backing transparency values
+  const isTemplateProject = !!templateImage || (canvasKind && canvasKind !== "canvas");
 
   // Convert HSL values to exact HEX string
   const hslToHex = (h: number, s: number, l: number): string => {
@@ -962,7 +1018,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
           
           {/* Gallery Top Navigation bar */}
           <div className="flex justify-between items-center mb-8 border-b border-neutral-900 pb-4">
-            <span className="text-xl font-light tracking-wide text-neutral-300">Procreate Gallery</span>
+            <span className="text-xl font-light tracking-wide text-neutral-300 font-sans">Procreate Gallery</span>
             <div className="flex items-center gap-4 text-xs font-semibold text-neutral-400 relative">
               <button onClick={() => {
                 const urlStr = prompt("Enter Custom Template Image URL:");
@@ -1002,7 +1058,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                       <span className="text-[10px] text-neutral-400 uppercase tracking-widest font-mono">Artboard</span>
                     </div>
                   ) : (
-                    <div className="w-full h-full p-2 flex items-center justify-center relative">
+                    <div className="w-full h-full p-2 flex items-center justify-center relative bg-transparent">
                       <Shirt size={48} className="text-indigo-400/30" />
                     </div>
                   )}
@@ -1094,7 +1150,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
             {/* Paint brush */}
             <button 
               onClick={() => { setTool("brush"); setRegionMode(false); }} 
-              className={`p-2 rounded-lg transition-all ${tool === "brush" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-neutral-100 dark:hover:text-[#efeff1]"}`}
+              className={`p-2 rounded-lg transition-all ${tool === "brush" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-[#1c1c1e] dark:hover:text-[#efeff1]"}`}
               title="Paint Tool"
             >
               <Paintbrush size={18} />
@@ -1103,7 +1159,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
             {/* Smudge tool */}
             <button 
               onClick={() => { setTool("smudge"); setRegionMode(false); }} 
-              className={`p-2 rounded-lg transition-all ${tool === "smudge" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-neutral-100 dark:hover:text-[#efeff1]"}`}
+              className={`p-2 rounded-lg transition-all ${tool === "smudge" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-[#1c1c1e] dark:hover:text-[#efeff1]"}`}
               title="Smudge Tool"
             >
               <Hand size={18} />
@@ -1112,7 +1168,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
             {/* Eraser */}
             <button 
               onClick={() => { setTool("eraser"); setRegionMode(false); }} 
-              className={`p-2 rounded-lg transition-all ${tool === "eraser" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-neutral-100 dark:hover:text-[#efeff1]"}`}
+              className={`p-2 rounded-lg transition-all ${tool === "eraser" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-[#1c1c1e] dark:hover:text-[#efeff1]"}`}
               title="Eraser Tool"
             >
               <Eraser size={18} />
@@ -1121,13 +1177,13 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
             {/* Paint Bucket fill */}
             <button 
               onClick={() => { setTool("fill"); setRegionMode(false); }} 
-              className={`p-2 rounded-lg transition-all ${tool === "fill" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-neutral-100 dark:hover:text-[#efeff1]"}`}
+              className={`p-2 rounded-lg transition-all ${tool === "fill" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-[#1c1c1e] dark:hover:text-[#efeff1]"}`}
               title="Flood Fill"
             >
               <PaintBucket size={18} />
             </button>
 
-            <span className="w-px h-5 bg-neutral-300 dark:bg-neutral-800 mx-1" />
+            <span className="w-px h-5 bg-neutral-300 dark:bg-neutral-850 mx-1" />
 
             {/* Layers panel toggler */}
             <button 
@@ -1228,18 +1284,18 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
           
           {/* Brush/Eraser Settings */}
           {(tool === "brush" || tool === "eraser" || tool === "smudge") && (
-            <div className="flex items-center gap-4 flex-wrap text-xs font-semibold animate-fade-in">
+            <div className="flex items-center gap-4 flex-wrap text-xs font-semibold animate-fade-in font-sans">
               <span className="text-[10px] opacity-50 uppercase tracking-widest">Brush tip</span>
-              <div className="flex bg-neutral-200 dark:bg-neutral-800 p-0.5 rounded-full border border-[#1c1c1e]/15">
+              <div className="flex bg-neutral-200 dark:bg-neutral-800 p-0.5 rounded-full border border-neutral-350 dark:border-neutral-850">
                 {(["round", "textured", "ink", "charcoal"] as const).map((b) => (
-                  <button key={b} onClick={() => setBrushType(b)} className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${brushType === b ? "bg-[#007aff] text-white" : "text-neutral-500"}`}>
+                  <button key={b} onClick={() => setBrushType(b)} className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${brushType === b ? "bg-[#007aff] text-white" : "text-[#8e8e93]"}`}>
                     {b}
                   </button>
                 ))}
               </div>
               <span className="w-px h-4 bg-neutral-300 dark:bg-neutral-850" />
               <div className="flex items-center gap-2">
-                <span className="text-[10px] opacity-50 uppercase">Stabilizer</span>
+                <span className="text-[10px] opacity-50 uppercase font-mono">Stabilizer</span>
                 <input type="range" min={0} max={90} value={Math.round(stabilizer * 100)} onChange={(e) => setStabilizer(parseInt(e.target.value) / 100)} className="w-20 accent-[#007aff]" />
                 <span className="tabular-nums">{Math.round(stabilizer * 100)}%</span>
               </div>
@@ -1310,7 +1366,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
             Rectangle
           </button>
 
-          <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
+          <span className="w-px h-5 bg-[#1c1c1e] dark:bg-neutral-800" />
 
           {lassoPoints.length >= 3 && (
             <button 
@@ -1335,21 +1391,21 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
          ───────────────────────────────────────────────────────────── */}
       {currentView === "editor" && tool === "select" && selectedLayer && !fullScreenCanvas && (
         <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-45 flex items-center gap-3 px-5 py-2.5 rounded-full bg-white/95 dark:bg-[#1c1c1e]/95 backdrop-blur-md shadow-xl border border-neutral-200/20 pointer-events-auto">
-          <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 select-none">Scale</span>
+          <span className="text-[9px] font-bold uppercase tracking-wider text-[#8e8e93] select-none">Scale</span>
           <button 
             onClick={() => setUniformScaling(true)} 
-            className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-full transition-all ${uniformScaling ? "bg-[#007aff] text-white" : "text-neutral-500"}`}
+            className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-full transition-all ${uniformScaling ? "bg-[#007aff] text-white" : "text-[#8e8e93]"}`}
           >
             Uniform
           </button>
           <button 
             onClick={() => setUniformScaling(false)} 
-            className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-full transition-all ${!uniformScaling ? "bg-[#007aff] text-white" : "text-neutral-500"}`}
+            className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-full transition-all ${!uniformScaling ? "bg-[#007aff] text-white" : "text-[#8e8e93]"}`}
           >
             Freeform
           </button>
 
-          <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
+          <span className="w-px h-5 bg-[#1c1c1e] dark:bg-neutral-800" />
 
           <button onClick={() => { patchLayer(selectedLayer.id, { rotation: (selectedLayer.rotation + 45) % 360 }); }} className="p-1 hover:bg-[#1c1c1e] dark:hover:bg-neutral-800 rounded text-neutral-400"><RefreshCcw size={13} /></button>
           <button onClick={() => { const sx = nodeRefs.current[selectedLayer.id]?.scaleX() || 1; patchLayer(selectedLayer.id, { x: selectedLayer.x + selectedLayer.width! * sx, width: selectedLayer.width, scaleX: -sx }); }} className="p-1 hover:bg-[#1c1c1e] dark:hover:bg-[#09090b] rounded text-neutral-400"><FlipHorizontal2 size={13} /></button>
@@ -1368,7 +1424,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
         <div className="absolute inset-0 z-[100] bg-transparent" onClick={() => setActivePopover("none")}>
           <div 
             onClick={(e) => e.stopPropagation()}
-            className={`absolute top-28 rounded-[24px] border p-6 max-w-[345px] w-full shadow-2xl transition-all duration-150 animate-fade-in ${
+            className={`absolute top-20 rounded-[24px] border p-6 max-w-[345px] w-full shadow-2xl transition-all duration-150 animate-fade-in ${
               activePopover === "colors" || activePopover === "layers" ? "right-6" : "left-6"
             } ${isDark ? "bg-[#1c1c1e] border-neutral-900 text-neutral-100" : "bg-white border-neutral-200 text-[#1c1c1e]"}`}
           >
@@ -1400,14 +1456,14 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                     <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Insert Elements</p>
                     <div className="grid grid-cols-2 gap-2">
                       <button onClick={() => { addText(); setActivePopover("none"); }} className="flex flex-col items-center gap-2 p-4 rounded-xl border border-dashed text-neutral-500 hover:text-[#007aff] hover:border-[#007aff]/40 transition-colors">
-                        <Type size={18} /> <span className="text-[10px] font-bold uppercase">Insert Text</span>
+                        <Type size={18} /> <span className="text-[10px] font-bold uppercase font-sans">Insert Text</span>
                       </button>
                       <label className="flex flex-col items-center gap-2 p-4 rounded-xl border border-dashed text-neutral-500 hover:text-[#007aff] hover:border-[#007aff]/40 transition-colors cursor-pointer">
-                        <ImagePlus size={18} /> <span className="text-[10px] font-bold uppercase">Insert Photo</span>
+                        <ImagePlus size={18} /> <span className="text-[10px] font-bold uppercase font-sans">Insert Photo</span>
                         <input type="file" accept="image/*,.svg,.png,.jpg,.jpeg,.webp" className="hidden" onChange={(e) => { if (e.target.files?.[0]) { uploadImage(e.target.files[0]); setActivePopover("none"); } }} />
                       </label>
                     </div>
-                    <label className="w-full flex items-center justify-center gap-2 py-3 border border-dashed rounded-xl cursor-pointer text-neutral-500 hover:text-[#007aff] hover:border-[#007aff]/40 text-xs font-bold transition-all">
+                    <label className="w-full flex items-center justify-center gap-2 py-3 border border-dashed rounded-xl cursor-pointer text-neutral-500 hover:text-[#007aff] hover:border-[#007aff]/40 text-xs font-bold transition-all font-sans">
                       <Wand2 size={14} /> Import Texture Overlay
                       <input type="file" accept="image/*,.svg,.png,.jpg,.jpeg,.webp" className="hidden" onChange={(e) => { if (e.target.files?.[0]) { importTexture(e.target.files[0]); setActivePopover("none"); } }} />
                     </label>
@@ -1417,20 +1473,20 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                 {/* CANVAS TAB */}
                 {activePopoverTab === "canvas" && (
                   <div className="space-y-3 animate-fade-in">
-                    <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400 font-mono">Sandbox Actions</p>
-                    <button onClick={open3d} className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors border border-[#1c1c1e] dark:border-neutral-850">
+                    <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93] font-mono">Sandbox Actions</p>
+                    <button onClick={() => { open3d(); setActivePopover("none"); }} className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors border border-[#1c1c1e] dark:border-neutral-850">
                       <span className="flex items-center gap-2.5"><Box size={14} /> 3D Garment Sandbox</span>
-                      <span className="text-[8px] bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-full font-bold uppercase">3D</span>
+                      <span className="text-[8px] bg-indigo-50/15 text-indigo-400 px-2 py-0.5 rounded-full font-bold uppercase">3D</span>
                     </button>
                     {product?.mfr === "printful" && (
-                      <button onClick={() => setEdmOpen(true)} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
+                      <button onClick={() => { setEdmOpen(true); setActivePopover("none"); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
                         <Wand2 size={14} /> Printful Creator Suite
                       </button>
                     )}
-                    <span className="block h-px bg-[#1c1c1e] dark:bg-neutral-800" />
+                    <span className="block h-px bg-neutral-200 dark:bg-neutral-850" />
                     <div className="flex items-center justify-between text-xs">
-                      <span className="opacity-60 font-semibold">Active Symmetry Guide</span>
-                      <button onClick={() => setSymmetry((s) => (s === "off" ? "v" : s === "v" ? "h" : "off"))} className="font-bold text-[#007aff] hover:underline uppercase text-[11px]">
+                      <span className="opacity-60 font-semibold text-neutral-400">Active Symmetry Guide</span>
+                      <button onClick={() => setSymmetry((s) => (s === "off" ? "v" : s === "v" ? "h" : "off"))} className="font-bold text-[#007aff] hover:underline uppercase text-[11px] font-mono">
                         {symmetry === "off" ? "Disabled" : symmetry === "v" ? "Vertical" : "Horizontal"}
                       </button>
                     </div>
@@ -1439,17 +1495,17 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
 
                 {/* SHARE TAB */}
                 {activePopoverTab === "share" && (
-                  <div className="space-y-3 animate-fade-in">
-                    <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Export Options</p>
+                  <div className="space-y-3 animate-fade-in font-sans">
+                    <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Export Options</p>
                     <div className="grid grid-cols-2 gap-2">
-                      <button onClick={exportPng} className="flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-bold border border-[#1c1c1e] dark:border-neutral-700 hover:bg-[#1c1c1e] dark:hover:bg-neutral-800">
+                      <button onClick={exportPng} className="flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-bold border border-[#1c1c1e] dark:border-neutral-700 hover:bg-[#1c1c1e] dark:hover:bg-[#09090b]">
                         <Download size={13} /> Export PNG
                       </button>
-                      <button onClick={save} disabled={saving} className="flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-bold border border-[#1c1c1e] dark:border-neutral-700 hover:bg-[#1c1c1e] dark:hover:bg-neutral-800">
+                      <button onClick={save} disabled={saving} className="flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-bold border border-[#1c1c1e] dark:border-neutral-700 hover:bg-[#1c1c1e] dark:hover:bg-[#09090b]">
                         {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save State
                       </button>
                     </div>
-                    <button onClick={publish} disabled={publishing} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold uppercase bg-[#007aff] text-white hover:bg-blue-600">
+                    <button onClick={publish} disabled={publishing} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold uppercase bg-[#007aff] text-white hover:bg-[#005bb5]">
                       {publishing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} Publish Design
                     </button>
                   </div>
@@ -1457,8 +1513,8 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
 
                 {/* PREFS TAB */}
                 {activePopoverTab === "prefs" && (
-                  <div className="space-y-4 animate-fade-in text-xs font-semibold text-neutral-400">
-                    <p className="text-[10px] uppercase font-bold tracking-widest">Interface Appearance</p>
+                  <div className="space-y-4 animate-fade-in text-xs font-semibold text-neutral-400 font-sans">
+                    <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Interface Appearance</p>
                     <div className="flex items-center justify-between">
                       <span>Light Interface Appearance</span>
                       <input 
@@ -1487,7 +1543,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                       />
                     </div>
                     
-                    <span className="block h-px bg-[#1c1c1e] dark:bg-neutral-800" />
+                    <span className="block h-px bg-[#1c1c1e] dark:bg-neutral-850" />
 
                     <div className="space-y-2">
                       <div className="flex justify-between">
@@ -1501,7 +1557,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                       />
                     </div>
                     {!product?.id && (
-                      <button onClick={() => { setMatchOpen(true); setActivePopover("none"); }} className="w-full py-2 bg-indigo-500/10 hover:bg-[#1c1c1e] text-[#007aff] font-bold rounded-lg transition-colors flex items-center justify-center gap-1 text-[11px] uppercase tracking-wider border border-indigo-500/20">
+                      <button onClick={() => { setMatchOpen(true); setActivePopover("none"); }} className="w-full py-2 bg-indigo-500/10 hover:bg-[#1c1c1e] text-[#007aff] font-bold rounded-lg transition-colors flex items-center justify-center gap-1 text-[11px] uppercase tracking-wider border border-indigo-500/20 font-mono">
                         <Shirt size={13} /> Open Store Blank Matcher
                       </button>
                     )}
@@ -1536,13 +1592,13 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
 
                 <span className="block h-px bg-neutral-200 dark:bg-neutral-800" />
                 
-                <div className="space-y-3">
+                <div className="space-y-3 font-sans">
                   <p className="text-[11px] font-bold uppercase tracking-wide">AI Generation Suite</p>
                   <textarea 
                     value={aiPrompt} 
                     onChange={(e) => setAiPrompt(e.target.value)}
                     placeholder="Describe design layers or lasso regions to generate..."
-                    className="w-full h-16 bg-[#1c1c1e] border-0 rounded-xl p-3 text-[10px] focus:outline-none focus:ring-1 focus:ring-indigo-500 text-neutral-200 font-mono" 
+                    className="w-full h-16 bg-[#1c1c1e] border-0 rounded-xl p-3 text-[10px] focus:outline-none focus:ring-1 focus:ring-[#007aff] text-neutral-200 font-mono" 
                   />
                   <div className="flex gap-2">
                     {lassoPoints.length >= 3 ? (
@@ -1550,7 +1606,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                         {aiBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Generate Into Lasso
                       </button>
                     ) : (
-                      <button onClick={aiNewLayer} disabled={aiBusy} className="flex-1 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#007aff] text-white hover:bg-[#005bb5] flex items-center justify-center gap-1 font-sans">
+                      <button onClick={aiNewLayer} disabled={aiBusy} className="flex-1 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500 text-white hover:bg-indigo-600 flex items-center justify-center gap-1">
                         {aiBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Generate Layer
                       </button>
                     )}
@@ -1599,7 +1655,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
 
                       {/* Sliding Actions Flyout */}
                       {activeLayerSettingsId === l.id && selectedId === l.id && (
-                        <div className="mt-2.5 pt-2 border-t border-[#1c1c1e] dark:border-neutral-800 space-y-2 text-[10px] text-neutral-500 animate-fade-in font-mono">
+                        <div className="mt-2.5 pt-2 border-t border-[#1c1c1e] dark:border-neutral-850 space-y-2 text-[10px] text-neutral-500 animate-fade-in font-mono">
                           <div className="flex items-center justify-between text-xs">
                             <span className="font-semibold text-neutral-400">Align Elements</span>
                             <div className="flex gap-1">
@@ -1608,7 +1664,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                               <button onClick={(e) => { e.stopPropagation(); align("both"); }} className="p-1 hover:bg-[#1c1c1e] dark:hover:bg-[#1a1a1c] rounded"><AlignVerticalJustifyCenter size={11} /></button>
                             </div>
                           </div>
-                          <span className="block h-px bg-[#1c1c1e] dark:bg-neutral-800" />
+                          <span className="block h-px bg-[#1c1c1e] dark:bg-neutral-850" />
                           <div className="flex items-center justify-between">
                             <span>Clipping mask:</span>
                             <input type="checkbox" checked={!!l.clip} onChange={(e) => patchLayer(l.id, { clip: e.target.checked })} />
@@ -1627,9 +1683,9 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                           )}
 
                           {l.type === "text" && (
-                            <div className="space-y-1.5 mt-1 pt-1 border-t border-[#1c1c1e] dark:border-neutral-800">
+                            <div className="space-y-1.5 mt-1 pt-1 border-t border-neutral-100 dark:border-neutral-800">
                               <input value={l.text} onChange={(e) => patchLayer(l.id, { text: e.target.value })} className="w-full text-[10px] bg-transparent border rounded p-1 text-neutral-200 border-neutral-850" />
-                              <div className="flex justify-between items-center">
+                              <div className="flex justify-between items-center font-sans">
                                 <input type="color" value={l.fill} onChange={(e) => patchLayer(l.id, { fill: e.target.value })} className="w-5 h-5 rounded cursor-pointer" />
                                 <input type="number" value={Math.round(l.fontSize || 0)} onChange={(e) => patchLayer(l.id, { fontSize: parseInt(e.target.value) || 48 })} className="w-12 bg-transparent border rounded text-center text-neutral-200 border-neutral-850" />
                               </div>
@@ -1674,7 +1730,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                 {/* COLOR DISC TAB */}
                 {colorSelectorTab === "disc" && (
                   <div className="space-y-3 animate-fade-in flex flex-col items-center font-mono">
-                    <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Interactive Disc</p>
+                    <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Interactive Disc</p>
                     
                     {/* High-fidelity color picker circular disk */}
                     <div className="relative w-44 h-44 rounded-full border border-[#1c1c1e] dark:border-neutral-850 overflow-hidden shadow-inner flex items-center justify-center">
@@ -1697,7 +1753,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                           background: `conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)`
                         }}
                       />
-                      <div className="w-24 h-24 rounded-full bg-white dark:bg-[#1c1c1e] z-10 border border-[#1c1c1e] dark:border-neutral-800 relative flex items-center justify-center">
+                      <div className="w-24 h-24 rounded-full bg-white dark:bg-[#1c1c1e] z-10 border border-[#1c1c1e] dark:border-[#1c1c1e] relative flex items-center justify-center">
                         <div className="w-16 h-16 rounded-full border border-[#1c1c1e] dark:border-[#1c1c1e]" style={{ backgroundColor: brushColor }} />
                       </div>
                     </div>
@@ -1731,7 +1787,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                     <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Presets Matrix</p>
                     <div className="grid grid-cols-6 gap-2">
                       {["#1c1c1e", "#3a3a3c", "#5c5c5e", "#aeaeaf", "#e5e5ea", "#ffffff", "#ff3b30", "#ff9500", "#ffcc00", "#4cd964", "#5ac8fa", "#007aff"].map((c) => (
-                        <button key={c} onClick={() => setBrushColor(c)} className="w-8 h-8 rounded border border-[#1c1c1e] dark:border-neutral-800 transition-transform active:scale-90" style={{ backgroundColor: c }} />
+                        <button key={c} onClick={() => setBrushColor(c)} className="w-8 h-8 rounded border border-[#1c1c1e] dark:border-[#1c1c1e] transition-transform active:scale-90" style={{ backgroundColor: c }} />
                       ))}
                     </div>
                   </div>
@@ -1755,7 +1811,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-         MAIN DIGITAL ARTWORK VIEWPORT (Centered & Formatted Container)
+         MAIN DIGITAL ARTWORK VIEWPORT (Centred & Formatted Container)
          ───────────────────────────────────────────────────────────── */}
       {currentView === "editor" && (
         <div className="flex-1 flex items-center justify-center relative overflow-hidden bg-black select-none h-full w-full">
@@ -1778,7 +1834,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                   width: `${artboardW * scale}px`,
                   height: `${artboardH * scale}px`,
                   transform: `translate3d(${panOffset.x}px, ${panOffset.y}px, 0)`,
-                  backgroundColor: canvasKind === "canvas" ? "#ffffff" : "transparent"
+                  backgroundColor: isTemplateProject ? "transparent" : "#ffffff"
                 }}
               >
                 <Stage
@@ -1790,6 +1846,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                   onPointerUp={handlePointerUp}
                 >
                   <Layer>
+                    {/* Absolute transformed layout group */}
                     <Group 
                       ref={artboardGroupRef}
                       rotation={canvasRotation} 
@@ -1797,7 +1854,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                       offsetX={artboardW / 2} offsetY={artboardH / 2}
                     >
                       <Group name="background-group">
-                        <Rect name="bg" x={0} y={0} width={artboardW} height={artboardH} fill={canvasKind === "canvas" ? "#ffffff" : "rgba(0,0,0,0)"} listening />
+                        <Rect name="bg" x={0} y={0} width={artboardW} height={artboardH} fill={isTemplateProject ? "rgba(0,0,0,0)" : "#ffffff"} listening />
                         {canvasKind === "canvas" ? null : garment ? (
                           <>
                             <KImage name="garment" image={garment} x={0} y={0} width={artboardW} height={artboardH} listening={false} />
@@ -1904,16 +1961,16 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-         MODALS & PORTALS (Attach Blanks / 3D previews / Printful Maker)
+         PORTALS (Attach Blanks / 3D previews / Printful Maker)
          ───────────────────────────────────────────────────────────── */}
       {matchOpen && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setMatchOpen(false)}>
           <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-md rounded-[24px] border p-6 ${isDark ? "bg-[#1c1c1e] border-neutral-800 text-neutral-100" : "bg-white border-neutral-200 text-[#1c1c1e]"}`}>
             <h2 className="text-[13px] font-semibold mb-1">Match to a real blank</h2>
-            <p className="text-[10px] mb-4 text-neutral-500 font-sans">Pick a garment category to fetch and match cheapest options.</p>
+            <p className="text-[10px] mb-4 text-[#8e8e93] font-sans">Pick a garment category to fetch and match cheapest options.</p>
             <div className="flex items-center gap-2 mb-4">
               <select value={matchType} onChange={(e) => setMatchType(e.target.value)}
-                className={`flex-1 text-[11px] rounded-full px-3 py-2 border focus:outline-none ${isDark ? "bg-neutral-900 border-neutral-800" : "bg-white border-neutral-200"}`}>
+                className={`flex-1 text-[11px] rounded-full px-3 py-2 border focus:outline-none ${isDark ? "bg-[#09090b] border-neutral-850" : "bg-white border-neutral-200"}`}>
                 {["t-shirt", "hoodie", "sweatshirt", "tank", "long sleeve", "hat"].map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
               <button onClick={runMatch} disabled={matchBusy}
