@@ -272,13 +272,11 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
   const hasMulti = placements.length > 1;
   const [activeP, setActiveP] = useState(0);
   const ap = hasMulti ? placements[activeP] : null;
-  const productPhoto: string | null = ((initialCanvas as any)?.product?.photo) || null;
-  const [showPhoto, setShowPhoto] = useState(false);
   const artboardW = ap?.template_w || artboardWProp;
   const artboardH = ap?.template_h || artboardHProp;
-  const templateImage = (showPhoto && productPhoto && (!hasMulti || activeP === 0))
-    ? productPhoto
-    : (ap?.background_url || ap?.image_url || templateImageProp);
+  // Always render the exact Printful/Apliiq-synced template for the active
+  // placement — this is the real design space that publishes 1:1.
+  const templateImage = ap?.background_url || ap?.image_url || templateImageProp;
   const printArea = ap?.print_area || printAreaProp;
   const placementLayers = useRef<Record<number, StudioLayer[]>>({});
 
@@ -289,7 +287,10 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
   const [publishing, setPublishing] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
-  const [aiStyle, setAiStyle] = useState<"apparel" | "streetwear" | "vintage" | "lineart" | "embroidery" | "none">("apparel");
+  const [aiStyle, setAiStyle] = useState<"apparel" | "streetwear" | "vintage" | "lineart" | "embroidery" | "watercolor" | "anime" | "3d" | "photoreal" | "none">("apparel");
+  const [aiAspect, setAiAspect] = useState<"square" | "portrait" | "landscape">("square");
+  const [aiNegative, setAiNegative] = useState("");
+  const [aiTransparent, setAiTransparent] = useState(true);
   const [regionMode, setRegionMode] = useState(false);
   const [region, setRegion] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
 
@@ -1688,8 +1689,11 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
     if (!aiPrompt.trim()) { toast.error("Enter a prompt"); return; }
     setAiBusy(true);
     try {
+      const dims = aiAspect === "portrait" ? { width: 832, height: 1216 }
+        : aiAspect === "landscape" ? { width: 1216, height: 832 }
+        : { width: 1024, height: 1024 };
       const { data, error } = await supabase.functions.invoke("ai-generate-image", {
-        body: { prompt: aiPrompt.trim(), width: 1024, height: 1024, style: aiStyle },
+        body: { prompt: aiPrompt.trim(), ...dims, style: aiStyle, negative_prompt: aiNegative.trim() || undefined, transparent: aiTransparent },
       });
       const msg = await extractFnError(error, data);
       if (msg) { toast.error(msg); return; }
@@ -1715,7 +1719,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
       const w = Math.round(bw), h = Math.round(bh);
       if (w < 10 || h < 10) { toast.error("Selection too small"); return; }
       const { data, error } = await supabase.functions.invoke("ai-generate-image", {
-        body: { prompt: aiPrompt.trim(), width: Math.min(1024, w), height: Math.min(1024, h), style: aiStyle },
+        body: { prompt: aiPrompt.trim(), width: Math.min(1024, w), height: Math.min(1024, h), style: aiStyle, negative_prompt: aiNegative.trim() || undefined, transparent: aiTransparent },
       });
       const msg = await extractFnError(error, data);
       if (msg) { toast.error(msg); return; }
@@ -2406,6 +2410,14 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                       <Wand2 size={14} /> Import Texture Overlay
                       <input type="file" accept="image/*,.svg,.png,.jpg,.jpeg,.webp" className="hidden" onChange={(e) => { if (e.target.files?.[0]) { importTexture(e.target.files[0]); setActivePopover("none"); } }} />
                     </label>
+                    <button onClick={() => { const u = window.prompt("Paste an image URL to import:"); if (u && /^https?:\/\//.test(u)) { addImageAtDirect(getProxyImageUrl(u) || u, "Imported"); setActivePopover("none"); } }}
+                      className="w-full flex items-center justify-center gap-2 py-3 border border-dashed rounded-xl cursor-pointer text-neutral-500 hover:text-[#007aff] hover:border-[#007aff]/40 text-xs font-bold transition-all font-sans">
+                      <ImagePlus size={14} /> Import from URL
+                    </button>
+                    <button onClick={() => { setEdmOpen(true); setActivePopover("none"); }}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl cursor-pointer bg-indigo-500/10 text-[#007aff] border border-indigo-500/20 hover:bg-indigo-500/20 text-xs font-bold transition-all font-sans">
+                      <Wand2 size={14} /> AI Design Maker
+                    </button>
                   </div>
                 )}
 
@@ -2740,8 +2752,39 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                 <div className="space-y-3">
                   <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">AI Generative Suite</p>
                   <textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)}
-                    placeholder="Describe design, or draw a lasso then generate into it…"
+                    placeholder="Describe your design…"
                     className="w-full h-14 bg-neutral-900 border border-neutral-800 rounded-xl p-3 text-[10px] focus:outline-none focus:ring-1 focus:ring-indigo-500 text-neutral-200 font-mono resize-none" />
+                  <textarea value={aiNegative} onChange={(e) => setAiNegative(e.target.value)}
+                    placeholder="Negative prompt — what to avoid (optional)…"
+                    className="w-full h-9 bg-neutral-900 border border-neutral-800 rounded-xl p-2.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-rose-500/50 text-neutral-300 font-mono resize-none" />
+
+                  {/* Style */}
+                  <div className="space-y-1">
+                    <p className="text-[9px] uppercase font-bold tracking-widest text-neutral-500">Style</p>
+                    <div className="flex flex-wrap gap-1">
+                      {(["apparel","streetwear","vintage","lineart","embroidery","watercolor","anime","3d","photoreal","none"] as const).map((s) => (
+                        <button key={s} onClick={() => setAiStyle(s)}
+                          className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border transition-colors ${aiStyle === s ? "bg-indigo-500 text-white border-indigo-500" : "text-neutral-400 border-neutral-700 hover:border-neutral-500"}`}>
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Aspect + transparent */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex gap-1">
+                      {([["square","1:1"],["portrait","2:3"],["landscape","3:2"]] as const).map(([a,l]) => (
+                        <button key={a} onClick={() => setAiAspect(a)}
+                          className={`text-[9px] px-2 py-1 rounded-md font-bold uppercase border ${aiAspect === a ? "bg-indigo-500 text-white border-indigo-500" : "text-neutral-400 border-neutral-700"}`}>{l}</button>
+                      ))}
+                    </div>
+                    <label className="flex items-center gap-1.5 text-[9px] uppercase font-bold tracking-wider text-neutral-400 cursor-pointer">
+                      <input type="checkbox" checked={aiTransparent} onChange={(e) => setAiTransparent(e.target.checked)} className="rounded accent-indigo-500" />
+                      Transparent BG
+                    </label>
+                  </div>
+
                   {lassoPoints.length >= 3 ? (
                     <button onClick={handleLassoRegionAi} disabled={aiBusy} className="w-full py-2.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500 text-white hover:bg-indigo-600 flex items-center justify-center gap-1">
                       {aiBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Generate Into Lasso
@@ -3334,18 +3377,10 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
             Animate
           </button>
 
-          {/* Dynamic view switchers */}
-          {(hasMulti || productPhoto) && (
+          {/* Placement switcher (front / back / sleeves — each a real Printful print space) */}
+          {hasMulti && (
             <div className="flex items-center gap-1.5">
-              {productPhoto && (!hasMulti || activeP === 0) && (
-                <button 
-                  onClick={() => setShowPhoto(!showPhoto)}
-                  className={`text-[9px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full ${showPhoto ? "bg-indigo-500 text-white" : "bg-neutral-100 dark:bg-neutral-800 text-neutral-500"}`}
-                >
-                  {showPhoto ? "Mockup" : "Template"}
-                </button>
-              )}
-              {hasMulti && placements.map((p, i) => (
+              {placements.map((p, i) => (
                 <button 
                   key={p.placement + i} 
                   onClick={() => switchPlacement(i)}
