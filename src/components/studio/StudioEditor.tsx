@@ -310,6 +310,19 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
   const [adjSat, setAdjSat] = useState(100);
   const [adjBri, setAdjBri] = useState(100);
   const [adjContrast, setAdjContrast] = useState(0);
+  // Adjustments suite (Procreate-style): which adjustment is active + its params.
+  const [adjMode, setAdjMode] = useState<"color" | "curves" | "balance" | "noise" | "sharpen" | "liquify">("color");
+  const [curveBlack, setCurveBlack] = useState(0);    // 0..100 input black point
+  const [curveWhite, setCurveWhite] = useState(100);  // 0..100 input white point
+  const [curveGamma, setCurveGamma] = useState(100);  // 50..200 midtone gamma (100 = linear)
+  const [balR, setBalR] = useState(0);
+  const [balG, setBalG] = useState(0);
+  const [balB, setBalB] = useState(0);
+  const [noiseAmt, setNoiseAmt] = useState(30);
+  const [sharpenAmt, setSharpenAmt] = useState(40);
+  const [liquifyMode, setLiquifyMode] = useState<"push" | "bloat" | "pinch" | "twirl">("push");
+  const [liquifySize, setLiquifySize] = useState(160);
+  const [liquifyStrength, setLiquifyStrength] = useState(50);
 
   // Color harmony mode
   const [harmonyMode, setHarmonyMode] = useState<"none"|"comp"|"split"|"triadic"|"tetradic"|"analogous">("none");
@@ -352,7 +365,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
   };
 
   // State Expansion for Procreate specifications
-  const [tool, setTool] = useState<"select" | "brush" | "smudge" | "eraser" | "fill" | "eyedropper" | "lasso">("select");
+  const [tool, setTool] = useState<"select" | "brush" | "smudge" | "eraser" | "fill" | "eyedropper" | "lasso" | "liquify">("select");
   const [brushType, setBrushType] = useState<BrushType>("round");
   const [brushSize, setBrushSize] = useState(36);
   const [brushLibOpen, setBrushLibOpen] = useState(false);
@@ -575,10 +588,18 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
       strokeTo(id, p.x, p.y, (e.evt as any).pressure || 0.5);
       return;
     }
-    if (regionMode) { 
-      drawing.current = { x: p.x, y: p.y }; 
-      setRegion({ x: p.x, y: p.y, w: 0, h: 0 }); 
-      return; 
+    if (tool === "liquify") {
+      const id = layers.find((l) => l.id === selectedId)?.type === "paint" ? selectedId! : ensurePaintTarget(true);
+      if (!id) { toast.error("Select a paint layer to liquify"); return; }
+      snapshotPaint(id);
+      painting.current = true;
+      lastPt.current = { x: p.x, y: p.y };
+      return;
+    }
+    if (regionMode) {
+      drawing.current = { x: p.x, y: p.y };
+      setRegion({ x: p.x, y: p.y, w: 0, h: 0 });
+      return;
     }
     if (e.target === stage || (e.target as any).attrs?.name === "bg") {
       setSelectedId(null);
@@ -637,6 +658,12 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
         if (holdTimer.current) clearTimeout(holdTimer.current);
         holdTimer.current = setTimeout(tryQuickShape, 550);
       }
+      return;
+    }
+    if (tool === "liquify" && painting.current) {
+      const last = lastPt.current;
+      if (last) { liquifyDab(p.x, p.y, p.x - last.x, p.y - last.y); }
+      lastPt.current = { x: p.x, y: p.y };
       return;
     }
     if (regionMode && drawing.current) { const s = drawing.current; setRegion({ x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), w: Math.abs(p.x - s.x), h: Math.abs(p.y - s.y) }); }
@@ -1251,6 +1278,126 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
     redrawStage();
     setAdjHue(0); setAdjSat(100); setAdjBri(100); setAdjContrast(0);
   }, [selectedLayer, adjHue, adjSat, adjBri, adjContrast]);
+
+  // Helper: run a pixel transform over the selected paint layer with one undo step.
+  const withPaintPixels = (fn: (d: Uint8ClampedArray, w: number, h: number) => void) => {
+    if (!selectedLayer || selectedLayer.type !== "paint") { toast.error("Select a paint layer"); return; }
+    const c = paintCanvases.current[selectedLayer.id]; if (!c) return;
+    snapshotPaint(selectedLayer.id);
+    const ctx = c.getContext("2d")!;
+    const img = ctx.getImageData(0, 0, c.width, c.height);
+    fn(img.data, c.width, c.height);
+    ctx.putImageData(img, 0, 0);
+    redrawStage();
+  };
+
+  // Curves: input black/white point remap + midtone gamma (luminance-preserving per channel).
+  const applyCurves = () => {
+    const bp = curveBlack / 100, wp = curveWhite / 100, g = 100 / Math.max(1, curveGamma);
+    const lut = new Uint8ClampedArray(256);
+    for (let v = 0; v < 256; v++) {
+      let n = (v / 255 - bp) / Math.max(0.001, wp - bp);
+      n = Math.max(0, Math.min(1, n));
+      lut[v] = Math.round(Math.pow(n, g) * 255);
+    }
+    withPaintPixels((d) => {
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 3] === 0) continue;
+        d[i] = lut[d[i]]; d[i + 1] = lut[d[i + 1]]; d[i + 2] = lut[d[i + 2]];
+      }
+    });
+    setCurveBlack(0); setCurveWhite(100); setCurveGamma(100);
+  };
+
+  // Color Balance: shift channels weighted toward midtones.
+  const applyColorBalance = () => {
+    const dr = balR * 0.6, dg = balG * 0.6, db = balB * 0.6;
+    withPaintPixels((d) => {
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 3] === 0) continue;
+        const lum = (d[i] + d[i + 1] + d[i + 2]) / 3 / 255;
+        const w = 1 - Math.abs(lum - 0.5) * 2; // midtone weight (0 at extremes)
+        d[i]   = Math.max(0, Math.min(255, d[i]   + dr * w));
+        d[i + 1] = Math.max(0, Math.min(255, d[i + 1] + dg * w));
+        d[i + 2] = Math.max(0, Math.min(255, d[i + 2] + db * w));
+      }
+    });
+    setBalR(0); setBalG(0); setBalB(0);
+  };
+
+  // Noise: monochrome film grain.
+  const applyNoise = () => {
+    const amt = (noiseAmt / 100) * 90;
+    withPaintPixels((d) => {
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 3] === 0) continue;
+        const n = (Math.random() - 0.5) * amt;
+        d[i] = Math.max(0, Math.min(255, d[i] + n));
+        d[i + 1] = Math.max(0, Math.min(255, d[i + 1] + n));
+        d[i + 2] = Math.max(0, Math.min(255, d[i + 2] + n));
+      }
+    });
+  };
+
+  // Sharpen: unsharp-mask via a 3×3 high-pass kernel.
+  const applySharpen = () => {
+    const k = sharpenAmt / 100;
+    withPaintPixels((d, w, h) => {
+      const src = new Uint8ClampedArray(d);
+      const at = (x: number, y: number, c: number) => src[(Math.max(0, Math.min(h - 1, y)) * w + Math.max(0, Math.min(w - 1, x))) * 4 + c];
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const idx = (y * w + x) * 4;
+          if (src[idx + 3] === 0) continue;
+          for (let c = 0; c < 3; c++) {
+            const blur = (at(x-1,y,c)+at(x+1,y,c)+at(x,y-1,c)+at(x,y+1,c)) / 4;
+            const sharp = at(x,y,c) + (at(x,y,c) - blur) * k * 2;
+            d[idx + c] = Math.max(0, Math.min(255, sharp));
+          }
+        }
+      }
+    });
+  };
+
+  // Liquify: push/bloat/pinch/twirl displacement applied to a region as you drag.
+  const liquifyDab = (cx: number, cy: number, dx: number, dy: number) => {
+    if (!selectedLayer || selectedLayer.type !== "paint") return;
+    const c = paintCanvases.current[selectedLayer.id]; if (!c) return;
+    const ctx = c.getContext("2d")!;
+    const R = liquifySize / 2;
+    const x0 = Math.max(0, Math.floor(cx - R)), y0 = Math.max(0, Math.floor(cy - R));
+    const x1 = Math.min(c.width, Math.ceil(cx + R)), y1 = Math.min(c.height, Math.ceil(cy + R));
+    const rw = x1 - x0, rh = y1 - y0;
+    if (rw <= 0 || rh <= 0) return;
+    const src = ctx.getImageData(x0, y0, rw, rh);
+    const out = ctx.createImageData(rw, rh);
+    const sd = src.data, od = out.data;
+    const str = liquifyStrength / 100;
+    const sample = (sx: number, sy: number, i: number) => {
+      const ix = Math.max(0, Math.min(rw - 1, Math.round(sx)));
+      const iy = Math.max(0, Math.min(rh - 1, Math.round(sy)));
+      const si = (iy * rw + ix) * 4;
+      od[i] = sd[si]; od[i + 1] = sd[si + 1]; od[i + 2] = sd[si + 2]; od[i + 3] = sd[si + 3];
+    };
+    for (let y = 0; y < rh; y++) {
+      for (let x = 0; x < rw; x++) {
+        const i = (y * rw + x) * 4;
+        const px = x0 + x - cx, py = y0 + y - cy;
+        const dist = Math.hypot(px, py);
+        const f = dist < R ? (1 - dist / R) : 0;
+        let sx = x, sy = y;
+        if (f > 0) {
+          if (liquifyMode === "push") { sx = x - dx * f * str; sy = y - dy * f * str; }
+          else if (liquifyMode === "bloat") { sx = x - px * f * str * 0.5; sy = y - py * f * str * 0.5; }
+          else if (liquifyMode === "pinch") { sx = x + px * f * str * 0.5; sy = y + py * f * str * 0.5; }
+          else { const a = f * str * 1.2; const cs = Math.cos(a), sn = Math.sin(a); sx = x + (px * cs - py * sn - px); sy = y + (px * sn + py * cs - py); }
+        }
+        sample(sx, sy, i);
+      }
+    }
+    ctx.putImageData(out, x0, y0);
+    redrawStage();
+  };
 
   // ─── Core layer mutators ───────────────────────────────────────────────────
   const patchLayer = (id: string, patch: Partial<StudioLayer>) => {
@@ -2313,7 +2460,76 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                   <div className="space-y-3.5">
                     <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide">{selectedLayer.name}</p>
 
+                    {/* Adjustment mode switcher (Procreate-style) */}
                     {selectedLayer.type === "paint" && (
+                      <div className="flex flex-wrap gap-1">
+                        {(["color","curves","balance","noise","sharpen","liquify"] as const).map((m) => (
+                          <button key={m} onClick={() => { setAdjMode(m); if (m === "liquify") { setTool("liquify"); setActivePopover("none"); } else if (tool === "liquify") setTool("brush"); }}
+                            className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border transition-colors ${adjMode === m ? "bg-[#007aff] text-white border-[#007aff]" : "text-neutral-400 border-neutral-700 hover:border-neutral-500"}`}>
+                            {m}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {selectedLayer.type === "paint" && adjMode === "curves" && (
+                      <div className="space-y-3 text-[10px] font-semibold text-neutral-400">
+                        <div className="space-y-1"><div className="flex justify-between"><span>Black point</span><span className="font-mono">{curveBlack}</span></div>
+                          <input type="range" min={0} max={90} value={curveBlack} onChange={(e)=>setCurveBlack(parseInt(e.target.value))} className="w-full accent-[#007aff]" /></div>
+                        <div className="space-y-1"><div className="flex justify-between"><span>White point</span><span className="font-mono">{curveWhite}</span></div>
+                          <input type="range" min={10} max={100} value={curveWhite} onChange={(e)=>setCurveWhite(parseInt(e.target.value))} className="w-full accent-[#007aff]" /></div>
+                        <div className="space-y-1"><div className="flex justify-between"><span>Midtones (gamma)</span><span className="font-mono">{(curveGamma/100).toFixed(2)}</span></div>
+                          <input type="range" min={40} max={250} value={curveGamma} onChange={(e)=>setCurveGamma(parseInt(e.target.value))} className="w-full accent-[#007aff]" /></div>
+                        <button onClick={applyCurves} className="w-full py-2 rounded-xl bg-[#007aff] text-white text-[10px] font-bold uppercase tracking-wider hover:bg-[#005bb5]">Apply Curves</button>
+                      </div>
+                    )}
+
+                    {selectedLayer.type === "paint" && adjMode === "balance" && (
+                      <div className="space-y-3 text-[10px] font-semibold text-neutral-400">
+                        {([["Red", balR, setBalR, "to right, #0ff, #f00"],["Green", balG, setBalG, "to right, #f0f, #0f0"],["Blue", balB, setBalB, "to right, #ff0, #00f"]] as const).map(([lbl, val, set, grad]) => (
+                          <div key={lbl} className="space-y-1"><div className="flex justify-between"><span>{lbl}</span><span className="font-mono">{val > 0 ? "+" : ""}{val}</span></div>
+                            <div className="relative h-2.5 rounded-full overflow-hidden" style={{ background: `linear-gradient(${grad})` }}>
+                              <input type="range" min={-100} max={100} value={val} onChange={(e)=>set(parseInt(e.target.value))} className="absolute inset-0 w-full opacity-0 cursor-pointer h-full" />
+                              <div className="absolute top-0 bottom-0 w-2 -translate-x-1/2 rounded-full bg-white border border-neutral-600 shadow pointer-events-none" style={{ left: `${((val+100)/200)*100}%` }} />
+                            </div></div>
+                        ))}
+                        <button onClick={applyColorBalance} className="w-full py-2 rounded-xl bg-[#007aff] text-white text-[10px] font-bold uppercase tracking-wider hover:bg-[#005bb5]">Apply Balance</button>
+                      </div>
+                    )}
+
+                    {selectedLayer.type === "paint" && adjMode === "noise" && (
+                      <div className="space-y-3 text-[10px] font-semibold text-neutral-400">
+                        <div className="space-y-1"><div className="flex justify-between"><span>Amount</span><span className="font-mono">{noiseAmt}%</span></div>
+                          <input type="range" min={0} max={100} value={noiseAmt} onChange={(e)=>setNoiseAmt(parseInt(e.target.value))} className="w-full accent-[#007aff]" /></div>
+                        <button onClick={applyNoise} className="w-full py-2 rounded-xl bg-[#007aff] text-white text-[10px] font-bold uppercase tracking-wider hover:bg-[#005bb5]">Apply Noise</button>
+                      </div>
+                    )}
+
+                    {selectedLayer.type === "paint" && adjMode === "sharpen" && (
+                      <div className="space-y-3 text-[10px] font-semibold text-neutral-400">
+                        <div className="space-y-1"><div className="flex justify-between"><span>Amount</span><span className="font-mono">{sharpenAmt}%</span></div>
+                          <input type="range" min={0} max={100} value={sharpenAmt} onChange={(e)=>setSharpenAmt(parseInt(e.target.value))} className="w-full accent-[#007aff]" /></div>
+                        <button onClick={applySharpen} className="w-full py-2 rounded-xl bg-[#007aff] text-white text-[10px] font-bold uppercase tracking-wider hover:bg-[#005bb5]">Apply Sharpen</button>
+                      </div>
+                    )}
+
+                    {selectedLayer.type === "paint" && adjMode === "liquify" && (
+                      <div className="space-y-3 text-[10px] font-semibold text-neutral-400">
+                        <p className="text-[9px] text-emerald-500 uppercase tracking-wider">Liquify active — drag on the canvas</p>
+                        <div className="flex flex-wrap gap-1">
+                          {(["push","bloat","pinch","twirl"] as const).map((m) => (
+                            <button key={m} onClick={()=>{ setLiquifyMode(m); setTool("liquify"); }}
+                              className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${liquifyMode === m ? "bg-[#007aff] text-white border-[#007aff]" : "text-neutral-400 border-neutral-700"}`}>{m}</button>
+                          ))}
+                        </div>
+                        <div className="space-y-1"><div className="flex justify-between"><span>Size</span><span className="font-mono">{liquifySize}px</span></div>
+                          <input type="range" min={40} max={500} value={liquifySize} onChange={(e)=>setLiquifySize(parseInt(e.target.value))} className="w-full accent-[#007aff]" /></div>
+                        <div className="space-y-1"><div className="flex justify-between"><span>Strength</span><span className="font-mono">{liquifyStrength}%</span></div>
+                          <input type="range" min={5} max={100} value={liquifyStrength} onChange={(e)=>setLiquifyStrength(parseInt(e.target.value))} className="w-full accent-[#007aff]" /></div>
+                      </div>
+                    )}
+
+                    {selectedLayer.type === "paint" && adjMode === "color" && (
                       <>
                         {/* Hue */}
                         <div className="space-y-1">
