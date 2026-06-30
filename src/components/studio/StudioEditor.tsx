@@ -32,6 +32,34 @@ export type BrushType =
   | "round" | "textured" | "ink" | "charcoal"
   | "pencil" | "airbrush" | "marker" | "spray" | "calligraphy" | "watercolor";
 
+// Procreate-style brush library: brushes grouped by category set.
+const BRUSH_LIBRARY: Record<string, BrushType[]> = {
+  Sketching: ["pencil", "charcoal"],
+  Inking: ["ink", "marker"],
+  Painting: ["round", "watercolor"],
+  Airbrushing: ["airbrush", "spray"],
+  Calligraphy: ["calligraphy"],
+  Textures: ["textured"],
+};
+
+// A CSS preview of each brush's stroke for the library swatches.
+const BRUSH_PREVIEW = (b: BrushType, dark: boolean): string => {
+  const ink = dark ? "#e5e5ea" : "#1c1c1e";
+  switch (b) {
+    case "pencil": return `repeating-linear-gradient(90deg, ${ink}99 0 1px, transparent 1px 2px)`;
+    case "charcoal": return `repeating-linear-gradient(90deg, ${ink}aa 0 2px, transparent 2px 4px)`;
+    case "ink": return `linear-gradient(90deg, transparent, ${ink}, ${ink}, transparent)`;
+    case "marker": return `linear-gradient(90deg, ${ink}cc, ${ink}cc)`;
+    case "round": return `linear-gradient(90deg, transparent, ${ink}, transparent)`;
+    case "watercolor": return `radial-gradient(ellipse at center, ${ink}55, transparent 70%)`;
+    case "airbrush": return `radial-gradient(ellipse at center, ${ink}66, ${ink}11 60%, transparent)`;
+    case "spray": return `radial-gradient(${ink}88 1px, transparent 1px) 0 0/4px 4px`;
+    case "calligraphy": return `linear-gradient(110deg, transparent 20%, ${ink} 40%, ${ink} 60%, transparent 80%)`;
+    case "textured": return `repeating-radial-gradient(${ink}66 0 1px, transparent 1px 3px)`;
+    default: return ink;
+  }
+};
+
 export type StudioLayer = {
   id: string; type: "image" | "text" | "paint"; name: string; visible: boolean;
   x: number; y: number; rotation: number; opacity: number;
@@ -267,7 +295,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
   const [fullScreenCanvas, setFullScreenCanvas] = useState(false);
   const [activePopover, setActivePopover] = useState<"none" | "actions" | "adjustments" | "layers" | "colors">("none");
   const [activePopoverTab, setActivePopoverTab] = useState<string>("add"); 
-  const [colorSelectorTab, setColorSelectorTab] = useState<"disc" | "classic" | "palette" | "history">("disc");
+  const [colorSelectorTab, setColorSelectorTab] = useState<"disc" | "classic" | "harmony" | "value" | "palettes">("disc");
   const [activeLayerSettingsId, setActiveLayerSettingsId] = useState<string | null>(null);
 
   const [preview3d, setPreview3d] = useState<string | null>(null);
@@ -327,6 +355,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
   const [tool, setTool] = useState<"select" | "brush" | "smudge" | "eraser" | "fill" | "eyedropper" | "lasso">("select");
   const [brushType, setBrushType] = useState<BrushType>("round");
   const [brushSize, setBrushSize] = useState(36);
+  const [brushLibOpen, setBrushLibOpen] = useState(false);
   const [brushColor, setBrushColor] = useState("#000000");
   const [colorH, setColorH] = useState(0);
   const [colorS, setColorS] = useState(0);
@@ -1948,12 +1977,46 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                   ⊹ {quickShapeHint} snapped
                 </span>
               )}
-              <div className="flex flex-wrap bg-neutral-200 dark:bg-neutral-800 p-0.5 rounded-full border border-neutral-350 dark:border-neutral-850 max-w-[420px]">
-                {(["round", "pencil", "ink", "marker", "airbrush", "spray", "charcoal", "calligraphy", "watercolor", "textured"] as const).map((b) => (
-                  <button key={b} onClick={() => setBrushType(b)} className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${brushType === b ? "bg-[#007aff] text-white" : "text-neutral-500"}`}>
-                    {b}
-                  </button>
-                ))}
+              {/* Brush Library opener */}
+              <div className="relative">
+                <button onClick={() => setBrushLibOpen((v) => !v)}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border transition-colors ${brushLibOpen ? "bg-[#007aff] text-white border-[#007aff]" : "bg-neutral-200 dark:bg-neutral-800 text-neutral-500 border-neutral-350 dark:border-neutral-850"}`}>
+                  <Paintbrush size={12} /> {brushType}
+                </button>
+                {brushLibOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setBrushLibOpen(false)} />
+                    <div className={`absolute z-50 mt-2 left-0 w-[340px] rounded-2xl border shadow-2xl overflow-hidden flex ${isDark ? "bg-[#1c1c1e] border-neutral-800" : "bg-white border-neutral-200"}`}>
+                      {/* Category list */}
+                      <div className={`w-[120px] shrink-0 border-r py-2 ${isDark ? "border-neutral-800 bg-black/20" : "border-neutral-200 bg-neutral-50"}`}>
+                        {Object.keys(BRUSH_LIBRARY).map((cat) => {
+                          const active = BRUSH_LIBRARY[cat].includes(brushType);
+                          return (
+                            <div key={cat} className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider ${active ? "text-[#007aff]" : "text-neutral-500"}`}>
+                              {cat}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {/* Brush grid grouped by category */}
+                      <div className="flex-1 max-h-[320px] overflow-y-auto py-2">
+                        {Object.entries(BRUSH_LIBRARY).map(([cat, brushes]) => (
+                          <div key={cat} className="mb-1">
+                            <p className="px-3 py-1 text-[9px] font-bold uppercase tracking-widest text-neutral-500">{cat}</p>
+                            {brushes.map((b) => (
+                              <button key={b} onClick={() => { setBrushType(b); setBrushLibOpen(false); }}
+                                className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${brushType === b ? "bg-[#007aff]/15" : "hover:bg-neutral-100 dark:hover:bg-neutral-800"}`}>
+                                {/* preview swatch */}
+                                <span className="w-14 h-5 rounded-full shrink-0" style={{ background: BRUSH_PREVIEW(b, isDark) }} />
+                                <span className={`text-[11px] font-semibold capitalize ${brushType === b ? "text-[#007aff]" : isDark ? "text-neutral-200" : "text-neutral-700"}`}>{b}</span>
+                              </button>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
               <span className="w-px h-4 bg-neutral-300 dark:bg-neutral-850" />
               <div className="flex items-center gap-2">
@@ -2448,7 +2511,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
             {activePopover === "colors" && (
               <div className="space-y-4">
                 <div className="flex border-b border-[#1c1c1e] dark:border-neutral-850 pb-2 mb-2 text-[10px] font-bold uppercase tracking-wider">
-                  {["disc", "classic", "palette", "history"].map((t) => (
+                  {["disc", "classic", "harmony", "value", "palettes"].map((t) => (
                     <button
                       key={t}
                       onClick={() => setColorSelectorTab(t as any)}
@@ -2576,48 +2639,98 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                   </div>
                 )}
 
-                {/* PALETTES TAB */}
-                {colorSelectorTab === "palette" && (
-                  <div className="space-y-3 animate-fade-in">
-                    <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93] font-sans">Colour Palette</p>
-                    {/* Harmony mode pills */}
-                    <div className="flex flex-wrap gap-1">
-                      {([["none","Off"],["comp","Comp"],["split","Split"],["triadic","Triadic"],["tetradic","Tetra"],["analogous","Analog"]] as const).map(([m,l]) => (
+                {/* HARMONY TAB — disc + complementary set */}
+                {colorSelectorTab === "harmony" && (
+                  <div className="space-y-3 animate-fade-in flex flex-col items-center font-mono">
+                    <div className="flex flex-wrap gap-1 justify-center">
+                      {([["comp","Complementary"],["split","Split"],["analogous","Analogous"],["triadic","Triadic"],["tetradic","Tetradic"]] as const).map(([m,l]) => (
                         <button key={m} onClick={() => setHarmonyMode(m as any)}
                           className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider transition-colors border ${harmonyMode === m ? "bg-[#007aff] text-white border-[#007aff]" : "text-neutral-400 border-neutral-700 hover:border-neutral-500"}`}>
                           {l}
                         </button>
                       ))}
                     </div>
-                    <div className="grid grid-cols-6 gap-2">
-                      {["#1c1c1e", "#3a3a3c", "#5c5c5e", "#aeaeaf", "#e5e5ea", "#ffffff", "#ff3b30", "#ff9500", "#ffcc00", "#4cd964", "#5ac8fa", "#007aff", "#5856d6", "#af52de", "#ff2d55", "#a2845e", "#34aadc", "#4cd964"].map((c) => (
-                        <button key={c} onClick={() => setColorFromHex(c)} className="w-8 h-8 rounded border border-[#1c1c1e] dark:border-neutral-850 transition-transform active:scale-90" style={{ backgroundColor: c }} />
-                      ))}
+                    {/* Compact hue ring + SB square */}
+                    <div className="relative select-none" style={{ width: 156, height: 156 }}>
+                      <div className="absolute inset-0 rounded-full cursor-crosshair"
+                        style={{ background: "conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)" }}
+                        onPointerDown={(e) => {
+                          const el = e.currentTarget;
+                          const mv = (ev: PointerEvent) => {
+                            const rect = el.getBoundingClientRect();
+                            const dx = ev.clientX - (rect.left + rect.width / 2), dy = ev.clientY - (rect.top + rect.height / 2);
+                            const r = Math.hypot(dx, dy), outerR = rect.width / 2, innerR = outerR * 0.62;
+                            if (r < innerR || r > outerR) return;
+                            setColorFromHsb(Math.round((Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360), colorS, colorB);
+                          };
+                          const up = () => { window.removeEventListener("pointermove", mv as any); window.removeEventListener("pointerup", up); };
+                          mv(e.nativeEvent as PointerEvent); window.addEventListener("pointermove", mv as any); window.addEventListener("pointerup", up); e.preventDefault();
+                        }} />
+                      <div className="absolute rounded-full pointer-events-none" style={{ inset: "19%", background: isDark ? "#09090b" : "#f4f5f7" }} />
+                      {/* Harmony dots around the ring */}
+                      {harmonyColors.map((c, i) => {
+                        const hsb = hexToHsb(c);
+                        const ang = (hsb.h * Math.PI) / 180, rad = 70;
+                        return <div key={i} className="absolute w-4 h-4 rounded-full border-2 border-white shadow -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+                          style={{ left: `calc(50% + ${Math.cos(ang) * rad}px)`, top: `calc(50% + ${Math.sin(ang) * rad}px)`, backgroundColor: c }} />;
+                      })}
                     </div>
-                  </div>
-                )}
-
-                {/* HARMONY TAB */}
-                {colorSelectorTab === "palette" && harmonyMode !== "none" && harmonyColors.length > 0 && (
-                  <div className="space-y-2 border-t border-neutral-800 pt-3 animate-fade-in">
-                    <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Harmony — {harmonyMode}</p>
-                    <div className="flex gap-2 items-center">
-                      <div className="w-7 h-7 rounded-lg border border-neutral-700 shrink-0 ring-2 ring-white/20" style={{ backgroundColor: brushColor }} />
+                    <div className="flex gap-2 items-center justify-center flex-wrap">
+                      <div className="w-8 h-8 rounded-lg border border-neutral-700 shrink-0 ring-2 ring-white/20" style={{ backgroundColor: brushColor }} />
                       {harmonyColors.map((c, i) => (
-                        <button key={i} onClick={() => setColorFromHex(c)} className="w-7 h-7 rounded-lg border border-neutral-700 hover:scale-110 transition-transform" style={{ backgroundColor: c }} />
+                        <button key={i} onClick={() => setColorFromHex(c)} className="w-8 h-8 rounded-lg border border-neutral-700 hover:scale-110 transition-transform" style={{ backgroundColor: c }} />
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* HISTORY PANEL TAB */}
-                {colorSelectorTab === "history" && (
-                  <div className="space-y-3 animate-fade-in font-sans">
-                    <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Sampled History</p>
-                    <div className="grid grid-cols-6 gap-2">
-                      {colorHistory.map((c, i) => (
-                        <button key={c + i} onClick={() => setColorFromHex(c)} className="w-8 h-8 rounded-full border border-[#1c1c1e] dark:border-[#1c1c1e] transition-transform active:scale-90" style={{ backgroundColor: c }} />
-                      ))}
+                {/* VALUE TAB — precise HSB + RGB + Hex */}
+                {colorSelectorTab === "value" && (
+                  <div className="space-y-3 animate-fade-in font-mono text-[11px] text-neutral-400">
+                    {([["H", colorH, 360, (v:number)=>setColorFromHsb(v,colorS,colorB)],["S", colorS, 100, (v:number)=>setColorFromHsb(colorH,v,colorB)],["B", colorB, 100, (v:number)=>setColorFromHsb(colorH,colorS,v)]] as const).map(([lbl,val,max,fn]) => (
+                      <div key={lbl} className="flex items-center gap-2">
+                        <span className="w-4 font-bold text-neutral-300">{lbl}</span>
+                        <input type="range" min={0} max={max} value={val} onChange={(e)=>fn(parseInt(e.target.value))} className="flex-1 accent-[#007aff]" />
+                        <input type="number" min={0} max={max} value={val} onChange={(e)=>fn(Math.max(0,Math.min(max,parseInt(e.target.value)||0)))} className="w-14 bg-neutral-900 border border-neutral-700 rounded px-1.5 py-1 text-neutral-200 outline-none focus:border-[#007aff]" />
+                      </div>
+                    ))}
+                    <div className="h-px bg-neutral-800 my-1" />
+                    {(() => { const { r, g, b } = hexToRgb(brushColor); const toHex=(n:number)=>Math.max(0,Math.min(255,n)).toString(16).padStart(2,"0");
+                      const set=(nr:number,ng:number,nb:number)=>setColorFromHex(`#${toHex(nr)}${toHex(ng)}${toHex(nb)}`);
+                      return ([["R", r, (v:number)=>set(v,g,b)],["G", g, (v:number)=>set(r,v,b)],["B", b, (v:number)=>set(r,g,v)]] as const).map(([lbl,val,fn]) => (
+                        <div key={lbl} className="flex items-center gap-2">
+                          <span className="w-4 font-bold text-neutral-300">{lbl}</span>
+                          <input type="range" min={0} max={255} value={val} onChange={(e)=>fn(parseInt(e.target.value))} className="flex-1 accent-[#007aff]" />
+                          <input type="number" min={0} max={255} value={val} onChange={(e)=>fn(Math.max(0,Math.min(255,parseInt(e.target.value)||0)))} className="w-14 bg-neutral-900 border border-neutral-700 rounded px-1.5 py-1 text-neutral-200 outline-none focus:border-[#007aff]" />
+                        </div>
+                      )); })()}
+                    <div className="flex items-center gap-2 pt-1">
+                      <span className="w-10 font-bold text-neutral-300">HEX</span>
+                      <div className="w-7 h-7 rounded border border-neutral-700 shrink-0" style={{ backgroundColor: brushColor }} />
+                      <input type="text" value={brushColor} maxLength={7} onChange={(e)=>{ const v=e.target.value; if(/^#[0-9a-fA-F]{6}$/.test(v)) setColorFromHex(v); }}
+                        className="flex-1 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-neutral-200 outline-none focus:border-[#007aff]" />
+                    </div>
+                  </div>
+                )}
+
+                {/* PALETTES TAB — default swatches + sampled history */}
+                {colorSelectorTab === "palettes" && (
+                  <div className="space-y-4 animate-fade-in font-sans">
+                    <div className="space-y-2">
+                      <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Default</p>
+                      <div className="grid grid-cols-6 gap-2">
+                        {["#1c1c1e", "#3a3a3c", "#5c5c5e", "#aeaeaf", "#e5e5ea", "#ffffff", "#ff3b30", "#ff9500", "#ffcc00", "#4cd964", "#5ac8fa", "#007aff", "#5856d6", "#af52de", "#ff2d55", "#a2845e", "#34aadc", "#8e8e93"].map((c) => (
+                          <button key={c} onClick={() => setColorFromHex(c)} className="w-8 h-8 rounded border border-[#1c1c1e] dark:border-neutral-850 transition-transform active:scale-90" style={{ backgroundColor: c }} />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Recent</p>
+                      <div className="grid grid-cols-6 gap-2">
+                        {colorHistory.map((c, i) => (
+                          <button key={c + i} onClick={() => setColorFromHex(c)} className="w-8 h-8 rounded-full border border-[#1c1c1e] dark:border-[#1c1c1e] transition-transform active:scale-90" style={{ backgroundColor: c }} />
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}
