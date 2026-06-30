@@ -163,12 +163,16 @@ function StudioPage() {
         price_cents: retailCents,
         artboard_w: tpl?.template_w || (tee ? 4500 : 5400),
         artboard_h: tpl?.template_h || 5400,
-        template_image: tpl?.image_url || color?.image || d.image,
+        // Prefer the product-photo background; fall back to the template image
+        // then the variant photo. (Some Printful products only ship a technical
+        // line-art template — the editor's Photo/Template toggle lets you swap
+        // to the clean product photo.)
+        template_image: tpl?.background_url || tpl?.image_url || color?.image || d.image,
         canvas_kind: "product",
         print_area: tpl?.print_area || null,
-        // Persist ALL print locations so the editor can offer per-placement
-        // surfaces (front/back/sleeves) — see docs/STUDIO_OVERHAUL.md.
-        canvas: { layers: [], product: { id: d.id, mfr: d.mfr, color: color?.name || null, variant_id: color?.variant_id ?? null, sizes: d.sizes, cost_cents: costCents, print: pa || null, placements } },
+        // Persist ALL print locations + the variant product photo so the editor
+        // can offer per-placement surfaces (front/back/sleeves) and a photo view.
+        canvas: { layers: [], product: { id: d.id, mfr: d.mfr, color: color?.name || null, variant_id: color?.variant_id ?? null, sizes: d.sizes, cost_cents: costCents, print: pa || null, placements, photo: color?.image || d.image || null } },
       }).select("*").single();
       if (error || !data) { toast.error(error?.message || "Could not create project"); return; }
       setNewOpen(false); setDetail(null); await loadProjects(); handleSetEditing(data as Project);

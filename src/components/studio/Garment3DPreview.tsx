@@ -11,7 +11,7 @@
 // ─────────────────────────────────────────────────────────────
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useMemo, useState, useEffect } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Decal, useTexture, Environment, ContactShadows, Center } from "@react-three/drei";
 import * as THREE from "three";
@@ -129,7 +129,10 @@ export default function Garment3DPreview({
 }) {
   const [color, setColor] = useState(GARMENT_COLORS[0].hex);
   const [spin, setSpin] = useState(true);
-  const [tab, setTab] = useState<"3d" | "real">("3d");
+  // Default to the photoreal on-model render when it's available — that's the
+  // real human wearing the exact product with the design; the 3D tab is a quick
+  // stylized preview.
+  const [tab, setTab] = useState<"3d" | "real">(canMockup ? "real" : "3d");
   const [mockups, setMockups] = useState<string[] | null>(null);
   const [mockBusy, setMockBusy] = useState(false);
 
@@ -141,22 +144,31 @@ export default function Garment3DPreview({
     finally { setMockBusy(false); }
   };
 
+  // Auto-render the photoreal mockup on open when it's the default tab.
+  useEffect(() => {
+    if (canMockup && fetchMockups && !mockups && !mockBusy) {
+      setMockBusy(true);
+      fetchMockups().then(setMockups).catch(() => {}).finally(() => setMockBusy(false));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-black/95 backdrop-blur-md">
       {/* Top bar */}
       <div className="flex items-center justify-between px-5 py-4 shrink-0">
         <div className="flex items-center gap-2">
           <div className="flex gap-1 rounded-full bg-white/10 p-1">
-            <button onClick={() => setTab("3d")}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest transition-colors ${tab === "3d" ? "bg-white text-black" : "text-white/60 hover:text-white"}`}>
-              <Box size={12} /> 3D
-            </button>
             {canMockup && (
               <button onClick={openReal}
                 className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest transition-colors ${tab === "real" ? "bg-white text-black" : "text-white/60 hover:text-white"}`}>
                 <User size={12} /> Realistic
               </button>
             )}
+            <button onClick={() => setTab("3d")}
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest transition-colors ${tab === "3d" ? "bg-white text-black" : "text-white/60 hover:text-white"}`}>
+              <Box size={12} /> 3D Preview
+            </button>
           </div>
           <span className="hidden sm:inline text-[9px] uppercase tracking-widest text-white/40">
             {tab === "3d"

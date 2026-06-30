@@ -168,9 +168,17 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
   const hasMulti = placements.length > 1;
   const [activeP, setActiveP] = useState(0);
   const ap = hasMulti ? placements[activeP] : null;
+  // Optional clean product photo (front variant) to swap to when a product only
+  // ships a technical line-art template.
+  const productPhoto: string | null = ((initialCanvas as any)?.product?.photo) || null;
+  const [showPhoto, setShowPhoto] = useState(false);
   const artboardW = ap?.template_w || artboardWProp;
   const artboardH = ap?.template_h || artboardHProp;
-  const templateImage = ap?.image_url || templateImageProp;
+  // Prefer the product-photo background; the Photo toggle forces the variant photo
+  // (front only). Falls back to the template image, then the project's image.
+  const templateImage = (showPhoto && productPhoto && (!hasMulti || activeP === 0))
+    ? productPhoto
+    : (ap?.background_url || ap?.image_url || templateImageProp);
   const printArea = ap?.print_area || printAreaProp;
   // Per-placement layer sets, swapped when the active placement changes.
   const placementLayers = useRef<Record<number, StudioLayer[]>>({});
@@ -523,12 +531,21 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
       commit((ls) => [...ls, l]); setSelectedId(l.id);
     };
     if (box) { place(box.w, box.h, box.x, box.y); return; }
-    const im = new window.Image(); im.crossOrigin = "anonymous"; 
-    im.src = src.includes("?") ? `${src}&cors=1` : `${src}?cors=1`;
+    const im = new window.Image(); im.crossOrigin = "anonymous";
+    // Never append a cache-buster to a data URL (it would corrupt the payload —
+    // breaking SVG/vector uploads); only remote URLs need the CORS refresh.
+    im.src = src.startsWith("data:") ? src : (src.includes("?") ? `${src}&cors=1` : `${src}?cors=1`);
     im.onload = () => {
-      const ratio = im.width / im.height; const w = Math.min(artboardW * 0.7, im.width); const h = w / ratio;
+      // SVGs / vectors / logos often report no intrinsic size — give them a
+      // sensible default so they're placed visibly instead of at 0×0.
+      let iw = im.naturalWidth || im.width, ih = im.naturalHeight || im.height;
+      if (!iw || !ih) { iw = 1200; ih = 1200; }
+      const ratio = iw / ih;
+      const w = Math.min(artboardW * 0.7, iw);
+      const h = w / ratio;
       place(w, h, (artboardW - w) / 2, (artboardH - h) / 2);
     };
+    im.onerror = () => toast.error("Could not load that file — try a PNG, JPG, SVG or WEBP.");
   };
 
   const uploadImage = (file: File) => { const r = new FileReader(); r.onload = () => addImageAt(r.result as string, file.name); r.readAsDataURL(file); };
@@ -867,8 +884,8 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
           <button onClick={() => { setTool("fill"); setRegionMode(false); }} className={pill + (tool === "fill" ? (isDark ? " bg-white/15" : " bg-black/10") : "")} title="Flood fill (bucket)"><PaintBucket size={13} /></button>
           <span className="w-px h-4 opacity-10 bg-current" />
           <button onClick={addText} className={pill}><Type size={13} /> Text</button>
-          <label className={pill + " cursor-pointer"}><ImagePlus size={13} /> Upload<input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadImage(e.target.files[0])} /></label>
-          <label className={pill + " cursor-pointer"} title="Import fabric texture (auto Multiply/Screen)"><Wand2 size={13} /> Texture<input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && importTexture(e.target.files[0])} /></label>
+          <label className={pill + " cursor-pointer"}><ImagePlus size={13} /> Upload<input type="file" accept="image/*,.svg,.png,.jpg,.jpeg,.webp,.gif,.bmp,.avif" className="hidden" onChange={(e) => e.target.files?.[0] && uploadImage(e.target.files[0])} /></label>
+          <label className={pill + " cursor-pointer"} title="Import fabric texture (auto Multiply/Screen)"><Wand2 size={13} /> Texture<input type="file" accept="image/*,.svg,.png,.jpg,.jpeg,.webp,.gif,.bmp,.avif" className="hidden" onChange={(e) => e.target.files?.[0] && importTexture(e.target.files[0])} /></label>
           <button onClick={addPaintLayer} className={pill}><Paintbrush size={13} /> Paint layer</button>
           <button onClick={() => { setRegionMode((v) => !v); setTool("select"); setSelectedId(null); }} className={pill + (regionMode ? (isDark ? " bg-white/15" : " bg-black/10") : "")} title="Draw a region for AI">
             <SquareDashed size={13} /> Region AI
@@ -961,18 +978,30 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
         </div>
       </div>
 
-      {/* Print-placement tabs — front / back / sleeves, each its own surface */}
-      {hasMulti && (
-        <div className="px-4 pb-2 shrink-0">
-          <div className={`flex items-center gap-1 px-2 py-1.5 rounded-full w-fit ${isDark ? "bg-neutral-900/70" : "bg-[#e8e8ed]/70"}`}>
-            <span className="text-[8px] uppercase tracking-widest opacity-40 px-2">Print area</span>
-            {placements.map((p, i) => (
-              <button key={p.placement + i} onClick={() => switchPlacement(i)}
-                className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-full transition-all ${activeP === i ? (isDark ? "bg-white text-black" : "bg-white text-black shadow") : (isDark ? "text-neutral-400 hover:bg-white/10" : "text-neutral-600 hover:bg-black/[0.06]")}`}>
-                {String(p.placement || `Area ${i + 1}`).replace(/_/g, " ")}
-              </button>
-            ))}
-          </div>
+      {/* Print-placement tabs + product-photo toggle */}
+      {(hasMulti || productPhoto) && (
+        <div className="px-4 pb-2 shrink-0 flex items-center gap-2 flex-wrap">
+          {hasMulti && (
+            <div className={`flex items-center gap-1 px-2 py-1.5 rounded-full w-fit ${isDark ? "bg-neutral-900/70" : "bg-[#e8e8ed]/70"}`}>
+              <span className="text-[8px] uppercase tracking-widest opacity-40 px-2">Print area</span>
+              {placements.map((p, i) => (
+                <button key={p.placement + i} onClick={() => switchPlacement(i)}
+                  className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-full transition-all ${activeP === i ? (isDark ? "bg-white text-black" : "bg-white text-black shadow") : (isDark ? "text-neutral-400 hover:bg-white/10" : "text-neutral-600 hover:bg-black/[0.06]")}`}>
+                  {String(p.placement || `Area ${i + 1}`).replace(/_/g, " ")}
+                </button>
+              ))}
+            </div>
+          )}
+          {productPhoto && (!hasMulti || activeP === 0) && (
+            <div className={`flex items-center gap-1 px-1 py-1 rounded-full ${isDark ? "bg-neutral-900/70" : "bg-[#e8e8ed]/70"}`}>
+              {(["Template", "Photo"] as const).map((m, i) => (
+                <button key={m} onClick={() => setShowPhoto(i === 1)}
+                  className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-full transition-all ${(showPhoto ? 1 : 0) === i ? (isDark ? "bg-white text-black" : "bg-white text-black shadow") : (isDark ? "text-neutral-400 hover:bg-white/10" : "text-neutral-600 hover:bg-black/[0.06]")}`}>
+                  {m}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1284,13 +1313,13 @@ export default function StudioEditor({ projectId, initialCanvas, artboardW: artb
                   <label className={`flex-1 flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
                     <ImagePlus size={18} />
                     <span className="text-[8px] font-bold uppercase tracking-wider mt-1 font-mono">Photo</span>
-                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files?.[0]) { uploadImage(e.target.files[0]); setMobileSheet("none"); } }} />
+                    <input type="file" accept="image/*,.svg,.png,.jpg,.jpeg,.webp,.gif,.bmp,.avif" className="hidden" onChange={(e) => { if (e.target.files?.[0]) { uploadImage(e.target.files[0]); setMobileSheet("none"); } }} />
                   </label>
 
                   <label className={`flex-1 flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900 ${isDark ? "border-neutral-800" : "border-neutral-200"}`}>
                     <Wand2 size={18} />
                     <span className="text-[8px] font-bold uppercase tracking-wider mt-1 font-mono">Texture</span>
-                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files?.[0]) { importTexture(e.target.files[0]); setMobileSheet("none"); } }} />
+                    <input type="file" accept="image/*,.svg,.png,.jpg,.jpeg,.webp,.gif,.bmp,.avif" className="hidden" onChange={(e) => { if (e.target.files?.[0]) { importTexture(e.target.files[0]); setMobileSheet("none"); } }} />
                   </label>
                 </div>
               </div>

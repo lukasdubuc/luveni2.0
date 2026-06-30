@@ -85,12 +85,22 @@ is achievable in-browser vs. via the manufacturer mockup API.
 ---
 
 ## C. Honest reality notes
-- **Photoreal human in-browser** is the hard part. three.js can't auto-produce a
-  CLO-grade rigged human; it needs real glTF assets (a rigged body + garment
-  meshes). The procedural figure will always read as stylized. The genuinely
-  photoreal on-model render is Printful's **mockup generator** (already wired as
-  the "Realistic" tab) — that should remain the customer-facing hero image; the
-  3D view is the live editing aid.
+- **Photoreal human in-browser** is the hard part. Research confirms **CLO 3D
+  works by loading rigged glTF/VRM avatars** (it ships proprietary, made-to-scale
+  avatars and imports glTF/VRM). There is no procedural shortcut — three.js can't
+  auto-produce a CLO-grade human; the procedural figure will always read as
+  stylized. To get a true 3D human clone we must load a real rigged glTF/VRM
+  avatar (Ready Player Me / VRoid export, or a purchased asset) — wired via
+  `VITE_STUDIO_HUMAN_GLB` with draco/meshopt decoders. **Decision needed: supply
+  an avatar asset URL.**
+- The genuinely photoreal on-model render is Printful's **mockup generator** —
+  a real model wearing the exact product with the design. It's wired as the
+  **Realistic** tab and is now the DEFAULT view; that is the customer-facing
+  hero image. The 3D tab is a quick stylized editing aid.
+- **Template surface**: Printful's `image_url` is sometimes a technical line-art
+  template and `background_url` is often null. The editor prefers `background_url`,
+  and offers a **Photo / Template** toggle to swap to the clean variant product
+  photo per project.
 - **Multi-placement** is a real data-model change (per-placement layer sets +
   publish per placement). Ship behind the placement tab bar; migrate existing
   single-canvas projects to "front".
