@@ -11,63 +11,11 @@
 // ─────────────────────────────────────────────────────────────
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Suspense, useMemo, useState, useEffect, Component, type ReactNode } from "react";
+import { Suspense, useMemo, useState, useEffect } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Decal, useTexture, useGLTF, Environment, ContactShadows, Center } from "@react-three/drei";
+import { OrbitControls, Decal, useTexture, Environment, ContactShadows, Center } from "@react-three/drei";
 import * as THREE from "three";
 import { X, Loader2, RotateCcw, Box, User } from "lucide-react";
-
-// A rigged human wearing a t-shirt (three.js "Soldier" asset, hosted locally so
-// it loads offline with no draco decoder). Swappable via VITE_STUDIO_HUMAN_GLB.
-const HUMAN_GLB = (import.meta as any).env?.VITE_STUDIO_HUMAN_GLB || "/models/figure.glb";
-
-// Real rigged human in a tee, with the design mapped onto the chest true-to-print.
-function HumanFigure({ design, printWidthIn, printHeightIn }: { design: string; printWidthIn?: number | null; printHeightIn?: number | null }) {
-  const { scene } = useGLTF(HUMAN_GLB) as unknown as { scene: THREE.Object3D };
-  const texture = useTexture(design);
-  texture.anisotropy = 8;
-
-  // Clone + normalize: scale to a consistent height and re-center at the origin.
-  const { model, chestY, chestZ } = useMemo(() => {
-    const c = scene.clone(true);
-    c.traverse((o: any) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
-    const box = new THREE.Box3().setFromObject(c);
-    const size = new THREE.Vector3(); box.getSize(size);
-    const center = new THREE.Vector3(); box.getCenter(center);
-    const targetH = 2.7;
-    const s = targetH / (size.y || 1.8);
-    c.scale.setScalar(s);
-    c.position.set(-center.x * s, -center.y * s, -center.z * s);
-    // Chest sits a bit above the vertical centre; front surface ≈ half the depth.
-    return { model: c, chestY: targetH * 0.30, chestZ: (size.z * 0.5 * s) * 0.7 + 0.02 };
-  }, [scene]);
-
-  // True-to-print chest panel: width from the real print width vs a 12" baseline.
-  const [w, h] = useMemo(() => {
-    const width = (printWidthIn && printWidthIn > 0 ? printWidthIn / 12 : 1) * 0.5;
-    const aspect = printHeightIn && printWidthIn ? printHeightIn / printWidthIn
-      : (texture.image ? (texture.image as any).height / (texture.image as any).width : 1.25);
-    return [width, width * aspect];
-  }, [printWidthIn, printHeightIn, texture]);
-
-  return (
-    <group>
-      <primitive object={model} />
-      {/* Design on the chest (slightly proud of the shirt so it always reads). */}
-      <mesh position={[0, chestY, chestZ]}>
-        <planeGeometry args={[w, h]} />
-        <meshStandardMaterial map={texture} transparent roughness={0.85} polygonOffset polygonOffsetFactor={-4} />
-      </mesh>
-    </group>
-  );
-}
-
-// Swaps in the procedural tee if the GLB can't load, so the view never blanks.
-class FigureBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
-  state = { failed: false };
-  static getDerivedStateFromError() { return { failed: true }; }
-  render() { return this.state.failed ? this.props.fallback : this.props.children; }
-}
 
 const GARMENT_COLORS: { key: string; label: string; hex: string }[] = [
   { key: "white", label: "White", hex: "#f4f4f5" },
@@ -77,86 +25,84 @@ const GARMENT_COLORS: { key: string; label: string; hex: string }[] = [
   { key: "olive", label: "Olive", hex: "#5a5f3f" },
 ];
 
-// Calibration: a standard 12" front print maps to this decal width on the
-// chest; real print widths scale linearly from here.
+// Calibration: a standard 12" front print maps to this decal width on the chest.
 const REF_PRINT_W_IN = 12;
-const REF_DECAL_W = 0.95;
-const TORSO_R = 0.7; // torso radius — decal sits on the front of the chest
+const REF_DECAL_W = 0.62;
+const CHEST_R = 0.42; // torso half-width; the flattened front carries the decal
 
-// A soft-knit fabric material so light reads like cloth, not plastic.
-function fabric(color: string) {
-  return new THREE.MeshStandardMaterial({ color, roughness: 0.92, metalness: 0.02 });
-}
-
-// Procedural human torso wearing a fitted tee: tapered torso, shoulder yoke,
-// neck + head and arms hanging at the sides so it reads as a proportional
-// person — not a blob. Enough form for a convincing live preview & decal.
-function Tee({ color, design, printWidthIn, printHeightIn }: { color: string; design: string; printWidthIn?: number | null; printHeightIn?: number | null }) {
-  const mat = useMemo(() => fabric(color), [color]);
-  const skin = useMemo(() => new THREE.MeshStandardMaterial({ color: "#cdb09a", roughness: 0.7, metalness: 0.02 }), []);
+// A realistic display mannequin (smooth, neutral, featureless — like a CLO/store
+// dress form) WEARING the tee: neutral body underneath, coloured shirt over the
+// torso, and the design mapped onto the chest true-to-print. Reliable, no asset.
+function Mannequin({ color, design, printWidthIn, printHeightIn, isDark }: { color: string; design: string; printWidthIn?: number | null; printHeightIn?: number | null; isDark: boolean }) {
   const texture = useTexture(design);
   texture.anisotropy = 8;
 
-  // True-to-print decal scale: width from the real print width vs a 12" baseline,
-  // height from the real print aspect (falls back to the texture's own aspect).
+  const skinColor = isDark ? "#3b3b40" : "#dcd5cb"; // matte mannequin material
+  const skin = useMemo(() => new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.85, metalness: 0.03 }), [skinColor]);
+  const shirt = useMemo(() => new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0.03, side: THREE.DoubleSide }), [color]);
+
+  // True-to-print decal: width from the real print width vs a 12" baseline.
   const decalScale = useMemo<[number, number, number]>(() => {
     const w = printWidthIn && printWidthIn > 0 ? (printWidthIn / REF_PRINT_W_IN) * REF_DECAL_W : REF_DECAL_W;
     const aspect = printHeightIn && printHeightIn > 0
       ? printHeightIn / printWidthIn!
       : (texture.image ? (texture.image as any).height / (texture.image as any).width : 1.25);
-    return [w, w * aspect, 1.0];
+    return [w, w * aspect, 0.6];
   }, [printWidthIn, printHeightIn, texture]);
+  const decalY = 0.92 - decalScale[1] * 0.5; // anchor just below the collar
 
   return (
     <Center>
-      <group rotation={[0, 0, 0]}>
-        {/* Head + neck */}
-        <mesh position={[0, 2.02, 0]} material={skin} castShadow>
-          <sphereGeometry args={[0.32, 32, 24]} />
+      <group>
+        {/* ── Mannequin body (neutral) ── */}
+        {/* Head — smooth featureless ovoid */}
+        <mesh position={[0, 1.9, 0]} scale={[0.8, 1, 0.84]} material={skin} castShadow>
+          <sphereGeometry args={[0.26, 48, 40]} />
         </mesh>
-        <mesh position={[0, 1.62, 0]} material={skin}>
-          <cylinderGeometry args={[0.14, 0.17, 0.34, 24]} />
+        {/* Neck */}
+        <mesh position={[0, 1.55, 0]} material={skin}>
+          <cylinderGeometry args={[0.1, 0.12, 0.28, 32]} />
         </mesh>
+        {/* Pelvis / hips below the shirt hem */}
+        <mesh position={[0, -0.12, 0]} scale={[1, 1, 0.72]} material={skin} castShadow>
+          <sphereGeometry args={[0.33, 40, 32]} />
+        </mesh>
+        {/* Upper legs (taper down, framing a full human form) */}
+        {[-1, 1].map((s) => (
+          <mesh key={`leg-${s}`} position={[s * 0.16, -0.85, 0]} material={skin} castShadow>
+            <capsuleGeometry args={[0.15, 1.0, 16, 28]} />
+          </mesh>
+        ))}
+        {/* Upper arms (neutral, at the sides) */}
+        {[-1, 1].map((s) => (
+          <mesh key={`uarm-${s}`} position={[s * 0.5, 0.62, 0]} rotation={[0, 0, s * 0.13]} material={skin} castShadow>
+            <capsuleGeometry args={[0.1, 0.78, 16, 28]} />
+          </mesh>
+        ))}
 
-        {/* Shoulder yoke (horizontal capsule reads as shoulders, not a ball) */}
-        <mesh position={[0, 1.34, 0]} rotation={[0, 0, Math.PI / 2]} material={mat} castShadow>
-          <capsuleGeometry args={[0.24, 1.0, 16, 32]} />
+        {/* ── Shirt worn over the torso ── */}
+        {/* Shoulders / upper chest cap */}
+        <mesh position={[0, 1.26, 0]} scale={[1.16, 0.72, 0.78]} material={shirt} castShadow>
+          <sphereGeometry args={[0.42, 48, 36]} />
         </mesh>
-
-        {/* Torso (tapered, narrower than the shoulders so it reads human) */}
-        <mesh position={[0, 0.5, 0]} material={mat} castShadow receiveShadow>
-          <capsuleGeometry args={[TORSO_R, 1.25, 16, 48]} />
+        {/* Torso shirt body — flattened front/back so it reads like a chest */}
+        <mesh position={[0, 0.62, 0]} scale={[1, 1, 0.66]} material={shirt} castShadow receiveShadow>
+          <cylinderGeometry args={[CHEST_R, 0.36, 1.3, 64, 1, false]} />
           {/* Chest decal — the user's design, true-to-print */}
-          <Decal position={[0, 0.4, TORSO_R]} rotation={[0, 0, 0]} scale={decalScale}>
-            <meshStandardMaterial
-              map={texture}
-              transparent
-              polygonOffset
-              polygonOffsetFactor={-1}
-              roughness={0.9}
-              depthTest
-            />
+          <Decal position={[0, decalY, CHEST_R]} rotation={[0, 0, 0]} scale={decalScale}>
+            <meshStandardMaterial map={texture} transparent polygonOffset polygonOffsetFactor={-4} roughness={0.85} depthTest />
           </Decal>
         </mesh>
-
-        {/* Upper arms hanging at the sides */}
-        {[-1, 1].map((s) => (
-          <mesh key={`arm-${s}`} position={[s * 0.82, 0.78, 0]} rotation={[0, 0, s * 0.16]} material={mat} castShadow>
-            <capsuleGeometry args={[0.17, 1.0, 12, 28]} />
-          </mesh>
-        ))}
-
-        {/* Short sleeves at the shoulders */}
-        {[-1, 1].map((s) => (
-          <mesh key={`slv-${s}`} position={[s * 0.78, 1.16, 0]} rotation={[0, 0, s * 0.5]} material={mat} castShadow>
-            <capsuleGeometry args={[0.25, 0.34, 10, 24]} />
-          </mesh>
-        ))}
-
         {/* Collar */}
-        <mesh position={[0, 1.5, 0]} rotation={[Math.PI / 2, 0, 0]} material={mat}>
-          <torusGeometry args={[0.17, 0.05, 12, 36]} />
+        <mesh position={[0, 1.46, 0]} rotation={[Math.PI / 2, 0, 0]} material={shirt}>
+          <torusGeometry args={[0.13, 0.035, 16, 48]} />
         </mesh>
+        {/* Short sleeves */}
+        {[-1, 1].map((s) => (
+          <mesh key={`slv-${s}`} position={[s * 0.5, 1.0, 0]} rotation={[0, 0, s * 0.5]} material={shirt} castShadow>
+            <cylinderGeometry args={[0.17, 0.155, 0.42, 32, 1, true]} />
+          </mesh>
+        ))}
       </group>
     </Center>
   );
@@ -264,26 +210,23 @@ export default function Garment3DPreview({
 
       {/* 3D viewport */}
       <div className={`relative flex-1 ${tab === "real" ? "hidden" : ""}`}>
-        <Canvas shadows camera={{ position: [0, 0.3, 4.2], fov: 40 }} dpr={[1, 2]}>
+        <Canvas shadows camera={{ position: [0, 0, 5.0], fov: 40 }} dpr={[1, 2]}>
           <color attach="background" args={[isDark ? "#0a0a0b" : "#101012"]} />
           <ambientLight intensity={0.6} />
           <directionalLight position={[3, 5, 4]} intensity={1.4} castShadow shadow-mapSize={[1024, 1024]} />
           <directionalLight position={[-4, 2, -2]} intensity={0.5} />
           <Suspense fallback={null}>
-            {/* Real rigged human in a tee; falls back to the procedural tee. */}
-            <FigureBoundary fallback={<Tee color={color} design={design} printWidthIn={printWidthIn} printHeightIn={printHeightIn} />}>
-              <Suspense fallback={<Tee color={color} design={design} printWidthIn={printWidthIn} printHeightIn={printHeightIn} />}>
-                <HumanFigure design={design} printWidthIn={printWidthIn} printHeightIn={printHeightIn} />
-              </Suspense>
-            </FigureBoundary>
+            <Mannequin color={color} design={design} isDark={isDark} printWidthIn={printWidthIn} printHeightIn={printHeightIn} />
             <Environment preset="studio" />
           </Suspense>
-          <ContactShadows position={[0, -1.6, 0]} opacity={0.45} scale={8} blur={2.5} far={3} />
+          <ContactShadows position={[0, -1.75, 0]} opacity={0.4} scale={8} blur={2.6} far={3.2} />
+          {/* Orbit around the body's centre (not the feet). */}
           <OrbitControls
             enablePan={false}
             autoRotate={spin}
             autoRotateSpeed={1.6}
-            minDistance={2.6}
+            target={[0, 0, 0]}
+            minDistance={2.8}
             maxDistance={7}
             onStart={() => setSpin(false)}
           />
@@ -321,6 +264,3 @@ export default function Garment3DPreview({
     </div>
   );
 }
-
-// Preload the figure so the first open is instant; harmless if it fails.
-try { useGLTF.preload(HUMAN_GLB); } catch { /* noop */ }
