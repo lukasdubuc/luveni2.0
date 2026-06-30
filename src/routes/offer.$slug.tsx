@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts } from "@/lib/useProducts";
 import { offer } from "@/config/site";
 import { useCart } from "@/context/CartContext";
+import { ZoomPanImage } from "@/components/site/ZoomPanImage";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -946,27 +947,21 @@ function OfferSlugPage() {
 
       {zoomOpen && galleryImages[activeImageIndex] && (
         <div
-          onClick={() => setZoomOpen(false)}
           style={{
             position: "fixed", inset: 0, zIndex: 200,
             background: "rgba(0,0,0,0.92)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "zoom-out",
             animation: "zoom-fade-in 0.15s linear both",
+            touchAction: "none",
           }}
         >
-          <img
-            src={galleryImages[activeImageIndex]}
-            alt={`${product.title} — zoomed`}
-            style={{
-              maxWidth: "min(92vw, 900px)",
-              maxHeight: "90vh",
-              objectFit: "contain",
-              display: "block",
-              userSelect: "none",
-              pointerEvents: "none",
-            }}
-          />
+          {/* Pan + pinch/scroll magnification (double-tap toggles). Esc / × closes. */}
+          <div style={{ width: "min(92vw, 1000px)", height: "90vh" }}>
+            <ZoomPanImage
+              src={galleryImages[activeImageIndex]}
+              alt={`${product.title} — zoomed`}
+            />
+          </div>
 
           <button
             onClick={(e) => { e.stopPropagation(); setZoomOpen(false); }}

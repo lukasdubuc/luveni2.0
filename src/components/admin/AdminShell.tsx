@@ -97,42 +97,52 @@ export function AdminShell({ children }: { children: ReactNode }) {
             </div>
           </div>
 
-          {/* Fullscreen overlay — same structure/typography as the shop menu */}
+          {/* Fullscreen overlay — structure/typography identical to the shop menu */}
           {open && (
-            <div className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-8 bg-background">
-              {nav.map((item) => {
-                const active = item.exact ? path === item.to : path.startsWith(item.to);
-                return (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    onClick={() => setOpen(false)}
-                    className={`text-[13px] font-normal tracking-[0em] transition-colors ${
-                      active ? "text-foreground" : "text-foreground/40"
-                    }`}
-                    style={{ fontFamily: NAV_FONT }}
-                  >
-                    {item.label.toUpperCase()}
-                  </Link>
-                );
-              })}
-              <button
-                onClick={() => {
-                  setOpen(false);
-                  logout();
-                }}
-                className="text-[13px] font-normal tracking-[0em] text-foreground/40 transition-colors hover:text-foreground"
-                style={{ fontFamily: NAV_FONT }}
-              >
-                SIGN OUT
-              </button>
-              <button
-                onClick={() => setOpen(false)}
-                aria-label="Close navigation"
-                className="absolute right-6 top-4 text-foreground"
-              >
-                <X size={20} />
-              </button>
+            <div className="fixed inset-0 z-[60] flex flex-col bg-background text-foreground">
+              {/* Menu top bar mirrors the header */}
+              <div className="flex h-14 w-full items-center justify-between px-6">
+                <button
+                  onClick={() => setOpen(false)}
+                  aria-label="Close navigation"
+                  className="flex items-center text-foreground"
+                >
+                  <X size={18} />
+                </button>
+                <span
+                  className="absolute left-1/2 -translate-x-1/2 text-[13px] font-normal text-foreground"
+                  style={{ fontFamily: NAV_FONT }}
+                >
+                  OWNER
+                </span>
+              </div>
+
+              {/* Centered, scrollable nav list — every desktop item is present */}
+              <nav className="flex flex-1 flex-col items-center justify-center gap-7 overflow-y-auto px-6 py-10">
+                {nav.map((item) => {
+                  const active = item.exact ? path === item.to : path.startsWith(item.to);
+                  return (
+                    <Link
+                      key={item.to}
+                      to={item.to}
+                      onClick={() => setOpen(false)}
+                      className={`text-base font-normal uppercase tracking-[0.2em] transition-opacity hover:opacity-60 ${
+                        active ? "text-foreground" : "text-foreground/50"
+                      }`}
+                      style={{ fontFamily: NAV_FONT }}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
+                <button
+                  onClick={() => { setOpen(false); logout(); }}
+                  className="text-base font-normal uppercase tracking-[0.2em] text-foreground/50 transition-opacity hover:opacity-60"
+                  style={{ fontFamily: NAV_FONT }}
+                >
+                  Sign out
+                </button>
+              </nav>
             </div>
           )}
         </header>
