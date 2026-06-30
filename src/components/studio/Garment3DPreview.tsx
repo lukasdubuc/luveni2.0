@@ -1,238 +1,405 @@
 // ─────────────────────────────────────────────────────────────
-//  Garment3DPreview — CLO-3D-style live 3D garment view.
-//  Maps the flattened artboard (transparent PNG) onto a procedural
-//  t-shirt mesh as a chest decal, on a simple neck/head form so the
-//  garment reads as worn. Orbit, studio lighting, garment base colors,
-//  plus a "Realistic" tab for Printful's photoreal on-model mockup.
-//  Three.js is DOM-only so this is loaded lazily by the editor.
+//  Garment3DPreview — CLO-3D-quality live 3D garment viewer
 //
-//  The chest decal is sized true-to-print from the product's real front
-//  print dimensions (falls back to a sensible default when unknown).
+//  Features:
+//  • Anatomically-detailed procedural human mannequin (LatheGeometry
+//    torso + CapsuleGeometry limbs + spheroid head with face features)
+//  • Full artboard (garment template + design layers) projected onto
+//    the shirt front as a flat plane — exactly what CLO-3D does
+//  • Live canvas sync via useFrame + CanvasTexture every paint stroke
+//  • PBR fabric material (MeshPhysicalMaterial) with sheen for cloth feel
+//  • Camera presets: Front · Back · Left · 3/4
+//  • Wireframe toggle · auto-spin · PNG export
+//  • Environment presets: Studio · Soft · Outdoor
+//  • Default tab: 3D (realistic/mockup tab optional)
 // ─────────────────────────────────────────────────────────────
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Suspense, useMemo, useState, useEffect, useRef, Component, type ReactNode } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, Decal, useTexture, useGLTF, Environment, ContactShadows, Center } from "@react-three/drei";
+import {
+  Suspense, useMemo, useState, useEffect, useRef,
+  Component, type ReactNode,
+} from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import {
+  OrbitControls, useTexture, useGLTF,
+  Environment, ContactShadows, Center, Grid,
+} from "@react-three/drei";
 import * as THREE from "three";
-import { X, Loader2, RotateCcw, Box, User, Download } from "lucide-react";
+import {
+  X, Loader2, RotateCcw, Box, User, Download,
+  Camera, Grid3X3, Eye, ChevronLeft, ChevronRight,
+} from "lucide-react";
 
-// Optional real avatar: set VITE_STUDIO_HUMAN_GLB to a glTF/GLB URL (a CLO/VRoid/
-// Blender export converted to glTF, hosted on /public, Supabase storage, or any
-// public URL). When set, the 3D view loads it and maps the design onto the
-// chest; otherwise it uses the built-in procedural mannequin. Dormant by default.
+// Optional real avatar GLB
 const HUMAN_GLB: string = (import.meta as any).env?.VITE_STUDIO_HUMAN_GLB || "";
 
-// Loads a real glTF avatar (draco-enabled) and maps the design onto its chest.
-function AvatarFigure({ url, design, printWidthIn, printHeightIn }: { url: string; design: string; printWidthIn?: number | null; printHeightIn?: number | null }) {
-  const { scene } = useGLTF(url, true) as unknown as { scene: THREE.Object3D };
-  const texture = useTexture(design);
-  texture.anisotropy = 8;
+// ── Garment color swatch palette ──────────────────────────────────────────────
+const GARMENT_COLORS = [
+  { key: "white",  label: "White",  hex: "#f4f4f5" },
+  { key: "black",  label: "Black",  hex: "#18181b" },
+  { key: "sand",   label: "Sand",   hex: "#d8c9b0" },
+  { key: "navy",   label: "Navy",   hex: "#1e2a44" },
+  { key: "olive",  label: "Olive",  hex: "#5a5f3f" },
+  { key: "red",    label: "Red",    hex: "#b91c1c" },
+  { key: "royal",  label: "Royal",  hex: "#1d4ed8" },
+  { key: "forest", label: "Forest", hex: "#14532d" },
+];
 
-  const { model, chestY, chestZ } = useMemo(() => {
+// ── Body calibration constants ─────────────────────────────────────────────────
+const BODY_H = 3.4;         // total body height in scene units
+const HEAD_R = 0.225;       // skull sphere radius
+const TORSO_Z = 0.60;       // depth squash (front-to-back / side-to-side ratio)
+const SHIRT_FRONT_Z = 0.295; // Z of shirt surface at chest
+const SHIRT_W = 0.92;       // projected shirt front width
+const SHIRT_H = 1.30;       // projected shirt front height
+
+// ── Utility: build LatheGeometry from profile points ─────────────────────────
+function lathe(profile: [number, number][], segs = 64): THREE.BufferGeometry {
+  const pts = profile.map(([r, y]) => new THREE.Vector2(Math.max(r, 0.001), y));
+  const g = new THREE.LatheGeometry(pts, segs);
+  g.computeVertexNormals();
+  return g;
+}
+
+// ── Camera preset controller (inside Canvas) ─────────────────────────────────
+function CameraPreset({ preset, onDone }: { preset: string | null; onDone: () => void }) {
+  const { camera } = useThree();
+  useEffect(() => {
+    if (!preset) return;
+    const targets: Record<string, [number, number, number]> = {
+      front:  [0, 0.2, 5.8],
+      back:   [0, 0.2, -5.8],
+      left:   [-5.8, 0.2, 0],
+      right:  [5.8, 0.2, 0],
+      q3d:    [3.8, 0.8, 4.2],
+      top:    [0, 6.0, 0.1],
+    };
+    const t = targets[preset] || targets.front;
+    camera.position.set(t[0], t[1], t[2]);
+    camera.lookAt(0, 0.2, 0);
+    onDone();
+  }, [preset]);
+  return null;
+}
+
+// ── Realistic human mannequin ─────────────────────────────────────────────────
+function Mannequin({
+  color,
+  liveCanvas,
+  staticDesign,
+  isDark,
+  showWire,
+}: {
+  color: string;
+  liveCanvas?: HTMLCanvasElement | null;
+  staticDesign?: string;
+  isDark: boolean;
+  showWire: boolean;
+}) {
+  // ── Live canvas texture ─────────────────────────────────────────────────────
+  const liveTexRef = useRef<THREE.CanvasTexture | null>(null);
+  useEffect(() => {
+    if (!liveCanvas) return;
+    const t = new THREE.CanvasTexture(liveCanvas);
+    t.anisotropy = 8;
+    t.flipY = true;
+    liveTexRef.current = t;
+    return () => { t.dispose(); liveTexRef.current = null; };
+  }, [liveCanvas]);
+  useFrame(() => { if (liveTexRef.current) liveTexRef.current.needsUpdate = true; });
+
+  // Static fallback texture
+  const staticTex = useTexture(staticDesign || "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==");
+  const designTex = liveTexRef.current ?? (staticDesign ? staticTex : null);
+
+  // ── Materials ───────────────────────────────────────────────────────────────
+  const skinHex = isDark ? "#c9a882" : "#ddb896";
+  const skin = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: skinHex,
+    roughness: 0.68,
+    metalness: 0,
+    sheen: 0.12,
+    sheenColor: new THREE.Color("#f0c8a8"),
+    clearcoat: 0.04,
+    clearcoatRoughness: 0.82,
+  }), [skinHex]);
+
+  const hairMat = useMemo(() => new THREE.MeshStandardMaterial({
+    color: isDark ? "#1a0a00" : "#2c1800",
+    roughness: 0.98,
+    metalness: 0,
+  }), [isDark]);
+
+  const eyeMat = useMemo(() => new THREE.MeshStandardMaterial({ color: "#1a1a2e", roughness: 0.2, metalness: 0.1 }), []);
+  const eyeWhite = useMemo(() => new THREE.MeshStandardMaterial({ color: "#f5f5f5", roughness: 0.5 }), []);
+  const lipMat = useMemo(() => new THREE.MeshStandardMaterial({ color: "#c87070", roughness: 0.6 }), []);
+
+  const shirt = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color,
+    roughness: 0.82,
+    metalness: 0.01,
+    sheen: 0.25,
+    sheenColor: new THREE.Color(color),
+    sheenRoughness: 0.6,
+    side: THREE.DoubleSide,
+    wireframe: showWire,
+  }), [color, showWire]);
+
+  const designMat = useMemo(() => designTex ? new THREE.MeshBasicMaterial({
+    map: designTex,
+    transparent: true,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+  }) : null, [designTex]);
+
+  // ── Procedural geometry ─────────────────────────────────────────────────────
+  const geo = useMemo(() => {
+    // Skull: ovoid – taller than wide, narrower front-to-back
+    const skull = new THREE.SphereGeometry(HEAD_R, 64, 48);
+
+    // Jaw: slightly oblate sphere blending into skull base
+    const jaw = new THREE.SphereGeometry(HEAD_R * 0.82, 32, 24);
+
+    // Ear: flattened torus
+    const ear = new THREE.TorusGeometry(0.055, 0.028, 12, 28);
+
+    // Eyelid groove: small flattened sphere
+    const eyeSphere = new THREE.SphereGeometry(0.033, 16, 12);
+
+    // Nose: oblate bump
+    const nose = new THREE.SphereGeometry(0.028, 12, 10);
+
+    // Lip segment
+    const lip = new THREE.SphereGeometry(0.048, 12, 8);
+
+    // Hair cap: upper hemisphere, scaled taller for volume
+    const hair = new THREE.SphereGeometry(HEAD_R * 1.05, 32, 32, 0, Math.PI * 2, 0, Math.PI * 0.52);
+
+    // Neck: tapered cylinder section
+    const neck = lathe([
+      [0.0, 1.54], [0.09, 1.555], [0.10, 1.64],
+      [0.115, 1.725], [0.16, 1.77], [0.0, 1.775],
+    ]);
+
+    // Torso: highly detailed silhouette — shoulder peak, chest, waist pinch, hip flare, pelvis
+    const torso = lathe([
+      [0.00, 1.615],
+      [0.22, 1.605], [0.36, 1.57], [0.435, 1.50],  // shoulder into chest
+      [0.445, 1.38], [0.435, 1.24],                  // upper chest
+      [0.41,  1.10], [0.37,  0.96], [0.335, 0.82],  // ribcage
+      [0.305, 0.68], [0.298, 0.58],                  // waist
+      [0.315, 0.46], [0.365, 0.34], [0.405, 0.20],  // hips
+      [0.41,  0.08], [0.36,  -0.02], [0.22, -0.07], [0.0, -0.09],
+    ], 80);
+
+    // Fitted tee shell: slightly larger than torso, has realistic hem/cuff shape
+    const shirtBody = lathe([
+      [0.00, 1.505],
+      [0.245, 1.495], [0.38, 1.46], [0.46, 1.395],
+      [0.475, 1.275], [0.465, 1.155],
+      [0.445, 1.015], [0.41,  0.875], [0.385, 0.755],
+      [0.37,  0.63],  [0.365, 0.525],
+      [0.385, 0.40],  [0.42,  0.30],  [0.445, 0.22],
+    ], 80);
+
+    // Limb helper (tapered capsule profile)
+    const capsule = (rTop: number, rBot: number, len: number, segs = 40) =>
+      lathe([
+        [0.0, len],      [rTop * 0.65, len],      [rTop, len - rTop * 0.55],
+        [rTop * 0.98, len * 0.70], [(rTop + rBot) / 2, len * 0.45],
+        [rBot, rBot * 0.55], [rBot * 0.65, 0], [0.0, 0],
+      ], segs);
+
+    return {
+      skull, jaw, ear, eyeSphere, nose, lip, hair, neck, torso, shirtBody,
+      upperArm:  capsule(0.105, 0.090, 0.64),
+      foreArm:   capsule(0.088, 0.065, 0.60),
+      hand:      new THREE.SphereGeometry(0.075, 20, 16),
+      thigh:     capsule(0.162, 0.118, 0.84),
+      calf:      capsule(0.120, 0.074, 0.84),
+      foot:      new THREE.SphereGeometry(0.10,  20, 14),
+    };
+  }, []);
+
+  return (
+    <Center>
+      <group>
+        {/* ── HEAD ─────────────────────────────────────────────────────────── */}
+        <group position={[0, 1.84, 0]}>
+          {/* Skull */}
+          <mesh geometry={geo.skull} material={skin} scale={[0.87, 1.0, 0.82]} castShadow />
+          {/* Jaw: slightly lower, blends into skull */}
+          <mesh geometry={geo.jaw} material={skin} position={[0, -0.09, 0.02]} scale={[0.88, 0.68, 0.84]} castShadow />
+          {/* Ears */}
+          {[-1, 1].map((s) => (
+            <mesh key={`ear-${s}`} geometry={geo.ear} material={skin}
+              position={[s * HEAD_R * 0.87, 0.02, 0]}
+              rotation={[0, s * Math.PI / 2, 0]}
+              scale={[0.5, 1, 0.28]} castShadow />
+          ))}
+          {/* Eye whites */}
+          {[-1, 1].map((s) => (
+            <group key={`eye-${s}`} position={[s * 0.075, 0.04, HEAD_R * 0.68]}>
+              <mesh geometry={geo.eyeSphere} material={eyeWhite} scale={[1, 0.72, 0.52]} />
+              {/* Iris */}
+              <mesh geometry={geo.eyeSphere} material={eyeMat} scale={[0.58, 0.42, 0.60]} position={[0, 0, 0.01]} />
+            </group>
+          ))}
+          {/* Nose bridge + tip */}
+          <mesh geometry={geo.nose} material={skin} position={[0, -0.03, HEAD_R * 0.76]} scale={[1.1, 1.6, 1.2]} />
+          <mesh geometry={geo.nose} material={skin} position={[0, -0.07, HEAD_R * 0.78]} scale={[1.4, 0.9, 1.3]} />
+          {/* Lips */}
+          <mesh geometry={geo.lip} material={lipMat} position={[0, -0.135, HEAD_R * 0.74]} scale={[1.6, 0.55, 0.85]} />
+          <mesh geometry={geo.lip} material={lipMat} position={[0, -0.158, HEAD_R * 0.73]} scale={[1.3, 0.48, 0.78]} />
+          {/* Hair cap */}
+          <mesh geometry={geo.hair} material={hairMat}
+            position={[0, 0.045, -0.012]}
+            scale={[0.88, 1.05, 0.86]}
+            rotation={[0, 0, 0]}
+            castShadow />
+          {/* Short hair sides */}
+          {[-1, 1].map((s) => (
+            <mesh key={`hair-s-${s}`} geometry={geo.hair} material={hairMat}
+              position={[s * HEAD_R * 0.62, -0.06, -0.03]}
+              scale={[0.46, 0.65, 0.44]}
+              rotation={[0.1, s * 0.4, s * 0.15]}
+              castShadow />
+          ))}
+        </group>
+
+        {/* ── NECK ─────────────────────────────────────────────────────────── */}
+        <mesh geometry={geo.neck} material={skin} castShadow />
+
+        {/* ── TORSO (under shirt) ──────────────────────────────────────────── */}
+        <mesh geometry={geo.torso} material={skin} scale={[1, 1, TORSO_Z]} castShadow receiveShadow />
+
+        {/* ── ARMS ─────────────────────────────────────────────────────────── */}
+        {[-1, 1].map((s) => (
+          <group key={`arm-${s}`} position={[s * 0.455, 1.52, 0]} rotation={[0.04, 0, s * 0.18]}>
+            <mesh geometry={geo.upperArm} material={skin} position={[0, -0.64, 0]} castShadow />
+            <group position={[s * 0.055, -0.64, 0.038]} rotation={[0.20, 0, s * 0.06]}>
+              <mesh geometry={geo.foreArm} material={skin} position={[0, -0.60, 0]} castShadow />
+              {/* Hand */}
+              <mesh geometry={geo.hand} material={skin} position={[0, -0.68, 0]} scale={[0.72, 0.58, 0.48]} castShadow />
+              {/* Thumb */}
+              <mesh geometry={geo.hand} material={skin} position={[s * 0.038, -0.66, 0.03]} scale={[0.28, 0.42, 0.28]} castShadow />
+            </group>
+          </group>
+        ))}
+
+        {/* ── LEGS ─────────────────────────────────────────────────────────── */}
+        {[-1, 1].map((s) => (
+          <group key={`leg-${s}`} position={[s * 0.175, -0.04, 0]}>
+            <mesh geometry={geo.thigh} material={skin} position={[0, -0.84, 0]} castShadow />
+            <group position={[0, -0.84, 0]}>
+              <mesh geometry={geo.calf} material={skin} position={[0, -0.84, 0]} castShadow />
+              {/* Foot */}
+              <mesh geometry={geo.foot} material={skin}
+                position={[s * 0.02, -0.90, 0.08]}
+                scale={[0.62, 0.38, 1.45]}
+                castShadow />
+            </group>
+          </group>
+        ))}
+
+        {/* ── FITTED TEE ──────────────────────────────────────────────────── */}
+        <mesh geometry={geo.shirtBody} material={shirt} scale={[1, 1, TORSO_Z * 1.07]} castShadow receiveShadow />
+
+        {/* Crew collar ring */}
+        <mesh position={[0, 1.49, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[1, TORSO_Z * 1.12, 1]} material={shirt} castShadow>
+          <torusGeometry args={[0.162, 0.029, 16, 52]} />
+        </mesh>
+
+        {/* Short sleeves — cuffed cylinders over upper arms */}
+        {[-1, 1].map((s) => (
+          <mesh key={`slv-${s}`}
+            position={[s * 0.445, 1.29, 0]}
+            rotation={[0, 0, s * 0.44]}
+            scale={[1, 1, 0.80]}
+            material={shirt} castShadow>
+            <cylinderGeometry args={[0.170, 0.145, 0.48, 38, 1, true]} />
+          </mesh>
+        ))}
+
+        {/* ── DESIGN + TEMPLATE PROJECTION (full artboard canvas onto shirt front) ── */}
+        {designMat && (
+          <mesh
+            position={[0, 0.62, SHIRT_FRONT_Z + 0.002]}
+            rotation={[0, 0, 0]}
+            renderOrder={1}
+          >
+            <planeGeometry args={[SHIRT_W, SHIRT_H]} />
+            <primitive object={designMat} attach="material" />
+          </mesh>
+        )}
+      </group>
+    </Center>
+  );
+}
+
+// ── GLB avatar with design plane overlay ─────────────────────────────────────
+function AvatarFigure({ url, liveCanvas, staticDesign }: { url: string; liveCanvas?: HTMLCanvasElement | null; staticDesign?: string }) {
+  const { scene } = useGLTF(url, true) as unknown as { scene: THREE.Object3D };
+  const liveTexRef = useRef<THREE.CanvasTexture | null>(null);
+  useEffect(() => {
+    if (!liveCanvas) return;
+    const t = new THREE.CanvasTexture(liveCanvas);
+    t.anisotropy = 8; t.flipY = true;
+    liveTexRef.current = t;
+    return () => { t.dispose(); liveTexRef.current = null; };
+  }, [liveCanvas]);
+  useFrame(() => { if (liveTexRef.current) liveTexRef.current.needsUpdate = true; });
+
+  const staticTex = useTexture(staticDesign || "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==");
+  const designTex = liveTexRef.current ?? (staticDesign ? staticTex : null);
+
+  const model = useMemo(() => {
     const c = scene.clone(true);
     c.traverse((o: any) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
     const box = new THREE.Box3().setFromObject(c);
-    const size = new THREE.Vector3(); box.getSize(size);
-    const center = new THREE.Vector3(); box.getCenter(center);
-    const targetH = 3.4;
-    const s = targetH / (size.y || 1.8);
+    const sz = new THREE.Vector3(); box.getSize(sz);
+    const ctr = new THREE.Vector3(); box.getCenter(ctr);
+    const s = BODY_H / (sz.y || 1.8);
     c.scale.setScalar(s);
-    c.position.set(-center.x * s, -center.y * s, -center.z * s);
-    return { model: c, chestY: targetH * 0.22, chestZ: (size.z * 0.5 * s) * 0.78 + 0.02 };
+    c.position.set(-ctr.x * s, -ctr.y * s, -ctr.z * s);
+    return { model: c, chestZ: (sz.z * 0.5 * s) * 0.78 + 0.02 };
   }, [scene]);
 
-  const [w, h] = useMemo(() => {
-    const width = (printWidthIn && printWidthIn > 0 ? printWidthIn / 12 : 1) * 0.55;
-    const aspect = printHeightIn && printWidthIn ? printHeightIn / printWidthIn
-      : (texture.image ? (texture.image as any).height / (texture.image as any).width : 1.25);
-    return [width, width * aspect];
-  }, [printWidthIn, printHeightIn, texture]);
+  const designMat = useMemo(() => designTex ? new THREE.MeshBasicMaterial({
+    map: designTex, transparent: true, depthWrite: false,
+    polygonOffset: true, polygonOffsetFactor: -4,
+  }) : null, [designTex]);
 
   return (
     <group>
-      <primitive object={model} />
-      <mesh position={[0, chestY, chestZ]}>
-        <planeGeometry args={[w, h]} />
-        <meshStandardMaterial map={texture} transparent roughness={0.85} polygonOffset polygonOffsetFactor={-4} />
-      </mesh>
+      <primitive object={model.model} />
+      {designMat && (
+        <mesh position={[0, 0.62, model.chestZ + 0.002]}>
+          <planeGeometry args={[SHIRT_W, SHIRT_H]} />
+          <primitive object={designMat} attach="material" />
+        </mesh>
+      )}
     </group>
   );
 }
 
-// Falls back to the procedural mannequin if the avatar can't load.
+// ── Error boundary ────────────────────────────────────────────────────────────
 class FigureBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
   render() { return this.state.failed ? this.props.fallback : this.props.children; }
 }
 
-const GARMENT_COLORS: { key: string; label: string; hex: string }[] = [
-  { key: "white", label: "White", hex: "#f4f4f5" },
-  { key: "black", label: "Black", hex: "#18181b" },
-  { key: "sand", label: "Sand", hex: "#d8c9b0" },
-  { key: "navy", label: "Navy", hex: "#1e2a44" },
-  { key: "olive", label: "Olive", hex: "#5a5f3f" },
+// ── Camera angle presets ──────────────────────────────────────────────────────
+const CAM_PRESETS = [
+  { id: "front", label: "Front",  icon: "↑" },
+  { id: "q3d",   label: "3/4",    icon: "↗" },
+  { id: "left",  label: "Left",   icon: "←" },
+  { id: "back",  label: "Back",   icon: "↓" },
 ];
 
-// Calibration: a standard 12" front print maps to this decal width on the chest.
-const REF_PRINT_W_IN = 12;
-const REF_DECAL_W = 0.62;
-const CHEST_R = 0.42; // torso half-width; the flattened front carries the decal
-
-// Builds a smooth, anatomically-proportioned human torso as a lathed surface of
-// revolution: a vertical profile of (radius, height) control points lofted around
-// Y, then squashed front-to-back so it reads like a real chest/waist/hip taper
-// rather than a plain cylinder. One welded mesh = no seams between body segments.
-function lathedBody(profile: [number, number][], segments = 64): THREE.BufferGeometry {
-  const points = profile.map(([r, y]) => new THREE.Vector2(Math.max(r, 0.001), y));
-  const geo = new THREE.LatheGeometry(points, segments);
-  geo.computeVertexNormals();
-  return geo;
-}
-
-// A realistic display figure — a smooth, neutral human form (like a CLO/Browzwear
-// avatar or a high-end store mannequin) WEARING the tee. The body is built from
-// lathed anatomical profiles (head, neck, torso, arms, legs) so the silhouette
-// reads as a real person; the fitted shirt drapes over the torso and the design
-// is mapped onto the chest true-to-print. Reliable, no external asset required.
-function Mannequin({ color, design, printWidthIn, printHeightIn, isDark, liveCanvas }: { color: string; design: string; printWidthIn?: number | null; printHeightIn?: number | null; isDark: boolean; liveCanvas?: HTMLCanvasElement | null }) {
-  const texture = useTexture(design);
-  texture.anisotropy = 8;
-
-  // Live sync: if a Konva/HTML canvas is provided, update the texture every frame
-  const liveTexRef = useRef<THREE.CanvasTexture | null>(null);
-  useEffect(() => {
-    if (!liveCanvas) return;
-    const t = new THREE.CanvasTexture(liveCanvas);
-    t.anisotropy = 8;
-    liveTexRef.current = t;
-    return () => { t.dispose(); liveTexRef.current = null; };
-  }, [liveCanvas]);
-
-  useFrame(() => {
-    if (liveTexRef.current) {
-      liveTexRef.current.needsUpdate = true;
-    }
-  });
-
-  const activeTexture = liveTexRef.current ?? texture;
-
-  const skinColor = isDark ? "#caa890" : "#e8c9b0"; // warm neutral mannequin skin
-  const skin = useMemo(() => new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.62, metalness: 0.0 }), [skinColor]);
-  const shirt = useMemo(() => new THREE.MeshStandardMaterial({ color, roughness: 0.78, metalness: 0.02, side: THREE.DoubleSide }), [color]);
-
-  // ── Anatomical geometry (built once) ──────────────────────────────────────
-  const geo = useMemo(() => {
-    // Head: rounded ovoid (jaw narrows toward chin, crown rounds off).
-    const head = lathedBody([
-      [0.0, 1.78], [0.11, 1.80], [0.18, 1.86], [0.205, 1.95],
-      [0.205, 2.05], [0.18, 2.14], [0.11, 2.20], [0.0, 2.22],
-    ]);
-    // Neck → trapezius slope into the shoulders.
-    const neck = lathedBody([
-      [0.0, 1.56], [0.095, 1.57], [0.10, 1.66], [0.12, 1.74], [0.16, 1.78], [0.0, 1.79],
-    ]);
-    // Torso: shoulders → chest → narrowing waist → flaring hips → pelvis.
-    const torso = lathedBody([
-      [0.0, 1.62], [0.30, 1.58], [0.40, 1.50], [0.43, 1.36], // shoulder/chest
-      [0.40, 1.20], [0.35, 1.00], [0.315, 0.80],             // ribcage → waist
-      [0.33, 0.60], [0.39, 0.40], [0.41, 0.22],              // hips
-      [0.36, 0.06], [0.22, -0.04], [0.0, -0.06],             // pelvis floor
-    ]);
-    // Limb segment helper (tapered capsule-like profile).
-    const limb = (rTop: number, rBot: number, len: number) => lathedBody([
-      [0.0, len], [rTop * 0.7, len], [rTop, len - rTop * 0.6],
-      [rBot, rBot * 0.6], [rBot * 0.7, 0], [0.0, 0],
-    ], 40);
-    // Fitted tee shell — slightly larger than the torso so it drapes over it.
-    const shirtBody = lathedBody([
-      [0.0, 1.50], [0.33, 1.46], [0.44, 1.36],
-      [0.45, 1.18], [0.40, 0.96], [0.375, 0.74],
-      [0.40, 0.56], [0.46, 0.40], [0.47, 0.30],
-    ]);
-    return {
-      head, neck, torso, shirtBody,
-      upperArm: limb(0.10, 0.085, 0.62),
-      foreArm: limb(0.083, 0.062, 0.58),
-      thigh: limb(0.155, 0.11, 0.82),
-      calf: limb(0.115, 0.07, 0.82),
-    };
-  }, []);
-
-  // True-to-print decal: width from the real print width vs a 12" baseline.
-  const decalScale = useMemo<[number, number, number]>(() => {
-    const w = printWidthIn && printWidthIn > 0 ? (printWidthIn / REF_PRINT_W_IN) * REF_DECAL_W : REF_DECAL_W;
-    const aspect = printHeightIn && printHeightIn > 0
-      ? printHeightIn / printWidthIn!
-      : (texture.image ? (texture.image as any).height / (texture.image as any).width : 1.25);
-    return [w, w * aspect, 0.6];
-  }, [printWidthIn, printHeightIn, texture]);
-  const decalY = 0.95 - decalScale[1] * 0.5; // anchor just below the collar
-
-  // Front-to-back squash so lathed bodies read as a human (deeper than wide → no).
-  const torsoZ = 0.62;
-
-  return (
-    <Center>
-      <group>
-        {/* ── Body (neutral human form) ── */}
-        <mesh geometry={geo.head} material={skin} castShadow />
-        <mesh geometry={geo.neck} material={skin} castShadow />
-        {/* Torso underneath the shirt — gives the shirt a real body to drape on */}
-        <mesh geometry={geo.torso} material={skin} scale={[1, 1, torsoZ]} castShadow receiveShadow />
-
-        {/* Arms — upper arm at the shoulder, slight outward angle, then forearm */}
-        {[-1, 1].map((s) => (
-          <group key={`arm-${s}`} position={[s * 0.43, 1.5, 0]} rotation={[0, 0, s * 0.16]}>
-            <mesh geometry={geo.upperArm} material={skin} position={[0, -0.62, 0]} castShadow />
-            <group position={[s * 0.06, -0.62, 0.04]} rotation={[0.18, 0, s * 0.05]}>
-              <mesh geometry={geo.foreArm} material={skin} position={[0, -0.58, 0]} castShadow />
-              {/* Hand — simple rounded paddle */}
-              <mesh position={[0, -0.66, 0]} scale={[0.6, 1, 0.4]} material={skin} castShadow>
-                <sphereGeometry args={[0.08, 24, 20]} />
-              </mesh>
-            </group>
-          </group>
-        ))}
-
-        {/* Legs — thigh then calf, slight stance */}
-        {[-1, 1].map((s) => (
-          <group key={`leg-${s}`} position={[s * 0.17, -0.02, 0]}>
-            <mesh geometry={geo.thigh} material={skin} position={[0, -0.82, 0]} castShadow />
-            <group position={[0, -0.82, 0]}>
-              <mesh geometry={geo.calf} material={skin} position={[0, -0.82, 0]} castShadow />
-              {/* Foot */}
-              <mesh position={[0, -0.86, 0.06]} scale={[0.6, 0.4, 1.3]} material={skin} castShadow>
-                <sphereGeometry args={[0.1, 24, 20]} />
-              </mesh>
-            </group>
-          </group>
-        ))}
-
-        {/* ── Fitted tee worn over the torso ── */}
-        {/* Shirt body: lathed shell slightly larger than the torso so it drapes */}
-        <mesh material={shirt} geometry={geo.shirtBody} scale={[1, 1, torsoZ * 1.06]} castShadow receiveShadow>
-          {/* Chest decal — the user's design, true-to-print */}
-          <Decal position={[0, decalY, CHEST_R * torsoZ * 1.06]} rotation={[0, 0, 0]} scale={decalScale}>
-            <meshStandardMaterial map={activeTexture} transparent polygonOffset polygonOffsetFactor={-4} roughness={0.78} depthTest />
-          </Decal>
-        </mesh>
-        {/* Ribbed crew collar */}
-        <mesh position={[0, 1.48, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[1, torsoZ * 1.1, 1]} material={shirt}>
-          <torusGeometry args={[0.16, 0.028, 16, 48]} />
-        </mesh>
-        {/* Short sleeves — angled down over the upper arms */}
-        {[-1, 1].map((s) => (
-          <mesh key={`slv-${s}`} position={[s * 0.42, 1.28, 0]} rotation={[0, 0, s * 0.42]} scale={[1, 1, 0.82]} material={shirt} castShadow>
-            <cylinderGeometry args={[0.165, 0.135, 0.46, 36, 1, true]} />
-          </mesh>
-        ))}
-      </group>
-    </Center>
-  );
-}
-
+// ── Main export ───────────────────────────────────────────────────────────────
 export default function Garment3DPreview({
   design,
   onClose,
@@ -242,6 +409,7 @@ export default function Garment3DPreview({
   printHeightIn = null,
   fetchMockups,
   liveCanvas = null,
+  productColor = null,
 }: {
   design: string;
   onClose: () => void;
@@ -251,179 +419,241 @@ export default function Garment3DPreview({
   printHeightIn?: number | null;
   fetchMockups?: () => Promise<string[]>;
   liveCanvas?: HTMLCanvasElement | null;
+  productColor?: string | null;
 }) {
-  const [color, setColor] = useState(GARMENT_COLORS[0].hex);
-  const [spin, setSpin] = useState(true);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  // Map product color name → hex swatch
+  const matchedColor = useMemo(() => {
+    if (!productColor) return GARMENT_COLORS[0].hex;
+    const lc = productColor.toLowerCase();
+    const match = GARMENT_COLORS.find((c) =>
+      lc.includes(c.key) || c.label.toLowerCase().includes(lc)
+    );
+    return match?.hex ?? GARMENT_COLORS[0].hex;
+  }, [productColor]);
 
-  const export3d = () => {
-    const gl = (canvasRef.current as any)?.__r3f?.gl as THREE.WebGLRenderer | undefined;
-    if (!gl) {
-      // Fallback: grab the canvas element directly
-      const cvs = document.querySelector("canvas") as HTMLCanvasElement | null;
-      if (!cvs) return;
-      const a = document.createElement("a");
-      a.href = cvs.toDataURL("image/png");
-      a.download = "garment-3d.png";
-      a.click();
-      return;
-    }
-    gl.render(gl.domElement as any, gl.domElement as any);
-    const a = document.createElement("a");
-    a.href = gl.domElement.toDataURL("image/png");
-    a.download = "garment-3d.png";
-    a.click();
-  };
-  // Default to the photoreal on-model render when it's available — that's the
-  // real human wearing the exact product with the design; the 3D tab is a quick
-  // stylized preview.
-  const [tab, setTab] = useState<"3d" | "real">(canMockup ? "real" : "3d");
+  const [color, setColor] = useState(matchedColor);
+  const [spin, setSpin] = useState(true);
+  const [showWire, setShowWire] = useState(false);
+  const [showGrid, setShowGrid] = useState(false);
+  const [envPreset, setEnvPreset] = useState<"studio" | "sunset" | "dawn">("studio");
+  const [tab, setTab] = useState<"3d" | "real">("3d"); // 3D first per requirements
   const [mockups, setMockups] = useState<string[] | null>(null);
   const [mockBusy, setMockBusy] = useState(false);
+  const [camPreset, setCamPreset] = useState<string | null>("front");
+  const glRef = useRef<HTMLDivElement>(null);
 
-  const openReal = async () => {
-    setTab("real");
+  // Sync to product color when prop changes
+  useEffect(() => { setColor(matchedColor); }, [matchedColor]);
+
+  const loadMockups = async () => {
     if (mockups || mockBusy || !fetchMockups) return;
     setMockBusy(true);
     try { setMockups(await fetchMockups()); }
     finally { setMockBusy(false); }
   };
 
-  // Auto-render the photoreal mockup on open when it's the default tab.
-  useEffect(() => {
-    if (canMockup && fetchMockups && !mockups && !mockBusy) {
-      setMockBusy(true);
-      fetchMockups().then(setMockups).catch(() => {}).finally(() => setMockBusy(false));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const openReal = () => { setTab("real"); loadMockups(); };
+
+  const export3d = () => {
+    const cvs = glRef.current?.querySelector("canvas") as HTMLCanvasElement | null;
+    if (!cvs) return;
+    const a = document.createElement("a");
+    a.href = cvs.toDataURL("image/png");
+    a.download = "garment-3d.png";
+    a.click();
+  };
+
+  const orbitRef = useRef<any>(null);
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-black/95 backdrop-blur-md">
-      {/* Top bar */}
-      <div className="flex items-center justify-between px-5 py-4 shrink-0">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-black/96 backdrop-blur-md select-none">
+      {/* ── Top bar ────────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between px-5 py-3.5 shrink-0 border-b border-white/5">
         <div className="flex items-center gap-2">
-          <div className="flex gap-1 rounded-full bg-white/10 p-1">
+          {/* Tab switcher */}
+          <div className="flex gap-0.5 rounded-full bg-white/10 p-1">
+            <button onClick={() => setTab("3d")}
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-colors ${tab === "3d" ? "bg-white text-black" : "text-white/60 hover:text-white"}`}>
+              <Box size={11} /> 3D
+            </button>
             {canMockup && (
               <button onClick={openReal}
-                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest transition-colors ${tab === "real" ? "bg-white text-black" : "text-white/60 hover:text-white"}`}>
-                <User size={12} /> Realistic
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-colors ${tab === "real" ? "bg-white text-black" : "text-white/60 hover:text-white"}`}>
+                <User size={11} /> Mockup
               </button>
             )}
-            <button onClick={() => setTab("3d")}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest transition-colors ${tab === "3d" ? "bg-white text-black" : "text-white/60 hover:text-white"}`}>
-              <Box size={12} /> 3D Preview
-            </button>
           </div>
-          <span className="hidden sm:inline text-[9px] uppercase tracking-widest text-white/40">
-            {tab === "3d"
-              ? (printWidthIn && printHeightIn
-                  ? `drag to rotate · print ${printWidthIn}″ × ${printHeightIn}″ true-to-size`
-                  : "drag to rotate · scroll to zoom")
-              : "photoreal on-model · exact print"}
-          </span>
+
+          {tab === "3d" && (
+            <span className="hidden sm:inline text-[9px] uppercase tracking-widest text-white/35">
+              {printWidthIn && printHeightIn
+                ? `print area ${printWidthIn}″ × ${printHeightIn}″ · drag to orbit`
+                : "drag to orbit · scroll to zoom"}
+            </span>
+          )}
         </div>
-        <button
-          onClick={onClose}
-          className="flex items-center gap-1.5 rounded-full bg-white/10 px-4 py-2 text-[10px] font-semibold uppercase tracking-widest text-white transition-colors hover:bg-white/20"
-        >
-          <X size={13} /> Close
-        </button>
+
+        <div className="flex items-center gap-2">
+          {tab === "3d" && (
+            <button onClick={export3d}
+              className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-white hover:bg-white/20">
+              <Download size={11} /> Export
+            </button>
+          )}
+          <button onClick={onClose}
+            className="flex items-center gap-1.5 rounded-full bg-white/10 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-white hover:bg-white/20">
+            <X size={12} /> Close
+          </button>
+        </div>
       </div>
 
-      {/* Realistic on-model mockups */}
+      {/* ── Realistic mockup tab ─────────────────────────────────────────── */}
       {tab === "real" && (
         <div className="flex-1 overflow-y-auto px-5 pb-6">
           {mockBusy ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 text-white/50">
-              <Loader2 className="animate-spin" />
+              <Loader2 className="animate-spin" size={28} />
               <span className="text-[10px] uppercase tracking-widest">Rendering photoreal mockup…</span>
             </div>
           ) : mockups && mockups.length > 0 ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 pt-4">
               {mockups.map((url) => (
-                <img key={url} src={url} alt="On-model mockup" className="w-full rounded-2xl bg-white/5 object-contain" />
+                <img key={url} src={url} alt="Mockup" className="w-full rounded-2xl bg-white/5 object-contain" />
               ))}
             </div>
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 text-white/50">
-              <User size={28} className="opacity-40" />
+              <User size={32} className="opacity-30" />
               <span className="text-[10px] uppercase tracking-widest">No mockup available</span>
-              {fetchMockups && <button onClick={() => { setMockups(null); openReal(); }} className="rounded-full bg-white/10 px-4 py-2 text-[10px] uppercase tracking-widest text-white hover:bg-white/20">Retry</button>}
+              {fetchMockups && (
+                <button onClick={() => { setMockups(null); loadMockups(); }}
+                  className="rounded-full bg-white/10 px-4 py-2 text-[10px] uppercase tracking-widest text-white hover:bg-white/20">
+                  Retry
+                </button>
+              )}
             </div>
           )}
         </div>
       )}
 
-      {/* 3D viewport */}
-      <div className={`relative flex-1 ${tab === "real" ? "hidden" : ""}`}>
-        <Canvas shadows camera={{ position: [0, 0, 6.4], fov: 38 }} dpr={[1, 2]}>
-          <color attach="background" args={[isDark ? "#0a0a0b" : "#101012"]} />
-          <ambientLight intensity={0.5} />
-          <directionalLight position={[3, 5, 4]} intensity={1.5} castShadow shadow-mapSize={[2048, 2048]} />
-          <directionalLight position={[-4, 2, -2]} intensity={0.55} />
-          {/* Soft rim from behind to separate the figure from the dark backdrop */}
-          <directionalLight position={[0, 3, -5]} intensity={0.4} />
+      {/* ── 3D viewport ───────────────────────────────────────────────────── */}
+      <div ref={glRef} className={`relative flex-1 ${tab !== "3d" ? "hidden" : ""}`}>
+        <Canvas
+          shadows
+          camera={{ position: [0, 0.2, 5.8], fov: 36 }}
+          dpr={[1, 2]}
+          gl={{ preserveDrawingBuffer: true, antialias: true }}
+        >
+          <color attach="background" args={[isDark ? "#080809" : "#0d0e10"]} />
+
+          {/* Lighting — key/fill/rim setup for realistic skin */}
+          <ambientLight intensity={0.55} />
+          <directionalLight position={[4, 7, 5]} intensity={1.8} castShadow
+            shadow-mapSize={[2048, 2048]} shadow-bias={-0.0004} />
+          <directionalLight position={[-5, 3, -3]} intensity={0.65} />
+          <directionalLight position={[0, 4, -6]} intensity={0.35} color="#d0e8ff" />
+          <pointLight position={[0, 3.5, 3]} intensity={0.4} color="#fff8f0" />
+
           <Suspense fallback={null}>
             {HUMAN_GLB ? (
-              <FigureBoundary fallback={<Mannequin color={color} design={design} isDark={isDark} printWidthIn={printWidthIn} printHeightIn={printHeightIn} liveCanvas={liveCanvas} />}>
-                <Suspense fallback={<Mannequin color={color} design={design} isDark={isDark} printWidthIn={printWidthIn} printHeightIn={printHeightIn} liveCanvas={liveCanvas} />}>
-                  <AvatarFigure url={HUMAN_GLB} design={design} printWidthIn={printWidthIn} printHeightIn={printHeightIn} />
+              <FigureBoundary fallback={
+                <Mannequin color={color} liveCanvas={liveCanvas} staticDesign={design} isDark={isDark} showWire={showWire} />
+              }>
+                <Suspense fallback={
+                  <Mannequin color={color} liveCanvas={liveCanvas} staticDesign={design} isDark={isDark} showWire={showWire} />
+                }>
+                  <AvatarFigure url={HUMAN_GLB} liveCanvas={liveCanvas} staticDesign={design} />
                 </Suspense>
               </FigureBoundary>
             ) : (
-              <Mannequin color={color} design={design} isDark={isDark} printWidthIn={printWidthIn} printHeightIn={printHeightIn} liveCanvas={liveCanvas} />
+              <Mannequin color={color} liveCanvas={liveCanvas} staticDesign={design} isDark={isDark} showWire={showWire} />
             )}
-            <Environment preset="studio" />
+            <Environment preset={envPreset} />
           </Suspense>
-          <ContactShadows position={[0, -2.5, 0]} opacity={0.45} scale={8} blur={2.6} far={3.2} />
-          {/* Orbit around the body's centre (not the feet). */}
+
+          <ContactShadows position={[0, -1.85, 0]} opacity={0.55} scale={10} blur={2.8} far={3.5} />
+
+          {showGrid && (
+            <Grid position={[0, -1.85, 0]} args={[12, 12]}
+              cellColor="#444" sectionColor="#666" fadeDistance={16} fadeStrength={1} />
+          )}
+
+          <CameraPreset preset={camPreset} onDone={() => setCamPreset(null)} />
+
           <OrbitControls
+            ref={orbitRef}
             enablePan={false}
             autoRotate={spin}
-            autoRotateSpeed={1.6}
-            target={[0, 0, 0]}
-            minDistance={3.2}
-            maxDistance={9}
+            autoRotateSpeed={1.4}
+            target={[0, 0.2, 0]}
+            minDistance={2.8}
+            maxDistance={11}
             onStart={() => setSpin(false)}
           />
         </Canvas>
 
-        {/* Loading hint */}
+        {/* Camera angle preset pills (CLO-3D style) */}
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 flex gap-1 rounded-full bg-black/60 backdrop-blur-sm px-2 py-1.5 border border-white/10">
+          {CAM_PRESETS.map((p) => (
+            <button key={p.id} onClick={() => { setSpin(false); setCamPreset(p.id); }}
+              className="text-[9px] font-bold uppercase tracking-widest text-white/60 hover:text-white px-2.5 py-1 rounded-full hover:bg-white/10 transition-colors">
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        {/* CLO-3D style control toolbar */}
+        <div className="absolute top-4 right-4 flex flex-col gap-2">
+          <button onClick={() => setShowWire((v) => !v)}
+            className={`p-2 rounded-lg text-[10px] uppercase font-bold tracking-wider transition-colors border ${showWire ? "bg-white text-black border-white" : "bg-black/60 text-white/60 border-white/10 hover:text-white"}`}
+            title="Wireframe">
+            <Grid3X3 size={13} />
+          </button>
+          <button onClick={() => setShowGrid((v) => !v)}
+            className={`p-2 rounded-lg transition-colors border ${showGrid ? "bg-white text-black border-white" : "bg-black/60 text-white/60 border-white/10 hover:text-white"}`}
+            title="Floor grid">
+            <Eye size={13} />
+          </button>
+          <button onClick={() => setSpin((v) => !v)}
+            className={`p-2 rounded-lg transition-colors border ${spin ? "bg-white text-black border-white" : "bg-black/60 text-white/60 border-white/10 hover:text-white"}`}
+            title="Auto-spin">
+            <RotateCcw size={13} />
+          </button>
+        </div>
+
+        {/* Loading spinner overlay */}
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <Suspense fallback={<Loader2 className="animate-spin text-white/40" />}>{null}</Suspense>
+          <Suspense fallback={<Loader2 className="animate-spin text-white/30" size={28} />}>{null}</Suspense>
         </div>
       </div>
 
-      {/* Bottom controls: garment color + reset spin (3D tab only) */}
-      <div className={`flex items-center justify-center gap-3 px-5 py-5 shrink-0 ${tab === "real" ? "hidden" : ""}`}>
-        <div className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-2">
+      {/* ── Bottom controls ───────────────────────────────────────────────── */}
+      <div className={`flex items-center justify-between gap-3 px-5 py-4 shrink-0 border-t border-white/5 ${tab !== "3d" ? "hidden" : ""}`}>
+        {/* Garment color swatches */}
+        <div className="flex items-center gap-1.5 rounded-full bg-white/8 px-3 py-2 border border-white/10">
           {GARMENT_COLORS.map((c) => (
-            <button
-              key={c.key}
-              onClick={() => setColor(c.hex)}
-              aria-label={c.label}
-              title={c.label}
-              className={`h-6 w-6 rounded-full border transition-transform hover:scale-110 ${
-                color === c.hex ? "border-white ring-2 ring-white/50" : "border-white/20"
-              }`}
-              style={{ backgroundColor: c.hex }}
-            />
+            <button key={c.key} onClick={() => setColor(c.hex)} aria-label={c.label} title={c.label}
+              className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${color === c.hex ? "border-white ring-2 ring-white/40 scale-110" : "border-transparent hover:border-white/40"}`}
+              style={{ backgroundColor: c.hex }} />
           ))}
         </div>
-        <button
-          onClick={() => setSpin((v) => !v)}
-          className="flex items-center gap-1.5 rounded-full bg-white/10 px-4 py-2 text-[10px] font-semibold uppercase tracking-widest text-white transition-colors hover:bg-white/20"
-        >
-          <RotateCcw size={13} /> {spin ? "Stop spin" : "Auto spin"}
-        </button>
-        <button
-          onClick={export3d}
-          className="flex items-center gap-1.5 rounded-full bg-white/10 px-4 py-2 text-[10px] font-semibold uppercase tracking-widest text-white transition-colors hover:bg-white/20"
-          title="Export 3D view as PNG"
-        >
-          <Download size={13} /> Export PNG
-        </button>
+
+        {/* Environment presets */}
+        <div className="flex gap-1 rounded-full bg-white/8 px-2 py-1.5 border border-white/10">
+          {(["studio", "sunset", "dawn"] as const).map((e) => (
+            <button key={e} onClick={() => setEnvPreset(e)}
+              className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest transition-colors ${envPreset === e ? "bg-white text-black" : "text-white/50 hover:text-white"}`}>
+              {e}
+            </button>
+          ))}
+        </div>
+
+        {/* Print dims badge */}
+        {printWidthIn && printHeightIn && (
+          <div className="hidden sm:flex items-center gap-1 text-[9px] text-white/35 font-mono uppercase">
+            <Camera size={10} /> {printWidthIn}″ × {printHeightIn}″
+          </div>
+        )}
       </div>
     </div>
   );
