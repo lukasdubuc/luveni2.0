@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts } from "@/lib/useProducts";
 import { offer } from "@/config/site";
 import { useCart } from "@/context/CartContext";
+import { ZoomPanImage } from "@/components/site/ZoomPanImage";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -955,18 +956,19 @@ function OfferSlugPage() {
             animation: "zoom-fade-in 0.15s linear both",
           }}
         >
-          <img
-            src={galleryImages[activeImageIndex]}
-            alt={`${product.title} — zoomed`}
+          <div
+            onClick={(e) => e.stopPropagation()}
             style={{
-              maxWidth: "min(92vw, 900px)",
-              maxHeight: "90vh",
-              objectFit: "contain",
-              display: "block",
-              userSelect: "none",
-              pointerEvents: "none",
+              width: "min(92vw, 900px)",
+              height: "90vh",
+              cursor: "default",
             }}
-          />
+          >
+            <ZoomPanImage
+              src={galleryImages[activeImageIndex]}
+              alt={`${product.title} — zoomed`}
+            />
+          </div>
 
           <button
             onClick={(e) => { e.stopPropagation(); setZoomOpen(false); }}
