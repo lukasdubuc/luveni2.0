@@ -11,11 +11,63 @@
 // ─────────────────────────────────────────────────────────────
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Suspense, useMemo, useState, useEffect } from "react";
+import { Suspense, useMemo, useState, useEffect, Component, type ReactNode } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Decal, useTexture, Environment, ContactShadows, Center } from "@react-three/drei";
+import { OrbitControls, Decal, useTexture, useGLTF, Environment, ContactShadows, Center } from "@react-three/drei";
 import * as THREE from "three";
 import { X, Loader2, RotateCcw, Box, User } from "lucide-react";
+
+// A rigged human wearing a t-shirt (three.js "Soldier" asset, hosted locally so
+// it loads offline with no draco decoder). Swappable via VITE_STUDIO_HUMAN_GLB.
+const HUMAN_GLB = (import.meta as any).env?.VITE_STUDIO_HUMAN_GLB || "/models/figure.glb";
+
+// Real rigged human in a tee, with the design mapped onto the chest true-to-print.
+function HumanFigure({ design, printWidthIn, printHeightIn }: { design: string; printWidthIn?: number | null; printHeightIn?: number | null }) {
+  const { scene } = useGLTF(HUMAN_GLB) as unknown as { scene: THREE.Object3D };
+  const texture = useTexture(design);
+  texture.anisotropy = 8;
+
+  // Clone + normalize: scale to a consistent height and re-center at the origin.
+  const { model, chestY, chestZ } = useMemo(() => {
+    const c = scene.clone(true);
+    c.traverse((o: any) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
+    const box = new THREE.Box3().setFromObject(c);
+    const size = new THREE.Vector3(); box.getSize(size);
+    const center = new THREE.Vector3(); box.getCenter(center);
+    const targetH = 2.7;
+    const s = targetH / (size.y || 1.8);
+    c.scale.setScalar(s);
+    c.position.set(-center.x * s, -center.y * s, -center.z * s);
+    // Chest sits a bit above the vertical centre; front surface ≈ half the depth.
+    return { model: c, chestY: targetH * 0.30, chestZ: (size.z * 0.5 * s) * 0.7 + 0.02 };
+  }, [scene]);
+
+  // True-to-print chest panel: width from the real print width vs a 12" baseline.
+  const [w, h] = useMemo(() => {
+    const width = (printWidthIn && printWidthIn > 0 ? printWidthIn / 12 : 1) * 0.5;
+    const aspect = printHeightIn && printWidthIn ? printHeightIn / printWidthIn
+      : (texture.image ? (texture.image as any).height / (texture.image as any).width : 1.25);
+    return [width, width * aspect];
+  }, [printWidthIn, printHeightIn, texture]);
+
+  return (
+    <group>
+      <primitive object={model} />
+      {/* Design on the chest (slightly proud of the shirt so it always reads). */}
+      <mesh position={[0, chestY, chestZ]}>
+        <planeGeometry args={[w, h]} />
+        <meshStandardMaterial map={texture} transparent roughness={0.85} polygonOffset polygonOffsetFactor={-4} />
+      </mesh>
+    </group>
+  );
+}
+
+// Swaps in the procedural tee if the GLB can't load, so the view never blanks.
+class FigureBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  render() { return this.state.failed ? this.props.fallback : this.props.children; }
+}
 
 const GARMENT_COLORS: { key: string; label: string; hex: string }[] = [
   { key: "white", label: "White", hex: "#f4f4f5" },
@@ -218,7 +270,12 @@ export default function Garment3DPreview({
           <directionalLight position={[3, 5, 4]} intensity={1.4} castShadow shadow-mapSize={[1024, 1024]} />
           <directionalLight position={[-4, 2, -2]} intensity={0.5} />
           <Suspense fallback={null}>
-            <Tee color={color} design={design} printWidthIn={printWidthIn} printHeightIn={printHeightIn} />
+            {/* Real rigged human in a tee; falls back to the procedural tee. */}
+            <FigureBoundary fallback={<Tee color={color} design={design} printWidthIn={printWidthIn} printHeightIn={printHeightIn} />}>
+              <Suspense fallback={<Tee color={color} design={design} printWidthIn={printWidthIn} printHeightIn={printHeightIn} />}>
+                <HumanFigure design={design} printWidthIn={printWidthIn} printHeightIn={printHeightIn} />
+              </Suspense>
+            </FigureBoundary>
             <Environment preset="studio" />
           </Suspense>
           <ContactShadows position={[0, -1.6, 0]} opacity={0.45} scale={8} blur={2.5} far={3} />
@@ -264,3 +321,6 @@ export default function Garment3DPreview({
     </div>
   );
 }
+
+// Preload the figure so the first open is instant; harmless if it fails.
+try { useGLTF.preload(HUMAN_GLB); } catch { /* noop */ }
