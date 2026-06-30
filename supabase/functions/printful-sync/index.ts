@@ -7,6 +7,8 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { parseManufacturerMedia } from "../_shared/media-pipeline.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -76,6 +78,72 @@ async function dbUpsertProduct(row: any): Promise<{ error?: string }> {
   });
   if (!res.ok) return { error: `${res.status}: ${await res.text().catch(() => "")}` };
   return {};
+}
+
+// Look up our product id by the Printful sync-product id.
+async function getProductId(printfulId: string): Promise<string | null> {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/products?select=id&printful_id=eq.${printfulId}&limit=1`,
+    { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } },
+  );
+  if (!res.ok) return null;
+  const rows = (await res.json().catch(() => [])) as any[];
+  return rows[0]?.id ?? null;
+}
+
+// Persist EVERY mockup view (per variant) into product_media so back/side/
+// model/lifestyle shots survive instead of collapsing to one image_urls entry.
+async function upsertMedia(productId: string, detail: any): Promise<void> {
+  const media = parseManufacturerMedia("printful", detail);
+  if (media.length === 0) return;
+  const rows = media.map((m) => ({
+    product_id: productId,
+    variant_key: m.variantKey,
+    view_type: m.viewType,
+    url: m.url,
+    is_primary: m.isPrimary,
+    is_transparent: m.isTransparent,
+    position: m.position,
+    source: "printful",
+    metadata: m.metadata,
+  }));
+  await fetch(
+    `${SUPABASE_URL}/rest/v1/product_media?on_conflict=product_id,variant_key,url`,
+    {
+      method: "POST",
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=minimal",
+      },
+      body: JSON.stringify(rows),
+    },
+  );
+}
+
+// Curation buffer: ensure draft channel rows exist for TikTok + Etsy so
+// imports NEVER auto-publish to a marketplace. ignore-duplicates keeps an
+// admin's already-published/curated status untouched on re-sync.
+async function ensureDraftChannels(productId: string): Promise<void> {
+  const rows = ["tiktok", "etsy"].map((channel) => ({
+    product_id: productId,
+    channel,
+    status: "draft",
+  }));
+  await fetch(
+    `${SUPABASE_URL}/rest/v1/channel_publications?on_conflict=product_id,channel`,
+    {
+      method: "POST",
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        "Content-Type": "application/json",
+        Prefer: "resolution=ignore-duplicates,return=minimal",
+      },
+      body: JSON.stringify(rows),
+    },
+  );
 }
 
 Deno.serve(async (req) => {
@@ -180,12 +248,21 @@ Deno.serve(async (req) => {
           is_archived: false,
           is_published: isPublished,
           printful_id: pid,
+          source: "printful",
+          raw_payload: detail,
           variants: variants.length > 0 ? variants : null,
           updated_at: new Date().toISOString(),
         });
         if (error) {
           errors.push(`Product ${item.id} (${productName}): ${error}`);
           continue;
+        }
+
+        // Persist all variant mockup views + seed the curation buffer.
+        const productId = await getProductId(pid);
+        if (productId) {
+          try { await upsertMedia(productId, detail); } catch (e: any) { errors.push(`Media ${item.id}: ${e.message}`); }
+          try { await ensureDraftChannels(productId); } catch { /* non-fatal */ }
         }
         synced++;
       } catch (e: any) {
