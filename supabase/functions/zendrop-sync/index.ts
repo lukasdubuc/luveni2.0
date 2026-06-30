@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
       let detail = item;
       try {
         const dRes = await fetch(`${ZENDROP_BASE}/v1/products/${externalId}`, { headers: zHeaders() });
-        if (dRes.ok) detail = (await dRes.json())?.data ?? (await dRes.json()) ?? item;
+        if (dRes.ok) { const body = await dRes.json(); detail = body?.data ?? body ?? item; }
       } catch { /* use list item */ }
 
       const variantsRaw: any[] = detail?.variants ?? [];

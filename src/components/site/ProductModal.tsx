@@ -20,12 +20,16 @@ export interface ModalProduct {
   title: string;
   slug: string;
   price_cents: number;
+  // DB column is price_cents_discounted; accept the legacy alias too.
+  price_cents_discounted?: number | null;
   discounted_price_cents?: number | null;
   image_urls?: string[];
-  variants?: Array<{ sku?: string; attributes?: Record<string, string>; stock?: number }>;
+  variants?: ModalVariant[];
 }
 
-function attr(v: ModalProduct["variants"] extends (infer T)[] ? T : never, key: string): string {
+interface ModalVariant { sku?: string; attributes?: Record<string, string>; stock?: number }
+
+function attr(v: ModalVariant, key: string): string {
   return (v?.attributes?.[key] ?? "").trim();
 }
 
@@ -79,8 +83,9 @@ export function ProductModal({ product, onClose }: { product: ModalProduct; onCl
     return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
   }, [onClose]);
 
-  const hasDiscount = product.discounted_price_cents != null && product.discounted_price_cents < product.price_cents;
-  const priceCents = hasDiscount ? product.discounted_price_cents! : product.price_cents;
+  const discounted = product.price_cents_discounted ?? product.discounted_price_cents ?? null;
+  const hasDiscount = discounted != null && discounted < product.price_cents;
+  const priceCents = hasDiscount ? discounted! : product.price_cents;
   const active = carousel[Math.min(activeIdx, Math.max(0, carousel.length - 1))];
   const kind = garmentKindFromTitle(product.title);
 

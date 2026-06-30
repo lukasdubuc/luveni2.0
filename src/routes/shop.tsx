@@ -75,10 +75,9 @@ const ProductCell = memo(({ product, index, onOpen }: { product: Product; index:
   const imageUrl = rawImageUrl ? proxyImageUrl(rawImageUrl) : null;
   const kind = garmentKindFromTitle(product.title);
 
-  const hasDiscount =
-    product.discounted_price_cents != null &&
-    product.discounted_price_cents < product.price_cents;
-  const displayPrice = hasDiscount ? product.discounted_price_cents! : product.price_cents;
+  const discounted = product.price_cents_discounted ?? product.discounted_price_cents ?? null;
+  const hasDiscount = discounted != null && discounted < product.price_cents;
+  const displayPrice = hasDiscount ? discounted! : product.price_cents;
 
   // First 6 products load eagerly and with high priority (above the fold).
   const isAboveFold = index < 6;
