@@ -20,7 +20,14 @@ import { computeRetailCents } from "@/lib/pricing";
 const Garment3DPreview = lazy(() => import("./Garment3DPreview"));
 const PrintfulDesignMaker = lazy(() => import("./PrintfulDesignMaker"));
 
-export type BlendMode = "source-over" | "multiply" | "screen" | "overlay" | "darken" | "lighten";
+export type BlendMode =
+  | "source-over" | "multiply" | "screen" | "overlay"
+  | "darken" | "lighten" | "color-dodge" | "color-burn"
+  | "hard-light" | "soft-light" | "difference" | "exclusion"
+  | "hue" | "saturation" | "color" | "luminosity"
+  | "lighter" | "destination-over" | "destination-in" | "destination-out"
+  | "destination-atop" | "source-in" | "source-out" | "source-atop"
+  | "xor" | "copy";
 export type BrushType = "round" | "textured" | "ink" | "charcoal";
 
 export type StudioLayer = {
@@ -74,9 +81,33 @@ function useBlur(getNode: () => Konva.Node | null, radius: number, dep: any) {
 
 const gco = (l: StudioLayer) => (l.clip ? "source-atop" : (l.blend || "source-over"));
 
-const BLENDS: BlendMode[] = ["source-over", "multiply", "screen", "overlay", "darken", "lighten"];
-const BLEND_LABEL: Record<BlendMode, string> = { "source-over": "Normal", multiply: "Multiply", screen: "Screen", overlay: "Overlay", darken: "Darken", lighten: "Lighten" };
-const BLEND_ABBR: Record<BlendMode, string> = { "source-over": "N", multiply: "M", screen: "S", overlay: "O", darken: "D", lighten: "L" };
+const BLENDS: BlendMode[] = [
+  "source-over", "multiply", "screen", "overlay",
+  "darken", "lighten", "color-dodge", "color-burn",
+  "hard-light", "soft-light", "difference", "exclusion",
+  "hue", "saturation", "color", "luminosity",
+  "lighter", "destination-over", "destination-in", "destination-out",
+  "destination-atop", "source-in", "source-out", "source-atop",
+  "xor", "copy",
+];
+const BLEND_LABEL: Record<BlendMode, string> = {
+  "source-over": "Normal", multiply: "Multiply", screen: "Screen", overlay: "Overlay",
+  darken: "Darken", lighten: "Lighten", "color-dodge": "Color Dodge", "color-burn": "Color Burn",
+  "hard-light": "Hard Light", "soft-light": "Soft Light", difference: "Difference", exclusion: "Exclusion",
+  hue: "Hue", saturation: "Saturation", color: "Color", luminosity: "Luminosity",
+  lighter: "Add (Glow)", "destination-over": "Behind", "destination-in": "Dest In", "destination-out": "Dest Out",
+  "destination-atop": "Dest Atop", "source-in": "Source In", "source-out": "Source Out", "source-atop": "Clip",
+  xor: "XOR", copy: "Replace",
+};
+const BLEND_ABBR: Record<BlendMode, string> = {
+  "source-over": "N", multiply: "Mu", screen: "Sc", overlay: "Ov",
+  darken: "Da", lighten: "Li", "color-dodge": "CD", "color-burn": "CB",
+  "hard-light": "HL", "soft-light": "SL", difference: "Di", exclusion: "Ex",
+  hue: "Hu", saturation: "Sa", color: "Co", luminosity: "Lu",
+  lighter: "Ad", "destination-over": "Be", "destination-in": "DI", "destination-out": "DO",
+  "destination-atop": "DA", "source-in": "SI", "source-out": "SO", "source-atop": "Cl",
+  xor: "XO", copy: "Cp",
+};
 
 type Props = {
   projectId: string;
@@ -271,6 +302,9 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
   const [brushType, setBrushType] = useState<BrushType>("round");
   const [brushSize, setBrushSize] = useState(120);
   const [brushColor, setBrushColor] = useState("#000000");
+  const [colorH, setColorH] = useState(0);
+  const [colorS, setColorS] = useState(0);
+  const [colorB, setColorB] = useState(0);
   const [brushOpacity, setBrushOpacity] = useState(1);     
   const [stabilizer, setStabilizer] = useState(0.45);      
   const [symmetry, setSymmetry] = useState<"off" | "v" | "h">("off");
@@ -568,15 +602,8 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
       const d = ctx.getImageData(pos.x * scale, pos.y * scale, 1, 1).data;
       if (d[3] === 0) return; 
       const hex = "#" + ((1 << 24) + (d[0] << 16) + (d[1] << 8) + d[2]).toString(16).slice(1);
-      setBrushColor(hex);
+      setColorFromHex(hex);
       setEyedropperColorHex(hex);
-      
-      // Update color selection history
-      setColorHistory((prev) => {
-        const next = prev.filter((c) => c !== hex);
-        next.unshift(hex);
-        return next.slice(0, 12);
-      });
     } catch {
       // safe fallback on CORS restrictions
     }
@@ -867,6 +894,48 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
   // Verify and resolve template canvas backing transparency values
   const isTemplateProject = canvasKind !== "canvas" || !!templateImage;
 
+  // HSB (0-360, 0-100, 0-100) → "#rrggbb"
+  const hsbToHex = (h: number, s: number, b: number): string => {
+    const S = s / 100, V = b / 100;
+    const f = (n: number) => {
+      const k = (n + h / 60) % 6;
+      const val = V - V * S * Math.max(0, Math.min(k, 4 - k, 1));
+      return Math.round(val * 255).toString(16).padStart(2, "0");
+    };
+    return `#${f(5)}${f(3)}${f(1)}`;
+  };
+  // "#rrggbb" → {h,s,b}
+  const hexToHsb = (hex: string): { h: number; s: number; b: number } => {
+    const r = parseInt(hex.slice(1, 3), 16) / 255;
+    const g = parseInt(hex.slice(3, 5), 16) / 255;
+    const bl = parseInt(hex.slice(5, 7), 16) / 255;
+    const max = Math.max(r, g, bl), min = Math.min(r, g, bl);
+    const d = max - min;
+    let h = 0;
+    if (d) {
+      if (max === r) h = ((g - bl) / d) % 6;
+      else if (max === g) h = (bl - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h = Math.round(h * 60);
+      if (h < 0) h += 360;
+    }
+    const s = max ? Math.round((d / max) * 100) : 0;
+    const bv = Math.round(max * 100);
+    return { h, s, b: bv };
+  };
+  const setColorFromHex = (hex: string) => {
+    setBrushColor(hex);
+    const { h, s, b } = hexToHsb(hex);
+    setColorH(h); setColorS(s); setColorB(b);
+    setColorHistory((prev) => [hex, ...prev.filter((c) => c !== hex)].slice(0, 30));
+  };
+  const setColorFromHsb = (h: number, s: number, b: number) => {
+    setColorH(h); setColorS(s); setColorB(b);
+    const hex = hsbToHex(h, s, b);
+    setBrushColor(hex);
+    setColorHistory((prev) => [hex, ...prev.filter((c) => c !== hex)].slice(0, 30));
+  };
+
   // Convert HSL values to exact HEX string
   const hslToHex = (h: number, s: number, l: number): string => {
     l /= 100;
@@ -877,6 +946,332 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
       return Math.round(255 * color).toString(16).padStart(2, "0");
     };
     return `#${f(0)}${f(8)}${f(4)}`;
+  };
+
+  // ─── Core layer mutators ───────────────────────────────────────────────────
+  const patchLayer = (id: string, patch: Partial<StudioLayer>) => {
+    commit((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+  };
+
+  const livePatch = (id: string, patch: Partial<StudioLayer>) => {
+    setLayers((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+  };
+
+  const serializeLayers = (): StudioLayer[] =>
+    layers.map((l) => {
+      if (l.type === "paint") {
+        const c = paintCanvases.current[l.id];
+        return { ...l, src: c?.toDataURL("image/png") ?? undefined };
+      }
+      return { ...l };
+    });
+
+  // ─── Paint canvas helpers ──────────────────────────────────────────────────
+  const snapshotPaint = (id: string) => {
+    const c = paintCanvases.current[id];
+    if (!c) return;
+    undoStack.current.push({ kind: "paint", id, data: c.toDataURL() });
+    if (undoStack.current.length > 80) undoStack.current.shift();
+    redoStack.current = [];
+  };
+
+  const ensurePaintTarget = (force = false): string | null => {
+    const active = layers.find((l) => l.id === selectedId && l.type === "paint");
+    if (active) return active.id;
+    const top = [...layers].reverse().find((l) => l.type === "paint" && l.visible);
+    if (top && !force) return top.id;
+    const newLayer: StudioLayer = {
+      id: uid(), type: "paint", name: "Paint", visible: true,
+      x: 0, y: 0, rotation: 0, opacity: 1, blend: "source-over",
+    };
+    getPaintCanvas(newLayer);
+    commit((ls) => [...ls, newLayer]);
+    setSelectedId(newLayer.id);
+    return newLayer.id;
+  };
+
+  // ─── Add layers ────────────────────────────────────────────────────────────
+  const addText = () => {
+    const l: StudioLayer = {
+      id: uid(), type: "text", name: "Text", visible: true,
+      x: artboardW / 2 - 200, y: artboardH / 2 - 30, rotation: 0, opacity: 1,
+      text: "Edit me", fontSize: Math.round(artboardW * 0.06),
+      fill: brushColor, fontStyle: "normal", fontFamily: "Space Mono", blend: "source-over",
+    };
+    commit((ls) => [...ls, l]);
+    setSelectedId(l.id);
+    setTool("select");
+  };
+
+  const addImageAtDirect = (url: string, name = "Design") => {
+    const id = uid();
+    const im = new window.Image();
+    im.crossOrigin = "anonymous";
+    im.src = url.startsWith("data:") ? url : `${url}${url.includes("?") ? "&" : "?"}cors=1`;
+    im.onload = () => {
+      const maxDim = Math.min(artboardW * 0.7, artboardH * 0.7);
+      const ratio = im.naturalWidth / im.naturalHeight;
+      const w = ratio > 1 ? maxDim : maxDim * ratio;
+      const h = ratio > 1 ? maxDim / ratio : maxDim;
+      const l: StudioLayer = {
+        id, type: "image", name, visible: true,
+        x: (artboardW - w) / 2, y: (artboardH - h) / 2,
+        rotation: 0, opacity: 1, src: url, width: w, height: h, blend: "source-over",
+      };
+      commit((ls) => [...ls, l]);
+      setSelectedId(id);
+      setTool("select");
+    };
+  };
+
+  const uploadImage = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const src = ev.target?.result as string;
+      if (src) addImageAtDirect(src, file.name.replace(/\.[^.]+$/, ""));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const importTexture = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const src = ev.target?.result as string;
+      if (!src) return;
+      const id = uid();
+      const l: StudioLayer = {
+        id, type: "image", name: "Texture Overlay", visible: true,
+        x: 0, y: 0, rotation: 0, opacity: 0.6, src,
+        width: artboardW, height: artboardH, blend: "overlay",
+      };
+      commit((ls) => [...ls, l]);
+      setSelectedId(id);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // ─── Canvas alignment & snap ───────────────────────────────────────────────
+  const snapDrag = (e: any) => {
+    const node = e.target;
+    const threshold = 12 / scale;
+    const nx = node.x(), ny = node.y();
+    const nw = node.width() * node.scaleX(), nh = node.height() * node.scaleY();
+    let gx = false, gy = false;
+    if (Math.abs(nx + nw / 2 - artboardW / 2) < threshold) {
+      node.x(artboardW / 2 - nw / 2); gx = true;
+    }
+    if (Math.abs(ny + nh / 2 - artboardH / 2) < threshold) {
+      node.y(artboardH / 2 - nh / 2); gy = true;
+    }
+    setGuides({ v: gx, h: gy });
+  };
+
+  const align = (dir: "h" | "v" | "both") => {
+    if (!selectedLayer) return;
+    const node = nodeRefs.current[selectedLayer.id];
+    const w = node ? node.width() * (node.scaleX() || 1) : selectedLayer.width || 200;
+    const h = node ? node.height() * (node.scaleY() || 1) : selectedLayer.height || 200;
+    const patch: Partial<StudioLayer> = {};
+    if (dir === "h" || dir === "both") patch.x = (artboardW - w) / 2;
+    if (dir === "v" || dir === "both") patch.y = (artboardH - h) / 2;
+    patchLayer(selectedLayer.id, patch);
+  };
+
+  // ─── Merge layers ──────────────────────────────────────────────────────────
+  const handleMergeDown = (id: string) => {
+    const idx = layers.findIndex((l) => l.id === id);
+    if (idx === 0) return;
+    const below = layers[idx - 1];
+    if (below.type !== "paint" || layers[idx].type !== "paint") {
+      toast("Can only merge paint layers"); return;
+    }
+    const topC = paintCanvases.current[id];
+    const botC = paintCanvases.current[below.id];
+    if (!topC || !botC) return;
+    snapshotPaint(below.id);
+    const ctx = botC.getContext("2d")!;
+    ctx.save();
+    ctx.globalCompositeOperation = (layers[idx].blend || "source-over") as GlobalCompositeOperation;
+    ctx.globalAlpha = layers[idx].opacity;
+    ctx.drawImage(topC, 0, 0);
+    ctx.restore();
+    commit((ls) => ls.filter((l) => l.id !== id));
+    setSelectedId(below.id);
+    redrawStage();
+    toast.success("Merged");
+  };
+
+  // ─── Multi-placement (front/back/sleeve) ──────────────────────────────────
+  const switchPlacement = (index: number) => {
+    if (!hasMulti) return;
+    placementLayers.current[activeP] = [...layers];
+    setActiveP(index);
+    setLayers(placementLayers.current[index] || []);
+    setSelectedId(null);
+  };
+
+  // ─── Save / export / publish ───────────────────────────────────────────────
+  const save = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const sLayers = serializeLayers();
+      let thumbnail_url: string | null = null;
+      try {
+        const dataUrl = stageRef.current?.toDataURL({
+          mimeType: "image/jpeg", quality: 0.65,
+          pixelRatio: Math.min(600 / artboardW, 1),
+        });
+        if (dataUrl) {
+          const blob = await (await fetch(dataUrl)).blob();
+          const { data: up } = await supabase.storage.from("designs").upload(
+            `thumbnails/${projectId}.jpg`, blob,
+            { upsert: true, contentType: "image/jpeg" },
+          );
+          if (up?.path) {
+            const { data: { publicUrl } } = supabase.storage.from("designs").getPublicUrl(up.path);
+            thumbnail_url = publicUrl;
+          }
+        }
+      } catch { /* skip thumbnail on error */ }
+      const { error } = await supabase.from("studio_projects").update({
+        canvas: { layers: sLayers, product: (initialCanvas as any)?.product ?? product ?? null },
+        ...(thumbnail_url ? { thumbnail_url } : {}),
+        updated_at: new Date().toISOString(),
+      }).eq("id", projectId);
+      if (error) throw error;
+      toast.success("Saved");
+    } catch (e: any) {
+      toast.error(e.message || "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const exportPng = () => {
+    const stg = stageRef.current;
+    if (!stg) return;
+    const dataUrl = stg.toDataURL({
+      mimeType: "image/png",
+      pixelRatio: Math.min(3072 / artboardW, 2),
+    });
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = `${projectName.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.png`;
+    a.click();
+  };
+
+  const publish = async () => {
+    if (publishing) return;
+    setPublishing(true);
+    try {
+      await save();
+      const { error } = await supabase.from("studio_projects").update({ status: "published" }).eq("id", projectId);
+      if (error) throw error;
+      toast.success("Published!");
+    } catch (e: any) {
+      toast.error(e.message || "Publish failed");
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  // ─── AI generation ─────────────────────────────────────────────────────────
+  const aiNewLayer = async () => {
+    if (!aiPrompt.trim()) { toast.error("Enter a prompt"); return; }
+    setAiBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ai-generate-image", {
+        body: { prompt: aiPrompt.trim(), width: 1024, height: 1024, style: aiStyle },
+      });
+      const msg = await extractFnError(error, data);
+      if (msg) { toast.error(msg); return; }
+      if (!data?.image_url) { toast.error("No image returned"); return; }
+      addImageAtDirect(data.image_url, aiPrompt.trim().substring(0, 40));
+      setAiPrompt("");
+      toast.success("AI layer added");
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const handleLassoRegionAi = async () => {
+    if (!aiPrompt.trim()) { toast.error("Enter a prompt"); return; }
+    if (lassoPoints.length < 3) { toast.error("Draw a lasso first"); return; }
+    setAiBusy(true);
+    try {
+      const xs = lassoPoints.map((p) => p.x);
+      const ys = lassoPoints.map((p) => p.y);
+      const bx = Math.max(0, Math.min(...xs)), by = Math.max(0, Math.min(...ys));
+      const bw = Math.min(artboardW - bx, Math.max(...xs) - bx);
+      const bh = Math.min(artboardH - by, Math.max(...ys) - by);
+      const w = Math.round(bw), h = Math.round(bh);
+      if (w < 10 || h < 10) { toast.error("Selection too small"); return; }
+      const { data, error } = await supabase.functions.invoke("ai-generate-image", {
+        body: { prompt: aiPrompt.trim(), width: Math.min(1024, w), height: Math.min(1024, h), style: aiStyle },
+      });
+      const msg = await extractFnError(error, data);
+      if (msg) { toast.error(msg); return; }
+      if (!data?.image_url) { toast.error("No image"); return; }
+      const im = new window.Image();
+      im.crossOrigin = "anonymous";
+      im.src = data.image_url;
+      im.onload = () => {
+        const destId = ensurePaintTarget(true);
+        if (!destId) return;
+        const c = paintCanvases.current[destId];
+        if (!c) return;
+        snapshotPaint(destId);
+        const ctx = c.getContext("2d")!;
+        ctx.save();
+        if (lassoPoints.length > 2) {
+          ctx.beginPath();
+          ctx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
+          lassoPoints.slice(1).forEach((p) => ctx.lineTo(p.x, p.y));
+          ctx.closePath();
+          ctx.clip();
+        }
+        ctx.drawImage(im, bx, by, w, h);
+        ctx.restore();
+        redrawStage();
+      };
+      setAiPrompt("");
+      toast.success("Generated into selection");
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const finalizeRegionDirect = (r: { x: number; y: number; w: number; h: number }) => {
+    setRegion(r);
+    drawing.current = null;
+    setRegionMode(false);
+  };
+
+  // ─── 3D preview & mockups ──────────────────────────────────────────────────
+  const open3d = async () => {
+    const stg = stageRef.current;
+    if (!stg) { toast.error("Canvas not ready"); return; }
+    try {
+      const dataUrl = stg.toDataURL({ mimeType: "image/png", pixelRatio: Math.min(2048 / artboardW, 2) });
+      setPreview3d(dataUrl);
+    } catch {
+      toast.error("Could not render preview");
+    }
+  };
+
+  const fetchMockups = async (): Promise<string[]> => {
+    if (!product?.mfr || product.mfr !== "printful" || !product.variant_id) return [];
+    try {
+      const designUrl = stageRef.current?.toDataURL({ mimeType: "image/png", pixelRatio: 1 }) ?? null;
+      const { data, error } = await supabase.functions.invoke("generate-mockup", {
+        body: { variantId: product.variant_id, designUrl },
+      });
+      if (error || !data?.mockups) return [];
+      return (data.mockups as { url: string }[]).map((m) => m.url);
+    } catch {
+      return [];
+    }
   };
 
   // Fixed padding and center allocations
@@ -894,6 +1289,30 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
     fit(); window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
   }, [artboardW, artboardH, fullScreenCanvas]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+      else if (mod && (e.key === "y" || (e.key === "z" && e.shiftKey))) { e.preventDefault(); redo(); }
+      else if (mod && e.key === "s") { e.preventDefault(); save(); }
+      else if (mod && e.key === "e") { e.preventDefault(); exportPng(); }
+      else if (e.key === " ") { e.preventDefault(); setTool((t) => t === "select" ? "select" : t); }
+      else if (e.key === "b") setTool("brush");
+      else if (e.key === "e" && !mod) setTool("eraser");
+      else if (e.key === "l") setTool("lasso");
+      else if (e.key === "f") setTool("fill");
+      else if (e.key === "i") setTool("eyedropper");
+      else if (e.key === "v") setTool("select");
+      else if (e.key === "Escape") setSelectedId(null);
+      else if (mod && e.key === "d") { e.preventDefault(); if (selectedLayer) { const copy = { ...selectedLayer, id: uid(), x: selectedLayer.x + 20, y: selectedLayer.y + 20, name: selectedLayer.name + " Copy" }; commit((ls) => [...ls, copy]); setSelectedId(copy.id); } }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedLayer, layers]);
 
   return (
     <div className={`fixed inset-0 z-50 flex flex-col select-none overflow-hidden transition-colors duration-200 touch-none ${
@@ -1229,7 +1648,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
 
           <div className="ml-auto flex items-center gap-3">
             <span className="text-[10px] opacity-50 uppercase tracking-widest">Swatch</span>
-            <input type="color" value={brushColor} onChange={(e) => setBrushColor(e.target.value)} className="w-6 h-6 rounded border-0 cursor-pointer shrink-0" />
+            <input type="color" value={brushColor} onChange={(e) => setColorFromHex(e.target.value)} className="w-6 h-6 rounded border-0 cursor-pointer shrink-0" />
           </div>
         </div>
       )}
@@ -1587,7 +2006,8 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                           <div className="flex justify-between items-center text-[9px] font-bold uppercase tracking-wider gap-3 font-sans">
                             <button onClick={(e) => { e.stopPropagation(); move(l.id, 1); }} className="hover:text-indigo-400">Up</button>
                             <button onClick={(e) => { e.stopPropagation(); move(l.id, -1); }} className="hover:text-indigo-400">Down</button>
-                            <button onClick={(e) => { e.stopPropagation(); handleMergeDown(l.id); }} className="hover:text-indigo-400">Merge Down</button>
+                            <button onClick={(e) => { e.stopPropagation(); const copy = { ...l, id: uid(), name: l.name + " Copy", x: l.x + 16, y: l.y + 16 }; commit((ls) => [...ls, copy]); setSelectedId(copy.id); }} className="hover:text-indigo-400">Duplicate</button>
+                            <button onClick={(e) => { e.stopPropagation(); handleMergeDown(l.id); }} className="hover:text-indigo-400">Merge↓</button>
                             <button onClick={(e) => { e.stopPropagation(); commit((ls) => ls.filter((x) => x.id !== l.id)); setSelectedId(null); }} className="text-rose-500">Delete</button>
                           </div>
                         </div>
@@ -1617,35 +2037,73 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                   ))}
                 </div>
 
-                {/* COLOR DISC TAB */}
+                {/* COLOR DISC TAB — outer hue ring + inner SB square */}
                 {colorSelectorTab === "disc" && (
                   <div className="space-y-3 animate-fade-in flex flex-col items-center font-mono">
-                    <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Interactive Disc</p>
-                    
-                    {/* High-fidelity color picker circular disk */}
-                    <div className="relative w-44 h-44 rounded-full border border-[#1c1c1e] dark:border-neutral-850 overflow-hidden shadow-inner flex items-center justify-center">
-                      <div 
+                    <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Colour Disc</p>
+                    {/* Outer hue ring */}
+                    <div className="relative select-none" style={{ width: 176, height: 176 }}>
+                      {/* Hue ring — clickable */}
+                      <div
+                        className="absolute inset-0 rounded-full cursor-crosshair"
+                        style={{ background: "conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)" }}
                         onPointerDown={(e) => {
-                          const rect = e.currentTarget.getBoundingClientRect();
-                          const cx = rect.left + rect.width / 2;
-                          const cy = rect.top + rect.height / 2;
-                          const dx = e.clientX - cx;
-                          const dy = e.clientY - cy;
-                          const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-                          const deg = angle < 0 ? angle + 360 : angle;
-                          
-                          // procedurally resolve HSL vectors mapping to HEX
-                          const hexColor = hslToHex(deg, 85, 50);
-                          setBrushColor(hexColor);
-                        }}
-                        className="absolute inset-0 cursor-crosshair"
-                        style={{
-                          background: `conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)`
+                          const el = e.currentTarget;
+                          const handleMove = (ev: PointerEvent) => {
+                            const rect = el.getBoundingClientRect();
+                            const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+                            const dx = ev.clientX - cx, dy = ev.clientY - cy;
+                            const r = Math.sqrt(dx * dx + dy * dy);
+                            const outerR = rect.width / 2, innerR = outerR * 0.62;
+                            if (r < innerR || r > outerR) return;
+                            let deg = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+                            setColorFromHsb(Math.round(deg), colorS, colorB);
+                          };
+                          const up = () => { window.removeEventListener("pointermove", handleMove as any); window.removeEventListener("pointerup", up); };
+                          handleMove(e.nativeEvent as PointerEvent);
+                          window.addEventListener("pointermove", handleMove as any);
+                          window.addEventListener("pointerup", up);
+                          e.preventDefault();
                         }}
                       />
-                      <div className="w-24 h-24 rounded-full bg-white dark:bg-[#1c1c1e] z-10 border border-[#1c1c1e] dark:border-neutral-800 relative flex items-center justify-center">
-                        <div className="w-16 h-16 rounded-full border border-[#1c1c1e] dark:border-[#1c1c1e]" style={{ backgroundColor: brushColor }} />
+                      {/* Inner circle mask */}
+                      <div className="absolute rounded-full pointer-events-none" style={{ inset: "19%", background: isDark ? "#09090b" : "#f4f5f7" }} />
+                      {/* Saturation/Brightness square inside */}
+                      <div
+                        className="absolute cursor-crosshair rounded-sm overflow-hidden"
+                        style={{ inset: "22%", background: `linear-gradient(to right, #fff, hsl(${colorH},100%,50%))` }}
+                        onPointerDown={(e) => {
+                          const el = e.currentTarget;
+                          const handleMove = (ev: PointerEvent) => {
+                            const rect = el.getBoundingClientRect();
+                            const sx = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+                            const sy = Math.max(0, Math.min(1, (ev.clientY - rect.top) / rect.height));
+                            setColorFromHsb(colorH, Math.round(sx * 100), Math.round((1 - sy) * 100));
+                          };
+                          const up = () => { window.removeEventListener("pointermove", handleMove as any); window.removeEventListener("pointerup", up); };
+                          handleMove(e.nativeEvent as PointerEvent);
+                          window.addEventListener("pointermove", handleMove as any);
+                          window.addEventListener("pointerup", up);
+                          e.preventDefault();
+                        }}
+                      >
+                        {/* Brightness overlay: white→black top→bottom */}
+                        <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(to bottom, transparent, #000)" }} />
+                        {/* Cursor dot */}
+                        <div className="absolute w-3 h-3 rounded-full border-2 border-white shadow -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+                          style={{ left: `${colorS}%`, top: `${100 - colorB}%`, backgroundColor: brushColor }} />
                       </div>
+                    </div>
+                    {/* Hex input */}
+                    <div className="flex items-center gap-2 w-full">
+                      <div className="w-8 h-8 rounded-lg border border-neutral-700 shrink-0" style={{ backgroundColor: brushColor }} />
+                      <input
+                        type="text"
+                        value={brushColor}
+                        onChange={(e) => { const v = e.target.value; if (/^#[0-9a-fA-F]{6}$/.test(v)) setColorFromHex(v); }}
+                        className="flex-1 bg-neutral-900 text-neutral-200 text-xs font-mono rounded-lg px-2 py-1.5 border border-neutral-700 outline-none focus:border-[#007aff]"
+                        maxLength={7}
+                      />
                     </div>
                   </div>
                 )}
@@ -1653,19 +2111,40 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                 {/* CLASSIC HSB SLIDERS TAB */}
                 {colorSelectorTab === "classic" && (
                   <div className="space-y-4 animate-fade-in font-sans">
-                    <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Classic Sliders</p>
+                    <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">HSB Sliders</p>
                     <div className="space-y-3 text-[11px] font-semibold text-neutral-400 font-sans">
+                      {/* Hue */}
                       <div className="space-y-1">
-                        <div className="flex justify-between font-sans">
-                          <span>Hue</span>
+                        <div className="flex justify-between"><span>Hue</span><span className="font-mono text-neutral-300">{colorH}°</span></div>
+                        <div className="relative h-3 rounded-full overflow-hidden" style={{ background: "conic-gradient(from 0deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)" }}>
+                          <input type="range" min={0} max={360} value={colorH} className="absolute inset-0 w-full opacity-0 cursor-pointer h-full" onChange={(e) => setColorFromHsb(parseInt(e.target.value), colorS, colorB)} />
+                          <div className="absolute top-0 bottom-0 w-2 -translate-x-1/2 rounded-full bg-white border border-neutral-700 shadow" style={{ left: `${(colorH / 360) * 100}%`, pointerEvents: "none" }} />
                         </div>
-                        <input type="range" min={0} max={360} className="w-full accent-[#007aff]" onChange={(e) => setBrushColor(hslToHex(parseInt(e.target.value), 85, 50))} />
                       </div>
+                      {/* Saturation */}
                       <div className="space-y-1">
-                        <div className="flex justify-between font-sans">
-                          <span>Saturation</span>
+                        <div className="flex justify-between"><span>Saturation</span><span className="font-mono text-neutral-300">{colorS}%</span></div>
+                        <div className="relative h-3 rounded-full overflow-hidden" style={{ background: `linear-gradient(to right, #888, hsl(${colorH},100%,50%))` }}>
+                          <input type="range" min={0} max={100} value={colorS} className="absolute inset-0 w-full opacity-0 cursor-pointer h-full" onChange={(e) => setColorFromHsb(colorH, parseInt(e.target.value), colorB)} />
+                          <div className="absolute top-0 bottom-0 w-2 -translate-x-1/2 rounded-full bg-white border border-neutral-700 shadow" style={{ left: `${colorS}%`, pointerEvents: "none" }} />
                         </div>
-                        <input type="range" min={0} max={100} className="w-full accent-[#007aff]" onChange={(e) => setBrushColor(hslToHex(180, parseInt(e.target.value), 50))} />
+                      </div>
+                      {/* Brightness */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between"><span>Brightness</span><span className="font-mono text-neutral-300">{colorB}%</span></div>
+                        <div className="relative h-3 rounded-full overflow-hidden" style={{ background: `linear-gradient(to right, #000, hsl(${colorH},${colorS}%,50%))` }}>
+                          <input type="range" min={0} max={100} value={colorB} className="absolute inset-0 w-full opacity-0 cursor-pointer h-full" onChange={(e) => setColorFromHsb(colorH, colorS, parseInt(e.target.value))} />
+                          <div className="absolute top-0 bottom-0 w-2 -translate-x-1/2 rounded-full bg-white border border-neutral-700 shadow" style={{ left: `${colorB}%`, pointerEvents: "none" }} />
+                        </div>
+                      </div>
+                      {/* Hex input */}
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded border border-neutral-700 shrink-0" style={{ backgroundColor: brushColor }} />
+                        <input
+                          type="text" value={brushColor} maxLength={7}
+                          onChange={(e) => { const v = e.target.value; if (/^#[0-9a-fA-F]{6}$/.test(v)) setColorFromHex(v); }}
+                          className="flex-1 bg-neutral-900 text-neutral-200 text-xs font-mono rounded px-2 py-1 border border-neutral-700 outline-none focus:border-[#007aff]"
+                        />
                       </div>
                     </div>
                   </div>
@@ -1676,8 +2155,8 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                   <div className="space-y-3 animate-fade-in">
                     <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93] font-sans">Presets Matrix</p>
                     <div className="grid grid-cols-6 gap-2">
-                      {["#1c1c1e", "#3a3a3c", "#5c5c5e", "#aeaeaf", "#e5e5ea", "#ffffff", "#ff3b30", "#ff9500", "#ffcc00", "#4cd964", "#5ac8fa", "#007aff"].map((c) => (
-                        <button key={c} onClick={() => setBrushColor(c)} className="w-8 h-8 rounded border border-[#1c1c1e] dark:border-neutral-850 transition-transform active:scale-90" style={{ backgroundColor: c }} />
+                      {["#1c1c1e", "#3a3a3c", "#5c5c5e", "#aeaeaf", "#e5e5ea", "#ffffff", "#ff3b30", "#ff9500", "#ffcc00", "#4cd964", "#5ac8fa", "#007aff", "#5856d6", "#af52de", "#ff2d55", "#a2845e", "#34aadc", "#4cd964"].map((c) => (
+                        <button key={c} onClick={() => setColorFromHex(c)} className="w-8 h-8 rounded border border-[#1c1c1e] dark:border-neutral-850 transition-transform active:scale-90" style={{ backgroundColor: c }} />
                       ))}
                     </div>
                   </div>
@@ -1689,7 +2168,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                     <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Sampled History</p>
                     <div className="grid grid-cols-6 gap-2">
                       {colorHistory.map((c, i) => (
-                        <button key={c + i} onClick={() => setBrushColor(c)} className="w-8 h-8 rounded-full border border-[#1c1c1e] dark:border-[#1c1c1e] transition-transform active:scale-90" style={{ backgroundColor: c }} />
+                        <button key={c + i} onClick={() => setColorFromHex(c)} className="w-8 h-8 rounded-full border border-[#1c1c1e] dark:border-[#1c1c1e] transition-transform active:scale-90" style={{ backgroundColor: c }} />
                       ))}
                     </div>
                   </div>
@@ -1974,7 +2453,8 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
             canMockup={product?.mfr === "printful" && !!product?.variant_id}
             printWidthIn={product?.print?.width_in ?? null}
             printHeightIn={product?.print?.height_in ?? null}
-            fetchMockups={fetchMockups} />
+            fetchMockups={fetchMockups}
+            liveCanvas={stageRef.current?.content?.children?.[0] as HTMLCanvasElement | null ?? null} />
         </Suspense>
       )}
 

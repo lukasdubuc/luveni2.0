@@ -11,11 +11,11 @@
 // ─────────────────────────────────────────────────────────────
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Suspense, useMemo, useState, useEffect, Component, type ReactNode } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Suspense, useMemo, useState, useEffect, useRef, Component, type ReactNode } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Decal, useTexture, useGLTF, Environment, ContactShadows, Center } from "@react-three/drei";
 import * as THREE from "three";
-import { X, Loader2, RotateCcw, Box, User } from "lucide-react";
+import { X, Loader2, RotateCcw, Box, User, Download } from "lucide-react";
 
 // Optional real avatar: set VITE_STUDIO_HUMAN_GLB to a glTF/GLB URL (a CLO/VRoid/
 // Blender export converted to glTF, hosted on /public, Supabase storage, or any
@@ -96,9 +96,27 @@ function lathedBody(profile: [number, number][], segments = 64): THREE.BufferGeo
 // lathed anatomical profiles (head, neck, torso, arms, legs) so the silhouette
 // reads as a real person; the fitted shirt drapes over the torso and the design
 // is mapped onto the chest true-to-print. Reliable, no external asset required.
-function Mannequin({ color, design, printWidthIn, printHeightIn, isDark }: { color: string; design: string; printWidthIn?: number | null; printHeightIn?: number | null; isDark: boolean }) {
+function Mannequin({ color, design, printWidthIn, printHeightIn, isDark, liveCanvas }: { color: string; design: string; printWidthIn?: number | null; printHeightIn?: number | null; isDark: boolean; liveCanvas?: HTMLCanvasElement | null }) {
   const texture = useTexture(design);
   texture.anisotropy = 8;
+
+  // Live sync: if a Konva/HTML canvas is provided, update the texture every frame
+  const liveTexRef = useRef<THREE.CanvasTexture | null>(null);
+  useEffect(() => {
+    if (!liveCanvas) return;
+    const t = new THREE.CanvasTexture(liveCanvas);
+    t.anisotropy = 8;
+    liveTexRef.current = t;
+    return () => { t.dispose(); liveTexRef.current = null; };
+  }, [liveCanvas]);
+
+  useFrame(() => {
+    if (liveTexRef.current) {
+      liveTexRef.current.needsUpdate = true;
+    }
+  });
+
+  const activeTexture = liveTexRef.current ?? texture;
 
   const skinColor = isDark ? "#caa890" : "#e8c9b0"; // warm neutral mannequin skin
   const skin = useMemo(() => new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.62, metalness: 0.0 }), [skinColor]);
@@ -197,7 +215,7 @@ function Mannequin({ color, design, printWidthIn, printHeightIn, isDark }: { col
         <mesh material={shirt} geometry={geo.shirtBody} scale={[1, 1, torsoZ * 1.06]} castShadow receiveShadow>
           {/* Chest decal — the user's design, true-to-print */}
           <Decal position={[0, decalY, CHEST_R * torsoZ * 1.06]} rotation={[0, 0, 0]} scale={decalScale}>
-            <meshStandardMaterial map={texture} transparent polygonOffset polygonOffsetFactor={-4} roughness={0.78} depthTest />
+            <meshStandardMaterial map={activeTexture} transparent polygonOffset polygonOffsetFactor={-4} roughness={0.78} depthTest />
           </Decal>
         </mesh>
         {/* Ribbed crew collar */}
@@ -223,17 +241,39 @@ export default function Garment3DPreview({
   printWidthIn = null,
   printHeightIn = null,
   fetchMockups,
+  liveCanvas = null,
 }: {
-  design: string; // transparent PNG data URL of the flattened artboard
+  design: string;
   onClose: () => void;
   isDark?: boolean;
-  canMockup?: boolean; // true when a Printful product variant is available
-  printWidthIn?: number | null;  // real front-print width (inches) for true-to-size decal
-  printHeightIn?: number | null; // real front-print height (inches)
+  canMockup?: boolean;
+  printWidthIn?: number | null;
+  printHeightIn?: number | null;
   fetchMockups?: () => Promise<string[]>;
+  liveCanvas?: HTMLCanvasElement | null;
 }) {
   const [color, setColor] = useState(GARMENT_COLORS[0].hex);
   const [spin, setSpin] = useState(true);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const export3d = () => {
+    const gl = (canvasRef.current as any)?.__r3f?.gl as THREE.WebGLRenderer | undefined;
+    if (!gl) {
+      // Fallback: grab the canvas element directly
+      const cvs = document.querySelector("canvas") as HTMLCanvasElement | null;
+      if (!cvs) return;
+      const a = document.createElement("a");
+      a.href = cvs.toDataURL("image/png");
+      a.download = "garment-3d.png";
+      a.click();
+      return;
+    }
+    gl.render(gl.domElement as any, gl.domElement as any);
+    const a = document.createElement("a");
+    a.href = gl.domElement.toDataURL("image/png");
+    a.download = "garment-3d.png";
+    a.click();
+  };
   // Default to the photoreal on-model render when it's available — that's the
   // real human wearing the exact product with the design; the 3D tab is a quick
   // stylized preview.
@@ -326,13 +366,13 @@ export default function Garment3DPreview({
           <directionalLight position={[0, 3, -5]} intensity={0.4} />
           <Suspense fallback={null}>
             {HUMAN_GLB ? (
-              <FigureBoundary fallback={<Mannequin color={color} design={design} isDark={isDark} printWidthIn={printWidthIn} printHeightIn={printHeightIn} />}>
-                <Suspense fallback={<Mannequin color={color} design={design} isDark={isDark} printWidthIn={printWidthIn} printHeightIn={printHeightIn} />}>
+              <FigureBoundary fallback={<Mannequin color={color} design={design} isDark={isDark} printWidthIn={printWidthIn} printHeightIn={printHeightIn} liveCanvas={liveCanvas} />}>
+                <Suspense fallback={<Mannequin color={color} design={design} isDark={isDark} printWidthIn={printWidthIn} printHeightIn={printHeightIn} liveCanvas={liveCanvas} />}>
                   <AvatarFigure url={HUMAN_GLB} design={design} printWidthIn={printWidthIn} printHeightIn={printHeightIn} />
                 </Suspense>
               </FigureBoundary>
             ) : (
-              <Mannequin color={color} design={design} isDark={isDark} printWidthIn={printWidthIn} printHeightIn={printHeightIn} />
+              <Mannequin color={color} design={design} isDark={isDark} printWidthIn={printWidthIn} printHeightIn={printHeightIn} liveCanvas={liveCanvas} />
             )}
             <Environment preset="studio" />
           </Suspense>
@@ -376,6 +416,13 @@ export default function Garment3DPreview({
           className="flex items-center gap-1.5 rounded-full bg-white/10 px-4 py-2 text-[10px] font-semibold uppercase tracking-widest text-white transition-colors hover:bg-white/20"
         >
           <RotateCcw size={13} /> {spin ? "Stop spin" : "Auto spin"}
+        </button>
+        <button
+          onClick={export3d}
+          className="flex items-center gap-1.5 rounded-full bg-white/10 px-4 py-2 text-[10px] font-semibold uppercase tracking-widest text-white transition-colors hover:bg-white/20"
+          title="Export 3D view as PNG"
+        >
+          <Download size={13} /> Export PNG
         </button>
       </div>
     </div>
