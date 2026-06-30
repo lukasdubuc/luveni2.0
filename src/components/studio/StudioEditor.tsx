@@ -66,10 +66,12 @@ export type StudioLayer = {
   src?: string; width?: number; height?: number;
   text?: string; fontSize?: number; fill?: string; fontStyle?: string; fontFamily?: string;
   blend?: BlendMode;
-  clip?: boolean;   
-  blur?: number;    
-  reference?: boolean; 
-  alphaLock?: boolean; 
+  clip?: boolean;
+  blur?: number;
+  reference?: boolean;
+  alphaLock?: boolean;
+  scaleX?: number;
+  scaleY?: number;
 };
 
 type GalleryProject = {
@@ -1238,8 +1240,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
   const harmonyColors = useMemo((): string[] => {
     if (harmonyMode === "none") return [];
     const h = colorH;
-    const offsets: Record<typeof harmonyMode, number[]> = {
-      none: [],
+    const offsets: Record<string, number[]> = {
       comp:     [180],
       split:    [150, 210],
       triadic:  [120, 240],
@@ -1642,7 +1643,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
           }
         }
       } catch { /* skip thumbnail on error */ }
-      const { error } = await supabase.from("studio_projects").update({
+      const { error } = await (supabase as any).from("studio_projects").update({
         canvas: { layers: sLayers, product: (initialCanvas as any)?.product ?? product ?? null },
         ...(thumbnail_url ? { thumbnail_url } : {}),
         updated_at: new Date().toISOString(),
@@ -1674,7 +1675,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
     setPublishing(true);
     try {
       await save();
-      const { error } = await supabase.from("studio_projects").update({ status: "published" }).eq("id", projectId);
+      const { error } = await (supabase as any).from("studio_projects").update({ status: "published" }).eq("id", projectId);
       if (error) throw error;
       toast.success("Published!");
     } catch (e: any) {
@@ -2566,8 +2567,8 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                           const SZ = 196, pts = curvePts[curveChannel];
                           const toSvg = (p:{x:number;y:number}) => ({ cx: (p.x/255)*SZ, cy: SZ - (p.y/255)*SZ });
                           const setPts = (np:{x:number;y:number}[]) => setCurvePts((cur)=>({ ...cur, [curveChannel]: np }));
-                          const dragPoint = (idx:number, e:React.PointerEvent<SVGSVGElement>) => {
-                            const svg = e.currentTarget; svg.setPointerCapture(e.pointerId);
+                          const dragPoint = (idx:number, e:React.PointerEvent<SVGCircleElement>) => {
+                            const svg = e.currentTarget.ownerSVGElement; if (!svg) return;
                             const move = (ev:PointerEvent) => {
                               const r = svg.getBoundingClientRect();
                               let nx = Math.max(0, Math.min(255, Math.round(((ev.clientX-r.left)/r.width)*255)));

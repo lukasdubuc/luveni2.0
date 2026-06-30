@@ -45,6 +45,16 @@ const GARMENT_COLORS = [
   { key: "forest", label: "Forest", hex: "#14532d" },
 ];
 
+// ── Fabric presets (CLO-3D style) — how the cloth catches light ───────────────
+type FabricKey = "cotton" | "denim" | "knit" | "silk" | "fleece";
+const FABRICS: Record<FabricKey, { label: string; roughness: number; sheen: number; sheenRoughness: number; metalness: number }> = {
+  cotton: { label: "Cotton", roughness: 0.82, sheen: 0.25, sheenRoughness: 0.6, metalness: 0.01 },
+  denim:  { label: "Denim",  roughness: 0.93, sheen: 0.12, sheenRoughness: 0.85, metalness: 0.0 },
+  knit:   { label: "Knit",   roughness: 0.88, sheen: 0.45, sheenRoughness: 0.4, metalness: 0.0 },
+  silk:   { label: "Silk",   roughness: 0.34, sheen: 0.9,  sheenRoughness: 0.18, metalness: 0.04 },
+  fleece: { label: "Fleece", roughness: 0.97, sheen: 0.6,  sheenRoughness: 0.5, metalness: 0.0 },
+};
+
 // ── Body calibration constants ─────────────────────────────────────────────────
 const BODY_H = 3.4;         // total body height in scene units
 const HEAD_R = 0.225;       // skull sphere radius
@@ -89,13 +99,16 @@ function Mannequin({
   staticDesign,
   isDark,
   showWire,
+  fabric,
 }: {
   color: string;
   liveCanvas?: HTMLCanvasElement | null;
   staticDesign?: string;
   isDark: boolean;
   showWire: boolean;
+  fabric?: FabricKey;
 }) {
+  const fab = FABRICS[fabric ?? "cotton"];
   // ── Live canvas texture ─────────────────────────────────────────────────────
   const liveTexRef = useRef<THREE.CanvasTexture | null>(null);
   useEffect(() => {
@@ -136,14 +149,14 @@ function Mannequin({
 
   const shirt = useMemo(() => new THREE.MeshPhysicalMaterial({
     color,
-    roughness: 0.82,
-    metalness: 0.01,
-    sheen: 0.25,
+    roughness: fab.roughness,
+    metalness: fab.metalness,
+    sheen: fab.sheen,
     sheenColor: new THREE.Color(color),
-    sheenRoughness: 0.6,
+    sheenRoughness: fab.sheenRoughness,
     side: THREE.DoubleSide,
     wireframe: showWire,
-  }), [color, showWire]);
+  }), [color, showWire, fab]);
 
   const designMat = useMemo(() => designTex ? new THREE.MeshBasicMaterial({
     map: designTex,
@@ -436,6 +449,7 @@ export default function Garment3DPreview({
   const [showWire, setShowWire] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
   const [envPreset, setEnvPreset] = useState<"studio" | "sunset" | "dawn">("studio");
+  const [fabric, setFabric] = useState<FabricKey>("cotton");
   const [tab, setTab] = useState<"3d" | "real">("3d"); // 3D first per requirements
   const [mockups, setMockups] = useState<string[] | null>(null);
   const [mockBusy, setMockBusy] = useState(false);
@@ -557,16 +571,16 @@ export default function Garment3DPreview({
           <Suspense fallback={null}>
             {HUMAN_GLB ? (
               <FigureBoundary fallback={
-                <Mannequin color={color} liveCanvas={liveCanvas} staticDesign={design} isDark={isDark} showWire={showWire} />
+                <Mannequin color={color} liveCanvas={liveCanvas} staticDesign={design} isDark={isDark} showWire={showWire} fabric={fabric} />
               }>
                 <Suspense fallback={
-                  <Mannequin color={color} liveCanvas={liveCanvas} staticDesign={design} isDark={isDark} showWire={showWire} />
+                  <Mannequin color={color} liveCanvas={liveCanvas} staticDesign={design} isDark={isDark} showWire={showWire} fabric={fabric} />
                 }>
                   <AvatarFigure url={HUMAN_GLB} liveCanvas={liveCanvas} staticDesign={design} />
                 </Suspense>
               </FigureBoundary>
             ) : (
-              <Mannequin color={color} liveCanvas={liveCanvas} staticDesign={design} isDark={isDark} showWire={showWire} />
+              <Mannequin color={color} liveCanvas={liveCanvas} staticDesign={design} isDark={isDark} showWire={showWire} fabric={fabric} />
             )}
             <Environment preset={envPreset} />
           </Suspense>
@@ -635,6 +649,16 @@ export default function Garment3DPreview({
             <button key={c.key} onClick={() => setColor(c.hex)} aria-label={c.label} title={c.label}
               className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${color === c.hex ? "border-white ring-2 ring-white/40 scale-110" : "border-transparent hover:border-white/40"}`}
               style={{ backgroundColor: c.hex }} />
+          ))}
+        </div>
+
+        {/* Fabric presets (CLO-3D) */}
+        <div className="flex gap-1 rounded-full bg-white/8 px-2 py-1.5 border border-white/10">
+          {(Object.keys(FABRICS) as FabricKey[]).map((f) => (
+            <button key={f} onClick={() => setFabric(f)} title={`${FABRICS[f].label} fabric`}
+              className={`px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest transition-colors ${fabric === f ? "bg-white text-black" : "text-white/50 hover:text-white"}`}>
+              {FABRICS[f].label}
+            </button>
           ))}
         </div>
 
