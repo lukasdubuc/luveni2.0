@@ -28,7 +28,9 @@ export type BlendMode =
   | "lighter" | "destination-over" | "destination-in" | "destination-out"
   | "destination-atop" | "source-in" | "source-out" | "source-atop"
   | "xor" | "copy";
-export type BrushType = "round" | "textured" | "ink" | "charcoal";
+export type BrushType =
+  | "round" | "textured" | "ink" | "charcoal"
+  | "pencil" | "airbrush" | "marker" | "spray" | "calligraphy" | "watercolor";
 
 export type StudioLayer = {
   id: string; type: "image" | "text" | "paint"; name: string; visible: boolean;
@@ -373,6 +375,14 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
   const lastPt = useRef<{ x: number; y: number } | null>(null);
   const painting = useRef(false);
 
+  // QuickShape: raw stroke points + the layer pixels at stroke start, so a
+  // held stroke can be cleaned up into a geometric primitive (Procreate-style).
+  const strokePts = useRef<{ x: number; y: number }[]>([]);
+  const strokeStartImg = useRef<ImageData | null>(null);
+  const holdTimer = useRef<any>(null);
+  const quickShapeId = useRef<string | null>(null);
+  const [quickShapeHint, setQuickShapeHint] = useState<string | null>(null);
+
   // Multi-Touch Gesture Tracker references
   const lastTouchRef = useRef<{ dist: number; angle: number; x: number; y: number } | null>(null);
 
@@ -513,9 +523,19 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
     if (tool === "brush" || tool === "eraser" || tool === "smudge") {
       const id = ensurePaintTarget(true);
       if (!id) { toast.error("Could not create a paint layer"); return; }
-      snapshotPaint(id); 
-      painting.current = true; 
+      snapshotPaint(id);
+      painting.current = true;
       lastPt.current = null;
+      // QuickShape: remember the layer pixels + raw points for this stroke.
+      strokePts.current = [{ x: p.x, y: p.y }];
+      quickShapeId.current = id;
+      if (tool === "brush") {
+        const sc = paintCanvases.current[id]?.getContext("2d");
+        try { strokeStartImg.current = sc ? sc.getImageData(0, 0, paintCanvases.current[id].width, paintCanvases.current[id].height) : null; }
+        catch { strokeStartImg.current = null; }
+      } else {
+        strokeStartImg.current = null;
+      }
       strokeTo(id, p.x, p.y, (e.evt as any).pressure || 0.5);
       return;
     }
@@ -575,6 +595,12 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
     if ((tool === "brush" || tool === "eraser" || tool === "smudge") && painting.current) {
       const id = layers.find((l) => l.id === selectedId)?.type === "paint" ? selectedId! : ensurePaintTarget();
       if (id) { strokeTo(id, p.x, p.y, (e.evt as any).pressure || 0.5); }
+      // QuickShape: record point and (re)arm the hold-to-snap timer.
+      if (tool === "brush" && strokeStartImg.current) {
+        strokePts.current.push({ x: p.x, y: p.y });
+        if (holdTimer.current) clearTimeout(holdTimer.current);
+        holdTimer.current = setTimeout(tryQuickShape, 550);
+      }
       return;
     }
     if (regionMode && drawing.current) { const s = drawing.current; setRegion({ x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), w: Math.abs(p.x - s.x), h: Math.abs(p.y - s.y) }); }
@@ -593,7 +619,15 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
       setTool("brush");
       return;
     }
-    if (painting.current) { painting.current = false; lastPt.current = null; return; }
+    if (painting.current) {
+      painting.current = false;
+      lastPt.current = null;
+      if (holdTimer.current) { clearTimeout(holdTimer.current); holdTimer.current = null; }
+      strokeStartImg.current = null;
+      strokePts.current = [];
+      quickShapeId.current = null;
+      return;
+    }
     if (regionMode && drawing.current && region) { finalizeRegionDirect(region); }
   };
 
@@ -695,8 +729,69 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
         ctx.globalAlpha = alpha * 0.25;
         ctx.fillRect(px + ox, py + oy, Math.max(1, r * 0.1), Math.max(1, r * 0.1));
       }
+    } else if (brushType === "pencil") {
+      // Graphite: hard-ish core + grainy speckle for tooth.
+      ctx.fillStyle = brushColor;
+      ctx.globalAlpha = alpha * 0.9;
+      ctx.beginPath(); ctx.arc(px, py, r * 0.78, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = alpha * 0.45;
+      const grains = Math.max(6, Math.floor(r * 1.4));
+      for (let i = 0; i < grains; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const d = Math.random() * r;
+        ctx.fillRect(px + Math.cos(a) * d, py + Math.sin(a) * d, 1, 1);
+      }
+    } else if (brushType === "airbrush") {
+      // Soft airbrush: wide feathered falloff, builds up on overlap.
+      const g = ctx.createRadialGradient(px, py, 0, px, py, r * 1.15);
+      g.addColorStop(0, brushColor + "66");
+      g.addColorStop(0.5, brushColor + "22");
+      g.addColorStop(1, brushColor + "00");
+      ctx.globalAlpha = alpha * 0.6;
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(px, py, r * 1.15, 0, Math.PI * 2); ctx.fill();
+    } else if (brushType === "marker") {
+      // Marker: flat opaque core with a translucent wet edge; multiply feel.
+      ctx.globalAlpha = alpha * 0.85;
+      ctx.fillStyle = brushColor;
+      ctx.beginPath(); ctx.arc(px, py, r * 0.92, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = alpha * 0.3;
+      ctx.beginPath(); ctx.arc(px, py, r * 1.08, 0, Math.PI * 2); ctx.fill();
+    } else if (brushType === "spray") {
+      // Spray paint: scattered dots within the radius.
+      ctx.fillStyle = brushColor;
+      const dots = Math.max(10, Math.floor(r * 3));
+      for (let i = 0; i < dots; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const d = Math.sqrt(Math.random()) * r * 1.2;
+        ctx.globalAlpha = alpha * (0.3 + Math.random() * 0.5);
+        const sr = Math.random() * 1.6 + 0.4;
+        ctx.beginPath(); ctx.arc(px + Math.cos(a) * d, py + Math.sin(a) * d, sr, 0, Math.PI * 2); ctx.fill();
+      }
+    } else if (brushType === "calligraphy") {
+      // Flat nib: an angled ellipse that gives thick/thin strokes by direction.
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = brushColor;
+      ctx.translate(px, py);
+      ctx.rotate(-Math.PI / 4);
+      ctx.scale(1, 0.32);
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+    } else if (brushType === "watercolor") {
+      // Watercolor: layered soft blobs with low alpha that bloom on overlap.
+      for (let i = 0; i < 4; i++) {
+        const ox = (Math.random() - 0.5) * r * 0.8;
+        const oy = (Math.random() - 0.5) * r * 0.8;
+        const br = r * (0.7 + Math.random() * 0.6);
+        const g = ctx.createRadialGradient(px + ox, py + oy, 0, px + ox, py + oy, br);
+        g.addColorStop(0, brushColor + "30");
+        g.addColorStop(0.7, brushColor + "18");
+        g.addColorStop(1, brushColor + "00");
+        ctx.globalAlpha = alpha * 0.5;
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(px + ox, py + oy, br, 0, Math.PI * 2); ctx.fill();
+      }
     }
-    
+
     ctx.restore();
   };
 
@@ -761,6 +856,97 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
     } else dab(id, tx, ty, pressure);
     lastPt.current = { x: tx, y: ty };
     redrawStage();
+  };
+
+  // ── QuickShape ──────────────────────────────────────────────────────────────
+  // Walk a list of points and stamp the brush along them at the normal spacing.
+  const stampPath = (id: string, pts: { x: number; y: number }[]) => {
+    if (pts.length < 2) return;
+    lastPt.current = null;
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      if (i === 0) { dab(id, p.x, p.y, 0.7); lastPt.current = { x: p.x, y: p.y }; continue; }
+      const last = lastPt.current!;
+      const dist = Math.hypot(p.x - last.x, p.y - last.y);
+      const step = Math.max(2, brushSize * 0.18);
+      const n = Math.ceil(dist / step);
+      for (let j = 1; j <= n; j++) dab(id, last.x + ((p.x - last.x) * j) / n, last.y + ((p.y - last.y) * j) / n, 0.7);
+      lastPt.current = { x: p.x, y: p.y };
+    }
+    redrawStage();
+  };
+
+  // Classify the raw stroke into line / ellipse / rectangle, returning clean points.
+  const recognizeShape = (raw: { x: number; y: number }[]): { kind: string; pts: { x: number; y: number }[] } | null => {
+    if (raw.length < 8) return null;
+    const xs = raw.map((p) => p.x), ys = raw.map((p) => p.y);
+    const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+    const bw = maxX - minX, bh = maxY - minY;
+    const diag = Math.hypot(bw, bh);
+    if (diag < 24) return null;
+    const A = raw[0], B = raw[raw.length - 1];
+    const endGap = Math.hypot(B.x - A.x, B.y - A.y);
+
+    // Path length
+    let pathLen = 0;
+    for (let i = 1; i < raw.length; i++) pathLen += Math.hypot(raw[i].x - raw[i - 1].x, raw[i].y - raw[i - 1].y);
+
+    // Straight line: endpoints span most of the path, low perpendicular deviation.
+    if (endGap > pathLen * 0.86 && endGap > diag * 0.7) {
+      return { kind: "line", pts: [A, B] };
+    }
+
+    const closed = endGap < diag * 0.28;
+    if (!closed) return null;
+
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+
+    // Rectangle vs ellipse: measure how well points hug the bbox edges.
+    let edgeHits = 0;
+    const tol = diag * 0.12;
+    for (const p of raw) {
+      const nearV = Math.abs(p.x - minX) < tol || Math.abs(p.x - maxX) < tol;
+      const nearH = Math.abs(p.y - minY) < tol || Math.abs(p.y - maxY) < tol;
+      if (nearV || nearH) edgeHits++;
+    }
+    const edgeRatio = edgeHits / raw.length;
+
+    // Ellipse: distance-to-center fits the bbox ellipse equation well.
+    const rx = bw / 2, ry = bh / 2;
+    let ellipseErr = 0;
+    for (const p of raw) {
+      const v = ((p.x - cx) / (rx || 1)) ** 2 + ((p.y - cy) / (ry || 1)) ** 2;
+      ellipseErr += Math.abs(v - 1);
+    }
+    ellipseErr /= raw.length;
+
+    if (edgeRatio > 0.82 && ellipseErr > 0.18) {
+      return { kind: "rectangle", pts: [
+        { x: minX, y: minY }, { x: maxX, y: minY }, { x: maxX, y: maxY }, { x: minX, y: maxY }, { x: minX, y: minY },
+      ] };
+    }
+    if (ellipseErr < 0.22) {
+      const pts: { x: number; y: number }[] = [];
+      for (let a = 0; a <= Math.PI * 2 + 0.01; a += Math.PI / 48) pts.push({ x: cx + Math.cos(a) * rx, y: cy + Math.sin(a) * ry });
+      return { kind: Math.abs(rx - ry) < diag * 0.06 ? "circle" : "ellipse", pts };
+    }
+    return null;
+  };
+
+  // Triggered when the pen is held still at the end of a stroke.
+  const tryQuickShape = () => {
+    const id = quickShapeId.current;
+    if (!id || !painting.current) return;
+    const shape = recognizeShape(strokePts.current);
+    if (!shape) return;
+    const c = paintCanvases.current[id];
+    if (!c || !strokeStartImg.current) return;
+    const ctx = c.getContext("2d")!;
+    // Restore the layer to its pre-stroke state, then stamp the clean shape.
+    ctx.putImageData(strokeStartImg.current, 0, 0);
+    stampPath(id, shape.pts);
+    setQuickShapeHint(shape.kind);
+    setTimeout(() => setQuickShapeHint(null), 1100);
   };
 
   const floodFill = (startX: number, startY: number) => {
@@ -1715,8 +1901,13 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
           {(tool === "brush" || tool === "eraser" || tool === "smudge") && (
             <div className="flex items-center gap-4 flex-wrap text-xs font-semibold animate-fade-in font-sans">
               <span className="text-[10px] opacity-50 uppercase tracking-widest animate-pulse text-indigo-500 font-bold">Brush active</span>
-              <div className="flex bg-neutral-200 dark:bg-neutral-800 p-0.5 rounded-full border border-neutral-350 dark:border-neutral-850">
-                {(["round", "textured", "ink", "charcoal"] as const).map((b) => (
+              {quickShapeHint && (
+                <span className="text-[10px] uppercase tracking-widest font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                  ⊹ {quickShapeHint} snapped
+                </span>
+              )}
+              <div className="flex flex-wrap bg-neutral-200 dark:bg-neutral-800 p-0.5 rounded-full border border-neutral-350 dark:border-neutral-850 max-w-[420px]">
+                {(["round", "pencil", "ink", "marker", "airbrush", "spray", "charcoal", "calligraphy", "watercolor", "textured"] as const).map((b) => (
                   <button key={b} onClick={() => setBrushType(b)} className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${brushType === b ? "bg-[#007aff] text-white" : "text-neutral-500"}`}>
                     {b}
                   </button>
