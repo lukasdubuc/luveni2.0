@@ -97,7 +97,11 @@ function useHtmlImage(src?: string) {
     if (!src) { setImg(null); return; }
     const im = new window.Image();
     im.crossOrigin = "anonymous";
-    im.src = src.includes("?") ? `${src}&cors=1` : `${src}?cors=1`;
+    if (src.startsWith("data:")) {
+      im.src = src;
+    } else {
+      im.src = src.includes("?") ? `${src}&cors=1` : `${src}?cors=1`;
+    }
     im.onload = () => setImg(im);
     im.onerror = () => setImg(null);
   }, [src]);
@@ -165,7 +169,7 @@ function PaintNode({ layer, canvas }: any) {
 
 export default function StudioEditor({ projectId: initialProjectId, initialCanvas, artboardW: artboardWProp, artboardH: artboardHProp, templateKey: templateKeyProp, templateImage: templateImageProp, canvasKind: canvasKindProp, projectName: projectNameProp, priceCents: priceCentsProp, printArea: printAreaProp, onClose, isDark: isDarkProp }: Props) {
   
-  // Navigation: "gallery" | "editor"
+  // Navigation state between Gallery and Editor
   const [currentView, setCurrentView] = useState<"gallery" | "editor">("editor");
   const [showPresetDropdown, setShowPresetDropdown] = useState(false);
 
@@ -360,7 +364,11 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
     if (l.src && !loadedPaint.current.has(l.id)) {
       loadedPaint.current.add(l.id);
       const im = new window.Image(); im.crossOrigin = "anonymous"; 
-      im.src = l.src.includes("?") ? `${src => src}&cors=1` : `${l.src}?cors=1`;
+      if (l.src.startsWith("data:")) {
+        im.src = l.src;
+      } else {
+        im.src = l.src.includes("?") ? `${l.src}&cors=1` : `${l.src}?cors=1`;
+      }
       im.onload = () => { c!.getContext("2d")!.drawImage(im, 0, 0); redrawStage(); };
     }
     return c;
@@ -410,29 +418,71 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
     }
   }, [redrawStage]);
 
-  // Gestures system: multi-finger mapping on standard target elements
-  const handleStageTouchStart = (e: any) => {
-    const numTouches = e.evt?.touches?.length || 0;
-    if (numTouches === 2) {
-      handleUndo();
-      toast("Undo gesture registered", { duration: 900 });
-    } else if (numTouches === 3) {
-      handleRedo();
-      toast("Redo gesture registered", { duration: 900 });
-    } else if (numTouches === 4) {
-      setFullScreenCanvas(prev => !prev);
-      toast(fullScreenCanvas ? "Interface revealed" : "Clean canvas activated", { duration: 900 });
+  // Unified stage interaction pointer events targeting Kindle, Android and iOS
+  const handlePointerDown = (e: any) => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    
+    // Multi-touch navigation initialization
+    const touches = e.evt?.touches;
+    if (touches && touches.length >= 2) {
+      const t1 = touches[0];
+      const t2 = touches[1];
+      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      const angle = Math.atan2(t2.clientY - t1.clientY, t2.clientX - t1.clientX) * 180 / Math.PI;
+      const cx = (t1.clientX + t2.clientX) / 2;
+      const cy = (t1.clientY + t2.clientY) / 2;
+      lastTouchRef.current = { dist, angle, x: cx, y: cy };
+      painting.current = false;
+      return;
+    }
+
+    const p = getArtboardPointerPos();
+    if (!p) return;
+
+    if (tool === "eyedropper") {
+      sampleColorAtPos(p);
+      setEyedropperActive(true);
+      setEyedropperActivePos(stage.getPointerPosition() || { x: 0, y: 0 });
+      return;
+    }
+    if (tool === "lasso") {
+      setLassoPoints([p]);
+      return;
+    }
+    if (tool === "fill") {
+      floodFill(p.x, p.y);
+      return;
+    }
+    if (tool === "brush" || tool === "eraser" || tool === "smudge") {
+      const id = ensurePaintTarget(true);
+      if (!id) { toast.error("Could not create a paint layer"); return; }
+      snapshotPaint(id); 
+      painting.current = true; 
+      lastPt.current = null;
+      strokeTo(id, p.x, p.y, (e.evt as any).pressure || 0.5);
+      return;
+    }
+    if (regionMode) { 
+      drawing.current = { x: p.x, y: p.y }; 
+      setRegion({ x: p.x, y: p.y, w: 0, h: 0 }); 
+      return; 
+    }
+    if (e.target === stage || (e.target as any).attrs?.name === "bg") {
+      setSelectedId(null);
     }
   };
 
-  // Inertia-free multi-touch gestures engine (supports continuous panning, scaling and rotation on tablets)
-  const handleStageTouchMove = (e: any) => {
+  const handlePointerMove = (e: any) => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    // Handle touch gesture panning/zooming if 2 fingers are down
     const touches = e.evt?.touches;
     if (touches && touches.length === 2) {
       e.evt.preventDefault();
       const t1 = touches[0];
       const t2 = touches[1];
-      
       const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
       const angle = Math.atan2(t2.clientY - t1.clientY, t2.clientX - t1.clientX) * 180 / Math.PI;
       const cx = (t1.clientX + t2.clientX) / 2;
@@ -448,13 +498,56 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
         setCanvasRotation((r) => (r + deltaAngle) % 360);
         setPanOffset((p) => ({ x: p.x + deltaX, y: p.y + deltaY }));
       }
-
       lastTouchRef.current = { dist, angle, x: cx, y: cy };
+      return;
+    }
+
+    const p = getArtboardPointerPos();
+    if (!p) return;
+
+    if (tool === "lasso" && e.evt.buttons === 1) {
+      setLassoPoints((pts) => [...pts, p]);
+      return;
+    }
+    if (tool === "eyedropper") {
+      if (e.evt.buttons === 1) {
+        sampleColorAtPos(p);
+        setEyedropperActivePos(stage.getPointerPosition() || { x: 0, y: 0 });
+      }
+      return;
+    }
+    if ((tool === "brush" || tool === "eraser" || tool === "smudge") && painting.current) {
+      const id = layers.find((l) => l.id === selectedId)?.type === "paint" ? selectedId! : ensurePaintTarget();
+      if (id) { strokeTo(id, p.x, p.y, (e.evt as any).pressure || 0.5); }
+      return;
+    }
+    if (regionMode && drawing.current) { 
+      const s = drawing.current; 
+      setRegion({ x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), w: Math.abs(p.x - s.x), h: Math.abs(p.y - s.y) }); 
     }
   };
 
-  const handleStageTouchEnd = () => {
+  const handlePointerUp = () => {
     lastTouchRef.current = null;
+    if (tool === "lasso") {
+      if (lassoPoints.length > 2) {
+        setLassoPoints((pts) => [...pts, pts[0]]);
+      }
+      return;
+    }
+    if (tool === "eyedropper") {
+      setEyedropperActive(false);
+      setTool("brush");
+      return;
+    }
+    if (painting.current) { 
+      painting.current = false; 
+      lastPt.current = null; 
+      return; 
+    }
+    if (regionMode && drawing.current && region) { 
+      finalizeRegionDirect(region); 
+    }
   };
 
   // Convert raw client coordinate vectors to dynamic artboard offsets through inverse matrices
@@ -721,55 +814,6 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
     }
   };
 
-  const aiNewLayer = async () => {
-    if (aiPrompt.trim().length < 3) { toast.error("Prompt too short"); return; }
-    setAiBusy(true);
-    try { const url = await runAi({ prompt: aiPrompt.trim(), width: 1024, height: 1024, persist: true, style: aiStyle }); if (url) { addImageAtDirect(url, aiPrompt.slice(0, 24)); setAiPrompt(""); toast.success("AI layer added."); } }
-    finally { setAiBusy(false); }
-  };
-
-  const aiRegenerateSelected = async () => {
-    const sel = layers.find((l) => l.id === selectedId);
-    if (!sel || sel.type !== "image" || !sel.src) { toast.error("Select an image layer first"); return; }
-    if (aiPrompt.trim().length < 3) { toast.error("Enter a prompt"); return; }
-    setAiBusy(true);
-    try { const url = await runAi({ prompt: aiPrompt.trim(), image: sel.src, width: 1024, height: 1024, persist: false }); if (url) { patchLayer(sel.id, { src: url }); setAiPrompt(""); toast.success("Layer reimagined."); } }
-    finally { setAiBusy(false); }
-  };
-
-  // Convert Lasso coordinates to set a generation mask region
-  const handleLassoRegionAi = async () => {
-    if (lassoPoints.length < 3) {
-      toast.error("Trace a lasso region before generating.");
-      return;
-    }
-    if (aiPrompt.trim().length < 3) {
-      toast.error("Describe the image to generate inside your lasso selection.");
-      return;
-    }
-    setAiBusy(true);
-    try {
-      const xs = lassoPoints.map(p => p.x);
-      const ys = lassoPoints.map(p => p.y);
-      const minX = Math.max(0, Math.min(...xs)), maxX = Math.min(artboardW, Math.max(...xs));
-      const minY = Math.max(0, Math.min(...ys)), maxY = Math.min(artboardH, Math.max(...ys));
-      const w = maxX - minX;
-      const h = maxY - minY;
-      
-      const longest = Math.max(w, h); const k = Math.min(1, 1024 / longest);
-      const gw = Math.round(w * k); const gh = Math.round(h * k);
-      const url = await runAi({ prompt: aiPrompt.trim(), width: gw, height: gh, persist: false, style: aiStyle });
-      if (url) {
-        addImageAtDirect(url, aiPrompt.slice(0, 24), { x: minX, y: minY, w, h });
-        setAiPrompt("");
-        setLassoPoints([]);
-        toast.success("Generated directly into selection.");
-      }
-    } finally {
-      setAiBusy(false);
-    }
-  };
-
   const finalizeRegionDirect = async (r: { x: number; y: number; w: number; h: number }) => {
     if (r.w < 40 || r.h < 40) { setRegion(null); return; }
     if (aiPrompt.trim().length < 3) { toast.error("Type a prompt first"); setRegion(null); return; }
@@ -778,16 +822,8 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
       const longest = Math.max(r.w, r.h); const k = Math.min(1, 1024 / longest);
       const gw = Math.round(r.w * k); const gh = Math.round(r.h * k);
       const url = await runAi({ prompt: aiPrompt.trim(), width: gw, height: gh, persist: false, style: aiStyle });
-      if (url) {
-        addImageAtDirect(url, aiPrompt.slice(0, 24), r);
-        setAiPrompt("");
-        toast.success("Generated into region.");
-      }
-    } finally {
-      setAiBusy(false);
-      setRegion(null);
-      setRegionMode(false);
-    }
+      if (url) { addImageAtDirect(url, aiPrompt.slice(0, 24), r); setAiPrompt(""); toast.success("Generated into region."); }
+    } finally { setAiBusy(false); setRegion(null); setRegionMode(false); }
   };
 
   const addImageAtDirect = (src: string, name: string, box?: { x: number; y: number; w: number; h: number }, blend?: BlendMode) => {
@@ -843,6 +879,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
 
   // Drag handler for custom vertical track pill sliders (matches visual feel of native iPadOS HUD element)
   const handleSliderDrag = (e: React.PointerEvent<HTMLDivElement>, type: "size" | "opacity") => {
+    e.currentTarget.setPointerCapture(e.pointerId);
     const rect = e.currentTarget.getBoundingClientRect();
     const calculateValue = (clientY: number) => {
       const relativeY = clientY - rect.top;
@@ -858,7 +895,10 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
       calculateValue(moveEvent.clientY);
     };
     
-    const onPointerUp = () => {
+    const onPointerUp = (upEvent: PointerEvent) => {
+      try {
+        (e.currentTarget as any).releasePointerCapture(upEvent.pointerId);
+      } catch {}
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
     };
@@ -892,6 +932,22 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
     };
     return `#${f(0)}${f(8)}${f(4)}`;
   };
+
+  // Fixed padding and center allocations
+  useEffect(() => {
+    const fit = () => {
+      const isMobile = window.innerWidth < 1024;
+      const padW = (isMobile || fullScreenCanvas) ? 0 : 320; 
+      const padH = 56; 
+      const availW = Math.max(280, window.innerWidth - padW);
+      const availH = Math.max(280, window.innerHeight - padH);
+      
+      setWorkspaceSize({ w: availW, h: availH });
+      setFitScale(Math.min(availW / artboardW, availH / artboardH, 1));
+    };
+    fit(); window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [artboardW, artboardH, fullScreenCanvas]);
 
   return (
     <div className={`fixed inset-0 z-50 flex flex-col select-none overflow-hidden transition-colors duration-200 touch-none ${
@@ -1038,7 +1094,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
             {/* Paint brush */}
             <button 
               onClick={() => { setTool("brush"); setRegionMode(false); }} 
-              className={`p-2 rounded-lg transition-all ${tool === "brush" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-[#1c1c1e] dark:hover:text-[#efeff1]"}`}
+              className={`p-2 rounded-lg transition-all ${tool === "brush" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-neutral-100 dark:hover:text-[#efeff1]"}`}
               title="Paint Tool"
             >
               <Paintbrush size={18} />
@@ -1047,7 +1103,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
             {/* Smudge tool */}
             <button 
               onClick={() => { setTool("smudge"); setRegionMode(false); }} 
-              className={`p-2 rounded-lg transition-all ${tool === "smudge" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-[#1c1c1e] dark:hover:text-[#efeff1]"}`}
+              className={`p-2 rounded-lg transition-all ${tool === "smudge" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-neutral-100 dark:hover:text-[#efeff1]"}`}
               title="Smudge Tool"
             >
               <Hand size={18} />
@@ -1056,7 +1112,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
             {/* Eraser */}
             <button 
               onClick={() => { setTool("eraser"); setRegionMode(false); }} 
-              className={`p-2 rounded-lg transition-all ${tool === "eraser" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-[#1c1c1e] dark:hover:text-[#efeff1]"}`}
+              className={`p-2 rounded-lg transition-all ${tool === "eraser" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-neutral-100 dark:hover:text-[#efeff1]"}`}
               title="Eraser Tool"
             >
               <Eraser size={18} />
@@ -1065,13 +1121,13 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
             {/* Paint Bucket fill */}
             <button 
               onClick={() => { setTool("fill"); setRegionMode(false); }} 
-              className={`p-2 rounded-lg transition-all ${tool === "fill" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-[#1c1c1e] dark:hover:text-[#efeff1]"}`}
+              className={`p-2 rounded-lg transition-all ${tool === "fill" ? "text-[#007aff] bg-[#007aff]/10" : "text-neutral-400 hover:text-neutral-100 dark:hover:text-[#efeff1]"}`}
               title="Flood Fill"
             >
               <PaintBucket size={18} />
             </button>
 
-            <span className="w-px h-5 bg-neutral-300 dark:bg-neutral-850 mx-1" />
+            <span className="w-px h-5 bg-neutral-300 dark:bg-neutral-800 mx-1" />
 
             {/* Layers panel toggler */}
             <button 
@@ -1148,18 +1204,18 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
             <span className="text-[8px] font-bold opacity-45 uppercase tracking-wider text-neutral-500 select-none">Opac</span>
             <div 
               onPointerDown={(e) => handleSliderDrag(e, "opacity")}
-              className="h-32 w-5 bg-neutral-200/50 dark:bg-neutral-900/50 backdrop-blur-md rounded-full relative flex items-center justify-center overflow-hidden border border-[#1c1c1e]/10 shadow-lg cursor-ns-resize touch-none"
+              className="h-32 w-5 bg-neutral-200/50 dark:bg-neutral-900/50 backdrop-blur-md rounded-full relative flex items-center justify-center overflow-hidden border border-neutral-350/10 shadow-lg cursor-ns-resize touch-none"
             >
               <div 
                 className="absolute bottom-0 left-0 right-0 bg-[#007aff]/85 pointer-events-none transition-all duration-75"
                 style={{ height: `${brushOpacity * 100}%` }}
               />
               <div 
-                className="absolute left-0 right-0 h-1 bg-white border border-[#1c1c1e] pointer-events-none"
+                className="absolute left-0 right-0 h-1 bg-white border border-neutral-400 pointer-events-none"
                 style={{ bottom: `calc(${brushOpacity * 100}% - 2px)` }}
               />
             </div>
-            <span className="text-[9px] font-semibold text-[#8e8e93] tabular-nums">{Math.round(brushOpacity * 100)}%</span>
+            <span className="text-[9px] font-semibold text-neutral-400 dark:text-neutral-500 tabular-nums">{Math.round(brushOpacity * 100)}%</span>
           </div>
         </div>
       )}
@@ -1168,15 +1224,15 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
          CONTEXT-SENSITIVE HORIZONTAL TWEAK BAR (Always visible under header)
          ───────────────────────────────────────────────────────────── */}
       {currentView === "editor" && !fullScreenCanvas && (
-        <div className={`px-6 py-2 border-[#1c1c1e] border-b shrink-0 flex items-center justify-between gap-3 flex-wrap ${isDark ? "bg-[#18181b] border-neutral-900" : "bg-[#f4f5f7] border-neutral-200"}`}>
+        <div className={`px-6 py-2 border-b shrink-0 flex items-center justify-between gap-3 flex-wrap ${isDark ? "bg-[#18181b] border-neutral-900" : "bg-[#f4f5f7] border-neutral-200"}`}>
           
           {/* Brush/Eraser Settings */}
           {(tool === "brush" || tool === "eraser" || tool === "smudge") && (
             <div className="flex items-center gap-4 flex-wrap text-xs font-semibold animate-fade-in">
               <span className="text-[10px] opacity-50 uppercase tracking-widest">Brush tip</span>
-              <div className="flex bg-[#1c1c1e] p-0.5 rounded-full border border-neutral-850">
+              <div className="flex bg-neutral-200 dark:bg-neutral-800 p-0.5 rounded-full border border-[#1c1c1e]/15">
                 {(["round", "textured", "ink", "charcoal"] as const).map((b) => (
-                  <button key={b} onClick={() => setBrushType(b)} className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${brushType === b ? "bg-[#007aff] text-white" : "text-[#8e8e93]"}`}>
+                  <button key={b} onClick={() => setBrushType(b)} className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${brushType === b ? "bg-[#007aff] text-white" : "text-neutral-500"}`}>
                     {b}
                   </button>
                 ))}
@@ -1220,7 +1276,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                   </button>
                 </div>
               ) : (
-                <span className="text-[#8e8e93] font-normal animate-pulse">Freehand draw a loop. Strokes clip within lasso.</span>
+                <span className="text-neutral-400 font-normal animate-pulse">Freehand draw a loop. Strokes clip within lasso.</span>
               )}
             </div>
           )}
@@ -1240,7 +1296,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
           <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 select-none">Selection Modes</span>
           <button 
             onClick={() => setSelectionModeType("freehand")} 
-            className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-full transition-all ${selectionModeType === "freehand" ? "bg-[#007aff] text-white" : "text-[#8e8e93]"}`}
+            className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-full transition-all ${selectionModeType === "freehand" ? "bg-[#007aff] text-white" : "text-neutral-500"}`}
           >
             Freehand (Lasso)
           </button>
@@ -1249,7 +1305,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
               setSelectionModeType("rectangle");
               setRegionMode(true);
             }} 
-            className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-full transition-all ${selectionModeType === "rectangle" && regionMode ? "bg-[#007aff] text-white" : "text-[#8e8e93]"}`}
+            className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-full transition-all ${selectionModeType === "rectangle" && regionMode ? "bg-[#007aff] text-white" : "text-neutral-500"}`}
           >
             Rectangle
           </button>
@@ -1282,22 +1338,22 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
           <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 select-none">Scale</span>
           <button 
             onClick={() => setUniformScaling(true)} 
-            className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-full transition-all ${uniformScaling ? "bg-[#007aff] text-white" : "text-[#8e8e93]"}`}
+            className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-full transition-all ${uniformScaling ? "bg-[#007aff] text-white" : "text-neutral-500"}`}
           >
             Uniform
           </button>
           <button 
             onClick={() => setUniformScaling(false)} 
-            className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-full transition-all ${!uniformScaling ? "bg-[#007aff] text-white" : "text-[#8e8e93]"}`}
+            className={`px-3 py-1 text-[9px] font-semibold uppercase tracking-wider rounded-full transition-all ${!uniformScaling ? "bg-[#007aff] text-white" : "text-neutral-500"}`}
           >
             Freeform
           </button>
 
-          <span className="w-px h-5 bg-[#1c1c1e] dark:bg-neutral-800" />
+          <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
 
           <button onClick={() => { patchLayer(selectedLayer.id, { rotation: (selectedLayer.rotation + 45) % 360 }); }} className="p-1 hover:bg-[#1c1c1e] dark:hover:bg-neutral-800 rounded text-neutral-400"><RefreshCcw size={13} /></button>
           <button onClick={() => { const sx = nodeRefs.current[selectedLayer.id]?.scaleX() || 1; patchLayer(selectedLayer.id, { x: selectedLayer.x + selectedLayer.width! * sx, width: selectedLayer.width, scaleX: -sx }); }} className="p-1 hover:bg-[#1c1c1e] dark:hover:bg-[#09090b] rounded text-neutral-400"><FlipHorizontal2 size={13} /></button>
-          <button onClick={() => { const sy = nodeRefs.current[selectedLayer.id]?.scaleY() || 1; patchLayer(selectedLayer.id, { y: selectedLayer.y + selectedLayer.height! * sy, height: selectedLayer.height, scaleY: -sy }); }} className="p-1 hover:bg-[#1c1c1e] dark:hover:bg-neutral-800 rounded text-neutral-400"><FlipVertical2 size={13} /></button>
+          <button onClick={() => { const sy = nodeRefs.current[selectedLayer.id]?.scaleY() || 1; patchLayer(selectedLayer.id, { y: selectedLayer.y + selectedLayer.height! * sy, height: selectedLayer.height, scaleY: -sy }); }} className="p-1 hover:bg-[#1c1c1e] dark:hover:bg-[#09090b] rounded text-neutral-400"><FlipVertical2 size={13} /></button>
           
           <span className="w-px h-5 bg-[#1c1c1e] dark:bg-neutral-800" />
 
@@ -1312,7 +1368,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
         <div className="absolute inset-0 z-[100] bg-transparent" onClick={() => setActivePopover("none")}>
           <div 
             onClick={(e) => e.stopPropagation()}
-            className={`absolute top-20 rounded-[24px] border p-6 max-w-[345px] w-full shadow-2xl transition-all duration-150 animate-fade-in ${
+            className={`absolute top-28 rounded-[24px] border p-6 max-w-[345px] w-full shadow-2xl transition-all duration-150 animate-fade-in ${
               activePopover === "colors" || activePopover === "layers" ? "right-6" : "left-6"
             } ${isDark ? "bg-[#1c1c1e] border-neutral-900 text-neutral-100" : "bg-white border-neutral-200 text-[#1c1c1e]"}`}
           >
@@ -1322,7 +1378,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
             {/* Actions Popover (Tabs match iPad Wrench options) */}
             {activePopover === "actions" && (
               <div className="space-y-4 font-sans">
-                <div className="flex border-[#1c1c1e] dark:border-neutral-850 pb-2 mb-2">
+                <div className="flex border-b border-neutral-200 dark:border-[#1c1c1e] pb-2 mb-2">
                   {["add", "canvas", "share", "prefs"].map((tab) => (
                     <button
                       key={tab}
@@ -1361,17 +1417,17 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                 {/* CANVAS TAB */}
                 {activePopoverTab === "canvas" && (
                   <div className="space-y-3 animate-fade-in">
-                    <p className="text-[10px] uppercase font-bold tracking-widest text-[#8e8e93]">Sandbox Actions</p>
-                    <button onClick={() => { open3d(); setActivePopover("none"); }} className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
+                    <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400 font-mono">Sandbox Actions</p>
+                    <button onClick={open3d} className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors border border-[#1c1c1e] dark:border-neutral-850">
                       <span className="flex items-center gap-2.5"><Box size={14} /> 3D Garment Sandbox</span>
                       <span className="text-[8px] bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-full font-bold uppercase">3D</span>
                     </button>
                     {product?.mfr === "printful" && (
-                      <button onClick={() => { setEdmOpen(true); setActivePopover("none"); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
+                      <button onClick={() => setEdmOpen(true)} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
                         <Wand2 size={14} /> Printful Creator Suite
                       </button>
                     )}
-                    <span className="block h-px bg-neutral-200 dark:bg-neutral-800" />
+                    <span className="block h-px bg-[#1c1c1e] dark:bg-neutral-800" />
                     <div className="flex items-center justify-between text-xs">
                       <span className="opacity-60 font-semibold">Active Symmetry Guide</span>
                       <button onClick={() => setSymmetry((s) => (s === "off" ? "v" : s === "v" ? "h" : "off"))} className="font-bold text-[#007aff] hover:underline uppercase text-[11px]">
@@ -1386,14 +1442,14 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                   <div className="space-y-3 animate-fade-in">
                     <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Export Options</p>
                     <div className="grid grid-cols-2 gap-2">
-                      <button onClick={exportPng} className="flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-bold border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800">
+                      <button onClick={exportPng} className="flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-bold border border-[#1c1c1e] dark:border-neutral-700 hover:bg-[#1c1c1e] dark:hover:bg-neutral-800">
                         <Download size={13} /> Export PNG
                       </button>
-                      <button onClick={save} disabled={saving} className="flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-bold border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800">
+                      <button onClick={save} disabled={saving} className="flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-bold border border-[#1c1c1e] dark:border-neutral-700 hover:bg-[#1c1c1e] dark:hover:bg-neutral-800">
                         {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save State
                       </button>
                     </div>
-                    <button onClick={publish} disabled={publishing} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold uppercase bg-[#007aff] text-white hover:bg-[#005bb5]">
+                    <button onClick={publish} disabled={publishing} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold uppercase bg-[#007aff] text-white hover:bg-blue-600">
                       {publishing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} Publish Design
                     </button>
                   </div>
@@ -1445,7 +1501,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                       />
                     </div>
                     {!product?.id && (
-                      <button onClick={() => { setMatchOpen(true); setActivePopover("none"); }} className="w-full py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-[#007aff] font-bold rounded-lg transition-colors flex items-center justify-center gap-1 text-[11px] uppercase tracking-wider border border-indigo-500/20">
+                      <button onClick={() => { setMatchOpen(true); setActivePopover("none"); }} className="w-full py-2 bg-indigo-500/10 hover:bg-[#1c1c1e] text-[#007aff] font-bold rounded-lg transition-colors flex items-center justify-center gap-1 text-[11px] uppercase tracking-wider border border-indigo-500/20">
                         <Shirt size={13} /> Open Store Blank Matcher
                       </button>
                     )}
@@ -1486,7 +1542,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                     value={aiPrompt} 
                     onChange={(e) => setAiPrompt(e.target.value)}
                     placeholder="Describe design layers or lasso regions to generate..."
-                    className="w-full h-16 bg-[#18181b] border-0 rounded-xl p-3 text-[10px] focus:outline-none focus:ring-1 focus:ring-indigo-500 text-neutral-200 font-mono border-neutral-850" 
+                    className="w-full h-16 bg-[#1c1c1e] border-0 rounded-xl p-3 text-[10px] focus:outline-none focus:ring-1 focus:ring-indigo-500 text-neutral-200 font-mono" 
                   />
                   <div className="flex gap-2">
                     {lassoPoints.length >= 3 ? (
@@ -1494,7 +1550,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                         {aiBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Generate Into Lasso
                       </button>
                     ) : (
-                      <button onClick={aiNewLayer} disabled={aiBusy} className="flex-1 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500 text-white hover:bg-indigo-600 flex items-center justify-center gap-1 font-sans">
+                      <button onClick={aiNewLayer} disabled={aiBusy} className="flex-1 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#007aff] text-white hover:bg-[#005bb5] flex items-center justify-center gap-1 font-sans">
                         {aiBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Generate Layer
                       </button>
                     )}
@@ -1524,7 +1580,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                       className={`flex flex-col p-2.5 rounded-xl border cursor-pointer transition-colors relative ${
                         selectedId === l.id 
                           ? "bg-indigo-50/70 border-indigo-100 dark:bg-[#2c2c2e] dark:border-neutral-700" 
-                          : "border-transparent hover:bg-neutral-150 dark:hover:bg-neutral-850"
+                          : "border-transparent hover:bg-neutral-150 dark:hover:bg-[#1a1a1c]"
                       }`}
                     >
                       <div className="flex items-center gap-2">
@@ -1572,10 +1628,10 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
 
                           {l.type === "text" && (
                             <div className="space-y-1.5 mt-1 pt-1 border-t border-[#1c1c1e] dark:border-neutral-800">
-                              <input value={l.text} onChange={(e) => patchLayer(l.id, { text: e.target.value })} className="w-full text-[10px] bg-transparent border rounded p-1 text-neutral-200" />
+                              <input value={l.text} onChange={(e) => patchLayer(l.id, { text: e.target.value })} className="w-full text-[10px] bg-transparent border rounded p-1 text-neutral-200 border-neutral-850" />
                               <div className="flex justify-between items-center">
                                 <input type="color" value={l.fill} onChange={(e) => patchLayer(l.id, { fill: e.target.value })} className="w-5 h-5 rounded cursor-pointer" />
-                                <input type="number" value={Math.round(l.fontSize || 0)} onChange={(e) => patchLayer(l.id, { fontSize: parseInt(e.target.value) || 48 })} className="w-12 bg-transparent border rounded text-center text-neutral-200" />
+                                <input type="number" value={Math.round(l.fontSize || 0)} onChange={(e) => patchLayer(l.id, { fontSize: parseInt(e.target.value) || 48 })} className="w-12 bg-transparent border rounded text-center text-neutral-200 border-neutral-850" />
                               </div>
                             </div>
                           )}
@@ -1606,7 +1662,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                       onClick={() => setColorSelectorTab(t as any)}
                       className={`flex-1 text-center py-1 transition-all ${
                         colorSelectorTab === t 
-                          ? "text-[#007aff] border-[#007aff]" 
+                          ? "text-[#007aff] border-b-2 border-[#007aff]" 
                           : "text-[#8e8e93] hover:text-[#007aff]"
                       }`}
                     >
@@ -1617,11 +1673,11 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
 
                 {/* COLOR DISC TAB */}
                 {colorSelectorTab === "disc" && (
-                  <div className="space-y-3 animate-fade-in flex flex-col items-center">
-                    <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400 font-mono">Interactive Disc</p>
+                  <div className="space-y-3 animate-fade-in flex flex-col items-center font-mono">
+                    <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">Interactive Disc</p>
                     
                     {/* High-fidelity color picker circular disk */}
-                    <div className="relative w-44 h-44 rounded-full border border-neutral-350 dark:border-neutral-850 overflow-hidden shadow-inner flex items-center justify-center">
+                    <div className="relative w-44 h-44 rounded-full border border-[#1c1c1e] dark:border-neutral-850 overflow-hidden shadow-inner flex items-center justify-center">
                       <div 
                         onPointerDown={(e) => {
                           const rect = e.currentTarget.getBoundingClientRect();
@@ -1642,7 +1698,7 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                         }}
                       />
                       <div className="w-24 h-24 rounded-full bg-white dark:bg-[#1c1c1e] z-10 border border-[#1c1c1e] dark:border-neutral-800 relative flex items-center justify-center">
-                        <div className="w-16 h-16 rounded-full border border-[#1c1c1e] dark:border-neutral-800" style={{ backgroundColor: brushColor }} />
+                        <div className="w-16 h-16 rounded-full border border-[#1c1c1e] dark:border-[#1c1c1e]" style={{ backgroundColor: brushColor }} />
                       </div>
                     </div>
                   </div>
@@ -1699,28 +1755,29 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-         MAIN DIGITAL ARTWORK VIEWPORT (Supports Rotational & Gesture Offsets)
+         MAIN DIGITAL ARTWORK VIEWPORT (Centered & Formatted Container)
          ───────────────────────────────────────────────────────────── */}
       {currentView === "editor" && (
-        <div className="flex-1 flex overflow-hidden relative">
+        <div className="flex-1 flex items-center justify-center relative overflow-hidden bg-black select-none h-full w-full">
           <div 
             ref={scrollOuterRef} 
-            className="flex-1 overflow-auto p-4 min-h-[380px] canvas-scroll-container bg-[radial-gradient(ellipse_at_center,#18181a_0%,#09090b_65%,#000000_100%)] select-none"
+            className="w-full h-full flex items-center justify-center overflow-hidden relative canvas-scroll-container"
+            style={{ touchAction: 'none' }}
           >
+            {/* Standard Flex alignment centering wrapping template dimensions */}
             <div 
-              className="relative block"
+              className="relative flex items-center justify-center select-none"
               style={{
-                width: `${Math.max(workspaceSize.w, artboardW * scale)}px`,
-                height: `${Math.max(workspaceSize.h, artboardH * scale)}px`,
+                width: `${workspaceSize.w}px`,
+                height: `${workspaceSize.h}px`,
               }}
             >
               <div 
-                className="absolute rounded-[24px] overflow-hidden shadow-2xl border border-neutral-850 transition-transform duration-75"
+                className="absolute rounded-[24px] overflow-hidden shadow-2xl border border-neutral-850 transition-transform duration-75 flex items-center justify-center"
                 style={{
-                  left: `${Math.max(0, (workspaceSize.w - artboardW * scale) / 2) + panOffset.x}px`,
-                  top: `${Math.max(0, (workspaceSize.h - artboardH * scale) / 2) + panOffset.y}px`,
                   width: `${artboardW * scale}px`,
                   height: `${artboardH * scale}px`,
+                  transform: `translate3d(${panOffset.x}px, ${panOffset.y}px, 0)`,
                   backgroundColor: canvasKind === "canvas" ? "#ffffff" : "transparent"
                 }}
               >
@@ -1728,77 +1785,11 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
                   ref={stageRef}
                   width={artboardW * scale} height={artboardH * scale} scaleX={scale} scaleY={scale}
                   style={{ cursor: tool === "brush" ? "crosshair" : tool === "eraser" ? "cell" : tool === "lasso" ? "crosshair" : "default" }}
-                  onTouchStart={handleStageTouchStart}
-                  onTouchMove={handleStageTouchMove}
-                  onTouchEnd={handleStageTouchEnd}
-                  onMouseDown={(e) => {
-                    const p = getArtboardPointerPos();
-                    if (!p) return;
-
-                    if (tool === "eyedropper") {
-                      sampleColorAtPos(p);
-                      setEyedropperActive(true);
-                      setEyedropperActivePos(stageRef.current!.getPointerPosition() || { x: 0, y: 0 });
-                      return;
-                    }
-                    if (tool === "lasso") {
-                      setLassoPoints([p]);
-                      return;
-                    }
-                    if (tool === "fill") {
-                      floodFill(p.x, p.y);
-                      return;
-                    }
-                    if (tool === "brush" || tool === "eraser" || tool === "smudge") {
-                      const id = ensurePaintTarget(true);
-                      if (!id) { toast.error("Could not create a paint layer"); return; }
-                      snapshotPaint(id); painting.current = true; lastPt.current = null;
-                      strokeTo(id, p.x, p.y, (e.evt as any).pressure || 0.5);
-                      return;
-                    }
-                    if (regionMode) { drawing.current = { x: p.x, y: p.y }; setRegion({ x: p.x, y: p.y, w: 0, h: 0 }); return; }
-                    if (e.target === e.target.getStage() || (e.target as any).attrs?.name === "bg") setSelectedId(null);
-                  }}
-                  onMouseMove={(e) => {
-                    const p = getArtboardPointerPos();
-                    if (!p) return;
-
-                    if (tool === "lasso" && e.evt.buttons === 1) {
-                      setLassoPoints((pts) => [...pts, p]);
-                      return;
-                    }
-                    if (tool === "eyedropper") {
-                      if (e.evt.buttons === 1) {
-                        sampleColorAtPos(p);
-                        setEyedropperActivePos(stageRef.current!.getPointerPosition() || { x: 0, y: 0 });
-                      }
-                      return;
-                    }
-                    if ((tool === "brush" || tool === "eraser" || tool === "smudge") && painting.current) {
-                      const id = layers.find((l) => l.id === selectedId)?.type === "paint" ? selectedId! : ensurePaintTarget();
-                      if (id) { strokeTo(id, p.x, p.y, (e.evt as any).pressure || 0.5); }
-                      return;
-                    }
-                    if (regionMode && drawing.current) { const s = drawing.current; setRegion({ x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), w: Math.abs(p.x - s.x), h: Math.abs(p.y - s.y) }); }
-                  }}
-                  onMouseUp={() => {
-                    if (tool === "lasso") {
-                      if (lassoPoints.length > 2) {
-                        setLassoPoints((pts) => [...pts, pts[0]]);
-                      }
-                      return;
-                    }
-                    if (tool === "eyedropper") {
-                      setEyedropperActive(false);
-                      setTool("brush");
-                      return;
-                    }
-                    if (painting.current) { painting.current = false; lastPt.current = null; return; }
-                    if (regionMode && drawing.current && region) { finalizeRegionDirect(region); }
-                  }}
+                  onPointerDown={handlePointerDown}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
                 >
                   <Layer>
-                    {/* Absolute transformed layout group */}
                     <Group 
                       ref={artboardGroupRef}
                       rotation={canvasRotation} 
@@ -1909,90 +1900,6 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
             <div className="flex-1" style={{ backgroundColor: brushColor }} />
           </div>
           <div className="absolute w-2 h-2 rounded-full bg-white border border-neutral-800" />
-        </div>
-      )}
-
-      {/* ─────────────────────────────────────────────────────────────
-         INTEGRATED SYSTEM ZOOM, PAN, AND ROTATE CONTROLLERS
-         ───────────────────────────────────────────────────────────── */}
-      {currentView === "editor" && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-2.5 rounded-full bg-white/95 dark:bg-[#1c1c1e]/95 backdrop-blur-md shadow-xl border border-neutral-200/20 pointer-events-auto">
-          
-          {/* Zoom Control Slider */}
-          <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 select-none">Zoom</span>
-          <input 
-            type="range" min={50} max={1000} step={10} value={zoomPercent} 
-            onChange={(e) => setZoomPercent(parseInt(e.target.value))} 
-            className="w-20 sm:w-36 accent-indigo-500 cursor-pointer"
-          />
-          <span className="text-[10px] font-bold text-neutral-500 select-none w-8 tabular-nums">{zoomPercent}%</span>
-          
-          <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
-
-          {/* Rotate Control Slider */}
-          <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 select-none">Rotate</span>
-          <input 
-            type="range" min={0} max={360} step={1} value={canvasRotation} 
-            onChange={(e) => setCanvasRotation(parseInt(e.target.value))} 
-            className="w-20 sm:w-36 accent-[#007aff] cursor-pointer"
-          />
-          <span className="text-[10px] font-bold text-neutral-500 select-none w-10 tabular-nums">{canvasRotation}°</span>
-
-          <button 
-            onClick={() => { setCanvasRotation(0); setPanOffset({ x: 0, y: 0 }); }} 
-            className="p-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-[#007aff]"
-            title="Reset Alignment"
-          >
-            <RefreshCcw size={12} />
-          </button>
-
-          <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
-
-          {/* Dynamic view switchers */}
-          {(hasMulti || productPhoto) && (
-            <div className="flex items-center gap-1.5">
-              {productPhoto && (!hasMulti || activeP === 0) && (
-                <button 
-                  onClick={() => setShowPhoto(!showPhoto)}
-                  className={`text-[9px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full ${showPhoto ? "bg-indigo-500 text-white" : "bg-neutral-100 dark:bg-neutral-800 text-neutral-500"}`}
-                >
-                  {showPhoto ? "Mockup" : "Template"}
-                </button>
-              )}
-              {hasMulti && placements.map((p, i) => (
-                <button 
-                  key={p.placement + i} 
-                  onClick={() => switchPlacement(i)}
-                  className={`text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${activeP === i ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30" : "text-neutral-500"}`}
-                >
-                  {String(p.placement || `P${i+1}`).substring(0, 5)}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {lassoPoints.length > 0 && (
-            <>
-              <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
-              <button 
-                onClick={() => setLassoPoints([])} 
-                className="text-[9px] uppercase font-bold text-rose-500 hover:underline px-2"
-                title="Clear lasso selection loop"
-              >
-                Clear Loop
-              </button>
-            </>
-          )}
-
-          <span className="w-px h-5 bg-neutral-200 dark:bg-neutral-800" />
-
-          <button 
-            onClick={() => setFullScreenCanvas(!fullScreenCanvas)}
-            className="text-neutral-400 hover:text-[#007aff] transition-colors"
-            title="Toggle Fullscreen Canvas"
-          >
-            {fullScreenCanvas ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
-          </button>
         </div>
       )}
 
