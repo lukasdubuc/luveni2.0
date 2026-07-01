@@ -6,8 +6,7 @@ import { offer } from "@/config/site";
 import { toast } from "sonner";
 import { Edit3, Archive, X, Menu, RefreshCw, BarChart2, Lock, CheckSquare, Square, Trash2, Eye, EyeOff, GripVertical, Users, TrendingUp, TrendingDown, Minus, Terminal, Cpu, Zap, Activity, AlertTriangle, Play } from "lucide-react";
 import { requireAdmin } from "@/lib/admin-guard";
-import { IntegrationsSettings } from "@/components/admin/IntegrationsSettings";
-import { ConnectionSecrets } from "@/components/admin/ConnectionSecrets";
+import { AdminIntegrations } from "@/components/admin/AdminIntegrations";
 
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -2023,13 +2022,8 @@ function AdminPage() {
               </div>
 
               <div className="space-y-3">
-                <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Connection Secrets</h2>
-                <ConnectionSecrets />
-              </div>
-
-              <div className="space-y-3">
                 <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Integrations</h2>
-                <IntegrationsSettings />
+                <AdminIntegrations isDark={isDark} />
               </div>
 
               <div className="space-y-3">
