@@ -69,9 +69,14 @@ const ALLOWED_SECRETS = new Set<string>([
   // Printful (print-on-demand)
   "PRINTFUL_API_KEY",
   "PRINTFUL_STORE_ID",
+  // CJ Dropshipping (catalog + live inventory)
+  "CJ_EMAIL",
+  "CJ_API_KEY",
+  "CJ_API_BASE",
   // Fulfillment auto-submit flags (leave off until tested)
   "APLIIQ_AUTO",
   "ZENDROP_AUTO",
+  "CJ_AUTO",
 ]);
 
 function mgmtHeaders() {
