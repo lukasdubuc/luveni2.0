@@ -642,15 +642,20 @@ function OfferSlugPage() {
         <div
           style={{
             position: "fixed", inset: 0,
-            display: "flex", alignItems: "center", justifyContent: "center",
+            display: "flex", alignItems: "center", justify_content: "center",
             fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
             overflow: "hidden", zIndex: 0,
           }}
         >
-          {/* ── Top-left: back arrow ── */}
+          {/* ── Top-left: back arrow (guarded against ghost clicks during zoom cooldown) ── */}
           <Link
             to="/shop"
             preload="intent"
+            onClick={(e) => {
+              if (justClosedZoom.current) {
+                e.preventDefault();
+              }
+            }}
             style={{
               position: "absolute", top: "1.25rem", left: "1.25rem", zIndex: 20,
               color: "inherit", textDecoration: "none",
@@ -678,7 +683,7 @@ function OfferSlugPage() {
           <div
             style={{
               display: "flex", flexDirection: "column",
-              alignItems: "center", justifyContent: "center",
+              alignItems: "center", justify_content: "center",
               width: "100%", maxWidth: "480px",
               padding: "3.5rem 2rem 2rem", boxSizing: "border-box",
               animation: "pdp-fade-in 0.15s linear both",
@@ -690,7 +695,7 @@ function OfferSlugPage() {
               data-gallery
               style={{
                 width: "100%", display: "flex",
-                alignItems: "center", justifyContent: "center",
+                alignItems: "center", justify_content: "center",
                 gap: "0.5rem", marginBottom: "1.5rem",
               }}
               onTouchStart={handleImgTouchStart}
@@ -701,7 +706,7 @@ function OfferSlugPage() {
                 ‹
               </button>
 
-              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justify_content: "center" }}>
                 <div style={{
                   position: "relative",
                   width: "min(320px, 70vw)",
@@ -738,7 +743,7 @@ function OfferSlugPage() {
                   ) : (
                     <div style={{
                       width: "100%", height: "100%",
-                      display: "flex", alignItems: "center", justifyContent: "center",
+                      display: "flex", alignItems: "center", justify_content: "center",
                       border: "1px solid var(--border)",
                       fontSize: "9px", fontWeight: 500, letterSpacing: "0.3em",
                       textTransform: "uppercase", opacity: 0.3,
