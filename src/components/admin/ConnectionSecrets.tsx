@@ -164,12 +164,12 @@ export function ConnectionSecrets() {
         <div className="mt-4 space-y-2 rounded-md bg-muted p-4 text-xs text-muted-foreground">
           <p className="font-medium text-foreground">One-time setup required</p>
           <p>
-            To manage secrets from here, add these two secrets once in
+            To manage secrets from here, add this one secret in
             Supabase → Edge Functions → Secrets:
           </p>
           <ul className="ml-4 list-disc space-y-1">
             <li>
-              <code className="rounded bg-background px-1">SUPABASE_MANAGEMENT_TOKEN</code>{" "}
+              <code className="rounded bg-background px-1">LUVENI_MANAGEMENT_TOKEN</code>{" "}
               — a personal access token from{" "}
               <a
                 href="https://supabase.com/dashboard/account/tokens"
@@ -179,11 +179,12 @@ export function ConnectionSecrets() {
                 supabase.com/dashboard/account/tokens
               </a>
             </li>
-            <li>
-              <code className="rounded bg-background px-1">SUPABASE_PROJECT_REF</code>{" "}
-              — this project's ref
-            </li>
           </ul>
+          <p>
+            (The project ref is derived automatically. Custom secret names
+            can't start with <code className="rounded bg-background px-1">SUPABASE_</code>,
+            which is why the token uses the <code className="rounded bg-background px-1">LUVENI_</code> prefix.)
+          </p>
           <p>Then refresh this panel.</p>
         </div>
       ) : error ? (

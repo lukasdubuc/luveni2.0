@@ -18,9 +18,11 @@
 //    value (the Management API returns a hash, which we also never expose).
 //
 //  BOOTSTRAP (set once in the Supabase dashboard → Edge Functions → Secrets):
-//    SUPABASE_MANAGEMENT_TOKEN  — a Supabase personal access token
-//                                 (https://supabase.com/dashboard/account/tokens)
-//    SUPABASE_PROJECT_REF       — this project's ref (e.g. unitqfuetxedmmrvlocu)
+//    LUVENI_MANAGEMENT_TOKEN  — a Supabase personal access token
+//                               (https://supabase.com/dashboard/account/tokens)
+//  (The project ref is derived from the auto-injected SUPABASE_URL — no
+//   second secret needed. Custom secrets can't use the reserved SUPABASE_
+//   prefix, which is why the token isn't named SUPABASE_*.)
 //
 //  Body:
 //    { action: "list" }
@@ -30,10 +32,22 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { corsHeaders, json, requireAdmin } from "../_shared/http.ts";
+import { corsHeaders, json, requireAdmin, SUPABASE_URL } from "../_shared/http.ts";
 
-const MGMT_TOKEN = Deno.env.get("SUPABASE_MANAGEMENT_TOKEN") || "";
-const PROJECT_REF = Deno.env.get("SUPABASE_PROJECT_REF") || "";
+// Reserved-prefix names (SUPABASE_*) can't be created as custom secrets,
+// so the token is LUVENI_MANAGEMENT_TOKEN. Accept a couple of aliases too.
+const MGMT_TOKEN =
+  Deno.env.get("LUVENI_MANAGEMENT_TOKEN") ||
+  Deno.env.get("MANAGEMENT_TOKEN") ||
+  Deno.env.get("SUPABASE_MANAGEMENT_TOKEN") ||
+  "";
+
+// Derive the project ref from the auto-injected SUPABASE_URL
+// (https://<ref>.supabase.co) so no second bootstrap secret is needed.
+const PROJECT_REF =
+  Deno.env.get("LUVENI_PROJECT_REF") ||
+  (SUPABASE_URL.match(/^https?:\/\/([^.]+)\.supabase\./)?.[1] ?? "");
+
 const MGMT_BASE = "https://api.supabase.com/v1";
 
 // The ONLY secret names this endpoint may read or write. Anything not in
@@ -76,8 +90,8 @@ Deno.serve(async (req) => {
   if (!MGMT_TOKEN || !PROJECT_REF) {
     return json({
       error:
-        "Secret management not configured. Set SUPABASE_MANAGEMENT_TOKEN and " +
-        "SUPABASE_PROJECT_REF in Supabase → Edge Functions → Secrets first.",
+        "Secret management not configured. Set LUVENI_MANAGEMENT_TOKEN in " +
+        "Supabase → Edge Functions → Secrets first.",
       needsBootstrap: true,
     }, 503);
   }
