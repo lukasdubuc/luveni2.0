@@ -131,6 +131,46 @@ const _colorMap: Record<string, string> = {
   pink: "#ed64a6", orange: "#ed8936",
   yellow: "#ecc94b", gold: "#d69e2e",
   purple: "#9f7aea", brown: "#a0522d",
+
+  // Explicit garment color names — these follow a "{qualifier} {basecolor}"
+  // pattern where the qualifier (heather/ice/carolina/stone/brick/etc.) is
+  // neither a real CSS color nor a shading modifier, so the canvas check and
+  // heuristic below both miss them. Mapped directly against every color name
+  // actually present in the catalog rather than guessed at.
+  agave: "#a7ab93",
+  anthracite: "#33363a",
+  ash: "#c7c8c6",
+  "bio white": "#f5f5f0",
+  birch: "#d7ccc0",
+  bone: "#e3dac9",
+  "brick red": "#a03c34",
+  "carolina blue": "#7bafd4",
+  cranberry: "#8c1f3b",
+  "dark chocolate": "#3b2313",
+  "dark green": "#1e4620",
+  "dark grey": "#4a4a4a",
+  "desert dust": "#c9a98d",
+  "desert pink": "#d8a398",
+  "green camo": "#5d6b3f",
+  "heather charcoal": "#4b4b4d",
+  "heather grey": "#a9a9ab",
+  "heather royal": "#3f5fa0",
+  heliconia: "#e0218a",
+  "ice grey": "#d6d6d8",
+  "jade dome": "#2e8b83",
+  khaki: "#c3b091",
+  "light blue": "#add8e6",
+  "light pink": "#ffb6c1",
+  mineral: "#7b8b8e",
+  natural: "#ede6d6",
+  "petrol blue": "#1f4e5f",
+  sand: "#c2b280",
+  "slate blue": "#647a8d",
+  spruce: "#1f3a2e",
+  stone: "#a79e8e",
+  "stone grey": "#8f8a82",
+  "vintage gold": "#c9a227",
+  "vintage white": "#f0ead6",
 };
 
 /**
@@ -178,20 +218,31 @@ export function resolveColor(value: string): string {
     };
 
     let shift = 0;
-    let baseWord = "";
+    const nonModifierWords: string[] = [];
 
     for (const word of words) {
       if (modifiers[word] !== undefined) shift += modifiers[word];
-      else if (!baseWord) baseWord = word;
+      else nonModifierWords.push(word);
     }
 
-    const baseHex = _colorMap[baseWord] ?? _canvasColor(baseWord);
-    if (baseHex && /^#[0-9a-f]{6}$/i.test(baseHex)) {
-      const r = Math.max(0, Math.min(255, parseInt(baseHex.slice(1, 3), 16) + shift));
-      const g = Math.max(0, Math.min(255, parseInt(baseHex.slice(3, 5), 16) + shift));
-      const b = Math.max(0, Math.min(255, parseInt(baseHex.slice(5, 7), 16) + shift));
-      const adjusted = `#${[r, g, b].map(v => v.toString(16).padStart(2, "0")).join("")}`;
-      return (_colorCache[key] = adjusted);
+    // Garment color names are usually "{qualifier} {basecolor}" (Ice Grey,
+    // Carolina Blue, Brick Red) — the LAST non-modifier word is the true
+    // color family more often than the first (Green Camo is the exception,
+    // so first-word is tried as a secondary fallback).
+    const candidates = [
+      nonModifierWords[nonModifierWords.length - 1],
+      nonModifierWords[0],
+    ].filter(Boolean);
+
+    for (const baseWord of candidates) {
+      const baseHex = _colorMap[baseWord] ?? _canvasColor(baseWord);
+      if (baseHex && /^#[0-9a-f]{6}$/i.test(baseHex)) {
+        const r = Math.max(0, Math.min(255, parseInt(baseHex.slice(1, 3), 16) + shift));
+        const g = Math.max(0, Math.min(255, parseInt(baseHex.slice(3, 5), 16) + shift));
+        const b = Math.max(0, Math.min(255, parseInt(baseHex.slice(5, 7), 16) + shift));
+        const adjusted = `#${[r, g, b].map(v => v.toString(16).padStart(2, "0")).join("")}`;
+        return (_colorCache[key] = adjusted);
+      }
     }
   }
 
