@@ -1,6 +1,61 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 
+// Printful sync_variant.name is formatted as:
+//   "{Product Name} / {Color} / {Size}"   (apparel, 2 attribute axes)
+//   "{Product Name} / {Color}"            (color-only items, e.g. beanies)
+//   "{Product Name} / {Size}"             (size-only items, e.g. stickers/dimensions)
+//   "{Product Name}"                      (no variant axes at all)
+//
+// The first "/"-separated segment is ALWAYS the product name itself, never an
+// attribute value — it must be dropped, not stored. Whatever segments remain
+// are classified as color/size by pattern, not by fixed position, since some
+// products only have one axis and it isn't always the same one.
+const SIZE_TOKEN = /^(XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|4XL|5XL|6XL)$/i;
+const SIZE_LIKE = /^\d+(\.\d+)?\s*(oz|ml|l|kg|g|lb|in|cm|mm)$/i;
+const DIMENSION_LIKE = /\d+(\.\d+)?\s*["']?\s*[×x]\s*\d+/i;
+
+function looksLikeSize(value: string): boolean {
+  const v = value.trim();
+  return SIZE_TOKEN.test(v) || SIZE_LIKE.test(v) || DIMENSION_LIKE.test(v);
+}
+
+function parseVariantAttributes(rawName: string): Record<string, string> {
+  const rawParts = (rawName ?? "")
+    .split("/")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  // Drop the leading product-name segment. If there's nothing else, there
+  // are no variant attributes to record.
+  const parts = rawParts.slice(1);
+  const attributes: Record<string, string> = {};
+
+  if (parts.length === 0) {
+    return attributes;
+  }
+
+  if (parts.length === 1) {
+    // Single axis — could be color OR size depending on the product type.
+    if (looksLikeSize(parts[0])) {
+      attributes.size = parts[0];
+    } else {
+      attributes.color = parts[0];
+    }
+    return attributes;
+  }
+
+  // Two or more segments: convention is color first, then size, then any
+  // further axes as option_N (N starting at 1 for the first extra axis).
+  attributes.color = parts[0];
+  attributes.size = parts[1];
+  for (let i = 2; i < parts.length; i++) {
+    attributes[`option_${i - 1}`] = parts[i];
+  }
+
+  return attributes;
+}
+
 export const Route = createFileRoute("/api/printful-sync")({
   server: {
     handlers: {
@@ -230,35 +285,7 @@ export const Route = createFileRoute("/api/printful-sync")({
 
               const variants = syncVariants.map(
                 (v: any) => {
-                  const parts = (v.name ?? "")
-                    .split("/")
-                    .map((p: string) =>
-                      p.trim()
-                    );
-
-                  const attributes: Record<
-                    string,
-                    string
-                  > = {};
-
-                  parts.forEach(
-                    (
-                      part: string,
-                      i: number
-                    ) => {
-                      if (i === 0) {
-                        attributes["size"] =
-                          part;
-                      } else if (i === 1) {
-                        attributes["color"] =
-                          part;
-                      } else {
-                        attributes[
-                          `option_${i}`
-                        ] = part;
-                      }
-                    }
-                  );
+                  const attributes = parseVariantAttributes(v.name ?? "");
 
                   return {
                     sku:

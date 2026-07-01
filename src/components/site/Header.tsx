@@ -131,14 +131,14 @@ export function Header({ theme: _theme }: { theme?: "light" | "dark" } = {}) {
             </Link>
           </div>
 
-          {/* Centered nav links */}
-          <nav className="flex flex-1 flex-col items-center justify-center gap-7 overflow-y-auto px-6 py-10">
+          {/* Large, centered nav links */}
+          <nav className="flex flex-1 flex-col items-center justify-center gap-6 px-6 text-center">
             {navLinks.map((l) => (
               <Link
                 key={l.to}
                 to={l.to}
                 onClick={() => setOpen(false)}
-                className="text-base font-normal uppercase tracking-[0.2em] text-foreground transition-opacity hover:opacity-60"
+                className="text-2xl font-normal tracking-tight text-foreground transition-opacity hover:opacity-60"
                 style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}
               >
                 {l.label}
@@ -147,7 +147,7 @@ export function Header({ theme: _theme }: { theme?: "light" | "dark" } = {}) {
             <Link
               to="/checkout"
               onClick={() => setOpen(false)}
-              className="text-base font-normal uppercase tracking-[0.2em] text-foreground transition-opacity hover:opacity-60"
+              className="text-2xl font-normal tracking-tight text-foreground transition-opacity hover:opacity-60"
               style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}
             >
               CART{count > 0 ? ` (${count})` : ""}

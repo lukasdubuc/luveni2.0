@@ -215,22 +215,23 @@ Deno.serve(async (req) => {
         if (imageUrls.length === 0 && item.thumbnail_url) imageUrls.push(item.thumbnail_url);
 
         const variants = syncVariants.map((v: any) => {
-          // Printful sync-variant names look like "<product> - <color> / <size>"
-          // (sometimes just "<color> / <size>" or only "<size>"). The size is
-          // the segment after the last "/"; the colour is the segment before
-          // it, with any "<product> - " prefix stripped. Prefer explicit
-          // fields when Printful provides them.
-          const segs = (v.name ?? "").split("/").map((p: string) => p.trim()).filter(Boolean);
+          // Printful sync_variant.name is formatted "{Product Name} - {Color} / {Size}".
+          // Splitting on "/" gives parts[0] = "{Product Name} - {Color}" and
+          // parts[1] = "{Size}". The previous code assigned these to the wrong
+          // keys (size got the color-with-prefix, color got the size) — fixed
+          // below, and the product-name prefix is stripped from the color.
+          const parts = (v.name ?? "").split("/").map((p: string) => p.trim());
           const attributes: Record<string, string> = {};
-          const sizeSeg = segs.length > 1 ? segs[segs.length - 1] : "";
-          let colorSeg = segs.length > 1 ? segs[segs.length - 2] : (segs[0] ?? "");
-          if (colorSeg.includes(" - ")) colorSeg = colorSeg.split(" - ").pop()!.trim();
-          const explicitColor = v.color ?? v.options?.find?.((o: any) => /colou?r/i.test(o?.id ?? o?.name ?? ""))?.value;
-          const explicitSize = v.size ?? v.options?.find?.((o: any) => /size/i.test(o?.id ?? o?.name ?? ""))?.value;
-          const color = (explicitColor || colorSeg || "").toString().trim();
-          const size = (explicitSize || sizeSeg || (segs.length === 1 ? segs[0] : "")).toString().trim();
-          if (color) attributes["color"] = color;
-          if (size) attributes["size"] = size;
+          parts.forEach((part: string, i: number) => {
+            if (i === 0) {
+              const dashIdx = part.lastIndexOf(" - ");
+              attributes["color"] = dashIdx !== -1 ? part.slice(dashIdx + 3).trim() : part;
+            } else if (i === 1) {
+              attributes["size"] = part;
+            } else {
+              attributes[`option_${i}`] = part;
+            }
+          });
           return {
             sku: v.sku ?? String(v.id),
             price_cents: Math.round(parseFloat(v.retail_price ?? "0") * 100),

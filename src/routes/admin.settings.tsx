@@ -45,6 +45,7 @@ function SettingsPage() {
           Edit that file to re-skin the public site for any niche.
         </p>
       </div>
+      <IntegrationsSettings />
     </div>
   );
 }

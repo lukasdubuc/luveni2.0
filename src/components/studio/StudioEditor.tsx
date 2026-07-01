@@ -1193,6 +1193,24 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
   };
 
   const selectedLayer = layers.find((l) => l.id === selectedId);
+
+  // The Transformer is rendered in the Stage but was never told which node to
+  // grip — without this it just renders empty handles that don't move
+  // anything. Attach/detach it to the selected layer's Konva node whenever
+  // the selection (or the underlying node instance) changes, for both
+  // mouse and touch interaction.
+  useEffect(() => {
+    const tr = trRef.current;
+    if (!tr) return;
+    const node = selectedId ? nodeRefs.current[selectedId] : null;
+    if (node && selectedLayer && (selectedLayer.type === "image" || selectedLayer.type === "text")) {
+      tr.nodes([node]);
+    } else {
+      tr.nodes([]);
+    }
+    tr.getLayer()?.batchDraw();
+  }, [selectedId, selectedLayer, layers]);
+
   const getFlatLassoPoints = (): number[] => {
     const pts: number[] = [];
     lassoPoints.forEach((p) => pts.push(p.x, p.y));
