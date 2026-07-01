@@ -642,7 +642,7 @@ function OfferSlugPage() {
         <div
           style={{
             position: "fixed", inset: 0,
-            display: "flex", alignItems: "center", justify_content: "center",
+            display: "flex", alignItems: "center", justifyContent: "center",
             fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
             overflow: "hidden", zIndex: 0,
           }}
@@ -683,7 +683,7 @@ function OfferSlugPage() {
           <div
             style={{
               display: "flex", flexDirection: "column",
-              alignItems: "center", justify_content: "center",
+              alignItems: "center", justifyContent: "center",
               width: "100%", maxWidth: "480px",
               padding: "3.5rem 2rem 2rem", boxSizing: "border-box",
               animation: "pdp-fade-in 0.15s linear both",
@@ -695,7 +695,7 @@ function OfferSlugPage() {
               data-gallery
               style={{
                 width: "100%", display: "flex",
-                alignItems: "center", justify_content: "center",
+                alignItems: "center", justifyContent: "center",
                 gap: "0.5rem", marginBottom: "1.5rem",
               }}
               onTouchStart={handleImgTouchStart}
@@ -706,7 +706,7 @@ function OfferSlugPage() {
                 ‹
               </button>
 
-              <div style={{ flex: 1, display: "flex", alignItems: "center", justify_content: "center" }}>
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <div style={{
                   position: "relative",
                   width: "min(320px, 70vw)",
