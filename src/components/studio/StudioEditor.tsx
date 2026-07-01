@@ -1619,6 +1619,19 @@ export default function StudioEditor({ projectId: initialProjectId, initialCanva
     setGuides({ v: gx, h: gy });
   };
 
+  // Attach the resize/rotate Transformer to the selected image/text node.
+  // Without this the Transformer renders but has no target, so the corner
+  // handles never appear and nothing can be resized.
+  useEffect(() => {
+    const tr = trRef.current;
+    if (!tr) return;
+    const node = selectedId ? nodeRefs.current[selectedId] : null;
+    const sel = layers.find((l) => l.id === selectedId);
+    const transformable = !!node && !!sel && (sel.type === "image" || sel.type === "text") && tool === "select" && !regionMode;
+    tr.nodes(transformable ? [node as Konva.Node] : []);
+    tr.getLayer()?.batchDraw();
+  }, [selectedId, tool, regionMode, layers]);
+
   const align = (dir: "h" | "v" | "both") => {
     if (!selectedLayer) return;
     const node = nodeRefs.current[selectedLayer.id];

@@ -46,15 +46,34 @@ Deno.serve(async (req) => {
       const detail = detailRes.ok ? detailRes.data : item;
 
       const variantsRaw: any[] = detail?.variants ?? detail?.options ?? [];
-      const variants = variantsRaw.map((v: any) => ({
-        sku: String(v?.sku ?? v?.id ?? ""),
-        external_sku: String(v?.id ?? v?.sku ?? ""),
-        fulfillment_provider: "apliiq",
-        price_cents: Math.round(parseFloat(v?.retailPrice ?? v?.price ?? "0") * 100),
-        attributes: { size: v?.size ?? "", color: v?.color ?? v?.colorName ?? "" },
-        stock: 999,
-        availability_status: "active",
-      }));
+      const variants = variantsRaw.map((v: any) => {
+        // Apliiq variant color/size aren't consistently top-level fields —
+        // some responses carry them under an "options"/"attributes" array
+        // instead (e.g. [{ name: "Color", value: "Black" }]). Try the direct
+        // fields first, then search any nested option list, and only store
+        // attributes we actually resolved a value for (an empty string would
+        // otherwise render as a blank/invisible swatch on the storefront).
+        const optionList: any[] = v?.options ?? v?.attributes ?? [];
+        const findOption = (re: RegExp) =>
+          optionList.find((o: any) => re.test(o?.name ?? o?.id ?? ""))?.value;
+
+        const color = v?.color ?? v?.colorName ?? v?.color_name ?? findOption(/colou?r/i);
+        const size = v?.size ?? v?.sizeName ?? v?.size_name ?? findOption(/size/i);
+
+        const attributes: Record<string, string> = {};
+        if (color) attributes["color"] = String(color);
+        if (size) attributes["size"] = String(size);
+
+        return {
+          sku: String(v?.sku ?? v?.id ?? ""),
+          external_sku: String(v?.id ?? v?.sku ?? ""),
+          fulfillment_provider: "apliiq",
+          price_cents: Math.round(parseFloat(v?.retailPrice ?? v?.price ?? "0") * 100),
+          attributes,
+          stock: 999,
+          availability_status: "active",
+        };
+      });
 
       const title = detail?.name ?? detail?.title ?? `apliiq-${externalId}`;
       // imageUrls = the transparent/primary mockups (storefront grid pulls these).

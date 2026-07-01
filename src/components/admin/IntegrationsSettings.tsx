@@ -14,7 +14,8 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 
 type IntegrationType = "printful" | "apliiq" | "zendrop" | "custom";
 
@@ -50,6 +51,28 @@ const CREDENTIAL_FIELDS: Record<IntegrationType, { key: string; label: string }[
   ],
 };
 
+// Built-in vendors have a real catalog-sync edge function; "custom" doesn't
+// (there's no generic importer for an arbitrary supplier's API shape), so
+// its Sync button stays disabled rather than silently doing nothing.
+const SYNC_FUNCTION: Record<IntegrationType, string | null> = {
+  printful: "printful-sync",
+  apliiq: "apliiq-sync",
+  zendrop: "zendrop-sync",
+  custom: null,
+};
+
+// The credentials typed into this dialog are stored here for reference/
+// record-keeping only. The sync edge functions read the ACTUAL working
+// credentials from Supabase Edge secrets (never from this table) — that's
+// this project's security model (secrets never live outside Edge Function
+// config). These are the secret names to set per vendor for Sync to work.
+const REQUIRED_SECRETS: Record<IntegrationType, string[]> = {
+  printful: ["PRINTFUL_API_KEY", "PRINTFUL_STORE_ID"],
+  apliiq: ["APLIIQ_APP_ID", "APLIIQ_SHARED_SECRET"],
+  zendrop: ["ZENDROP_API_KEY"],
+  custom: [],
+};
+
 const emptyForm = {
   id: null as string | null,
   name: "",
@@ -66,6 +89,28 @@ export function IntegrationsSettings() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+
+  async function syncNow(row: SupplierIntegration) {
+    const fn = SYNC_FUNCTION[row.type];
+    if (!fn) { toast.error(`${TYPE_LABEL[row.type]} has no built-in catalog sync yet`); return; }
+    setSyncingId(row.id);
+    try {
+      const { data, error: err } = await supabase.functions.invoke(fn, { body: {} });
+      if (err) { toast.error(err.message || `${row.name} sync failed`); return; }
+      if (data?.error) { toast.error(data.error); return; }
+      const errCount = Array.isArray(data?.errors) ? data.errors.length : 0;
+      toast.success(
+        `${row.name}: synced ${data?.synced ?? 0}/${data?.total ?? 0} product(s)` +
+        (errCount ? ` — ${errCount} error(s), see console` : ""),
+      );
+      if (errCount) console.warn(`${row.name} sync errors:`, data.errors);
+    } catch (e: any) {
+      toast.error(`${row.name} sync error: ${e?.message || "Unknown error"}`);
+    } finally {
+      setSyncingId(null);
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -184,6 +229,20 @@ export function IntegrationsSettings() {
                 </Select>
               </div>
 
+              {REQUIRED_SECRETS[form.type].length > 0 && (
+                <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+                  Sync actually runs on Supabase Edge secrets, not the fields below — set{" "}
+                  {REQUIRED_SECRETS[form.type].map((s, i) => (
+                    <span key={s}>
+                      {i > 0 && ", "}
+                      <code className="rounded bg-background px-1">{s}</code>
+                    </span>
+                  ))}{" "}
+                  in your Supabase project (Edge Functions → Secrets) for the Sync button to work.
+                  The fields below are saved here for your own reference only.
+                </p>
+              )}
+
               {fields.map((f) => (
                 <div key={f.key} className="space-y-1.5">
                   <Label htmlFor={`int-${f.key}`}>{f.label}</Label>
@@ -276,6 +335,14 @@ export function IntegrationsSettings() {
                     </button>
                   </TableCell>
                   <TableCell className="text-right">
+                    <Button
+                      variant="ghost" size="icon"
+                      onClick={() => syncNow(row)}
+                      disabled={!row.enabled || !SYNC_FUNCTION[row.type] || syncingId === row.id}
+                      title={SYNC_FUNCTION[row.type] ? "Sync catalog now" : "No built-in sync for this type"}
+                    >
+                      <RefreshCw className={`h-4 w-4 ${syncingId === row.id ? "animate-spin" : ""}`} />
+                    </Button>
                     <Button variant="ghost" size="icon" onClick={() => openEdit(row)}>
                       <Pencil className="h-4 w-4" />
                     </Button>

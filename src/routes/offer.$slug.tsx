@@ -743,7 +743,7 @@ function OfferSlugPage() {
                   ) : (
                     <div style={{
                       width: "100%", height: "100%",
-                      display: "flex", alignItems: "center", justify_content: "center",
+                      display: "flex", alignItems: "center", justifyContent: "center",
                       border: "1px solid var(--border)",
                       fontSize: "9px", fontWeight: 500, letterSpacing: "0.3em",
                       textTransform: "uppercase", opacity: 0.3,
@@ -1029,13 +1029,12 @@ function OfferSlugPage() {
 
       {zoomOpen && galleryImages[activeImageIndex] && (
         <div
-          onClick={() => setZoomOpen(false)}
           style={{
             position: "fixed", inset: 0, zIndex: 200,
             background: "rgba(0,0,0,0.92)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "zoom-out",
             animation: "zoom-fade-in 0.15s linear both",
+            touchAction: "none",
           }}
         >
           <div
