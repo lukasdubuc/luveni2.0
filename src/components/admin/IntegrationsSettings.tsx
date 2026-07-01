@@ -238,7 +238,7 @@ export function IntegrationsSettings() {
                       <code className="rounded bg-background px-1">{s}</code>
                     </span>
                   ))}{" "}
-                  in your Supabase project (Edge Functions → Secrets) for the Sync button to work.
+                  in the Connection secrets panel above for the Sync button to work.
                   The fields below are saved here for your own reference only.
                 </p>
               )}
