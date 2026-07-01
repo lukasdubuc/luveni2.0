@@ -2,8 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { requireAdmin } from "@/lib/admin-guard";
-import { IntegrationsSettings } from "@/components/admin/IntegrationsSettings";
-import { ConnectionSecrets } from "@/components/admin/ConnectionSecrets";
+import { AdminIntegrations } from "@/components/admin/AdminIntegrations";
 
 export const Route = createFileRoute("/admin/settings")({
   beforeLoad: requireAdmin,
@@ -37,9 +36,10 @@ function SettingsPage() {
           checkout.session.async_payment_failed.
         </p>
       </div>
-      <ConnectionSecrets />
-
-      <IntegrationsSettings />
+      <div className="space-y-2">
+        <h2 className="text-sm font-semibold">Integrations</h2>
+        <AdminIntegrations isDark={typeof document !== "undefined" && document.documentElement.classList.contains("dark")} />
+      </div>
 
       <div className="rounded-xl border border-border bg-card p-5">
         <h2 className="text-sm font-semibold">Brand &amp; copy</h2>
