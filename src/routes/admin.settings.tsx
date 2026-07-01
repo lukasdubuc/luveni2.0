@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { requireAdmin } from "@/lib/admin-guard";
 import { IntegrationsSettings } from "@/components/admin/IntegrationsSettings";
+import { ConnectionSecrets } from "@/components/admin/ConnectionSecrets";
 
 export const Route = createFileRoute("/admin/settings")({
   beforeLoad: requireAdmin,
@@ -36,6 +37,8 @@ function SettingsPage() {
           checkout.session.async_payment_failed.
         </p>
       </div>
+      <ConnectionSecrets />
+
       <IntegrationsSettings />
 
       <div className="rounded-xl border border-border bg-card p-5">
@@ -45,7 +48,6 @@ function SettingsPage() {
           Edit that file to re-skin the public site for any niche.
         </p>
       </div>
-      <IntegrationsSettings />
     </div>
   );
 }
