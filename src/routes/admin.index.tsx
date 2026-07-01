@@ -992,46 +992,84 @@ function AdminPage() {
         </div>
       </aside>
 
-      {/* ── NAV (mobile only) ── */}
+      {/* ── NAV (mobile only) — mirrors the storefront Header: burger left,
+             brand centered ── */}
       <nav className={`lg:hidden sticky top-0 z-50 backdrop-blur-xl border-b ${isDark ? "bg-black/90 border-white/[0.06]" : "bg-white/90 border-black/[0.07]"}`}>
-        <div className="relative flex items-center justify-center px-6 py-3">
-          <div className="absolute right-6">
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className={`p-1.5 transition-opacity ${isDark ? "text-white opacity-60 hover:opacity-100" : "text-black opacity-60 hover:opacity-100"}`}
-            >
-              <Menu size={16} />
-            </button>
-          </div>
+        <div className="relative flex h-14 items-center justify-between px-6">
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            aria-label="Open navigation"
+            className={`flex items-center transition-opacity ${isDark ? "text-white opacity-70 hover:opacity-100" : "text-black opacity-70 hover:opacity-100"}`}
+          >
+            <Menu size={18} />
+          </button>
+          <span className={`absolute left-1/2 -translate-x-1/2 text-[12px] font-mono font-bold uppercase tracking-[0.2em] ${isDark ? "text-white" : "text-neutral-900"}`}>
+            Admin
+          </span>
         </div>
       </nav>
 
-      {/* ── MOBILE FULL-SCREEN OVERLAY ── */}
+      {/* ── MOBILE FULL-SCREEN OVERLAY — mirrors the storefront menu takeover:
+             header bar (X + centered brand) then large centered links ── */}
       {mobileMenuOpen && (
         <div
-          className={`lg:hidden fixed inset-0 z-[100] font-mono overflow-x-hidden ${isDark ? "bg-black" : "bg-[#f5f5f7]"}`}
+          className={`lg:hidden fixed inset-0 z-[100] flex flex-col font-mono overflow-x-hidden ${isDark ? "bg-black text-white" : "bg-[#f5f5f7] text-neutral-900"}`}
         >
-          {/* X button */}
-          <button
-            onClick={() => setMobileMenuOpen(false)}
-            className="absolute top-4 right-5 text-current opacity-40 hover:opacity-85 transition-opacity text-[11px] tracking-[0.02em]"
-          >
-            ✕
-          </button>
+          {/* Top bar mirrors the header so it reads as one surface */}
+          <div className="relative flex h-14 w-full items-center justify-between px-6">
+            <button
+              onClick={() => setMobileMenuOpen(false)}
+              aria-label="Close navigation"
+              className="flex items-center text-current opacity-70 hover:opacity-100 transition-opacity"
+            >
+              <X size={18} />
+            </button>
+            <span className="absolute left-1/2 -translate-x-1/2 text-[12px] font-mono font-bold uppercase tracking-[0.2em]">
+              Admin
+            </span>
+          </div>
 
-          {/* Section grid */}
-          <div className="grid grid-cols-2">
+          {/* Large, centered nav links */}
+          <nav className="flex flex-1 flex-col items-center justify-center gap-6 px-6 text-center">
             {navSections.map(s => (
               <button
                 key={s}
                 onClick={() => { setSection(s); setMobileMenuOpen(false); }}
-                className="relative flex aspect-square items-center justify-center bg-transparent border-none outline-none focus:outline-none"
+                className={`text-2xl font-normal uppercase tracking-tight transition-opacity ${section === s ? "opacity-100" : "opacity-40 hover:opacity-70"}`}
               >
-                <p className={`text-[11px] leading-tight tracking-[0.02em] text-current transition-opacity ${section === s ? "opacity-100" : "opacity-90 hover:opacity-60"}`}>
-                  {s}
-                </p>
+                {s}
               </button>
             ))}
+            <a
+              href="/admin/studio"
+              onClick={() => setMobileMenuOpen(false)}
+              className="text-2xl font-normal uppercase tracking-tight opacity-40 hover:opacity-70 transition-opacity"
+            >
+              Studio
+            </a>
+            <a
+              href="/admin/compare"
+              onClick={() => setMobileMenuOpen(false)}
+              className="text-2xl font-normal uppercase tracking-tight opacity-40 hover:opacity-70 transition-opacity"
+            >
+              Compare
+            </a>
+          </nav>
+
+          {/* Bottom actions mirror the desktop sidebar footer */}
+          <div className={`flex items-center justify-center gap-8 px-6 py-8 border-t ${isDark ? "border-white/[0.06]" : "border-black/[0.07]"}`}>
+            <button
+              onClick={() => { setMobileMenuOpen(false); handleOpenJarvis(); }}
+              className="text-[11px] font-mono font-semibold uppercase tracking-widest opacity-60 hover:opacity-100 transition-opacity"
+            >
+              AI Console
+            </button>
+            <button
+              onClick={handleSignOut}
+              className={`text-[11px] font-mono font-semibold uppercase tracking-widest opacity-60 transition-opacity ${isDark ? "hover:text-rose-400 hover:opacity-100" : "hover:text-rose-600 hover:opacity-100"}`}
+            >
+              Sign Out
+            </button>
           </div>
         </div>
       )}
