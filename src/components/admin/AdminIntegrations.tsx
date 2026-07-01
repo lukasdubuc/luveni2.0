@@ -17,6 +17,10 @@ type Vendor = {
 };
 
 const VENDORS: Vendor[] = [
+  { key: "cj", name: "CJ Dropshipping", syncFn: "cj-inventory-sync", fields: [
+    { secret: "CJ_EMAIL", label: "Account Email" },
+    { secret: "CJ_API_KEY", label: "API Key" },
+  ] },
   { key: "zendrop", name: "Zendrop", syncFn: "zendrop-sync", fields: [
     { secret: "ZENDROP_API_KEY", label: "API Key" },
   ] },
@@ -75,7 +79,11 @@ export function AdminIntegrations({ isDark }: { isDark: boolean }) {
     const { data, error } = await supabase.functions.invoke(v.syncFn, { body: {} });
     setSyncingKey(null);
     if (error || data?.error) { toast.error(data?.error || error?.message || `${v.name} sync failed`); return; }
-    toast.success(`${v.name}: synced ${data?.synced ?? 0}/${data?.total ?? 0} product(s).`);
+    // Catalog syncs report synced/total; the CJ inventory sync reports stock counts.
+    const msg = typeof data?.variants_checked === "number"
+      ? `${v.name}: checked ${data.variants_checked} variant(s), updated ${data.products_updated ?? 0} product(s).`
+      : `${v.name}: synced ${data?.synced ?? 0}/${data?.total ?? 0} product(s).`;
+    toast.success(msg);
   }
 
   const cardCls = `p-5 border rounded-[24px] overflow-hidden transition-all duration-300 space-y-5 ${
