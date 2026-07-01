@@ -328,14 +328,35 @@ function OfferSlugPage() {
   const touchStartX = useRef<number | null>(null);
   const touchOnGallery = useRef(false);
 
-  // Declared here so the keyboard useEffect below can close the zoom on Escape
   const [zoomOpen, setZoomOpen] = useState(false);
+  
+  // Transition lock and cooldown to ignore trailing trackpad/touch inertia on zoom out
+  const justClosedZoom = useRef(false);
+  const closedZoomTimeout = useRef<any>(null);
+  const wasZoomOpen = useRef(false);
+
+  useEffect(() => {
+    if (!zoomOpen && wasZoomOpen.current) {
+      justClosedZoom.current = true;
+      if (closedZoomTimeout.current) clearTimeout(closedZoomTimeout.current);
+      closedZoomTimeout.current = setTimeout(() => {
+        justClosedZoom.current = false;
+      }, 800); // 800ms cooldown threshold to swallow any kinetic scrolling inertia
+    }
+    wasZoomOpen.current = zoomOpen;
+  }, [zoomOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (closedZoomTimeout.current) clearTimeout(closedZoomTimeout.current);
+    };
+  }, []);
 
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
-      // Zoom modal is open — lock product navigation so scrolling the
+      // Zoom modal is open or recently closed — lock product navigation so scrolling the
       // zoomed image doesn't flip to the next/previous product underneath.
-      if (zoomOpen) return;
+      if (zoomOpen || justClosedZoom.current) return;
       const target = e.target as HTMLElement;
       if (target.closest("[data-gallery]")) return;
       if (Math.abs(e.deltaY) < 30) return;
@@ -343,14 +364,14 @@ function OfferSlugPage() {
       if (e.deltaY < 0) goToPrev(); else goToNext();
     };
     const handleTouchStart = (e: TouchEvent) => {
-      if (zoomOpen) return;
+      if (zoomOpen || justClosedZoom.current) return;
       const target = e.target as HTMLElement;
       touchOnGallery.current = !!target.closest("[data-gallery]");
       touchStartY.current = e.touches[0].clientY;
       touchStartX.current = e.touches[0].clientX;
     };
     const handleTouchEnd = (e: TouchEvent) => {
-      if (zoomOpen) return;
+      if (zoomOpen || justClosedZoom.current) return;
       if (touchOnGallery.current) {
         touchStartY.current = null;
         touchStartX.current = null;
