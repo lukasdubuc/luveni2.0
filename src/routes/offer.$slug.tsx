@@ -333,6 +333,9 @@ function OfferSlugPage() {
 
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
+      // Zoom modal is open — lock product navigation so scrolling the
+      // zoomed image doesn't flip to the next/previous product underneath.
+      if (zoomOpen) return;
       const target = e.target as HTMLElement;
       if (target.closest("[data-gallery]")) return;
       if (Math.abs(e.deltaY) < 30) return;
@@ -340,12 +343,14 @@ function OfferSlugPage() {
       if (e.deltaY < 0) goToPrev(); else goToNext();
     };
     const handleTouchStart = (e: TouchEvent) => {
+      if (zoomOpen) return;
       const target = e.target as HTMLElement;
       touchOnGallery.current = !!target.closest("[data-gallery]");
       touchStartY.current = e.touches[0].clientY;
       touchStartX.current = e.touches[0].clientX;
     };
     const handleTouchEnd = (e: TouchEvent) => {
+      if (zoomOpen) return;
       if (touchOnGallery.current) {
         touchStartY.current = null;
         touchStartX.current = null;
@@ -369,7 +374,7 @@ function OfferSlugPage() {
       window.removeEventListener("touchstart", handleTouchStart);
       window.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [goToPrev, goToNext]);
+  }, [goToPrev, goToNext, zoomOpen]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
