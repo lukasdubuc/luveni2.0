@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
         }
         const buffered = Math.max(0, s.total - Math.max(0, Number(p.buffer_qty) || 0));
         if (buffered < minBuffered) minBuffered = buffered;
-        await sleep(120); // stay under CJ's 10 reads/s
+        await sleep(1100); // stock endpoint QPS is 1/s (confirmed live: 429 code 1600200)
       } catch (e: any) {
         errors.push(`${p.title} / ${vid}: ${e.message}`);
       }
