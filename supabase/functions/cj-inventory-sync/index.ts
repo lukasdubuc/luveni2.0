@@ -1,69 +1,25 @@
 // ─────────────────────────────────────────────────────────────
 //  Luveni GM — cj-inventory-sync (Supabase Edge Function)
 //
-//  Oversell protection. Reads live stock from CJ Dropshipping for every
-//  product sourced from CJ, writes it onto products.variants[].stock, and
-//  fires a single Discord alert when a product's *buffered* stock drops to
-//  or below its low_stock_threshold — so you can pause it on TikTok before
-//  selling something you can't ship.
+//  Oversell protection. Reads live per-warehouse stock from CJ for every
+//  CJ-sourced product, writes totals onto products.variants[].stock (with
+//  per-warehouse detail in variants[].cj_stock), and fires one Discord
+//  alert per drop when a product's *buffered* stock reaches its
+//  low_stock_threshold — so it can be paused on TikTok before overselling.
 //
-//  Runs either from the admin "Sync stock" button (admin JWT) or from the
-//  scheduled cron (service-role bearer). No auto-publish, no destructive ops.
+//  Callable by: admin JWT (Sync button), service-role bearer, or the
+//  scheduled cron via the x-cron-key header (CRON_KEY secret).
 //
-//  Secrets:
-//    CJ_EMAIL     — CJ account email
-//    CJ_API_KEY   — CJ API key (used as the auth "password")
-//    CJ_API_BASE  — optional override (default CJ API v2)
-//
-//  NOTE: CJ field names for the stock query vary by endpoint/version; the
-//  extraction below tries the known variants and is the one spot to confirm
-//  against a live response.
+//  Secrets: CJ_EMAIL, CJ_API_KEY (+ optional CJ_API_BASE), CRON_KEY.
 // ─────────────────────────────────────────────────────────────
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { corsHeaders, json, requireAdmin, SUPABASE_URL, SERVICE_KEY } from "../_shared/http.ts";
-
-const CJ_BASE = Deno.env.get("CJ_API_BASE") || "https://developers.cjdropshipping.com/api2.0/v1";
-const CJ_EMAIL = Deno.env.get("CJ_EMAIL") || "";
-const CJ_API_KEY = Deno.env.get("CJ_API_KEY") || "";
+import { cjConfigured, getCjToken, cjGet, summarizeStock, isCronOrService } from "../_shared/cj.ts";
 
 const svc = () => ({ apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` });
-
-/** getAccessToken is heavily rate-limited (~1 / 300s); the cron interval is
- *  well above that, so we simply auth per run. */
-async function cjAuth(): Promise<string> {
-  const res = await fetch(`${CJ_BASE}/authentication/getAccessToken`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: CJ_EMAIL, password: CJ_API_KEY }),
-  });
-  const body = await res.json().catch(() => ({}));
-  const token = body?.data?.accessToken;
-  if (!token) throw new Error(`CJ auth failed (${res.status}): ${JSON.stringify(body).slice(0, 300)}`);
-  return token;
-}
-
-/** Live stock for one CJ variant id (vid), summed across warehouses. */
-async function cjStockByVid(token: string, vid: string): Promise<number | null> {
-  const res = await fetch(`${CJ_BASE}/product/stock/queryByVid?vid=${encodeURIComponent(vid)}`, {
-    headers: { "CJ-Access-Token": token },
-  });
-  if (!res.ok) return null;
-  const body = await res.json().catch(() => ({}));
-  const rows = body?.data;
-  if (!Array.isArray(rows)) {
-    // Some responses return a single object with a total field.
-    const n = Number(rows?.cjInventory ?? rows?.storageNum ?? rows?.totalInventory ?? rows?.quantity ?? NaN);
-    return Number.isFinite(n) ? n : null;
-  }
-  let total = 0; let found = false;
-  for (const r of rows) {
-    const n = Number(r?.cjInventory ?? r?.storageNum ?? r?.totalInventory ?? r?.quantity ?? NaN);
-    if (Number.isFinite(n)) { total += n; found = true; }
-  }
-  return found ? total : null;
-}
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function sendDiscord(title: string, message: string, level: string) {
   await fetch(`${SUPABASE_URL}/functions/v1/discord-notify`, {
@@ -75,27 +31,15 @@ async function sendDiscord(title: string, message: string, level: string) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-
-  // Allow the scheduled cron (service-role bearer) or an admin user.
-  const auth = req.headers.get("Authorization") || req.headers.get("authorization") || "";
-  const isService = auth === `Bearer ${SERVICE_KEY}` && SERVICE_KEY !== "";
-  if (!isService) {
+  if (!(await isCronOrService(req))) {
     const authErr = await requireAdmin(req);
     if (authErr) return authErr;
   }
-
-  if (!CJ_EMAIL || !CJ_API_KEY) {
-    return json({ error: "CJ_EMAIL and CJ_API_KEY secrets not set" }, 500);
-  }
+  if (!cjConfigured()) return json({ error: "CJ_EMAIL / CJ_API_KEY secrets not set" }, 500);
 
   let token: string;
-  try {
-    token = await cjAuth();
-  } catch (e: any) {
-    return json({ error: e.message }, 502);
-  }
+  try { token = await getCjToken(); } catch (e: any) { return json({ error: e.message }, 502); }
 
-  // Pull CJ-sourced products with variants + alert bookkeeping.
   const res = await fetch(
     `${SUPABASE_URL}/rest/v1/products?source=eq.cj&is_archived=eq.false&select=id,title,variants,buffer_qty,low_stock_threshold,last_low_stock_alert_at`,
     { headers: svc() },
@@ -106,7 +50,7 @@ Deno.serve(async (req) => {
   let updated = 0;
   const alerts: string[] = [];
   const errors: string[] = [];
-  const ALERT_COOLDOWN_MS = 6 * 60 * 60 * 1000; // one alert per product per 6h
+  const ALERT_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
   for (const p of products) {
     const variants: any[] = Array.isArray(p.variants) ? p.variants : [];
@@ -115,15 +59,21 @@ Deno.serve(async (req) => {
     let changed = false;
     let minBuffered = Infinity;
     for (const v of variants) {
-      const vid = v?.external_sku || v?.vid || v?.cj_vid;
+      const vid = v?.external_sku || v?.vid;
       if (!vid) continue;
       checked++;
       try {
-        const stock = await cjStockByVid(token, String(vid));
-        if (stock == null) continue;
-        if (v.stock !== stock) { v.stock = stock; changed = true; }
-        const buffered = Math.max(0, stock - Math.max(0, Number(p.buffer_qty) || 0));
+        const rows = await cjGet(token, `product/stock/queryByVid?vid=${encodeURIComponent(String(vid))}`);
+        const s = summarizeStock(Array.isArray(rows) ? rows : []);
+        if (v.stock !== s.total) { v.stock = s.total; changed = true; }
+        if (JSON.stringify(v.cj_stock) !== JSON.stringify(s.warehouses)) {
+          v.cj_stock = s.warehouses;
+          v.cj_held = s.cjHeld;
+          changed = true;
+        }
+        const buffered = Math.max(0, s.total - Math.max(0, Number(p.buffer_qty) || 0));
         if (buffered < minBuffered) minBuffered = buffered;
+        await sleep(1100); // stock endpoint QPS is 1/s (confirmed live: 429 code 1600200)
       } catch (e: any) {
         errors.push(`${p.title} / ${vid}: ${e.message}`);
       }
@@ -138,7 +88,6 @@ Deno.serve(async (req) => {
       if (ok) updated++;
     }
 
-    // Low-stock alert (deduped by cooldown).
     const threshold = Number(p.low_stock_threshold ?? 3);
     if (minBuffered !== Infinity && minBuffered <= threshold) {
       const last = p.last_low_stock_alert_at ? new Date(p.last_low_stock_alert_at).getTime() : 0;

@@ -17,7 +17,8 @@ type Vendor = {
 };
 
 const VENDORS: Vendor[] = [
-  { key: "cj", name: "CJ Dropshipping", syncFn: "cj-inventory-sync", fields: [
+  // CJ's sync imports the catalog first, then refreshes live stock (see sync()).
+  { key: "cj", name: "CJ Dropshipping", syncFn: "cj-catalog-sync", fields: [
     { secret: "CJ_EMAIL", label: "Account Email" },
     { secret: "CJ_API_KEY", label: "API Key" },
   ] },
@@ -84,6 +85,13 @@ export function AdminIntegrations({ isDark }: { isDark: boolean }) {
       ? `${v.name}: checked ${data.variants_checked} variant(s), updated ${data.products_updated ?? 0} product(s).`
       : `${v.name}: synced ${data?.synced ?? 0}/${data?.total ?? 0} product(s).`;
     toast.success(msg);
+    // CJ: follow the catalog import with a live stock refresh.
+    if (v.key === "cj") {
+      const inv = await supabase.functions.invoke("cj-inventory-sync", { body: {} });
+      if (!inv.error && !inv.data?.error) {
+        toast.success(`CJ stock: checked ${inv.data?.variants_checked ?? 0} variant(s), updated ${inv.data?.products_updated ?? 0} product(s).`);
+      }
+    }
   }
 
   const cardCls = `p-5 border rounded-[24px] overflow-hidden transition-all duration-300 space-y-5 ${
