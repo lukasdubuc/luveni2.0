@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Edit3, Archive, X, Menu, RefreshCw, BarChart2, Lock, CheckSquare, Square, Trash2, Eye, EyeOff, GripVertical, Users, TrendingUp, TrendingDown, Minus, Terminal, Cpu, Zap, Activity, AlertTriangle, Play } from "lucide-react";
 import { requireAdmin } from "@/lib/admin-guard";
 import { AdminIntegrations } from "@/components/admin/AdminIntegrations";
+import { AdminPricing } from "@/components/admin/AdminPricing";
 
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -2019,6 +2020,11 @@ function AdminPage() {
                     <p className={`text-[9px] font-mono uppercase tracking-widest ${isDark ? "text-neutral-750" : "text-neutral-300"}`}>Registry empty</p>
                   )}
                 </div>
+              </div>
+
+              <div className="space-y-3">
+                <h2 className={`text-[10px] font-mono font-semibold uppercase tracking-widest ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>Pricing</h2>
+                <AdminPricing isDark={isDark} />
               </div>
 
               <div className="space-y-3">

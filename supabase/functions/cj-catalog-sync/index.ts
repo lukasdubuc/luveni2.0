@@ -7,8 +7,11 @@
 //  everything so a later TikTok/Etsy publish has all data even if the
 //  storefront doesn't show it.
 //
-//  IMPORTANT: price_cents is imported as CJ's COST price (what CJ charges
-//  us). Set retail pricing in the admin before publishing.
+//  Pricing: CJ's COST lands in cost_cents (product + per-variant) and
+//  retail is computed through _shared/pricing.ts (pricing_rules table),
+//  so price_cents is always a sellable RETAIL price. Titles are cleaned
+//  with formatTitle. New products auto-publish (they arrive fully priced);
+//  existing products keep their publish choice.
 //
 //  Secrets: CJ_EMAIL, CJ_API_KEY (+ optional CJ_API_BASE), CRON_KEY.
 // ─────────────────────────────────────────────────────────────
@@ -17,6 +20,7 @@
 
 import { corsHeaders, json, requireAdmin, SUPABASE_URL, SERVICE_KEY } from "../_shared/http.ts";
 import { cjConfigured, getCjToken, cjGet, isCronOrService } from "../_shared/cj.ts";
+import { loadPricingRules, matchRule, computeRetail, formatTitle } from "../_shared/pricing.ts";
 
 function slugify(s: string): string {
   return (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -54,6 +58,8 @@ Deno.serve(async (req) => {
     await sleep(150);
   }
 
+  const pricingRules = await loadPricingRules();
+
   let synced = 0;
   const errors: string[] = [];
 
@@ -76,26 +82,35 @@ Deno.serve(async (req) => {
       }
       await sleep(250);
 
-      const title = detail?.productNameEn ?? item?.nameEn ?? `cj-${pid}`;
+      const rawTitle = detail?.productNameEn ?? item?.nameEn ?? `cj-${pid}`;
+      const title = formatTitle(rawTitle);
+      const rule = matchRule(title, pricingRules);
       const gallery: string[] = Array.from(new Set(
         [...(detail?.productImageSet ?? []), detail?.bigImage, item?.bigImage].filter(Boolean),
       )) as string[];
 
-      const variants = (Array.isArray(variantsRaw) ? variantsRaw : []).map((v: any) => ({
-        sku: String(v?.variantSku ?? v?.vid ?? ""),
-        external_sku: String(v?.vid ?? ""),
-        fulfillment_provider: "cj",
-        price_cents: Math.round(Number(v?.variantSellPrice ?? 0) * 100),
-        attributes: attributesFromKey(v?.variantKey),
-        image: v?.variantImage ?? null,
-        stock: null, // filled by cj-inventory-sync
-        availability_status: "active",
-      }));
+      const variants = (Array.isArray(variantsRaw) ? variantsRaw : []).map((v: any) => {
+        const costCents = Math.round(Number(v?.variantSellPrice ?? 0) * 100); // CJ "sell price" = our cost
+        return {
+          sku: String(v?.variantSku ?? v?.vid ?? ""),
+          external_sku: String(v?.vid ?? ""),
+          fulfillment_provider: "cj",
+          cost_cents: costCents,
+          price_cents: costCents > 0 ? computeRetail(costCents, rule).retail_cents : 0,
+          attributes: attributesFromKey(v?.variantKey),
+          image: v?.variantImage ?? null,
+          stock: null, // filled by cj-inventory-sync
+          availability_status: "active",
+        };
+      });
 
-      const prices = variants.map((v) => v.price_cents).filter((n) => n > 0);
-      const priceCents = prices.length ? Math.min(...prices) : Math.round(Number(item?.sellPrice ?? 0) * 100);
+      const costs = variants.map((v) => v.cost_cents).filter((n) => n > 0);
+      const costCents = costs.length ? Math.min(...costs) : Math.round(Number(item?.sellPrice ?? 0) * 100);
+      const retails = variants.map((v) => v.price_cents).filter((n) => n > 0);
+      const priceCents = retails.length ? Math.min(...retails)
+        : (costCents > 0 ? computeRetail(costCents, rule).retail_cents : 0);
 
-      // Preserve prior publish choice; new products land unpublished.
+      // Preserve prior publish choice; new products auto-publish (fully priced).
       const existing = await fetch(
         `${SUPABASE_URL}/rest/v1/products?select=id,is_published&source=eq.cj&external_product_id=eq.${encodeURIComponent(pid)}&limit=1`,
         { headers: svc() },
@@ -110,9 +125,12 @@ Deno.serve(async (req) => {
           slug: slugify(title) || `cj-${pid}`,
           description: detail?.description ?? title,
           price_cents: priceCents,
+          cost_cents: costCents,
+          shipping_cents: rule.ship_first_cents,
+          category: rule.key,
           image_urls: gallery,
           is_archived: false,
-          is_published: prior ? !!prior.is_published : false,
+          is_published: prior ? !!prior.is_published : priceCents > 0,
           source: "cj",
           external_product_id: pid,
           raw_payload: { detail, listItem: item, variants: variantsRaw },
