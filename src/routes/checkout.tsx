@@ -4,6 +4,19 @@ import { useState, useEffect } from "react";
 import { createCheckout } from "@/lib/checkout.functions";
 import { trackEvent } from "@/lib/track";
 import { markContactSubmitted } from "@/lib/contact-flag";
+import { useTransparentImage } from "@/lib/useTransparentImage";
+
+/** "Black · L" style variant summary from cart metadata, when present. */
+function variantLabel(item: { metadata?: Record<string, any> }): string {
+  const m = item.metadata ?? {};
+  return [m.color, m.size].filter(Boolean).join(" · ");
+}
+
+/** Cart thumbnail with client-side background removal for a consistent look. */
+function CartThumb({ src, alt, className }: { src: string; alt: string; className: string }) {
+  const { url } = useTransparentImage(src);
+  return <img src={url ?? src} alt={alt} className={className} />;
+}
 
 export const Route = createFileRoute("/checkout")({
   head: () => ({
@@ -68,10 +81,13 @@ function CheckoutPage() {
               {items.map((item) => (
                 <div key={`${item.productId}-${item.variantSku}`} className="flex gap-3 border-b border-border pb-4">
                   <div className="w-16 h-16 flex-shrink-0 overflow-hidden rounded-lg bg-white p-1 ring-1 ring-black/5">
-                    <img src={item.image_url} alt={item.title} className="w-full h-full object-contain" />
+                    <CartThumb src={item.image_url} alt={item.title} className="w-full h-full object-contain" />
                   </div>
                   <div className="flex flex-col flex-1 gap-1 min-w-0">
                     <h3 className="text-xs font-bold uppercase leading-tight">{item.title}</h3>
+                    {variantLabel(item) && (
+                      <p className="text-[10px] uppercase tracking-widest opacity-50">{variantLabel(item)}</p>
+                    )}
                     <p className="text-[10px] opacity-60">${(item.price_cents / 100).toFixed(2)} each</p>
                     <div className="flex items-center justify-between mt-1">
                       <div className="flex items-center border border-border">
@@ -105,9 +121,14 @@ function CheckoutPage() {
                       <td className="py-3">
                         <div className="flex items-center gap-2">
                           <div className="w-20 h-20 flex-shrink-0 overflow-hidden rounded-lg bg-white p-1 ring-1 ring-black/5">
-                            <img src={item.image_url} alt={item.title} className="w-full h-full object-contain" />
+                            <CartThumb src={item.image_url} alt={item.title} className="w-full h-full object-contain" />
                           </div>
-                          <span className="text-xs">{item.title}</span>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs">{item.title}</span>
+                            {variantLabel(item) && (
+                              <span className="text-[10px] uppercase tracking-widest opacity-50">{variantLabel(item)}</span>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="py-3">

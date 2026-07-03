@@ -6,6 +6,7 @@ import { offer } from "@/config/site";
 import { useCart } from "@/context/CartContext";
 import { ZoomPanImage } from "@/components/site/ZoomPanImage";
 import { isLikelyTransparentImage } from "@/lib/img";
+import { useTransparentImage } from "@/lib/useTransparentImage";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -211,12 +212,13 @@ function _canvasColor(name: string): string | null {
 }
 
 /**
- * Resolves any string to a Hex CSS color code.
- * Includes fallback logic for complex names and color shifting.
+ * Attempts to resolve a string to a Hex CSS color. Returns null when the value
+ * is not recognizable as a color (e.g. "1Style", a product title, a SKU) so
+ * callers can decide to fall back to an image swatch instead of a grey dot.
  */
-export function resolveColor(value: string): string {
+export function tryResolveColor(value: string): string | null {
   const key = value.toLowerCase().trim();
-  if (_colorCache[key]) return _colorCache[key];
+  if (key in _colorCache) return _colorCache[key] || null;
 
   // 1. Direct Map
   if (_colorMap[key]) return (_colorCache[key] = _colorMap[key]);
@@ -226,11 +228,13 @@ export function resolveColor(value: string): string {
     return (_colorCache[key] = key);
   }
 
-  // 3. Browser Canvas Check
+  // 3. Browser Canvas Check — but reject bare CSS keywords that also happen to
+  //    be nouns we don't want to treat as colors is unnecessary here; canvas
+  //    only accepts real CSS color names.
   const canvasCheck = _canvasColor(key);
   if (canvasCheck) return (_colorCache[key] = canvasCheck);
 
-  // 4. Heuristic Modifier Logic
+  // 4. Heuristic Modifier Logic for "{qualifier} {basecolor}" names.
   const words = key.split(/[\s_\-\/]+/).filter(Boolean);
   if (words.length > 1) {
     const modifiers: Record<string, number> = {
@@ -246,10 +250,6 @@ export function resolveColor(value: string): string {
       else nonModifierWords.push(word);
     }
 
-    // Garment color names are usually "{qualifier} {basecolor}" (Ice Grey,
-    // Carolina Blue, Brick Red) — the LAST non-modifier word is the true
-    // color family more often than the first (Green Camo is the exception,
-    // so first-word is tried as a secondary fallback).
     const candidates = [
       nonModifierWords[nonModifierWords.length - 1],
       nonModifierWords[0],
@@ -267,7 +267,42 @@ export function resolveColor(value: string): string {
     }
   }
 
-  return (_colorCache[key] = "#888888"); // Default fallback
+  return (_colorCache[key] = ""); // cache the miss; "" → null via `|| null`
+}
+
+/**
+ * Resolves any string to a Hex CSS color code, falling back to neutral grey.
+ */
+export function resolveColor(value: string): string {
+  return tryResolveColor(value) ?? "#888888";
+}
+
+/** Size tokens (S/M/L/XL/2XL…, numeric, one-size). Used to classify options. */
+const _sizeToken =
+  /^(xxxs|xxs|xs|s|m|l|xl|xxl|xxxl|[2-6]xl|one[\s-]?size|os|free[\s-]?size|[0-9]{1,3}(\.[0-9])?|[0-9]{1,2}[\s-]?(months?|m|y))$/i;
+
+export function isSizeValue(value: string): boolean {
+  return _sizeToken.test(value.trim());
+}
+
+/**
+ * Classify an option's *values* (not its key name) into a display role. Vendor
+ * imports are wildly inconsistent — colors land under a "size" key, style codes
+ * like "1Style" land under "color", product titles leak into "color" — so we
+ * never trust the key. We look at what the values actually are.
+ *
+ *  - "size"   → values are size tokens → centered text chips
+ *  - "color"  → values resolve to real colors → color circles
+ *  - "style"  → multiple unresolvable values (e.g. 1Style/2Style) → image circles
+ *  - "hidden" → a single degenerate value (a title/SKU) → no picker at all
+ */
+export function classifyOptionValues(values: string[]): "size" | "color" | "style" | "hidden" {
+  const vals = values.map((v) => v?.trim()).filter(Boolean);
+  if (vals.length <= 1) return "hidden";
+  const threshold = Math.ceil(vals.length * 0.6);
+  if (vals.filter(isSizeValue).length >= threshold) return "size";
+  if (vals.filter((v) => tryResolveColor(v) !== null).length >= threshold) return "color";
+  return "style";
 }
 
 export function isColorOption(key: string): boolean {
@@ -281,6 +316,52 @@ function proxyImageUrl(url: string): string {
     return `https://wsrv.nl/?url=${encodeURIComponent(url)}&n=-1`;
   }
   return url;
+}
+
+// ─── Gallery image (with client-side background removal) ───────────────────────
+
+function GalleryImg({
+  src, framed, isActive, alt, onClick,
+}: {
+  src: string;
+  framed: boolean;
+  isActive: boolean;
+  alt: string;
+  onClick: () => void;
+}) {
+  // Only cut the background of the image actually on screen to keep the PDP
+  // snappy; results are cached so revisiting a slide is instant.
+  const { url, transparent } = useTransparentImage(src, isActive);
+  const showFrame = framed && !transparent;
+  return (
+    <img
+      src={url ?? src}
+      alt={alt}
+      loading={isActive ? "eager" : "lazy"}
+      decoding="async"
+      onClick={onClick}
+      style={{
+        position: "absolute",
+        maxWidth: "100%",
+        maxHeight: "100%",
+        objectFit: "contain",
+        display: "block",
+        cursor: "zoom-in",
+        transition: "opacity 0.15s ease-in-out, visibility 0.15s",
+        opacity: isActive ? 1 : 0,
+        visibility: isActive ? "visible" : "hidden",
+        pointerEvents: isActive ? "auto" : "none",
+        ...(showFrame
+          ? {
+              background: "#fff",
+              borderRadius: "16px",
+              padding: "10px",
+              boxShadow: "0 1px 12px rgba(0,0,0,0.06)",
+            }
+          : null),
+      }}
+    />
+  );
 }
 
 // ─── Main Page Component ──────────────────────────────────────────────────────
@@ -484,16 +565,42 @@ function OfferSlugPage() {
     }, {});
   }, [optionKeys, variants]);
 
-  const visibleOptionKeys = useMemo(
-    () => optionKeys.filter((key) => (optionValues[key]?.length ?? 0) > 1),
-    [optionKeys, optionValues],
+  // Role for every option, derived from its VALUES (never its key name) so the
+  // storefront renders correctly no matter how the importer labeled things.
+  const optionRole = useMemo(() => {
+    return optionKeys.reduce<Record<string, "size" | "color" | "style" | "hidden">>((acc, key) => {
+      acc[key] = classifyOptionValues(optionValues[key] ?? []);
+      return acc;
+    }, {});
+  }, [optionKeys, optionValues]);
+
+  // Visible pickers: skip degenerate single-value/junk options, and always show
+  // colour/style (the visual pick) before size.
+  const visibleOptionKeys = useMemo(() => {
+    const roleOrder: Record<string, number> = { color: 0, style: 1, size: 2, hidden: 9 };
+    return optionKeys
+      .filter((key) => optionRole[key] !== "hidden")
+      .sort((a, b) => (roleOrder[optionRole[a]] ?? 5) - (roleOrder[optionRole[b]] ?? 5));
+  }, [optionKeys, optionRole]);
+
+  // The option whose values are true colours drives positional image mapping.
+  const colorOptionKey = useMemo(
+    () => optionKeys.find((k) => optionRole[k] === "color"),
+    [optionKeys, optionRole],
   );
 
-  // Derived color option key and ordered color values (matches Printful image order)
-  const colorOptionKey = useMemo(
-    () => optionKeys.find((k) => isColorOption(k)),
-    [optionKeys],
-  );
+  // Map every option value to a representative variant image (for style swatches
+  // and colours that carry per-variant imagery). First match wins.
+  const valueImage = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const key of optionKeys) {
+      for (const v of variants) {
+        const val = v.attributes?.[key];
+        if (val && v.image && !(`${key}::${val}` in map)) map[`${key}::${val}`] = v.image;
+      }
+    }
+    return map;
+  }, [optionKeys, variants]);
   const colorValues = useMemo(
     () => (colorOptionKey ? optionValues[colorOptionKey] ?? [] : []),
     [colorOptionKey, optionValues],
@@ -579,6 +686,21 @@ function OfferSlugPage() {
     }
   }, [selectedVariant, jumpGalleryToImage]);
 
+  // Human-readable variant attributes for the cart/checkout, keyed by role so
+  // "color"/"style" collapse to color and size stays size — regardless of the
+  // vendor's original attribute key names.
+  const variantMeta = useCallback((sel: Record<string, string>) => {
+    const meta: { color?: string; size?: string } = {};
+    for (const key of optionKeys) {
+      const role = optionRole[key];
+      const val = sel[key];
+      if (!val || role === "hidden") continue;
+      if (role === "size") meta.size = val;
+      else if (!meta.color) meta.color = val;
+    }
+    return meta;
+  }, [optionKeys, optionRole]);
+
   const commitToCart = useCallback(() => {
     if (!product) return;
     const variant = variants.find((v) =>
@@ -597,6 +719,7 @@ function OfferSlugPage() {
           colorValues,
         )),
         metadata: {
+          ...variantMeta(selection),
           external_sku: variant?.external_sku,
           fulfillment_provider: variant?.fulfillment_provider || "printful",
         },
@@ -608,7 +731,7 @@ function OfferSlugPage() {
     } catch (e) {
       console.error("Cart Engine Critical Failure:", e);
     }
-  }, [product, variants, optionKeys, selection, selectedPrice, colorOptionKey, colorValues, addItem]);
+  }, [product, variants, optionKeys, selection, selectedPrice, colorOptionKey, colorValues, addItem, variantMeta]);
 
   const handleAddToCart = useCallback(() => {
     if (!product) return;
@@ -781,40 +904,16 @@ function OfferSlugPage() {
                   justifyContent: "center",
                 }}>
                   {galleryImages[0] !== "" ? (
-                    galleryImages.map((imgUrl, idx) => {
-                      const isActive = idx === activeImageIndex;
-                      const framed = galleryFramed[idx];
-                      return (
-                        <img
-                          key={imgUrl}
-                          src={imgUrl}
-                          alt={`${product.title} — image ${idx + 1}`}
-                          loading={idx === 0 ? "eager" : "lazy"}
-                          decoding="async"
-                          onClick={() => setZoomOpen(true)}
-                          style={{
-                            position: "absolute",
-                            maxWidth: "100%",
-                            maxHeight: "100%",
-                            objectFit: "contain",
-                            display: "block",
-                            cursor: "zoom-in",
-                            transition: "opacity 0.15s ease-in-out, visibility 0.15s",
-                            opacity: isActive ? 1 : 0,
-                            visibility: isActive ? "visible" : "hidden",
-                            pointerEvents: isActive ? "auto" : "none",
-                            ...(framed
-                              ? {
-                                  background: "#fff",
-                                  borderRadius: "16px",
-                                  padding: "10px",
-                                  boxShadow: "0 1px 12px rgba(0,0,0,0.06)",
-                                }
-                              : null),
-                          }}
-                        />
-                      );
-                    })
+                    galleryImages.map((imgUrl, idx) => (
+                      <GalleryImg
+                        key={imgUrl}
+                        src={imgUrl}
+                        framed={galleryFramed[idx]}
+                        isActive={idx === activeImageIndex}
+                        alt={`${product.title} — image ${idx + 1}`}
+                        onClick={() => setZoomOpen(true)}
+                      />
+                    ))
                   ) : (
                     <div style={{
                       width: "100%", height: "100%",
@@ -941,7 +1040,9 @@ function OfferSlugPage() {
                       if (idx !== currentStep && currentStep !== null) return null;
                       if (currentStep === null) return null;
 
-                      const isColor = isColorOption(option);
+                      const role = optionRole[option];
+                      const isSize = role === "size";
+                      const optionLabel = role === "size" ? "SIZE" : role === "style" ? "STYLE" : "COLOR";
                       const isLast = idx === visibleOptionKeys.length - 1;
 
                       return (
@@ -955,24 +1056,31 @@ function OfferSlugPage() {
                             opacity: 0.45, color: "var(--foreground)",
                             fontFamily: "inherit",
                           }}>
-                            {normalizeOptionName(option)}
+                            {optionLabel}
                           </div>
 
                           <div style={{
                             display: "flex", flexWrap: "wrap",
-                            gap: "0.5rem", justifyContent: "center",
+                            gap: isSize ? "0.4rem" : "0.6rem",
+                            justifyContent: "center", alignItems: "center",
+                            maxWidth: "320px",
                           }}>
                             {optionValues[option]?.map((value) => {
                               const selected = selection[option] === value;
                               const available = isOptionAvailable(option, value);
-                              const colorHex = isColor ? resolveColor(value) : null;
+                              // Non-size swatches are circles: a real color fill
+                              // when the value resolves to a color, otherwise the
+                              // variant's own photo (style codes like "1Style").
+                              const hex = isSize ? null : tryResolveColor(value);
+                              const swatchImg = valueImage[`${option}::${value}`];
+                              const useImageSwatch = !isSize && !hex && !!swatchImg;
 
                               const handleChipClick = () => {
                                 userPickedVariant.current = true;
                                 setSelection((cur) => ({ ...cur, [option]: value }));
 
                                 // Jump gallery to matching color image immediately
-                                if (isColor) jumpGalleryToColor(value);
+                                if (role === "color") jumpGalleryToColor(value);
 
                                 if (!isLast) {
                                   setCurrentStep(idx + 1);
@@ -994,6 +1102,7 @@ function OfferSlugPage() {
                                         colorValues,
                                       )),
                                       metadata: {
+                                        ...variantMeta(updatedSelection),
                                         external_sku: variant?.external_sku,
                                         fulfillment_provider: variant?.fulfillment_provider || "printful",
                                       },
@@ -1010,7 +1119,7 @@ function OfferSlugPage() {
                                 }
                               };
 
-                              if (isColor) {
+                              if (!isSize) {
                                 return (
                                   <button
                                     key={value}
@@ -1022,14 +1131,16 @@ function OfferSlugPage() {
                                     title={value}
                                     style={{
                                       display: "inline-block",
-                                      width: "24px", height: "24px",
+                                      width: "26px", height: "26px",
                                       borderRadius: "50%",
-                                      background: colorHex ?? "#888",
+                                      background: useImageSwatch
+                                        ? `center/cover no-repeat url(${proxyImageUrl(swatchImg!)})`
+                                        : (hex ?? "#888"),
                                       outline: selected
                                         ? "2px solid var(--foreground)"
                                         : "2px solid transparent",
                                       outlineOffset: "3px",
-                                      border: "1.5px solid color-mix(in srgb, var(--foreground) 20%, transparent)",
+                                      border: "1.5px solid color-mix(in srgb, var(--foreground) 25%, transparent)",
                                       cursor: available ? "pointer" : "not-allowed",
                                       opacity: available ? 1 : 0.25,
                                       transition: "outline 0.15s ease, opacity 0.15s ease",
