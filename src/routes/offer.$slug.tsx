@@ -14,6 +14,9 @@ type ProductVariant = {
   price_cents?: number;
   external_sku?: string;
   fulfillment_provider?: string;
+  // CJ variants carry their own per-variant image; Printful variants do not
+  // (Printful relies on positional image_urls indexing instead).
+  image?: string;
   attributes?: Record<string, string>;
 };
 
@@ -114,6 +117,22 @@ export function resolveVariantImage(
 
   // +1 because imageUrls[0] is typically a logo/hero mockup
   return imageUrls[colorIndex + 1] ?? imageUrls[1] ?? imageUrls[0] ?? "";
+}
+
+/**
+ * Unified variant → image resolver. Any provider that attaches a per-variant
+ * image (CJ) wins outright — that image is the exact variant the shopper picked,
+ * so the cart preview and gallery always match the selection. Providers with no
+ * per-variant image (Printful) fall back to positional image_urls indexing.
+ */
+export function pickVariantImage(
+  variant: { image?: string } | undefined,
+  imageUrls: string[],
+  colorValue: string | undefined,
+  colorValues: string[],
+): string {
+  if (variant?.image) return variant.image;
+  return resolveVariantImage(imageUrls, colorValue, colorValues);
 }
 
 // ─── Color Resolution Utility ────────────────────────────────────────────────
@@ -414,15 +433,27 @@ function OfferSlugPage() {
     [product?.variants],
   );
 
-  // Gallery: skip image_urls[0] (always the logo/design mockup), show all others.
-  // Proxy each URL through wsrv.nl to eliminate Printful CDN CORS blocks.
+  // Products whose variants carry their own image (CJ) are gallery-driven by
+  // those variant images; Printful-shape products index positionally into
+  // image_urls where [0] is a logo/design mockup that must be skipped.
+  const hasVariantImages = useMemo(
+    () => variants.some((v) => !!v.image),
+    [variants],
+  );
+
+  // Gallery. Printful: skip image_urls[0] (the logo mockup). CJ: keep every
+  // product image AND merge in each variant image so selecting any variant
+  // always lands on a real slide. Proxy through wsrv.nl to dodge CDN CORS.
   const galleryImages = useMemo(() => {
-    if (!Array.isArray(product?.image_urls)) return [""];
-    const all = product!.image_urls.filter(Boolean);
-    const withoutLogo = all.length > 1 ? all.slice(1) : all;
-    const proxied = withoutLogo.map(proxyImageUrl);
+    const base = Array.isArray(product?.image_urls) ? product!.image_urls.filter(Boolean) : [];
+    const core = hasVariantImages ? base : base.length > 1 ? base.slice(1) : base;
+    const variantImgs = hasVariantImages
+      ? variants.map((v) => v.image).filter((u): u is string => !!u)
+      : [];
+    const merged = Array.from(new Set([...core, ...variantImgs]));
+    const proxied = merged.map(proxyImageUrl);
     return proxied.length > 0 ? proxied : [""];
-  }, [product?.image_urls]);
+  }, [product?.image_urls, variants, hasVariantImages]);
 
   const optionKeys = useMemo(
     () => sortOptionKeys(Array.from(new Set(variants.flatMap((v) => Object.keys(v.attributes ?? {}))))),
@@ -515,6 +546,20 @@ function OfferSlugPage() {
     setActiveImageIndex(target);
   }, [colorOptionKey, colorValues, galleryImages.length]);
 
+  // Jump the gallery to a specific image URL (used for per-variant images).
+  const jumpGalleryToImage = useCallback((rawUrl?: string) => {
+    if (!rawUrl) return;
+    const idx = galleryImages.indexOf(proxyImageUrl(rawUrl));
+    if (idx >= 0) setActiveImageIndex(idx);
+  }, [galleryImages]);
+
+  // For variant-image products (CJ), keep the gallery locked to whatever variant
+  // is currently selected — colour OR size change lands on the exact image, so
+  // the preview always matches what goes to cart.
+  useEffect(() => {
+    if (selectedVariant?.image) jumpGalleryToImage(selectedVariant.image);
+  }, [selectedVariant, jumpGalleryToImage]);
+
   const commitToCart = useCallback(() => {
     if (!product) return;
     const variant = variants.find((v) =>
@@ -526,7 +571,8 @@ function OfferSlugPage() {
         variantSku: variant?.sku,
         title: product.title,
         price_cents: selectedPrice ?? product.price_cents,
-        image_url: proxyImageUrl(resolveVariantImage(
+        image_url: proxyImageUrl(pickVariantImage(
+          variant,
           product.image_urls ?? [],
           selection[colorOptionKey ?? ""] ?? selection["color"] ?? selection["colour"],
           colorValues,
@@ -911,7 +957,8 @@ function OfferSlugPage() {
                                       variantSku: variant?.sku,
                                       title: product.title,
                                       price_cents: variant?.price_cents ?? selectedPrice ?? product.price_cents,
-                                      image_url: proxyImageUrl(resolveVariantImage(
+                                      image_url: proxyImageUrl(pickVariantImage(
+                                        variant,
                                         product.image_urls ?? [],
                                         updatedSelection[colorOptionKey ?? ""] ?? updatedSelection["color"] ?? updatedSelection["colour"],
                                         colorValues,
