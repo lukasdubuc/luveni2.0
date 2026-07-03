@@ -81,7 +81,8 @@ function normalizeOptionName(key: string) {
 }
 
 function sortOptionKeys(keys: string[]) {
-  const priority = ["size", "color", "colour"];
+  // Color first, then size — consistent with the shop modal (CJ ordering).
+  const priority = ["color", "colour", "size"];
   return [...keys].sort((a, b) => {
     const ai = priority.indexOf(a.toLowerCase());
     const bi = priority.indexOf(b.toLowerCase());
@@ -1026,8 +1027,7 @@ function OfferSlugPage() {
                                     cursor: available ? "pointer" : "not-allowed",
                                     opacity: available ? (selected ? 1 : 0.55) : 0.2,
                                     transition: "all 0.15s ease", fontFamily: "inherit",
-                                    textDecoration: selected ? "underline" : "none",
-                                    textUnderlineOffset: "3px",
+                                    textDecoration: "none",
                                   }}
                                 >
                                   {value}

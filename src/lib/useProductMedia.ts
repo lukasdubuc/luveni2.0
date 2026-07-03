@@ -19,6 +19,7 @@ export interface ProductMedia {
   is_primary: boolean;
   is_transparent: boolean;
   position: number;
+  metadata?: { original_url?: string | null } | null;
 }
 
 export function useProductMedia(productId: string | undefined) {
@@ -32,7 +33,7 @@ export function useProductMedia(productId: string | undefined) {
     (async () => {
       const { data, error } = await (supabase as any)
         .from("product_media")
-        .select("id, variant_key, view_type, url, is_primary, is_transparent, position")
+        .select("id, variant_key, view_type, url, is_primary, is_transparent, position, metadata")
         .eq("product_id", productId)
         .order("position", { ascending: true });
       if (cancelled) return;

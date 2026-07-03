@@ -64,6 +64,12 @@ export function ProductModal({ product, onClose }: { product: ModalProduct; onCl
     if (color && colorSkus.size > 0) {
       rows = media.filter((m) => !m.variant_key || colorSkus.has(String(m.variant_key)));
     }
+    // Drop opaque originals that a transparent row has already superseded, so
+    // the carousel never shows the look-alike duplicate (transparent + opaque).
+    const superseded = new Set(
+      media.map((m) => m.metadata?.original_url).filter((u): u is string => !!u),
+    );
+    rows = rows.filter((m) => !superseded.has(m.url));
     const ordered = [...rows].sort((a, b) => {
       if (a.is_primary !== b.is_primary) return a.is_primary ? -1 : 1;
       return a.position - b.position;

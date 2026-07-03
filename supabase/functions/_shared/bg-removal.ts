@@ -157,8 +157,10 @@ function pickSourceImage(p: ProductRow, override?: string | null): string | null
 }
 
 async function persistTransparentImage(p: ProductRow, publicUrl: string, sourceUrl: string, engine: string) {
-  // 1. products.image_urls — transparent PNG first, original kept after.
-  const rest = (p.image_urls ?? []).filter((u) => u && u !== publicUrl);
+  // 1. products.image_urls — transparent PNG first. Drop the opaque source it
+  //    replaces so the gallery never shows both (the transparent look-alike +
+  //    the original). Provenance is retained on the media row's original_url.
+  const rest = (p.image_urls ?? []).filter((u) => u && u !== publicUrl && u !== sourceUrl);
   await fetch(`${SUPABASE_URL}/rest/v1/products?id=eq.${encodeURIComponent(p.id)}`, {
     method: "PATCH",
     headers: { ...svc(), "Content-Type": "application/json", Prefer: "return=minimal" },
