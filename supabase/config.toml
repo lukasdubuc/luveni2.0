@@ -9,3 +9,13 @@ verify_jwt = false
 verify_jwt = false
 [functions.proxy-image]
 verify_jwt = false
+# TikTok's OAuth callback GET carries no JWT; POST actions are admin-gated inside.
+[functions.tiktok-oauth]
+verify_jwt = false
+# Callers always carry a JWT (admin, service key, or anon+x-cron-key), so the
+# gateway check stays on; fine-grained auth is enforced inside.
+[functions.tiktok-post]
+verify_jwt = true
+# CJ's webhook push carries no JWT; authenticated by the shared secret in the URL.
+[functions.cj-webhook]
+verify_jwt = false

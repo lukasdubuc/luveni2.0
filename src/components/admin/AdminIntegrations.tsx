@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, type Dispatch, type SetStateAction } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { RefreshCw } from "lucide-react";
@@ -18,25 +18,180 @@ type Vendor = {
 
 const VENDORS: Vendor[] = [
   // CJ's sync imports the catalog first, then refreshes live stock (see sync()).
-  { key: "cj", name: "CJ Dropshipping", syncFn: "cj-catalog-sync", fields: [
-    { secret: "CJ_EMAIL", label: "Account Email" },
-    { secret: "CJ_API_KEY", label: "API Key" },
-  ] },
-  { key: "zendrop", name: "Zendrop", syncFn: "zendrop-sync", fields: [
-    { secret: "ZENDROP_API_KEY", label: "API Key" },
-  ] },
-  { key: "apliiq", name: "Apliiq", syncFn: "apliiq-sync", fields: [
-    { secret: "APLIIQ_APP_ID", label: "App ID" },
-    { secret: "APLIIQ_SHARED_SECRET", label: "Shared Secret" },
-  ] },
-  { key: "printful", name: "Printful", syncFn: "printful-sync", fields: [
-    { secret: "PRINTFUL_API_KEY", label: "API Key" },
-  ] },
-  { key: "tiktok", name: "TikTok Shop", syncFn: null, fields: [
-    { secret: "TIKTOK_SHOP_TOKEN", label: "Access Token" },
-    { secret: "TIKTOK_SHOP_ID", label: "Shop ID" },
-  ] },
+  {
+    key: "cj",
+    name: "CJ Dropshipping",
+    syncFn: "cj-catalog-sync",
+    fields: [
+      { secret: "CJ_EMAIL", label: "Account Email" },
+      { secret: "CJ_API_KEY", label: "API Key" },
+    ],
+  },
+  {
+    key: "zendrop",
+    name: "Zendrop",
+    syncFn: "zendrop-sync",
+    fields: [{ secret: "ZENDROP_API_KEY", label: "API Key" }],
+  },
+  {
+    key: "apliiq",
+    name: "Apliiq",
+    syncFn: "apliiq-sync",
+    fields: [
+      { secret: "APLIIQ_APP_ID", label: "App ID" },
+      { secret: "APLIIQ_SHARED_SECRET", label: "Shared Secret" },
+    ],
+  },
+  {
+    key: "printful",
+    name: "Printful",
+    syncFn: "printful-sync",
+    fields: [{ secret: "PRINTFUL_API_KEY", label: "API Key" }],
+  },
+  {
+    key: "tiktok",
+    name: "TikTok Shop",
+    syncFn: null,
+    fields: [
+      { secret: "TIKTOK_SHOP_TOKEN", label: "Access Token" },
+      { secret: "TIKTOK_SHOP_ID", label: "Shop ID" },
+    ],
+  },
 ];
+
+// TikTok CONTENT POSTING (developers.tiktok.com) — separate from TikTok Shop.
+// OAuth-based: save the client secret, then Connect opens TikTok's consent
+// page; the tiktok-oauth function stores the tokens.
+function TikTokContentCard({
+  isDark,
+  status,
+  drafts,
+  setDrafts,
+  saveSecret,
+}: {
+  isDark: boolean;
+  status: Record<string, boolean> | null;
+  drafts: Record<string, string>;
+  setDrafts: Dispatch<SetStateAction<Record<string, string>>>;
+  saveSecret: (secrets: Record<string, string>, label: string) => Promise<void>;
+}) {
+  const [conn, setConn] = useState<{
+    connected: boolean;
+    open_id?: string | null;
+    scope?: string | null;
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const refresh = useCallback(async () => {
+    const { data } = await supabase.functions.invoke("tiktok-oauth", {
+      body: { action: "status" },
+    });
+    if (data && !data.error) setConn(data);
+  }, []);
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  async function connect() {
+    setBusy(true);
+    const { data, error } = await supabase.functions.invoke("tiktok-oauth", {
+      body: { action: "start" },
+    });
+    setBusy(false);
+    if (error || data?.error) {
+      toast.error(data?.error || error?.message || "Could not start TikTok OAuth");
+      return;
+    }
+    window.open(data.url, "_blank", "noopener");
+    toast.info("Finish authorizing in the TikTok tab, then come back and hit Refresh.");
+  }
+
+  async function disconnect() {
+    setBusy(true);
+    await supabase.functions.invoke("tiktok-oauth", { body: { action: "disconnect" } });
+    setBusy(false);
+    refresh();
+  }
+
+  const solidBtn = `text-[9px] font-mono font-bold uppercase px-4 py-1.5 rounded-[9999px] transition-all disabled:opacity-30 ${
+    isDark
+      ? "bg-white text-black hover:bg-neutral-202"
+      : "bg-black text-white hover:bg-neutral-800 shadow-sm"
+  }`;
+  const ghostBtn = `flex items-center gap-1.5 text-[8px] font-mono font-bold uppercase px-3 py-1 rounded-[9999px] border transition-all disabled:opacity-40 ${
+    isDark
+      ? "border-neutral-800 text-neutral-300 hover:bg-white/[0.05]"
+      : "border-[#D1D1D6] text-neutral-600 hover:bg-neutral-50"
+  }`;
+  const inputCls = `w-full bg-transparent border rounded-[9999px] px-4 py-1.5 text-[10px] font-mono focus:outline-none focus:ring-1 ${
+    isDark
+      ? "border-neutral-850 text-white placeholder-neutral-700 focus:border-white focus:ring-white/25"
+      : "border-[#D1D1D6] text-black placeholder-neutral-350 focus:border-black focus:ring-black/10 bg-white shadow-sm"
+  }`;
+
+  return (
+    <div className={`pt-5 border-t ${isDark ? "border-neutral-900" : "border-[#F2F2F7]"}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-mono font-semibold uppercase tracking-wider">
+            TikTok Content Posting
+          </span>
+          {conn?.connected && (
+            <span className="flex items-center gap-1 text-[8px] font-mono uppercase text-emerald-500">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Connected
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={refresh} title="Refresh status" className={ghostBtn}>
+            <RefreshCw size={9} /> Refresh
+          </button>
+          {conn?.connected ? (
+            <button onClick={disconnect} disabled={busy} className={ghostBtn}>
+              Disconnect
+            </button>
+          ) : (
+            <button onClick={connect} disabled={busy} className={solidBtn}>
+              {busy ? "Opening" : "Connect"}
+            </button>
+          )}
+        </div>
+      </div>
+      <p
+        className={`mt-1.5 text-[9px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-455"}`}
+      >
+        Posts product photos/videos to the Luveni TikTok account (developers.tiktok.com — not TikTok
+        Shop). Sandbox posts are private (SELF_ONLY) until the app passes review.
+        {conn?.connected && conn?.scope ? ` Scopes: ${conn.scope}.` : ""}
+      </p>
+      <div className="mt-2.5 space-y-2">
+        <input
+          type="password"
+          autoComplete="off"
+          placeholder={`Client Secret${status?.TIKTOK_CLIENT_SECRET ? " — set (blank keeps it)" : ""}`}
+          value={drafts.TIKTOK_CLIENT_SECRET ?? ""}
+          onChange={(e) => setDrafts((d) => ({ ...d, TIKTOK_CLIENT_SECRET: e.target.value }))}
+          className={inputCls}
+        />
+        <div className="flex justify-end">
+          <button
+            onClick={() => {
+              const val = (drafts.TIKTOK_CLIENT_SECRET ?? "").trim();
+              if (!val) {
+                toast.error("Enter the client secret first.");
+                return;
+              }
+              saveSecret({ TIKTOK_CLIENT_SECRET: val }, "TikTok Content Posting");
+            }}
+            className={solidBtn}
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function AdminIntegrations({ isDark }: { isDark: boolean }) {
   const [status, setStatus] = useState<Record<string, boolean> | null>(null);
@@ -46,17 +201,55 @@ export function AdminIntegrations({ isDark }: { isDark: boolean }) {
   const [needsBootstrap, setNeedsBootstrap] = useState(false);
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.functions.invoke("manage-secrets", { body: { action: "list" } });
+    const { data, error } = await supabase.functions.invoke("manage-secrets", {
+      body: { action: "list" },
+    });
     if (error) {
-      const ctx = (error as any).context;
-      if (ctx?.json) { try { const b = await ctx.json(); if (b?.needsBootstrap) setNeedsBootstrap(true); } catch { /* ignore */ } }
+      const ctx = (error as { context?: { json?: () => Promise<{ needsBootstrap?: boolean }> } })
+        .context;
+      if (ctx?.json) {
+        try {
+          const b = await ctx.json();
+          if (b?.needsBootstrap) setNeedsBootstrap(true);
+        } catch {
+          /* ignore */
+        }
+      }
       return; // Leave status null → render neutrally, never a false "not set".
     }
-    if (data?.needsBootstrap) { setNeedsBootstrap(true); return; }
-    if (data?.secrets) { setStatus(data.secrets); setNeedsBootstrap(false); }
+    if (data?.needsBootstrap) {
+      setNeedsBootstrap(true);
+      return;
+    }
+    if (data?.secrets) {
+      setStatus(data.secrets);
+      setNeedsBootstrap(false);
+    }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const saveSecret = useCallback(
+    async (secrets: Record<string, string>, label: string) => {
+      const { data, error } = await supabase.functions.invoke("manage-secrets", {
+        body: { action: "set", secrets },
+      });
+      if (error || data?.error) {
+        toast.error(data?.error || error?.message || "Save failed");
+        return;
+      }
+      toast.success(`${label} key saved.`);
+      setDrafts((d) => {
+        const n = { ...d };
+        for (const k of Object.keys(secrets)) delete n[k];
+        return n;
+      });
+      load();
+    },
+    [load],
+  );
 
   async function saveVendor(v: Vendor) {
     const payload: Record<string, string> = {};
@@ -64,14 +257,13 @@ export function AdminIntegrations({ isDark }: { isDark: boolean }) {
       const val = drafts[f.secret];
       if (typeof val === "string" && val.trim() !== "") payload[f.secret] = val.trim();
     }
-    if (!Object.keys(payload).length) { toast.error("Enter a value first."); return; }
+    if (!Object.keys(payload).length) {
+      toast.error("Enter a value first.");
+      return;
+    }
     setSavingKey(v.key);
-    const { data, error } = await supabase.functions.invoke("manage-secrets", { body: { action: "set", secrets: payload } });
+    await saveSecret(payload, v.name);
     setSavingKey(null);
-    if (error || data?.error) { toast.error(data?.error || error?.message || "Save failed"); return; }
-    toast.success(`${v.name} key saved.`);
-    setDrafts((d) => { const n = { ...d }; for (const k of Object.keys(payload)) delete n[k]; return n; });
-    load();
   }
 
   async function sync(v: Vendor) {
@@ -79,51 +271,74 @@ export function AdminIntegrations({ isDark }: { isDark: boolean }) {
     setSyncingKey(v.key);
     const { data, error } = await supabase.functions.invoke(v.syncFn, { body: {} });
     setSyncingKey(null);
-    if (error || data?.error) { toast.error(data?.error || error?.message || `${v.name} sync failed`); return; }
+    if (error || data?.error) {
+      toast.error(data?.error || error?.message || `${v.name} sync failed`);
+      return;
+    }
     // Catalog syncs report synced/total; the CJ inventory sync reports stock counts.
-    const msg = typeof data?.variants_checked === "number"
-      ? `${v.name}: checked ${data.variants_checked} variant(s), updated ${data.products_updated ?? 0} product(s).`
-      : `${v.name}: synced ${data?.synced ?? 0}/${data?.total ?? 0} product(s).`;
+    const msg =
+      typeof data?.variants_checked === "number"
+        ? `${v.name}: checked ${data.variants_checked} variant(s), updated ${data.products_updated ?? 0} product(s).`
+        : `${v.name}: synced ${data?.synced ?? 0}/${data?.total ?? 0} product(s).`;
     toast.success(msg);
     // CJ: follow the catalog import with a live stock refresh.
     if (v.key === "cj") {
       const inv = await supabase.functions.invoke("cj-inventory-sync", { body: {} });
       if (!inv.error && !inv.data?.error) {
-        toast.success(`CJ stock: checked ${inv.data?.variants_checked ?? 0} variant(s), updated ${inv.data?.products_updated ?? 0} product(s).`);
+        toast.success(
+          `CJ stock: checked ${inv.data?.variants_checked ?? 0} variant(s), updated ${inv.data?.products_updated ?? 0} product(s).`,
+        );
       }
     }
   }
 
   const cardCls = `p-5 border rounded-[24px] overflow-hidden transition-all duration-300 space-y-5 ${
-    isDark ? "bg-neutral-955/30 border-neutral-900" : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"
+    isDark
+      ? "bg-neutral-955/30 border-neutral-900"
+      : "bg-white border-[#D1D1D6] shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]"
   }`;
   const inputCls = `w-full bg-transparent border rounded-[9999px] px-4 py-1.5 text-[10px] font-mono focus:outline-none focus:ring-1 ${
-    isDark ? "border-neutral-850 text-white placeholder-neutral-700 focus:border-white focus:ring-white/25" : "border-[#D1D1D6] text-black placeholder-neutral-350 focus:border-black focus:ring-black/10 bg-white shadow-sm"
+    isDark
+      ? "border-neutral-850 text-white placeholder-neutral-700 focus:border-white focus:ring-white/25"
+      : "border-[#D1D1D6] text-black placeholder-neutral-350 focus:border-black focus:ring-black/10 bg-white shadow-sm"
   }`;
   const solidBtn = `text-[9px] font-mono font-bold uppercase px-4 py-1.5 rounded-[9999px] transition-all disabled:opacity-30 ${
-    isDark ? "bg-white text-black hover:bg-neutral-202" : "bg-black text-white hover:bg-neutral-800 shadow-sm"
+    isDark
+      ? "bg-white text-black hover:bg-neutral-202"
+      : "bg-black text-white hover:bg-neutral-800 shadow-sm"
   }`;
 
   // A vendor is "connected" only when every field is confirmed set. When
   // status is unknown (null / no management token) we show nothing loud.
-  const vendorConnected = (v: Vendor) => status ? v.fields.every((f) => status[f.secret]) : null;
+  const vendorConnected = (v: Vendor) => (status ? v.fields.every((f) => status[f.secret]) : null);
 
   return (
     <div className={cardCls}>
       {needsBootstrap && (
         <p className={`text-[9px] font-mono ${isDark ? "text-neutral-500" : "text-neutral-455"}`}>
-          Add <code className={`px-1 rounded ${isDark ? "bg-white/10" : "bg-black/5"}`}>LUVENI_MANAGEMENT_TOKEN</code> in
-          Supabase → Edge Functions → Secrets to show live connection status. Keys can still be saved below.
+          Add{" "}
+          <code className={`px-1 rounded ${isDark ? "bg-white/10" : "bg-black/5"}`}>
+            LUVENI_MANAGEMENT_TOKEN
+          </code>{" "}
+          in Supabase → Edge Functions → Secrets to show live connection status. Keys can still be
+          saved below.
         </p>
       )}
 
       {VENDORS.map((v, i) => {
         const connected = vendorConnected(v);
         return (
-          <div key={v.key} className={i > 0 ? `pt-5 border-t ${isDark ? "border-neutral-900" : "border-[#F2F2F7]"}` : ""}>
+          <div
+            key={v.key}
+            className={
+              i > 0 ? `pt-5 border-t ${isDark ? "border-neutral-900" : "border-[#F2F2F7]"}` : ""
+            }
+          >
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <span className="text-[11px] font-mono font-semibold uppercase tracking-wider">{v.name}</span>
+                <span className="text-[11px] font-mono font-semibold uppercase tracking-wider">
+                  {v.name}
+                </span>
                 {connected === true && (
                   <span className="flex items-center gap-1 text-[8px] font-mono uppercase text-emerald-500">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Connected
@@ -136,7 +351,9 @@ export function AdminIntegrations({ isDark }: { isDark: boolean }) {
                   disabled={syncingKey === v.key}
                   title="Sync catalog now"
                   className={`flex items-center gap-1.5 text-[8px] font-mono font-bold uppercase px-3 py-1 rounded-[9999px] border transition-all disabled:opacity-40 ${
-                    isDark ? "border-neutral-800 text-neutral-300 hover:bg-white/[0.05]" : "border-[#D1D1D6] text-neutral-600 hover:bg-neutral-50"
+                    isDark
+                      ? "border-neutral-800 text-neutral-300 hover:bg-white/[0.05]"
+                      : "border-[#D1D1D6] text-neutral-600 hover:bg-neutral-50"
                   }`}
                 >
                   <RefreshCw size={9} className={syncingKey === v.key ? "animate-spin" : ""} /> Sync
@@ -158,7 +375,11 @@ export function AdminIntegrations({ isDark }: { isDark: boolean }) {
                 </div>
               ))}
               <div className="flex justify-end">
-                <button onClick={() => saveVendor(v)} disabled={savingKey === v.key} className={solidBtn}>
+                <button
+                  onClick={() => saveVendor(v)}
+                  disabled={savingKey === v.key}
+                  className={solidBtn}
+                >
                   {savingKey === v.key ? "Saving" : "Save"}
                 </button>
               </div>
@@ -166,6 +387,14 @@ export function AdminIntegrations({ isDark }: { isDark: boolean }) {
           </div>
         );
       })}
+
+      <TikTokContentCard
+        isDark={isDark}
+        status={status}
+        drafts={drafts}
+        setDrafts={setDrafts}
+        saveSecret={saveSecret}
+      />
     </div>
   );
 }
