@@ -1,4 +1,11 @@
 project_id = "unitqfuetxedmmrvlocu"
+# Server-side transparent-PNG pipeline. Called server-to-server (vendor syncs,
+# sweep cron, Astra) with the service key or x-cron-key — never an admin JWT —
+# and auth is enforced inside via isCronOrService, so keep the gateway off.
+[functions.strip-background]
+verify_jwt = false
+[functions.strip-background-sweep]
+verify_jwt = false
 [functions.jarvis-google]
 verify_jwt = false
 # CORS preflight (OPTIONS) requests carry no Authorization header, so the
