@@ -57,7 +57,7 @@ export const Route = createFileRoute("/api/shipment-complete")({
           });
         } catch (err) {
           console.error("APLIQQ SHIPMENT COMPLETE WEBHOOK EXCEPTION:", err);
-          return new Response(JSON.stringify({ error: err.message || "Unknown error" }), {
+          return new Response(JSON.stringify({ error: (err instanceof Error ? err.message : null) || "Unknown error" }), {
             status: 500,
             headers: { "Content-Type": "application/json" },
           });

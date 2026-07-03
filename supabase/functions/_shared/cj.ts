@@ -62,6 +62,19 @@ export async function cjGet(token: string, path: string): Promise<any> {
   return b.data;
 }
 
+export async function cjPost(token: string, path: string, body: unknown): Promise<any> {
+  const res = await fetch(`${CJ_BASE}/${path}`, {
+    method: "POST",
+    headers: { "CJ-Access-Token": token, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const b = await res.json().catch(() => ({}));
+  if (!res.ok || b?.code !== 200) {
+    throw new Error(`CJ ${path} → ${res.status}/${b?.code}: ${b?.message ?? ""}`);
+  }
+  return b.data;
+}
+
 /** Total sellable stock for a variant, summed across warehouses.
  *  Uses totalInventoryNum (CJ-held + factory) — CJ procures factory stock
  *  on demand, so it counts as sellable for dropshipping. Per-warehouse

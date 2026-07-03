@@ -17,6 +17,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { apliiqFetch } from "../_shared/apliiq.ts";
+import { cjConfigured, getCjToken, cjGet, cjPost, summarizeStock } from "../_shared/cj.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,6 +32,9 @@ const APLIIQ_AUTO = (Deno.env.get("APLIIQ_AUTO") || "").toLowerCase() === "true"
 const ZENDROP_API_KEY = Deno.env.get("ZENDROP_API_KEY") || "";
 const ZENDROP_BASE = Deno.env.get("ZENDROP_API_BASE") || "https://api.zendrop.com";
 const ZENDROP_AUTO = (Deno.env.get("ZENDROP_AUTO") || "").toLowerCase() === "true";
+// CJ auto-submit is opt-in like the others; the stock precheck always runs.
+const CJ_AUTO = (Deno.env.get("CJ_AUTO") || "").toLowerCase() === "true";
+const CJ_LOGISTIC = Deno.env.get("CJ_LOGISTIC_NAME") || "CJPacket Ordinary";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -200,6 +204,88 @@ async function submitZendrop(externalId: string, recipient: Recipient, items: an
   }
 }
 
+// Discord alert so a stuck CJ order never fails silently.
+async function alertDiscord(title: string, message: string, level = "error"): Promise<void> {
+  await fetch(`${SUPABASE_URL}/functions/v1/discord-notify`, {
+    method: "POST",
+    headers: {
+      apikey: SERVICE_KEY,
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ title, message, level, source: "fulfill-order" }),
+  }).catch(() => {});
+}
+
+// CJ Dropshipping: LIVE stock check first (order-time oversell gate), then
+// createOrderV2 when CJ_AUTO=true. A failed check stops the CJ sub-order and
+// pings Discord; the paid order is preserved in metadata for manual handling.
+async function submitCJ(externalId: string, recipient: Recipient, items: any[]): Promise<any> {
+  if (!cjConfigured()) {
+    return { provider: "cj", ok: false, skipped: true, error: "CJ_EMAIL / CJ_API_KEY not set", items: items.length };
+  }
+  const lines = items
+    .map((i) => ({ vid: String(i.external_sku || ""), quantity: Math.max(1, Number(i.quantity) || 1) }))
+    .filter((l) => l.vid);
+  if (lines.length === 0) {
+    return { provider: "cj", ok: false, error: "No valid CJ vid on items", items: items.length };
+  }
+
+  let token: string;
+  try { token = await getCjToken(); } catch (e: any) {
+    return { provider: "cj", ok: false, error: `CJ auth failed: ${e.message}`, items: items.length };
+  }
+
+  // Order-time stock gate: every line must have live sellable stock ≥ qty.
+  const shortages: string[] = [];
+  const stockByVid: Record<string, number> = {};
+  for (const l of lines) {
+    try {
+      const rows = await cjGet(token, `product/stock/queryByVid?vid=${encodeURIComponent(l.vid)}`);
+      const s = summarizeStock(Array.isArray(rows) ? rows : []);
+      stockByVid[l.vid] = s.total;
+      if (s.total < l.quantity) shortages.push(`${l.vid}: need ${l.quantity}, CJ has ${s.total}`);
+      await new Promise((r) => setTimeout(r, 1100)); // stock endpoint QPS is 1/s
+    } catch (e: any) {
+      shortages.push(`${l.vid}: stock check failed (${e.message})`);
+    }
+  }
+  if (shortages.length) {
+    await alertDiscord(
+      "🛑 CJ order blocked — stock",
+      `Order ${externalId}: ${shortages.join("; ")}. Held for manual handling.`,
+    );
+    return { provider: "cj", ok: false, error: `Insufficient CJ stock: ${shortages.join("; ")}`, stock: stockByVid, items: items.length };
+  }
+
+  if (!CJ_AUTO) {
+    return { provider: "cj", ok: false, skipped: true, stock: stockByVid, error: "CJ auto-fulfillment disabled (set CJ_AUTO=true); stock verified", items: items.length };
+  }
+
+  try {
+    const data = await cjPost(token, "shopping/order/createOrderV2", {
+      orderNumber: externalId,
+      shippingCountryCode: recipient.country_code,
+      shippingProvince: recipient.state_code || "",
+      shippingCity: recipient.city,
+      shippingAddress: [recipient.address1, recipient.address2].filter(Boolean).join(", "),
+      shippingCustomerName: recipient.name,
+      shippingZip: recipient.zip,
+      shippingPhone: recipient.phone || "",
+      email: recipient.email || undefined,
+      remark: "Luveni storefront order",
+      logisticName: CJ_LOGISTIC,
+      fromCountryCode: "CN",
+      products: lines,
+    });
+    const ref = String(data?.orderId ?? data ?? "");
+    return { provider: "cj", ok: true, ref, stock: stockByVid, items: items.length };
+  } catch (e: any) {
+    await alertDiscord("🛑 CJ order submission failed", `Order ${externalId}: ${e.message}`);
+    return { provider: "cj", ok: false, error: e.message, stock: stockByVid, items: items.length };
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -237,6 +323,7 @@ Deno.serve(async (req) => {
       if (provider === "printful") results.push(await submitPrintful(orderId, recipient, groupItems));
       else if (provider === "apliq" || provider === "apliiq") results.push(await submitApliiq(orderId, recipient, groupItems));
       else if (provider === "zendrop") results.push(await submitZendrop(orderId, recipient, groupItems));
+      else if (provider === "cj") results.push(await submitCJ(orderId, recipient, groupItems));
       else results.push({ provider, ok: false, skipped: true, error: `Unknown provider "${provider}"`, items: groupItems.length });
     }
 

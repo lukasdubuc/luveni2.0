@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { fetchProducts, useProducts } from "@/lib/useProducts";
 import { useMemo, memo, useEffect } from "react";
 import { trackEvent } from "@/lib/track";
-import { proxyImageUrl } from "@/lib/img";
+import { proxyImageUrl, isLikelyTransparentImage } from "@/lib/img";
 
 type Product = {
   id: string;
@@ -71,6 +71,10 @@ function gridImage(images?: string[]): string | null {
 const ProductCell = memo(({ product, index }: { product: Product; index: number }) => {
   const raw = gridImage(product.image_urls);
   const imageUrl = raw ? proxyImageUrl(raw) : null;
+  // Transparent PNGs (Printful mockups, treated CJ uploads) float on the bare
+  // grid. Untreated vendor photos (CJ JPGs on white/colored backgrounds) get a
+  // neutral rounded tile so they read as deliberate, not pasted rectangles.
+  const framed = !!raw && !isLikelyTransparentImage(raw);
 
   const discounted = product.price_cents_discounted ?? product.discounted_price_cents ?? null;
   const hasDiscount = discounted != null && discounted < product.price_cents;
@@ -96,7 +100,11 @@ const ProductCell = memo(({ product, index }: { product: Product; index: number 
             width={600}
             height={600}
             sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
-            className="max-h-full max-w-full object-contain aspect-square"
+            className={
+              framed
+                ? "max-h-full max-w-full aspect-square rounded-2xl bg-white object-contain p-2 shadow-[0_1px_10px_rgba(0,0,0,0.06)] ring-1 ring-black/5"
+                : "max-h-full max-w-full object-contain aspect-square"
+            }
             loading={isAboveFold ? "eager" : "lazy"}
             decoding="async"
             {...(isAboveFold ? { fetchPriority: "high" } : {})}
