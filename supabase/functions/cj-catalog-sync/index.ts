@@ -30,12 +30,29 @@ function slugify(s: string): string {
 const svc = () => ({ apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// "Yellow-M" → {color: "Yellow", size: "M"}; single part → {option: part}.
+// CJ variantKeys are hyphen-joined property values in no guaranteed order
+// ("Yellow-M", "M-Yellow", "Light Blue-2XL", "Army Green-One Size"). We can't
+// assume the color is first. Instead we identify the SIZE token(s) from a known
+// vocabulary and treat everything else as the color, so color always loads.
+const SIZE_RE =
+  /^(one[\s-]?size|os|free[\s-]?size|xxxs|xxs|xs|s|m|l|xl|xxl|xxxl|xxxxl|[2-6]\s?xs|[2-6]\s?xl|\d{1,2}(\.\d)?|s\/m|m\/l|l\/xl)$/i;
+const isSizeToken = (p: string) => SIZE_RE.test(p.trim());
+
 function attributesFromKey(key: string): Record<string, string> {
   const parts = String(key ?? "").split("-").map((p) => p.trim()).filter(Boolean);
-  if (parts.length >= 2) return { color: parts[0], size: parts.slice(1).join("-") };
-  if (parts.length === 1) return { option: parts[0] };
-  return {};
+  if (parts.length === 0) return {};
+
+  const sizeParts = parts.filter(isSizeToken);
+  const colorParts = parts.filter((p) => !isSizeToken(p));
+
+  const attrs: Record<string, string> = {};
+  if (colorParts.length) attrs.color = colorParts.join(" ");
+  if (sizeParts.length) attrs.size = sizeParts.join("-");
+
+  // Single ambiguous part that matched nothing above: keep it as color so the
+  // storefront's color picker still renders it (never a dead "option" key).
+  if (!attrs.color && !attrs.size) attrs.color = parts.join(" ");
+  return attrs;
 }
 
 Deno.serve(async (req) => {

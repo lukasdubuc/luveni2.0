@@ -16,7 +16,7 @@
 //  20260703_product_media_bucket.sql).
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2, Wand2, Check, AlertTriangle, MinusCircle } from "lucide-react";
@@ -110,8 +110,10 @@ async function persistTransparentImage(
   publicUrl: string,
   sourceUrl: string,
 ) {
-  // 1. products.image_urls — transparent PNG first, original kept after it.
-  const rest = (product.image_urls ?? []).filter((u) => u && u !== publicUrl);
+  // 1. products.image_urls — transparent PNG first. Drop the opaque source it
+  //    replaces so the gallery never shows both look-alikes (original_url on
+  //    the media row keeps provenance).
+  const rest = (product.image_urls ?? []).filter((u) => u && u !== publicUrl && u !== sourceUrl);
   const { error: prodErr } = await supabase
     .from("products")
     .update({ image_urls: [publicUrl, ...rest] })
@@ -164,8 +166,12 @@ export function CjTransparencyPanel({
   products: CjPanelProduct[];
   onUpdated: () => void;
 }) {
-  const cjProducts = useMemo(
-    () => products.filter((p) => (p.source ?? "") === "cj"),
+  // Every product, regardless of who sourced it (CJ, Printful, Apliiq, manual):
+  // the storefront must show one transparent primary across the board. Already-
+  // transparent items are skipped by isTreated() at process time, so Printful's
+  // pre-cut mockups cost nothing.
+  const allProducts = useMemo(
+    () => products.filter((p) => !!p.id),
     [products],
   );
 
@@ -176,7 +182,7 @@ export function CjTransparencyPanel({
 
   // Which CJ products already have a transparent primary in product_media.
   useEffect(() => {
-    if (cjProducts.length === 0) {
+    if (allProducts.length === 0) {
       setTransparentIds(new Set());
       return;
     }
@@ -187,7 +193,7 @@ export function CjTransparencyPanel({
         .select("product_id")
         .in(
           "product_id",
-          cjProducts.map((p) => p.id),
+          allProducts.map((p) => p.id),
         )
         .eq("is_primary", true)
         .eq("is_transparent", true)
@@ -197,10 +203,25 @@ export function CjTransparencyPanel({
     return () => {
       cancelled = true;
     };
-  }, [cjProducts]);
+  }, [allProducts]);
 
   const isTreated = (p: CjPanelProduct) =>
     transparentIds.has(p.id) || primaryLooksTransparent(p);
+
+  // Auto-sweep: as soon as the dashboard loads, quietly convert any untreated
+  // product to a transparent primary — no clicking required. Runs once per
+  // mount after the treated-set query resolves, so we never re-process items
+  // that already have a transparent PNG. Manual buttons below still work for
+  // re-runs. Guarded by a ref so re-renders don't kick off a second pass.
+  const autoSweptRef = useRef(false);
+  useEffect(() => {
+    if (autoSweptRef.current || running || allProducts.length === 0) return;
+    const untreated = allProducts.filter((p) => !isTreated(p));
+    if (untreated.length === 0) return;
+    autoSweptRef.current = true;
+    void processProducts(untreated);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allProducts, transparentIds]);
 
   const setState = (id: string, s: ItemState) =>
     setStates((prev) => ({ ...prev, [id]: s }));
@@ -215,14 +236,14 @@ export function CjTransparencyPanel({
 
   const toggleAll = () =>
     setSelected((prev) =>
-      prev.size === cjProducts.length
+      prev.size === allProducts.length
         ? new Set()
-        : new Set(cjProducts.map((p) => p.id)),
+        : new Set(allProducts.map((p) => p.id)),
     );
 
   async function processProducts(targets: CjPanelProduct[]) {
     if (targets.length === 0) {
-      toast.info("No CJ products to process.");
+      toast.info("No products to process.");
       return;
     }
     setRunning(true);
@@ -292,16 +313,16 @@ export function CjTransparencyPanel({
     }
   }
 
-  if (cjProducts.length === 0) return null;
+  if (allProducts.length === 0) return null;
 
-  const selectedProducts = cjProducts.filter((p) => selected.has(p.id));
+  const selectedProducts = allProducts.filter((p) => selected.has(p.id));
 
   return (
     <div className="border-b border-black">
       <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 bg-[#fafafa]">
         <div>
           <span className="text-[11px] tracking-[0.3em] uppercase font-bold">
-            CJ Images · Make Transparent
+            Product Images · Make Transparent
           </span>
           <p className="text-[10px] text-black/40 mt-1 tracking-wide">
             Removes backgrounds in your browser (first run downloads a ~40&nbsp;MB
@@ -322,12 +343,12 @@ export function CjTransparencyPanel({
             Selected ({selectedProducts.length})
           </button>
           <button
-            onClick={() => processProducts(cjProducts)}
+            onClick={() => processProducts(allProducts)}
             disabled={running}
             className="flex items-center gap-2 border border-black px-4 py-2 text-[11px] tracking-widest uppercase hover:bg-black hover:text-white transition-colors disabled:opacity-30"
           >
             <Wand2 size={11} />
-            All CJ ({cjProducts.length})
+            All ({allProducts.length})
           </button>
         </div>
       </div>
@@ -335,11 +356,11 @@ export function CjTransparencyPanel({
       <div className="hidden md:grid grid-cols-[auto_auto_2fr_1fr] items-center gap-3 border-t border-black/10 px-6 py-2 bg-[#fafafa]">
         <input
           type="checkbox"
-          checked={selected.size === cjProducts.length && cjProducts.length > 0}
+          checked={selected.size === allProducts.length && allProducts.length > 0}
           onChange={toggleAll}
           disabled={running}
           className="accent-black"
-          aria-label="Select all CJ products"
+          aria-label="Select all products"
         />
         <span className="w-8" />
         <span className="text-[9px] tracking-[0.3em] uppercase text-black/30">
@@ -350,7 +371,7 @@ export function CjTransparencyPanel({
         </span>
       </div>
 
-      {cjProducts.map((p) => {
+      {allProducts.map((p) => {
         const state: ItemState = states[p.id] ?? {
           phase: isTreated(p) ? "skipped" : "idle",
           note: isTreated(p) ? "already transparent" : undefined,
