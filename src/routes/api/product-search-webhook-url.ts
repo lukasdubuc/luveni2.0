@@ -40,10 +40,10 @@ export const Route = createFileRoute("/api/product-search-webhook-url")({
             price: p.price_cents / 100,
             sku: p.variants?.[0]?.sku || "",
             image_url: p.image_urls?.[0] || "",
-            variants: (p.variants || []).map(v => ({
+            variants: (p.variants || []).map((v: { external_sku?: string; sku?: string; price_cents?: number; attributes?: Record<string, string> }) => ({
               id: v.external_sku || v.sku,
               sku: v.sku,
-              price: v.price_cents / 100,
+              price: (v.price_cents ?? 0) / 100,
               title: Object.values(v.attributes || {}).join(" / "),
             }))
           }));
@@ -54,7 +54,7 @@ export const Route = createFileRoute("/api/product-search-webhook-url")({
           });
         } catch (err) {
           console.error("APLIQ SEARCH PROCESS EXCEPTION:", err);
-          return new Response(JSON.stringify({ error: err.message || "Unknown error" }), {
+          return new Response(JSON.stringify({ error: (err instanceof Error ? err.message : null) || "Unknown error" }), {
             status: 500,
             headers: { "Content-Type": "application/json" },
           });

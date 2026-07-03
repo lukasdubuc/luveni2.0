@@ -9,17 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRouteImport } from './routes/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y[.]txt'
 import { Route as ThankYouRouteImport } from './routes/thank-you'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as ShopRouteImport } from './routes/shop'
+import { Route as ShippingRouteImport } from './routes/shipping'
 import { Route as RefundRouteImport } from './routes/refund'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as AboutRouteImport } from './routes/about'
-import { Route as ShippingRouteImport } from './routes/Shipping'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as OfferSlugRouteImport } from './routes/offer.$slug'
@@ -37,6 +38,12 @@ import { Route as AdminJarvisRouteImport } from './routes/admin.jarvis'
 import { Route as AdminCompareRouteImport } from './routes/admin.compare'
 import { Route as ApiPublicStripeWebhookRouteImport } from './routes/api/public/stripe-webhook'
 
+const Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRoute =
+  Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRouteImport.update({
+    id: '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt',
+    path: '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ThankYouRoute = ThankYouRouteImport.update({
   id: '/thank-you',
   path: '/thank-you',
@@ -55,6 +62,11 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
 const ShopRoute = ShopRouteImport.update({
   id: '/shop',
   path: '/shop',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShippingRoute = ShippingRouteImport.update({
+  id: '/shipping',
+  path: '/shipping',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RefundRoute = RefundRouteImport.update({
@@ -85,11 +97,6 @@ const CheckoutRoute = CheckoutRouteImport.update({
 const AboutRoute = AboutRouteImport.update({
   id: '/about',
   path: '/about',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ShippingRoute = ShippingRouteImport.update({
-  id: '/Shipping',
-  path: '/Shipping',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -178,17 +185,18 @@ const ApiPublicStripeWebhookRoute = ApiPublicStripeWebhookRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/Shipping': typeof ShippingRoute
   '/about': typeof AboutRoute
   '/checkout': typeof CheckoutRoute
   '/contact': typeof ContactRoute
   '/login': typeof LoginRoute
   '/privacy': typeof PrivacyRoute
   '/refund': typeof RefundRoute
+  '/shipping': typeof ShippingRoute
   '/shop': typeof ShopRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
   '/thank-you': typeof ThankYouRoute
+  '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt': typeof Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRoute
   '/admin/compare': typeof AdminCompareRoute
   '/admin/jarvis': typeof AdminJarvisRoute
   '/admin/leads': typeof AdminLeadsRoute
@@ -207,17 +215,18 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/Shipping': typeof ShippingRoute
   '/about': typeof AboutRoute
   '/checkout': typeof CheckoutRoute
   '/contact': typeof ContactRoute
   '/login': typeof LoginRoute
   '/privacy': typeof PrivacyRoute
   '/refund': typeof RefundRoute
+  '/shipping': typeof ShippingRoute
   '/shop': typeof ShopRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
   '/thank-you': typeof ThankYouRoute
+  '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt': typeof Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRoute
   '/admin/compare': typeof AdminCompareRoute
   '/admin/jarvis': typeof AdminJarvisRoute
   '/admin/leads': typeof AdminLeadsRoute
@@ -237,17 +246,18 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/Shipping': typeof ShippingRoute
   '/about': typeof AboutRoute
   '/checkout': typeof CheckoutRoute
   '/contact': typeof ContactRoute
   '/login': typeof LoginRoute
   '/privacy': typeof PrivacyRoute
   '/refund': typeof RefundRoute
+  '/shipping': typeof ShippingRoute
   '/shop': typeof ShopRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
   '/thank-you': typeof ThankYouRoute
+  '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt': typeof Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRoute
   '/admin/compare': typeof AdminCompareRoute
   '/admin/jarvis': typeof AdminJarvisRoute
   '/admin/leads': typeof AdminLeadsRoute
@@ -268,17 +278,18 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/Shipping'
     | '/about'
     | '/checkout'
     | '/contact'
     | '/login'
     | '/privacy'
     | '/refund'
+    | '/shipping'
     | '/shop'
     | '/sitemap.xml'
     | '/terms'
     | '/thank-you'
+    | '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt'
     | '/admin/compare'
     | '/admin/jarvis'
     | '/admin/leads'
@@ -297,17 +308,18 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/Shipping'
     | '/about'
     | '/checkout'
     | '/contact'
     | '/login'
     | '/privacy'
     | '/refund'
+    | '/shipping'
     | '/shop'
     | '/sitemap.xml'
     | '/terms'
     | '/thank-you'
+    | '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt'
     | '/admin/compare'
     | '/admin/jarvis'
     | '/admin/leads'
@@ -326,17 +338,18 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/Shipping'
     | '/about'
     | '/checkout'
     | '/contact'
     | '/login'
     | '/privacy'
     | '/refund'
+    | '/shipping'
     | '/shop'
     | '/sitemap.xml'
     | '/terms'
     | '/thank-you'
+    | '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt'
     | '/admin/compare'
     | '/admin/jarvis'
     | '/admin/leads'
@@ -356,17 +369,18 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ShippingRoute: typeof ShippingRoute
   AboutRoute: typeof AboutRoute
   CheckoutRoute: typeof CheckoutRoute
   ContactRoute: typeof ContactRoute
   LoginRoute: typeof LoginRoute
   PrivacyRoute: typeof PrivacyRoute
   RefundRoute: typeof RefundRoute
+  ShippingRoute: typeof ShippingRoute
   ShopRoute: typeof ShopRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TermsRoute: typeof TermsRoute
   ThankYouRoute: typeof ThankYouRoute
+  Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRoute: typeof Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRoute
   AdminCompareRoute: typeof AdminCompareRoute
   AdminJarvisRoute: typeof AdminJarvisRoute
   AdminLeadsRoute: typeof AdminLeadsRoute
@@ -386,6 +400,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt': {
+      id: '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt'
+      path: '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt'
+      fullPath: '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt'
+      preLoaderRoute: typeof Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/thank-you': {
       id: '/thank-you'
       path: '/thank-you'
@@ -412,6 +433,13 @@ declare module '@tanstack/react-router' {
       path: '/shop'
       fullPath: '/shop'
       preLoaderRoute: typeof ShopRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/shipping': {
+      id: '/shipping'
+      path: '/shipping'
+      fullPath: '/shipping'
+      preLoaderRoute: typeof ShippingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/refund': {
@@ -454,13 +482,6 @@ declare module '@tanstack/react-router' {
       path: '/about'
       fullPath: '/about'
       preLoaderRoute: typeof AboutRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/Shipping': {
-      id: '/Shipping'
-      path: '/Shipping'
-      fullPath: '/Shipping'
-      preLoaderRoute: typeof ShippingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -580,17 +601,19 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ShippingRoute: ShippingRoute,
   AboutRoute: AboutRoute,
   CheckoutRoute: CheckoutRoute,
   ContactRoute: ContactRoute,
   LoginRoute: LoginRoute,
   PrivacyRoute: PrivacyRoute,
   RefundRoute: RefundRoute,
+  ShippingRoute: ShippingRoute,
   ShopRoute: ShopRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   TermsRoute: TermsRoute,
   ThankYouRoute: ThankYouRoute,
+  Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRoute:
+    Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRoute,
   AdminCompareRoute: AdminCompareRoute,
   AdminJarvisRoute: AdminJarvisRoute,
   AdminLeadsRoute: AdminLeadsRoute,

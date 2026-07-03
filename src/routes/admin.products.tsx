@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Plus, Trash2, Pencil, Loader2, Eye, EyeOff, ChevronDown, ChevronUp } from "lucide-react";
 import { requireAdmin } from "@/lib/admin-guard";
+import { CjTransparencyPanel } from "@/components/admin/CjTransparencyPanel";
 
 export const Route = createFileRoute("/admin/products")({
   beforeLoad: requireAdmin,
@@ -21,6 +22,7 @@ type Product = {
   description?: string | null;
   variants?: any[];
   is_published: boolean;
+  source?: string | null;
   created_at?: string;
 };
 
@@ -269,6 +271,19 @@ function ProductsPage() {
           </div>
         </form>
       </div>
+
+      {/* ── CJ transparency tool (only renders when CJ products exist) ── */}
+      {!loading && (
+        <CjTransparencyPanel
+          products={products.map((p) => ({
+            id: p.id,
+            title: p.title,
+            image_urls: p.image_urls ?? [],
+            source: p.source ?? null,
+          }))}
+          onUpdated={fetchProducts}
+        />
+      )}
 
       {/* ── Product table ── */}
       {loading ? (

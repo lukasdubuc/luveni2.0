@@ -80,7 +80,7 @@ export const Route = createFileRoute("/api/fulfillment-webhook-url")({
           });
         } catch (err) {
           console.error("APLIQQ FULFILLMENT WEBHOOK EXCEPTION:", err);
-          return new Response(JSON.stringify({ error: err.message || "Unknown error" }), {
+          return new Response(JSON.stringify({ error: (err instanceof Error ? err.message : null) || "Unknown error" }), {
             status: 500,
             headers: { "Content-Type": "application/json" },
           });

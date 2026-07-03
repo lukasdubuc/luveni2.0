@@ -7,7 +7,8 @@ export const Route = createFileRoute("/api/product-add-or-update-webhook-url")({
       POST: async ({ request }) => {
         try {
           const SUPABASE_URL = process.env.SUPABASE_URL;
-          const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
+          const SUPABASE_SERVICE_ROLE_KEY =
+            process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
           if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
             return new Response(JSON.stringify({ error: "Server misconfigured" }), {
               status: 500,
@@ -18,7 +19,9 @@ export const Route = createFileRoute("/api/product-add-or-update-webhook-url")({
           const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
           const body = await request.json();
 
-          const apliqId = String(body.id || body.product_id || body.productId || body.design_id || "");
+          const apliqId = String(
+            body.id || body.product_id || body.productId || body.design_id || "",
+          );
           if (!apliqId) {
             return new Response(JSON.stringify({ error: "Missing product identifier (id)" }), {
               status: 400,
@@ -42,48 +45,76 @@ export const Route = createFileRoute("/api/product-add-or-update-webhook-url")({
             priceCents = Math.round(parseFloat(body.retail_price) * 100);
           }
 
-          let imageUrls = [];
+          let imageUrls: string[] = [];
           if (Array.isArray(body.image_urls)) {
             imageUrls = body.image_urls;
           } else if (Array.isArray(body.images)) {
-            imageUrls = body.images.map(img => typeof img === "string" ? img : img.url || img.src || img.preview_url).filter(Boolean);
+            imageUrls = body.images
+              .map((img: string | { url?: string; src?: string; preview_url?: string }) =>
+                typeof img === "string" ? img : img.url || img.src || img.preview_url,
+              )
+              .filter((u: string | undefined): u is string => Boolean(u));
           } else if (body.image_url) {
             imageUrls = [body.image_url];
           } else if (body.thumbnail_url) {
             imageUrls = [body.thumbnail_url];
           }
 
-          let variants = [];
+          type IncomingVariant = {
+            id?: string | number;
+            sku?: string;
+            price?: string | number;
+            price_cents?: string | number;
+            attributes?: Record<string, unknown>;
+            size?: string;
+            color?: string;
+            stock?: number;
+          };
+          type ProductVariant = {
+            sku: string;
+            price_cents: number;
+            external_sku: string;
+            fulfillment_provider: string;
+            attributes: Record<string, unknown>;
+            stock: number;
+          };
+          let variants: ProductVariant[] = [];
           if (Array.isArray(body.variants)) {
-            variants = body.variants.map(v => ({
+            variants = body.variants.map((v: IncomingVariant) => ({
               sku: v.sku || String(v.id || ""),
-              price_cents: v.price_cents !== undefined ? parseInt(v.price_cents) : (v.price !== undefined ? Math.round(parseFloat(v.price) * 100) : priceCents),
+              price_cents:
+                v.price_cents !== undefined
+                  ? parseInt(String(v.price_cents))
+                  : v.price !== undefined
+                    ? Math.round(parseFloat(String(v.price)) * 100)
+                    : priceCents,
               external_sku: String(v.id || v.sku || ""),
               fulfillment_provider: "apliq",
               attributes: v.attributes || { size: v.size || "OS", color: v.color || "Default" },
               stock: v.stock !== undefined ? v.stock : 999,
             }));
           } else if (body.sku) {
-            variants = [{
-              sku: body.sku,
-              price_cents: priceCents,
-              external_sku: body.sku,
-              fulfillment_provider: "apliq",
-              attributes: { size: "OS", color: "Default" },
-              stock: 999,
-            }];
+            variants = [
+              {
+                sku: body.sku,
+                price_cents: priceCents,
+                external_sku: body.sku,
+                fulfillment_provider: "apliq",
+                attributes: { size: "OS", color: "Default" },
+                stock: 999,
+              },
+            ];
           }
 
           if (priceCents === 0 && variants.length > 0) {
-            const prices = variants.map(v => v.price_cents).filter(p => p > 0);
+            const prices = variants.map((v) => v.price_cents).filter((p) => p > 0);
             if (prices.length > 0) {
               priceCents = Math.min(...prices);
             }
           }
 
-          const { error: upsertError } = await supabaseAdmin
-            .from("products")
-            .upsert({
+          const { error: upsertError } = await supabaseAdmin.from("products").upsert(
+            {
               title: productName,
               slug,
               description,
@@ -94,10 +125,12 @@ export const Route = createFileRoute("/api/product-add-or-update-webhook-url")({
               apliq_id: apliqId,
               variants: variants.length > 0 ? variants : null,
               updated_at: new Date().toISOString(),
-            }, {
+            },
+            {
               onConflict: "apliq_id",
               ignoreDuplicates: false,
-            });
+            },
+          );
 
           if (upsertError) {
             console.error("APLIQ WEBHOOK UPSERT ERROR:", upsertError);
@@ -113,12 +146,15 @@ export const Route = createFileRoute("/api/product-add-or-update-webhook-url")({
           });
         } catch (err) {
           console.error("APLIQ PRODUCT WEBHOOK EXCEPTION:", err);
-          return new Response(JSON.stringify({ error: err.message || "Unknown error" }), {
-            status: 500,
-            headers: { "Content-Type": "application/json" },
-          });
+          return new Response(
+            JSON.stringify({ error: err instanceof Error ? err.message : "Unknown error" }),
+            {
+              status: 500,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
         }
-      }
-    }
-  }
+      },
+    },
+  },
 });
