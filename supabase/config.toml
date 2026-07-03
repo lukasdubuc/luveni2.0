@@ -1,8 +1,17 @@
 project_id = "unitqfuetxedmmrvlocu"
 [functions.jarvis-google]
 verify_jwt = false
+# CORS preflight (OPTIONS) requests carry no Authorization header, so the
+# gateway's verify_jwt check MUST stay OFF here or the browser preflight fails
+# ("preflight response does not have HTTP ok status"). Astra's own admin gate
+# (requireAdminCaller) enforces auth inside the function on real POST calls.
 [functions.jarvis-brain]
-verify_jwt = true
+verify_jwt = false
+# Public TTS proxy for Astra's voice — called from the browser with the anon
+# key only. Preflight carries no JWT, so the gateway check stays off; the
+# function itself just relays text to ElevenLabs.
+[functions.jarvis-tts]
+verify_jwt = false
 [functions.discord-bot]
 verify_jwt = false
 [functions.printful-catalog]

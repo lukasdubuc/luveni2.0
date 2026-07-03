@@ -19,7 +19,7 @@
 //  functions and in the Vite/React bundle.
 // ─────────────────────────────────────────────────────────────
 
-export type VendorSource = "printful" | "apliiq" | "zendrop" | "manual";
+export type VendorSource = "printful" | "apliiq" | "zendrop" | "cj" | "manual";
 
 export type MediaViewType =
   | "front_flat"
@@ -176,6 +176,56 @@ function parseZendrop(payload: any): NormalizedMedia[] {
   return out;
 }
 
+function parseCj(payload: any): NormalizedMedia[] {
+  const out: NormalizedMedia[] = [];
+  // cj-catalog-sync stores raw_payload as { detail, listItem, variants }.
+  // Accept that wrapper or a bare CJ detail object.
+  const detail = payload?.detail ?? payload ?? {};
+  const listItem = payload?.listItem ?? {};
+  const variants: any[] = payload?.variants ?? detail?.variants ?? [];
+
+  // Product-level gallery: productImageSet + bigImage fallbacks.
+  const gallery: string[] = [
+    ...(Array.isArray(detail?.productImageSet) ? detail.productImageSet : []),
+    detail?.bigImage,
+    listItem?.bigImage,
+  ].filter(isHttp);
+  const seenGallery = new Set<string>();
+  let gi = 0;
+  for (const url of gallery) {
+    if (seenGallery.has(url)) continue;
+    seenGallery.add(url);
+    out.push({
+      variantKey: null,
+      viewType: classifyView(url),
+      url,
+      isPrimary: gi === 0,
+      isTransparent: looksTransparent(url),
+      position: gi,
+      source: "cj",
+      metadata: {},
+    });
+    gi++;
+  }
+
+  // Per-variant colour shots, keyed by CJ variant id (vid).
+  for (const v of variants) {
+    const url = v?.variantImage ?? v?.image;
+    if (!isHttp(url)) continue;
+    out.push({
+      variantKey: String(v?.vid ?? v?.variantSku ?? "") || null,
+      viewType: classifyView(v?.variantKey, v?.variantNameEn, url),
+      url,
+      isPrimary: true,
+      isTransparent: looksTransparent(url),
+      position: 0,
+      source: "cj",
+      metadata: { variantSku: v?.variantSku ?? null, variantKey: v?.variantKey ?? null },
+    });
+  }
+  return out;
+}
+
 /**
  * Normalize any supported manufacturer payload into the unified media
  * model. Deduplicates per (variantKey,url) — NOT globally — so a back
@@ -190,6 +240,7 @@ export function parseManufacturerMedia(
     case "printful": raw = parsePrintful(payload); break;
     case "apliiq": raw = parseApliiq(payload); break;
     case "zendrop": raw = parseZendrop(payload); break;
+    case "cj": raw = parseCj(payload); break;
     default: raw = [];
   }
   const seen = new Set<string>();
@@ -300,7 +351,7 @@ export function splitCartByVendor<T extends RoutableCartItem>(
   items: T[],
 ): Record<VendorSource, T[]> {
   const groups: Record<VendorSource, T[]> = {
-    printful: [], apliiq: [], zendrop: [], manual: [],
+    printful: [], apliiq: [], zendrop: [], cj: [], manual: [],
   };
   for (const item of items) {
     const src: VendorSource =

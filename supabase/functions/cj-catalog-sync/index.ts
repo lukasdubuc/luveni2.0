@@ -21,6 +21,7 @@
 import { corsHeaders, json, requireAdmin, SUPABASE_URL, SERVICE_KEY } from "../_shared/http.ts";
 import { cjConfigured, getCjToken, cjGet, isCronOrService } from "../_shared/cj.ts";
 import { loadPricingRules, matchRule, computeRetail, formatTitle } from "../_shared/pricing.ts";
+import { parseManufacturerMedia } from "../_shared/media-pipeline.ts";
 
 function slugify(s: string): string {
   return (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -143,19 +144,16 @@ Deno.serve(async (req) => {
       const productId = (await up.json().catch(() => []))?.[0]?.id;
       if (!productId) { errors.push(`${title}: no product id`); continue; }
 
-      // Media: gallery (product-level) + per-variant images, keyed by vid.
-      const mediaRows = [
-        ...gallery.map((url, i) => ({
-          product_id: productId, variant_key: null, view_type: "other",
-          url, is_primary: i === 0, is_transparent: false, position: i,
-          source: "cj", metadata: {},
-        })),
-        ...variants.filter((v) => v.image).map((v, i) => ({
-          product_id: productId, variant_key: v.external_sku, view_type: "other",
-          url: v.image, is_primary: true, is_transparent: false, position: i,
-          source: "cj", metadata: { variant_sku: v.sku },
-        })),
-      ];
+      // Media: run CJ's payload through the SAME normalizer every other
+      // vendor uses, so CJ images land with proper view_type + transparency
+      // flags (not hardcoded "other"/false) and render on the storefront
+      // grid identically to Printful/Apliiq products.
+      const mediaRows = parseManufacturerMedia("cj", { detail, listItem: item, variants: variantsRaw })
+        .map((m) => ({
+          product_id: productId, variant_key: m.variantKey, view_type: m.viewType,
+          url: m.url, is_primary: m.isPrimary, is_transparent: m.isTransparent,
+          position: m.position, source: "cj", metadata: m.metadata,
+        }));
       if (mediaRows.length) {
         await fetch(`${SUPABASE_URL}/rest/v1/product_media?on_conflict=product_id,variant_key,url`, {
           method: "POST",

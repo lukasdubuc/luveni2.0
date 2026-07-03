@@ -104,6 +104,26 @@ assert(groups.printful.length === 2, "printful lines grouped");
 assert(groups.zendrop.length === 1 && groups.apliiq.length === 1, "zendrop + apliiq routed");
 assert(groups.manual.length === 1, "unknown/manual kept for human handling");
 
+// ── CJ: raw_payload wrapper { detail, listItem, variants } ─────
+console.log("CJ media parsing");
+const cj = {
+  detail: {
+    productImageSet: ["https://cjcdn/tee-white.jpg", "https://cjcdn/tee-model.jpg"],
+    bigImage: "https://cjcdn/tee-white.jpg", // dup of gallery[0]
+  },
+  listItem: { bigImage: "https://cjcdn/tee-white.jpg" },
+  variants: [
+    { vid: "V1", variantSku: "TEE-COFFEE", variantKey: "Coffee", variantImage: "https://cjcdn/tee-coffee.png" },
+    { vid: "V2", variantSku: "TEE-BLACK", variantKey: "Black", variantImage: "https://cjcdn/tee-black.png" },
+  ],
+};
+const cjMedia = parseManufacturerMedia("cj", cj);
+assert(cjMedia.filter((m) => m.variantKey === null).length === 2, "gallery deduped to 2 product images");
+assert(cjMedia.find((m) => m.url.endsWith("tee-white.jpg"))!.isPrimary, "first gallery image is primary");
+assert(!cjMedia.find((m) => m.url.endsWith("tee-model.jpg"))!.isTransparent, "model shot not flagged transparent");
+assert(cjMedia.filter((m) => m.variantKey === "V1").length === 1, "variant keyed by CJ vid");
+assert(cjMedia.find((m) => m.url.endsWith("tee-coffee.png"))!.isTransparent, "PNG variant shot flagged transparent");
+
 console.log("");
 if (failures === 0) {
   console.log("ALL PASSED ✅");
