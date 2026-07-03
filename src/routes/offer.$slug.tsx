@@ -5,6 +5,7 @@ import { fetchProducts } from "@/lib/useProducts";
 import { offer } from "@/config/site";
 import { useCart } from "@/context/CartContext";
 import { ZoomPanImage } from "@/components/site/ZoomPanImage";
+import { isLikelyTransparentImage } from "@/lib/img";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -456,6 +457,15 @@ function OfferSlugPage() {
     return proxied.length > 0 ? proxied : [""];
   }, [product?.image_urls, variants, hasVariantImages]);
 
+  // Transparent PNGs (Printful mockups / background-removed uploads) float on
+  // the page background. Untreated opaque vendor photos (CJ JPGs on a white or
+  // colored studio backdrop) get a neutral white tile so they read as
+  // deliberate product shots, consistent with the shop grid.
+  const galleryFramed = useMemo(
+    () => galleryImages.map((u) => !!u && !isLikelyTransparentImage(u)),
+    [galleryImages],
+  );
+
   const optionKeys = useMemo(
     () => sortOptionKeys(Array.from(new Set(variants.flatMap((v) => Object.keys(v.attributes ?? {}))))),
     [variants],
@@ -493,11 +503,17 @@ function OfferSlugPage() {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [optionsOpen, setOptionsOpen] = useState(false);
 
+  // True only after the shopper actively picks a variant. Until then the
+  // gallery stays on the primary product photo (index 0) instead of jumping
+  // to whatever image the default-selected variant happens to carry.
+  const userPickedVariant = useRef(false);
+
   useEffect(() => {
     setActiveImageIndex(0);
     setOptionsOpen(false);
     setCurrentStep(null);
     setZoomOpen(false);
+    userPickedVariant.current = false;
   }, [product?.id]);
 
   useEffect(() => {
@@ -558,7 +574,9 @@ function OfferSlugPage() {
   // is currently selected — colour OR size change lands on the exact image, so
   // the preview always matches what goes to cart.
   useEffect(() => {
-    if (selectedVariant?.image) jumpGalleryToImage(selectedVariant.image);
+    if (userPickedVariant.current && selectedVariant?.image) {
+      jumpGalleryToImage(selectedVariant.image);
+    }
   }, [selectedVariant, jumpGalleryToImage]);
 
   const commitToCart = useCallback(() => {
@@ -765,12 +783,14 @@ function OfferSlugPage() {
                   {galleryImages[0] !== "" ? (
                     galleryImages.map((imgUrl, idx) => {
                       const isActive = idx === activeImageIndex;
+                      const framed = galleryFramed[idx];
                       return (
                         <img
                           key={imgUrl}
                           src={imgUrl}
                           alt={`${product.title} — image ${idx + 1}`}
-                          loading="eager"
+                          loading={idx === 0 ? "eager" : "lazy"}
+                          decoding="async"
                           onClick={() => setZoomOpen(true)}
                           style={{
                             position: "absolute",
@@ -783,6 +803,14 @@ function OfferSlugPage() {
                             opacity: isActive ? 1 : 0,
                             visibility: isActive ? "visible" : "hidden",
                             pointerEvents: isActive ? "auto" : "none",
+                            ...(framed
+                              ? {
+                                  background: "#fff",
+                                  borderRadius: "16px",
+                                  padding: "10px",
+                                  boxShadow: "0 1px 12px rgba(0,0,0,0.06)",
+                                }
+                              : null),
                           }}
                         />
                       );
@@ -940,6 +968,7 @@ function OfferSlugPage() {
                               const colorHex = isColor ? resolveColor(value) : null;
 
                               const handleChipClick = () => {
+                                userPickedVariant.current = true;
                                 setSelection((cur) => ({ ...cur, [option]: value }));
 
                                 // Jump gallery to matching color image immediately

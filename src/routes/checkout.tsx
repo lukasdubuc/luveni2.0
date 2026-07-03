@@ -67,8 +67,8 @@ function CheckoutPage() {
             <div className="md:hidden space-y-4 mb-6">
               {items.map((item) => (
                 <div key={`${item.productId}-${item.variantSku}`} className="flex gap-3 border-b border-border pb-4">
-                  <div className="w-16 h-16 flex-shrink-0 overflow-hidden">
-                    <img src={item.image_url} alt={item.title} className="w-full h-full object-cover" />
+                  <div className="w-16 h-16 flex-shrink-0 overflow-hidden rounded-lg bg-white p-1 ring-1 ring-black/5">
+                    <img src={item.image_url} alt={item.title} className="w-full h-full object-contain" />
                   </div>
                   <div className="flex flex-col flex-1 gap-1 min-w-0">
                     <h3 className="text-xs font-bold uppercase leading-tight">{item.title}</h3>
@@ -104,8 +104,8 @@ function CheckoutPage() {
                     <tr key={`${item.productId}-${item.variantSku}`} className="border-t border-border">
                       <td className="py-3">
                         <div className="flex items-center gap-2">
-                          <div className="w-20 h-20 flex-shrink-0 overflow-hidden">
-                            <img src={item.image_url} alt={item.title} className="w-full h-full object-cover" />
+                          <div className="w-20 h-20 flex-shrink-0 overflow-hidden rounded-lg bg-white p-1 ring-1 ring-black/5">
+                            <img src={item.image_url} alt={item.title} className="w-full h-full object-contain" />
                           </div>
                           <span className="text-xs">{item.title}</span>
                         </div>
