@@ -6,7 +6,6 @@ import { offer } from "@/config/site";
 import { useCart } from "@/context/CartContext";
 import { ZoomPanImage } from "@/components/site/ZoomPanImage";
 import { isLikelyTransparentImage } from "@/lib/img";
-import { useTransparentImage } from "@/lib/useTransparentImage";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -329,13 +328,10 @@ function GalleryImg({
   alt: string;
   onClick: () => void;
 }) {
-  // Only cut the background of the image actually on screen to keep the PDP
-  // snappy; results are cached so revisiting a slide is instant.
-  const { url, transparent } = useTransparentImage(src, isActive);
-  const showFrame = framed && !transparent;
+  const showFrame = framed;
   return (
     <img
-      src={url ?? src}
+      src={src}
       alt={alt}
       loading={isActive ? "eager" : "lazy"}
       decoding="async"
