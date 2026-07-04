@@ -46,7 +46,7 @@ export function useProducts(opts: UseProductsOptions = { onlyPublished: true }) 
     document.addEventListener("visibilitychange", onVisible);
     const poll = setInterval(() => {
       if (document.visibilityState === "visible") load();
-    }, 30000);
+    }, 120000);
     return () => {
       window.removeEventListener("productsUpdated", onUpdate);
       window.removeEventListener("focus", onUpdate);

@@ -108,6 +108,11 @@ const ProductCell = memo(({ product, index }: { product: Product; index: number 
             loading={isAboveFold ? "eager" : "lazy"}
             decoding="async"
             {...(isAboveFold ? { fetchPriority: "high" } : {})}
+            // Shared element: the browser morphs this thumbnail into the same
+            // image on the offer page for a seamless zoom (Yeezy-style). Only
+            // the clicked cell's name is live during a navigation, so per-id
+            // names never collide.
+            style={{ viewTransitionName: `product-media-${product.id}` }}
           />
         ) : (
           <span className="text-[7px] uppercase tracking-[0.3em] opacity-20">No Image</span>

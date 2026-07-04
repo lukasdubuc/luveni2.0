@@ -13,10 +13,12 @@ const corsHeaders = {
 
 // Secrets
 const MISTRAL_API_KEY = Deno.env.get("MISTRAL_API_KEY") || "";
-// Astra's reasoning model. `mistral-large-latest` is materially sharper at
-// tool use, multi-step reasoning and staying in character than the small
-// model — the difference between "dumb" and a competent chief-of-staff.
-const MISTRAL_MODEL = "mistral-large-latest";
+// Astra's reasoning model. Overridable via the MISTRAL_MODEL secret so the
+// model can be upgraded without a code change once plan access is confirmed.
+// Default is the small model, which is always available on the standard key —
+// `mistral-large-latest` 400s on plans without large access, which takes Astra
+// fully offline, so we never hard-code a gated model.
+const MISTRAL_MODEL = Deno.env.get("MISTRAL_MODEL") || "mistral-small-latest";
 // Vision-capable model — used only when the turn includes image attachments.
 const VISION_MODEL = "pixtral-12b-2409";
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY") || "";

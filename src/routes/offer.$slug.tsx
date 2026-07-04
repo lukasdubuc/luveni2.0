@@ -320,13 +320,14 @@ function proxyImageUrl(url: string): string {
 // ─── Gallery image (with client-side background removal) ───────────────────────
 
 function GalleryImg({
-  src, framed, isActive, alt, onClick,
+  src, framed, isActive, alt, onClick, sharedName,
 }: {
   src: string;
   framed: boolean;
   isActive: boolean;
   alt: string;
   onClick: () => void;
+  sharedName?: string;
 }) {
   const showFrame = framed;
   return (
@@ -347,6 +348,9 @@ function GalleryImg({
         opacity: isActive ? 1 : 0,
         visibility: isActive ? "visible" : "hidden",
         pointerEvents: isActive ? "auto" : "none",
+        // Only the on-screen image claims the shared name, so it morphs from
+        // the shop thumbnail on navigation (Yeezy-style zoom).
+        ...(isActive && sharedName ? { viewTransitionName: sharedName } : null),
         ...(showFrame
           ? {
               background: "#fff",
@@ -401,25 +405,24 @@ function OfferSlugPage() {
   useEffect(() => {
     if (!product || allProducts.length === 0) return;
 
+    // Warm the neighbouring product images without a `preload` (which the
+    // browser warns about when the resource isn't used within seconds of load)
+    // — a plain Image() prefetch primes the HTTP cache silently instead.
+    const created: HTMLLinkElement[] = [];
     [prevProduct, nextProduct].forEach((p) => {
       if (p?.image_urls?.[0]) {
-        const link = document.createElement("link");
-        link.rel = "preload";
-        link.as = "image";
-        link.href = proxyImageUrl(p.image_urls[0]);
-        document.head.appendChild(link);
+        const img = new Image();
+        img.src = proxyImageUrl(p.image_urls[0]);
       }
-    });
-
-    [prevProduct, nextProduct].forEach((p) => {
       if (p) {
         const link = document.createElement("link");
         link.rel = "prefetch";
         link.href = `/offer/${p.slug}`;
-        link.as = "document";
         document.head.appendChild(link);
+        created.push(link);
       }
     });
+    return () => { created.forEach((l) => l.remove()); };
   }, [product, prevProduct, nextProduct]);
 
   const touchStartY = useRef<number | null>(null);
@@ -795,8 +798,8 @@ function OfferSlugPage() {
 
   return (
     <>
-      {prevProduct && <link rel="prefetch" href={`/offer/${prevProduct.slug}`} as="document" />}
-      {nextProduct && <link rel="prefetch" href={`/offer/${nextProduct.slug}`} as="document" />}
+      {prevProduct && <link rel="prefetch" href={`/offer/${prevProduct.slug}`} />}
+      {nextProduct && <link rel="prefetch" href={`/offer/${nextProduct.slug}`} />}
       <style>{`
         @keyframes pdp-fade-in {
           from { opacity: 0; transform: translateY(4px); }
@@ -908,6 +911,7 @@ function OfferSlugPage() {
                         isActive={idx === activeImageIndex}
                         alt={`${product.title} — image ${idx + 1}`}
                         onClick={() => setZoomOpen(true)}
+                        sharedName={`product-media-${product.id}`}
                       />
                     ))
                   ) : (
