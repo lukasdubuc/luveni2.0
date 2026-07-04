@@ -3,7 +3,6 @@ import { fetchProducts, useProducts } from "@/lib/useProducts";
 import { useMemo, memo, useEffect } from "react";
 import { trackEvent } from "@/lib/track";
 import { proxyImageUrl, isLikelyTransparentImage } from "@/lib/img";
-import { useTransparentImage } from "@/lib/useTransparentImage";
 
 type Product = {
   id: string;
@@ -71,14 +70,11 @@ function gridImage(images?: string[]): string | null {
 
 const ProductCell = memo(({ product, index }: { product: Product; index: number }) => {
   const raw = gridImage(product.image_urls);
-  const proxied = raw ? proxyImageUrl(raw) : undefined;
-  // Cut the background client-side so every thumbnail floats transparently,
-  // regardless of whether the vendor shipped a PNG or an opaque studio JPG.
-  const { url: imageUrl, transparent } = useTransparentImage(proxied);
-  // Until the cut-out is ready, an opaque source gets a neutral rounded tile so
-  // it reads as deliberate rather than a pasted rectangle. Once transparent,
-  // it floats on the bare grid.
-  const framed = !!raw && !isLikelyTransparentImage(raw) && !transparent;
+  const imageUrl = raw ? proxyImageUrl(raw) : null;
+  // Transparent PNGs (Printful mockups, admin-treated CJ uploads) float on the
+  // bare grid. Untreated vendor photos (CJ JPGs on studio backdrops) get a
+  // neutral rounded tile so they read as deliberate, not pasted rectangles.
+  const framed = !!raw && !isLikelyTransparentImage(raw);
 
   const discounted = product.price_cents_discounted ?? product.discounted_price_cents ?? null;
   const hasDiscount = discounted != null && discounted < product.price_cents;

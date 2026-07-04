@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { createCheckout } from "@/lib/checkout.functions";
 import { trackEvent } from "@/lib/track";
 import { markContactSubmitted } from "@/lib/contact-flag";
-import { useTransparentImage } from "@/lib/useTransparentImage";
 
 /** "Black · L" style variant summary from cart metadata, when present. */
 function variantLabel(item: { metadata?: Record<string, any> }): string {
@@ -12,10 +11,8 @@ function variantLabel(item: { metadata?: Record<string, any> }): string {
   return [m.color, m.size].filter(Boolean).join(" · ");
 }
 
-/** Cart thumbnail with client-side background removal for a consistent look. */
 function CartThumb({ src, alt, className }: { src: string; alt: string; className: string }) {
-  const { url } = useTransparentImage(src);
-  return <img src={url ?? src} alt={alt} className={className} />;
+  return <img src={src} alt={alt} className={className} />;
 }
 
 export const Route = createFileRoute("/checkout")({
