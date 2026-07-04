@@ -193,6 +193,21 @@ const _colorMap: Record<string, string> = {
   "stone grey": "#8f8a82",
   "vintage gold": "#c9a227",
   "vintage white": "#f0ead6",
+
+  // Common vendor (CJ) color words the canvas/heuristic miss, so every
+  // swatch resolves to a real fill instead of a grey blank.
+  coffee: "#6f4e37", "dark brown": "#3b2313", "light brown": "#b07d52",
+  wine: "#722f37", burgundy: "#800020", apricot: "#fbceb1",
+  beige: "#e8dcc4", cream: "#fffdd0", ivory: "#fffff0",
+  olive: "#808000", "army green": "#4b5320", mustard: "#e1ad01",
+  rust: "#b7410e", lavender: "#b57edc", mint: "#98ff98",
+  coral: "#ff7f50", salmon: "#fa8072", tan: "#d2b48c",
+  camel: "#c19a6b", chocolate: "#7b3f00", teal: "#008080",
+  turquoise: "#40e0d0", cyan: "#00b7eb", magenta: "#c71585",
+  peach: "#ffcba4", plum: "#8e4585", "rose red": "#c21e56",
+  "light green": "#90ee90", "dark blue": "#00008b", "sky blue": "#87ceeb",
+  "wine red": "#722f37", "light grey": "#d3d3d3", "light gray": "#d3d3d3",
+  "dark gray": "#4a4a4a", silver: "#c0c0c0",
 };
 
 /**
@@ -388,6 +403,10 @@ function OfferSlugPage() {
     currentIndex < allProducts.length - 1 ? allProducts[currentIndex + 1] : null;
 
   const navigateCooldown = useRef(false);
+  // Swallow scroll/touch inertia for a beat right after a product opens or
+  // changes, so the momentum from the click/scroll that navigated here does
+  // not immediately flip to the next product (the "glitch on open").
+  const navSettleUntil = useRef(0);
 
   const goToPrev = useCallback(() => {
     if (navigateCooldown.current || !prevProduct) return;
@@ -458,7 +477,7 @@ function OfferSlugPage() {
     const handleWheel = (e: WheelEvent) => {
       // Zoom modal is open or recently closed — lock product navigation so scrolling the
       // zoomed image doesn't flip to the next/previous product underneath.
-      if (zoomOpen || justClosedZoom.current) return;
+      if (zoomOpen || justClosedZoom.current || Date.now() < navSettleUntil.current) return;
       const target = e.target as HTMLElement;
       if (target.closest("[data-gallery]")) return;
       if (Math.abs(e.deltaY) < 30) return;
@@ -466,7 +485,7 @@ function OfferSlugPage() {
       if (e.deltaY < 0) goToPrev(); else goToNext();
     };
     const handleTouchStart = (e: TouchEvent) => {
-      if (zoomOpen || justClosedZoom.current) return;
+      if (zoomOpen || justClosedZoom.current || Date.now() < navSettleUntil.current) return;
       const target = e.target as HTMLElement;
       touchOnGallery.current = !!target.closest("[data-gallery]");
       touchStartY.current = e.touches[0].clientY;
@@ -621,6 +640,7 @@ function OfferSlugPage() {
     setCurrentStep(null);
     setZoomOpen(false);
     userPickedVariant.current = false;
+    navSettleUntil.current = Date.now() + 450;
   }, [product?.id]);
 
   useEffect(() => {

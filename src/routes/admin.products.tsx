@@ -2,9 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, Trash2, Pencil, Loader2, Eye, EyeOff, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Trash2, Pencil, Loader2, Eye, EyeOff, ChevronUp, Images } from "lucide-react";
 import { requireAdmin } from "@/lib/admin-guard";
 import { CjTransparencyPanel } from "@/components/admin/CjTransparencyPanel";
+import { ProductMediaCurator } from "@/components/admin/ProductMediaCurator";
 import { processProductImages } from "@/lib/transparency-processing";
 
 /**
@@ -87,6 +88,7 @@ function ProductsPage() {
   const [editing, setEditing] = useState<EditState | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [curatingId, setCuratingId] = useState<string | null>(null);
 
   /* fetch */
   const fetchProducts = async () => {
@@ -364,9 +366,9 @@ function ProductsPage() {
           </div>
 
           {products.map((p) => (
+            <div key={p.id} className="border-b border-black/10">
             <div
-              key={p.id}
-              className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr_auto] border-b border-black/10 px-6 py-4 items-center gap-3 hover:bg-black/[0.015] transition-colors"
+              className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr_auto] px-6 py-4 items-center gap-3 hover:bg-black/[0.015] transition-colors"
             >
               {/* Title + slug */}
               <div className="min-w-0">
@@ -402,6 +404,13 @@ function ProductsPage() {
               {/* Actions */}
               <div className="flex items-center gap-3">
                 <button
+                  onClick={() => setCuratingId((cur) => (cur === p.id ? null : p.id))}
+                  className={`transition-colors ${curatingId === p.id ? "text-black" : "text-black/25 hover:text-black"}`}
+                  title="Curate photos"
+                >
+                  <Images size={13} />
+                </button>
+                <button
                   onClick={() => toggleStatus(p)}
                   className="text-black/25 hover:text-black transition-colors"
                   title={p.is_published ? "Unpublish" : "Publish"}
@@ -423,6 +432,14 @@ function ProductsPage() {
                   <Trash2 size={13} />
                 </button>
               </div>
+            </div>
+
+            {/* Expandable photo curator */}
+            {curatingId === p.id && (
+              <div className="border-t border-black/10 bg-[#fafafa] px-6 pb-4">
+                <ProductMediaCurator productId={p.id} onChanged={fetchProducts} />
+              </div>
+            )}
             </div>
           ))}
         </>
