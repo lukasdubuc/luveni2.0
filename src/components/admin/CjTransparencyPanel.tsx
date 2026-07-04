@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { Loader2, Wand2, Check, AlertTriangle, MinusCircle } from "lucide-react";
 import { isOwnProductMediaUrl, isLikelyTransparentImage } from "@/lib/img";
 import { processProductImages, type ProcessableProduct } from "@/lib/transparency-processing";
+import { supplierNeedsTransparency } from "@/lib/suppliers";
 
 export type CjPanelProduct = {
   id: string;
@@ -51,12 +52,13 @@ export function CjTransparencyPanel({
   products: CjPanelProduct[];
   onUpdated: () => void;
 }) {
-  // Every product, regardless of who sourced it (CJ, Printful, Apliiq, manual):
-  // the storefront must show one transparent primary across the board. Already-
-  // transparent items are skipped by isTreated() at process time, so Printful's
-  // pre-cut mockups cost nothing.
+  // Only suppliers whose photos need it (CJ today) get background removal —
+  // Printful/print-on-demand ship transparent mockups already, and treating a
+  // clean image can only degrade it. Add a supplier to TRANSPARENCY_SUPPLIERS
+  // to extend this. Already-transparent images are additionally skipped at
+  // process time.
   const allProducts = useMemo(
-    () => products.filter((p) => !!p.id),
+    () => products.filter((p) => !!p.id && supplierNeedsTransparency(p.source)),
     [products],
   );
 

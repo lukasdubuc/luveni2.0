@@ -919,24 +919,28 @@ function AdminPage() {
             const icons: Record<string, string> = {
               overview: "◎", products: "▦", orders: "≡", leads: "◉", analytics: "∿", settings: "⚙"
             };
+            const itemCls = (active: boolean) =>
+              `w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-[12px] text-[11px] font-mono font-semibold uppercase tracking-wider transition-all duration-150 ${
+                active
+                  ? isDark ? "bg-white/[0.09] text-white" : "bg-black/[0.07] text-black"
+                  : isDark ? "text-neutral-500 hover:text-neutral-202" : "text-neutral-400 hover:text-neutral-900 hover:bg-black/[0.04]"
+              }`;
+            // Overview is this dashboard; every other section now lives on its
+            // own /admin/* page — link out instead of switching an inline view.
+            if (s === "overview") {
+              return (
+                <button key={s} onClick={() => setSection("overview")} className={itemCls(section === "overview")}>
+                  <span className="text-[13px] w-4 text-center leading-none opacity-80">{icons[s]}</span>
+                  {s}
+                  {section === "overview" && <span className={`ml-auto w-1 h-1 rounded-full ${isDark ? "bg-white" : "bg-black"}`} />}
+                </button>
+              );
+            }
             return (
-              <button
-                key={s}
-                onClick={() => setSection(s)}
-                className={`w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-[12px] text-[11px] font-mono font-semibold uppercase tracking-wider transition-all duration-150 ${
-                  section === s
-                    ? isDark
-                      ? "bg-white/[0.09] text-white"
-                      : "bg-black/[0.07] text-black"
-                    : isDark
-                      ? "text-neutral-500 hover:text-neutral-202"
-                      : "text-neutral-400 hover:text-neutral-900 hover:bg-black/[0.04]"
-                }`}
-              >
+              <a key={s} href={`/admin/${s}`} className={itemCls(false)}>
                 <span className="text-[13px] w-4 text-center leading-none opacity-80">{icons[s] || "·"}</span>
                 {s}
-                {section === s && <span className={`ml-auto w-1 h-1 rounded-full ${isDark ? "bg-white" : "bg-black"}`} />}
-              </button>
+              </a>
             );
           })}
           <a
@@ -1034,13 +1038,24 @@ function AdminPage() {
           {/* Large, centered nav links */}
           <nav className="flex flex-1 flex-col items-center justify-center gap-6 px-6 text-center">
             {navSections.map(s => (
-              <button
-                key={s}
-                onClick={() => { setSection(s); setMobileMenuOpen(false); }}
-                className={`text-2xl font-normal uppercase tracking-tight transition-opacity ${section === s ? "opacity-100" : "opacity-40 hover:opacity-70"}`}
-              >
-                {s}
-              </button>
+              s === "overview" ? (
+                <button
+                  key={s}
+                  onClick={() => { setSection("overview"); setMobileMenuOpen(false); }}
+                  className={`text-2xl font-normal uppercase tracking-tight transition-opacity ${section === "overview" ? "opacity-100" : "opacity-40 hover:opacity-70"}`}
+                >
+                  {s}
+                </button>
+              ) : (
+                <a
+                  key={s}
+                  href={`/admin/${s}`}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="text-2xl font-normal uppercase tracking-tight opacity-40 transition-opacity hover:opacity-70"
+                >
+                  {s}
+                </a>
+              )
             ))}
             <a
               href="/admin/studio"

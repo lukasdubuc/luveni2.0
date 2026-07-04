@@ -5,7 +5,8 @@ import { fetchProducts } from "@/lib/useProducts";
 import { offer } from "@/config/site";
 import { useCart } from "@/context/CartContext";
 import { ZoomPanImage } from "@/components/site/ZoomPanImage";
-import { isLikelyTransparentImage, isOwnProductMediaUrl } from "@/lib/img";
+import { isLikelyTransparentImage } from "@/lib/img";
+import { useDisplayImages } from "@/lib/useDisplayImages";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -515,30 +516,21 @@ function OfferSlugPage() {
     [product?.variants],
   );
 
-  // Products whose variants carry their own image (CJ) are gallery-driven by
-  // those variant images; Printful-shape products index positionally into
-  // image_urls where [0] is a logo/design mockup that must be skipped.
-  const hasVariantImages = useMemo(
-    () => variants.some((v) => !!v.image),
-    [variants],
-  );
+  // Gallery images come exclusively from the display-image pipeline: only good,
+  // quality-gated, deduped, transparent product media (bad cutouts hidden,
+  // opaque originals superseded so there are never look-alike duplicates,
+  // primary first), falling back to raw image_urls when a product has no
+  // processed media. This guarantees no poor images or duplicates on the page.
+  const { images: displayImages } = useDisplayImages(product?.id, product?.image_urls, {
+    stripFirstFallback: true,
+  });
 
-  // Gallery. Printful: skip image_urls[0] (the logo mockup). CJ: keep every
-  // product image AND merge in each variant image so selecting any variant
-  // always lands on a real slide. Proxy through wsrv.nl to dodge CDN CORS.
-  const galleryImages = useMemo(() => {
-    const base = Array.isArray(product?.image_urls) ? product!.image_urls.filter(Boolean) : [];
-    // Strip index 0 only when it's an untreated Printful print file. Once
-    // processed, image_urls[0] is the clean transparent primary — keep it.
-    const primaryIsTreated = base[0] && (isOwnProductMediaUrl(base[0]) || isLikelyTransparentImage(base[0]));
-    const core = hasVariantImages || primaryIsTreated ? base : base.length > 1 ? base.slice(1) : base;
-    const variantImgs = hasVariantImages
-      ? variants.map((v) => v.image).filter((u): u is string => !!u)
-      : [];
-    const merged = Array.from(new Set([...core, ...variantImgs]));
-    const proxied = merged.map(proxyImageUrl);
-    return proxied.length > 0 ? proxied : [""];
-  }, [product?.image_urls, variants, hasVariantImages]);
+  // Sentinel [""] means "no images" — the gallery renders a tasteful
+  // placeholder rather than a broken/opaque image.
+  const galleryImages = useMemo(
+    () => (displayImages.length > 0 ? displayImages : [""]),
+    [displayImages],
+  );
 
   // Transparent PNGs (Printful mockups / background-removed uploads) float on
   // the page background. Untreated opaque vendor photos (CJ JPGs on a white or
@@ -616,6 +608,12 @@ function OfferSlugPage() {
   // gallery stays on the primary product photo (index 0) instead of jumping
   // to whatever image the default-selected variant happens to carry.
   const userPickedVariant = useRef(false);
+
+  // Keep the active slide in range as the async display-image list resolves or
+  // shrinks (e.g. duplicates/bad cutouts get filtered out after first paint).
+  useEffect(() => {
+    setActiveImageIndex((i) => Math.min(i, Math.max(0, galleryImages.length - 1)));
+  }, [galleryImages.length]);
 
   useEffect(() => {
     setActiveImageIndex(0);
