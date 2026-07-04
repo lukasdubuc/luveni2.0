@@ -38,6 +38,17 @@ export function useDisplayImages(
       if (orig) hiddenUrls.add(orig);
     }
 
+    // Printful lists the bare print/design file first (files.cdn.printful.com),
+    // which is just the flat artwork, not a wearable mockup. Skip that first
+    // image whenever the product has real mockups after it — for existing AND
+    // future Printful products, and for both the good-cutout list and the
+    // catalog fallback below. (The design row's product_media.url is the same
+    // printful CDN url, so excluding by url removes it everywhere.)
+    const base0 = Array.isArray(fallbackImageUrls) ? fallbackImageUrls.filter(Boolean) : [];
+    if (base0.length > 1 && /files\.cdn\.printful\.com/i.test(base0[0])) {
+      hiddenUrls.add(base0[0]);
+    }
+
     // Good cutouts (transparent + passed quality gate + not hidden).
     const good = media
       .filter((m) => !m.hidden && m.is_transparent && m.metadata?.quality_ok !== false)

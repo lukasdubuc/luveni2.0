@@ -1152,8 +1152,11 @@ function OfferSlugPage() {
                                     title={value}
                                     style={{
                                       display: "inline-block",
+                                      boxSizing: "border-box",
                                       width: "26px", height: "26px",
-                                      borderRadius: "50%",
+                                      aspectRatio: "1 / 1",
+                                      borderRadius: "9999px",
+                                      overflow: "hidden",
                                       background: useImageSwatch
                                         ? `center/cover no-repeat url(${proxyImageUrl(swatchImg!)})`
                                         : (hex ?? "#888"),
@@ -1166,7 +1169,7 @@ function OfferSlugPage() {
                                       opacity: available ? 1 : 0.25,
                                       transition: "outline 0.15s ease, opacity 0.15s ease",
                                       padding: 0, flexShrink: 0,
-                                      WebkitAppearance: "none",
+                                      WebkitAppearance: "none", appearance: "none",
                                     }}
                                   />
                                 );
