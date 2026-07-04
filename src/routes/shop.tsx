@@ -72,13 +72,28 @@ function gridImage(images?: string[]): string | null {
   return images.length > 1 ? images[1] : images[0];
 }
 
+// Resolve the single thumbnail for a product. Prefer an already-transparent
+// primary (image_urls[0]); otherwise use the gridImage() mockup choice. Returns
+// null when the product has no usable image so the cell renders the "No Image"
+// placeholder instead of a broken tile.
+function pickThumbnail(images?: string[]): { raw: string; transparent: boolean } | null {
+  if (!Array.isArray(images) || images.length === 0) return null;
+  const primary = images[0];
+  if (primary && isLikelyTransparentImage(primary)) {
+    return { raw: primary, transparent: true };
+  }
+  const raw = gridImage(images);
+  if (!raw) return null;
+  return { raw, transparent: isLikelyTransparentImage(raw) };
+}
+
 const ProductCell = memo(({ product, index }: { product: Product; index: number }) => {
-  const raw = gridImage(product.image_urls);
-  const imageUrl = raw ? proxyImageUrl(raw) : null;
+  const thumb = pickThumbnail(product.image_urls);
+  const imageUrl = thumb ? proxyImageUrl(thumb.raw) : null;
   // Transparent PNGs (Printful mockups, admin-treated CJ uploads) float on the
   // bare grid. Untreated vendor photos (CJ JPGs on studio backdrops) get a
   // neutral rounded tile so they read as deliberate, not pasted rectangles.
-  const framed = !!raw && !isLikelyTransparentImage(raw);
+  const framed = !!thumb && !thumb.transparent;
 
   const discounted = product.price_cents_discounted ?? product.discounted_price_cents ?? null;
   const hasDiscount = discounted != null && discounted < product.price_cents;
@@ -94,7 +109,7 @@ const ProductCell = memo(({ product, index }: { product: Product; index: number 
       preload="intent"
       viewTransition
       onClick={() => trackEvent("product_click", { product_id: product.id })}
-      className="group relative z-0 block border-none bg-transparent outline-none transition-transform duration-300 ease-in-out hover:z-10 hover:scale-105 focus:outline-none focus-visible:outline-none"
+      className="group relative z-0 block border-none bg-transparent outline-none [transform:translateZ(0)] transition-transform duration-300 ease-out will-change-transform hover:z-10 hover:scale-[1.04] focus:outline-none focus-visible:outline-none"
     >
       <div className="relative flex aspect-square items-center justify-center overflow-hidden bg-transparent p-6 sm:p-8 md:p-10">
         {imageUrl ? (
@@ -106,8 +121,8 @@ const ProductCell = memo(({ product, index }: { product: Product; index: number 
             sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
             className={
               framed
-                ? "max-h-full max-w-full aspect-square rounded-2xl bg-white object-contain p-2 shadow-[0_1px_10px_rgba(0,0,0,0.06)] ring-1 ring-black/5"
-                : "max-h-full max-w-full object-contain aspect-square"
+                ? "aspect-square h-full w-full rounded-2xl bg-white object-contain p-3 shadow-[0_1px_10px_rgba(0,0,0,0.06)] ring-1 ring-black/5"
+                : "max-h-full max-w-full object-contain"
             }
             loading={isAboveFold ? "eager" : "lazy"}
             decoding="async"
