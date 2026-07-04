@@ -20,141 +20,26 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2, Wand2, Check, AlertTriangle, MinusCircle } from "lucide-react";
-import {
-  PRODUCT_MEDIA_BUCKET,
-  isOwnProductMediaUrl,
-  isLikelyTransparentImage,
-} from "@/lib/img";
+import { isOwnProductMediaUrl, isLikelyTransparentImage } from "@/lib/img";
+import { processProductImages, type ProcessableProduct } from "@/lib/transparency-processing";
 
 export type CjPanelProduct = {
   id: string;
   title: string;
   image_urls: string[];
+  variants?: any[] | null;
   source?: string | null;
 };
 
 type ItemPhase = "idle" | "processing" | "done" | "skipped" | "error";
 type ItemState = { phase: ItemPhase; note?: string };
 
-// ── Image helpers ──────────────────────────────────────────────
-
-/**
- * Fetch a vendor image as a Blob. Tries the CDN directly first; if the
- * host blocks cross-origin reads, falls back to the wsrv.nl image proxy
- * (the same CORS-dodging proxy the storefront already uses for Printful).
- */
-async function fetchImageBlob(url: string): Promise<Blob> {
-  try {
-    const res = await fetch(url, { mode: "cors" });
-    if (res.ok) return await res.blob();
-  } catch {
-    /* fall through to proxy */
-  }
-  const proxied = `https://wsrv.nl/?url=${encodeURIComponent(url)}&n=-1`;
-  const res = await fetch(proxied);
-  if (!res.ok) throw new Error(`Could not fetch source image (HTTP ${res.status})`);
-  return await res.blob();
-}
-
-/** First image that is not one of our own already-processed uploads. */
-function pickSourceImage(p: CjPanelProduct): string | null {
-  const urls = Array.isArray(p.image_urls) ? p.image_urls.filter(Boolean) : [];
-  return urls.find((u) => !isOwnProductMediaUrl(u)) ?? urls[0] ?? null;
-}
+// ── Treated detection ──────────────────────────────────────────
 
 /** Already treated? (own-storage transparent PNG sits first in image_urls) */
 function primaryLooksTransparent(p: CjPanelProduct): boolean {
   const primary = p.image_urls?.[0];
   return !!primary && isOwnProductMediaUrl(primary) && isLikelyTransparentImage(primary);
-}
-
-// ── Storage upload (create-if-missing bucket) ──────────────────
-
-async function uploadTransparentPng(productId: string, png: Blob): Promise<string> {
-  const path = `products/${productId}/transparent-${Date.now()}.png`;
-  const storage = supabase.storage;
-
-  let { error } = await storage
-    .from(PRODUCT_MEDIA_BUCKET)
-    .upload(path, png, { upsert: true, contentType: "image/png" });
-
-  if (error && /bucket.*not.*found/i.test(error.message)) {
-    // Best effort: create the public bucket, then retry. Bucket creation is
-    // usually reserved for the service role — if it fails, apply migration
-    // 20260703_product_media_bucket.sql (or create the bucket in the
-    // dashboard) and re-run.
-    const { error: createErr } = await storage.createBucket(PRODUCT_MEDIA_BUCKET, {
-      public: true,
-    });
-    if (createErr) {
-      throw new Error(
-        `Storage bucket "${PRODUCT_MEDIA_BUCKET}" is missing and could not be created from the browser (${createErr.message}). Apply migration 20260703_product_media_bucket.sql.`,
-      );
-    }
-    ({ error } = await storage
-      .from(PRODUCT_MEDIA_BUCKET)
-      .upload(path, png, { upsert: true, contentType: "image/png" }));
-  }
-  if (error) throw new Error(`Upload failed: ${error.message}`);
-
-  const {
-    data: { publicUrl },
-  } = storage.from(PRODUCT_MEDIA_BUCKET).getPublicUrl(path);
-  return publicUrl;
-}
-
-// ── DB writes ──────────────────────────────────────────────────
-
-async function persistTransparentImage(
-  product: CjPanelProduct,
-  publicUrl: string,
-  sourceUrl: string,
-) {
-  // 1. products.image_urls — transparent PNG first. Drop the opaque source it
-  //    replaces so the gallery never shows both look-alikes (original_url on
-  //    the media row keeps provenance).
-  const rest = (product.image_urls ?? []).filter((u) => u && u !== publicUrl && u !== sourceUrl);
-  const { error: prodErr } = await supabase
-    .from("products")
-    .update({ image_urls: [publicUrl, ...rest] })
-    .eq("id", product.id);
-  if (prodErr) throw new Error(`products update failed: ${prodErr.message}`);
-
-  // 2. Demote the previous primary product-level media rows.
-  const { error: demoteErr } = await supabase
-    .from("product_media")
-    .update({ is_primary: false })
-    .eq("product_id", product.id)
-    .eq("is_primary", true)
-    .is("variant_key", null)
-    .neq("url", publicUrl);
-  if (demoteErr) throw new Error(`product_media demote failed: ${demoteErr.message}`);
-
-  // 3. Upsert the new primary row. The table's unique key includes the
-  //    nullable variant_key (NULLs never conflict), so upsert manually.
-  const row = {
-    view_type: "front_flat",
-    is_primary: true,
-    is_transparent: true,
-    position: 0,
-    source: "cj",
-    metadata: { generated_by: "imgly-background-removal", original_url: sourceUrl },
-  };
-  const { data: existing, error: selErr } = await supabase
-    .from("product_media")
-    .select("id")
-    .eq("product_id", product.id)
-    .eq("url", publicUrl)
-    .is("variant_key", null)
-    .maybeSingle();
-  if (selErr) throw new Error(`product_media lookup failed: ${selErr.message}`);
-
-  const { error: upsertErr } = existing
-    ? await supabase.from("product_media").update(row).eq("id", existing.id)
-    : await supabase
-        .from("product_media")
-        .insert([{ product_id: product.id, variant_key: null, url: publicUrl, ...row }]);
-  if (upsertErr) throw new Error(`product_media upsert failed: ${upsertErr.message}`);
 }
 
 // ── Panel ──────────────────────────────────────────────────────
@@ -247,11 +132,13 @@ export function CjTransparencyPanel({
       return;
     }
     setRunning(true);
-    let done = 0;
-    let skipped = 0;
-    let failed = 0;
+    let productsTouched = 0;
+    let imagesDone = 0;
+    let imagesBad = 0;
+    let imagesFailed = 0;
 
-    // Loaded lazily so the (large) WASM bundle never ships with the page.
+    // Loaded once and shared across every product so the (large) WASM bundle
+    // downloads a single time per sweep.
     let removeBackground: (blob: Blob) => Promise<Blob>;
     try {
       const mod = await import("@imgly/background-removal");
@@ -265,35 +152,49 @@ export function CjTransparencyPanel({
     }
 
     for (const product of targets) {
-      if (isTreated(product)) {
-        skipped++;
-        setState(product.id, { phase: "skipped", note: "already transparent" });
-        continue;
-      }
-      const sourceUrl = pickSourceImage(product);
-      if (!sourceUrl) {
-        failed++;
-        setState(product.id, { phase: "error", note: "no source image" });
-        continue;
-      }
       try {
-        setState(product.id, { phase: "processing", note: "fetching image" });
-        const blob = await fetchImageBlob(sourceUrl);
+        const summary = await processProductImages(
+          product as ProcessableProduct,
+          {
+            removeBackground,
+            onProgress: (p) => {
+              const label =
+                p.phase === "skipped"
+                  ? "already transparent"
+                  : p.phase === "bad"
+                    ? `image ${p.index + 1}/${p.total}: low quality`
+                    : `image ${p.index + 1}/${p.total} · ${p.note ?? p.phase}`;
+              setState(product.id, { phase: "processing", note: label });
+            },
+          },
+        );
 
-        setState(product.id, { phase: "processing", note: "removing background" });
-        const png = await removeBackground(blob);
+        imagesDone += summary.processed;
+        imagesBad += summary.bad;
+        imagesFailed += summary.failed;
 
-        setState(product.id, { phase: "processing", note: "uploading PNG" });
-        const publicUrl = await uploadTransparentPng(product.id, png);
-
-        setState(product.id, { phase: "processing", note: "saving" });
-        await persistTransparentImage(product, publicUrl, sourceUrl);
-
-        setTransparentIds((prev) => new Set(prev).add(product.id));
-        setState(product.id, { phase: "done" });
-        done++;
+        if (summary.processed > 0) {
+          setTransparentIds((prev) => new Set(prev).add(product.id));
+          productsTouched++;
+          setState(product.id, {
+            phase: "done",
+            note:
+              summary.bad || summary.failed
+                ? `${summary.processed} ok · ${summary.bad} flagged · ${summary.failed} failed`
+                : undefined,
+          });
+        } else if (summary.total > 0 && summary.skipped === summary.total) {
+          setState(product.id, { phase: "skipped", note: "already transparent" });
+        } else if (summary.bad > 0 || summary.failed > 0) {
+          setState(product.id, {
+            phase: "error",
+            note: `${summary.bad} low-quality · ${summary.failed} failed`,
+          });
+        } else {
+          setState(product.id, { phase: "skipped", note: "no images" });
+        }
       } catch (e) {
-        failed++;
+        imagesFailed++;
         const message = (e as Error).message || "unknown error";
         setState(product.id, { phase: "error", note: message });
         toast.error(`${product.title}: ${message}`);
@@ -301,15 +202,15 @@ export function CjTransparencyPanel({
     }
 
     setRunning(false);
-    if (done > 0) {
+    if (imagesDone > 0) {
       toast.success(
-        `Made ${done} product image${done === 1 ? "" : "s"} transparent.` +
-          (skipped ? ` ${skipped} skipped.` : "") +
-          (failed ? ` ${failed} failed.` : ""),
+        `Made ${imagesDone} image${imagesDone === 1 ? "" : "s"} transparent across ${productsTouched} product${productsTouched === 1 ? "" : "s"}.` +
+          (imagesBad ? ` ${imagesBad} flagged low-quality.` : "") +
+          (imagesFailed ? ` ${imagesFailed} failed.` : ""),
       );
       onUpdated();
-    } else if (failed === 0) {
-      toast.info("Nothing to do — all selected products are already transparent.");
+    } else if (imagesBad === 0 && imagesFailed === 0) {
+      toast.info("Nothing to do — all images are already transparent.");
     }
   }
 

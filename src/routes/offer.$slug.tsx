@@ -5,7 +5,7 @@ import { fetchProducts } from "@/lib/useProducts";
 import { offer } from "@/config/site";
 import { useCart } from "@/context/CartContext";
 import { ZoomPanImage } from "@/components/site/ZoomPanImage";
-import { isLikelyTransparentImage } from "@/lib/img";
+import { isLikelyTransparentImage, isOwnProductMediaUrl } from "@/lib/img";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -528,7 +528,10 @@ function OfferSlugPage() {
   // always lands on a real slide. Proxy through wsrv.nl to dodge CDN CORS.
   const galleryImages = useMemo(() => {
     const base = Array.isArray(product?.image_urls) ? product!.image_urls.filter(Boolean) : [];
-    const core = hasVariantImages ? base : base.length > 1 ? base.slice(1) : base;
+    // Strip index 0 only when it's an untreated Printful print file. Once
+    // processed, image_urls[0] is the clean transparent primary — keep it.
+    const primaryIsTreated = base[0] && (isOwnProductMediaUrl(base[0]) || isLikelyTransparentImage(base[0]));
+    const core = hasVariantImages || primaryIsTreated ? base : base.length > 1 ? base.slice(1) : base;
     const variantImgs = hasVariantImages
       ? variants.map((v) => v.image).filter((u): u is string => !!u)
       : [];
