@@ -5,6 +5,43 @@ import { toast } from "sonner";
 import { Plus, Trash2, Pencil, Loader2, Eye, EyeOff, ChevronDown, ChevronUp } from "lucide-react";
 import { requireAdmin } from "@/lib/admin-guard";
 import { CjTransparencyPanel } from "@/components/admin/CjTransparencyPanel";
+import { processProductImages } from "@/lib/transparency-processing";
+
+/**
+ * Fire-and-forget transparent-PNG treatment for a product the admin just
+ * published/added. Runs in the browser, treats EVERY image, and MUST NEVER
+ * block or crash the publish action — all failures are swallowed. The
+ * CjTransparencyPanel auto-sweep remains a backstop for anything missed here
+ * (e.g. webhook-imported products with no browser context).
+ */
+function autoTreatOnPublish(product: {
+  id: string;
+  title?: string;
+  image_urls?: string[] | null;
+  variants?: any[] | null;
+  source?: string | null;
+}) {
+  void (async () => {
+    try {
+      const summary = await processProductImages({
+        id: product.id,
+        title: product.title,
+        image_urls: Array.isArray(product.image_urls) ? product.image_urls : [],
+        variants: product.variants ?? [],
+        source: product.source ?? null,
+      });
+      if (summary.processed > 0) {
+        toast.success(
+          `Cleaned ${summary.processed} image${summary.processed === 1 ? "" : "s"} for "${product.title ?? "product"}".` +
+            (summary.bad ? ` ${summary.bad} flagged low-quality.` : ""),
+        );
+        window.dispatchEvent(new Event("productsUpdated"));
+      }
+    } catch {
+      /* background-removal is best-effort; never breaks publishing */
+    }
+  })();
+}
 
 export const Route = createFileRoute("/admin/products")({
   beforeLoad: requireAdmin,
@@ -106,14 +143,25 @@ function ProductsPage() {
     }
 
     const final = { ...payload, variants } as any;
-    const { error } = id
-      ? await supabase.from("products").update(final).eq("id", id)
-      : await supabase.from("products").insert([final]);
+    const { data: savedRows, error } = id
+      ? await supabase.from("products").update(final).eq("id", id).select().limit(1)
+      : await supabase.from("products").insert([final]).select().limit(1);
 
     if (error) {
       toast.error("Save failed: " + error.message);
     } else {
       toast.success(id ? "Product updated." : "Product created.");
+      // Treat images immediately on publish (all images, non-blocking).
+      const saved = (savedRows?.[0] ?? null) as Product | null;
+      if (saved && saved.is_published) {
+        autoTreatOnPublish({
+          id: saved.id,
+          title: saved.title,
+          image_urls: saved.image_urls,
+          variants: saved.variants ?? variants,
+          source: saved.source ?? null,
+        });
+      }
       closeForm();
       window.dispatchEvent(new Event("productsUpdated"));
       fetchProducts();
@@ -135,7 +183,18 @@ function ProductsPage() {
 
   /* toggle publish */
   const toggleStatus = async (p: Product) => {
-    await supabase.from("products").update({ is_published: !p.is_published }).eq("id", p.id);
+    const nowPublished = !p.is_published;
+    await supabase.from("products").update({ is_published: nowPublished }).eq("id", p.id);
+    // Publishing from the list → treat every image immediately (non-blocking).
+    if (nowPublished) {
+      autoTreatOnPublish({
+        id: p.id,
+        title: p.title,
+        image_urls: p.image_urls,
+        variants: p.variants ?? [],
+        source: p.source ?? null,
+      });
+    }
     window.dispatchEvent(new Event("productsUpdated"));
     fetchProducts();
   };
@@ -279,6 +338,7 @@ function ProductsPage() {
             id: p.id,
             title: p.title,
             image_urls: p.image_urls ?? [],
+            variants: p.variants ?? [],
             source: p.source ?? null,
           }))}
           onUpdated={fetchProducts}

@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { fetchProducts, useProducts } from "@/lib/useProducts";
 import { useMemo, memo, useEffect } from "react";
 import { trackEvent } from "@/lib/track";
-import { proxyImageUrl, isLikelyTransparentImage } from "@/lib/img";
+import { proxyImageUrl, isLikelyTransparentImage, isOwnProductMediaUrl } from "@/lib/img";
 
 type Product = {
   id: string;
@@ -65,6 +65,10 @@ function ShopPage() {
 // there's a real mockup after it).
 function gridImage(images?: string[]): string | null {
   if (!Array.isArray(images) || images.length === 0) return null;
+  // Once processed, image_urls[0] is the clean transparent primary — prefer it.
+  // Otherwise fall back to skipping index 0 (Printful lists the bare print file
+  // first, so the real mockup is at [1]).
+  if (isOwnProductMediaUrl(images[0]) || isLikelyTransparentImage(images[0])) return images[0];
   return images.length > 1 ? images[1] : images[0];
 }
 
@@ -108,6 +112,11 @@ const ProductCell = memo(({ product, index }: { product: Product; index: number 
             loading={isAboveFold ? "eager" : "lazy"}
             decoding="async"
             {...(isAboveFold ? { fetchPriority: "high" } : {})}
+            // Shared element: the browser morphs this thumbnail into the same
+            // image on the offer page for a seamless zoom (Yeezy-style). Only
+            // the clicked cell's name is live during a navigation, so per-id
+            // names never collide.
+            style={{ viewTransitionName: `product-media-${product.id}` }}
           />
         ) : (
           <span className="text-[7px] uppercase tracking-[0.3em] opacity-20">No Image</span>

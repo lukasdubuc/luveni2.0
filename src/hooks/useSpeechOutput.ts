@@ -365,6 +365,12 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       const cleanText = sanitizeTextForSpeech(text);
       if (!cleanText) { endSpeechCleanup(); return; }
 
+      // Reuse the SINGLE primed audio element. It was unlocked by a real user
+      // gesture in unlock(); a freshly-created `new Audio()` is NOT trusted by
+      // the autoplay policy, so play() would reject after the async TTS fetch.
+      if (!globalAudioRef.current) globalAudioRef.current = new Audio();
+      const audioEl = globalAudioRef.current;
+
       const firstCut = (() => {
         const head = cleanText.slice(0, 90);
         const m = head.match(/[.!?]\s/);
@@ -377,6 +383,8 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
       const chunks = restTxt ? [first, ...chunkText(restTxt, 220)] : [first];
 
       let done = false;
+      let playedAny = false;
+      let fellBack = false;
       const finish = () => {
         if (done) return; done = true;
         if (audioIntervalRef.current) { clearInterval(audioIntervalRef.current); audioIntervalRef.current = null; }
@@ -384,12 +392,31 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         if (onEndRef.current) onEndRef.current();
       };
 
+      // GUARANTEE SPEECH: on ANY server/autoplay failure before audio has begun,
+      // fall back to the browser speechSynthesis path so Astra is never silent.
+      const nativeFallback = (reason: unknown) => {
+        if (done || fellBack) return;
+        fellBack = true;
+        console.warn('[Speech] ElevenLabs TTS unavailable — using browser speechSynthesis fallback:', reason);
+        if (audioIntervalRef.current) { clearInterval(audioIntervalRef.current); audioIntervalRef.current = null; }
+        const fv = voiceCache ?? findBestVoice(
+          typeof window !== 'undefined' && window.speechSynthesis ? window.speechSynthesis.getVoices() : [],
+        );
+        if (fv) voiceCache = fv;
+        if (typeof window !== 'undefined' && window.speechSynthesis) {
+          // doSpeakNative resets speaking/onStart itself.
+          doSpeakNative(text, fv);
+        } else {
+          finish();
+        }
+      };
+
       if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
       audioIntervalRef.current = setInterval(() => {
         if (onBoundaryRef.current && speaking.current) onBoundaryRef.current(0.3 + Math.random() * 0.55);
       }, 80);
 
-      const fetchAudio = async (t: string): Promise<HTMLAudioElement> => {
+      const fetchAudioUrl = async (t: string): Promise<string> => {
         const res = await fetch(JARVIS_TTS_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': JARVIS_TTS_ANON, 'Authorization': `Bearer ${JARVIS_TTS_ANON}` },
@@ -397,30 +424,39 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data?.audio) throw new Error(data?.error ?? `TTS ${res.status}`);
-        return new Audio(base64ToBlobUrl(data.audio));
+        return base64ToBlobUrl(data.audio);
       };
 
       let idx = 0;
-      let nextP: Promise<HTMLAudioElement> | null = chunks.length ? fetchAudio(chunks[0]) : null;
+      let nextP: Promise<string> | null = chunks.length ? fetchAudioUrl(chunks[0]) : null;
       const playNext = async () => {
         if (!speaking.current || !nextP || idx >= chunks.length) { finish(); return; }
-        let audio: HTMLAudioElement;
-        try { audio = await nextP; }
+        let url: string;
+        try { url = await nextP; }
         catch (e) {
-          console.warn('[Speech] server TTS failed, native fallback:', e);
-          const fv = voiceCache ?? findBestVoice(window.speechSynthesis ? window.speechSynthesis.getVoices() : []);
-          if (fv) voiceCache = fv;
-          if (window.speechSynthesis && fv && idx === 0) doSpeakNative(text, fv); else finish();
+          // Server TTS failed (e.g. ELEVENLABS_API_KEY missing → { error }).
+          if (!playedAny) nativeFallback(e);
+          else { if (nextP && idx < chunks.length) void playNext(); else finish(); }
           return;
         }
-        if (!speaking.current) { finish(); return; }
+        if (!speaking.current) { try { URL.revokeObjectURL(url); } catch (_) {} finish(); return; }
         setCurrentSubtitle(chunks[idx]);
         idx += 1;
-        nextP = idx < chunks.length ? fetchAudio(chunks[idx]) : null;
-        activeAudiosRef.current = [audio];
-        audio.onended = () => { if (nextP) void playNext(); else finish(); };
-        audio.onerror = () => { if (nextP) void playNext(); else finish(); };
-        try { await audio.play(); } catch { if (nextP) void playNext(); else finish(); }
+        nextP = idx < chunks.length ? fetchAudioUrl(chunks[idx]) : null;
+        audioEl.src = url;
+        activeAudiosRef.current = [audioEl];
+        const cleanupUrl = () => { try { URL.revokeObjectURL(url); } catch (_) {} };
+        audioEl.onended = () => { cleanupUrl(); if (nextP) void playNext(); else finish(); };
+        audioEl.onerror = () => { cleanupUrl(); if (nextP) void playNext(); else finish(); };
+        try {
+          await audioEl.play();
+          playedAny = true;
+        } catch (playErr) {
+          cleanupUrl();
+          // Autoplay rejection (gesture lost across the async round-trip).
+          if (!playedAny) nativeFallback(playErr);
+          else { if (nextP) void playNext(); else finish(); }
+        }
       };
       void playNext();
     }, 0);
