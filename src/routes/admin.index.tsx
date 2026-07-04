@@ -72,14 +72,14 @@ type AdminUser = {
   created_at: string;
 };
 
-type NavSection = "overview" | "products" | "orders" | "leads" | "analytics" | "settings";
+export type NavSection = "overview" | "products" | "orders" | "leads" | "analytics" | "settings";
 
 export const Route = createFileRoute("/admin/")({
   head: () => ({
     meta: [{ title: "Command Center" }],
   }),
   beforeLoad: requireAdmin,
-  component: AdminPage,
+  component: () => <AdminPage initialSection="overview" />,
 });
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -120,11 +120,11 @@ function proxyImageUrl(url: string): string {
 // ────────────────────────────────────────────────────────────────────────────
 // MAIN ADMIN PAGE COMPONENT
 // ────────────────────────────────────────────────────────────────────────────
-function AdminPage() {
+export function AdminPage({ initialSection = "overview" }: { initialSection?: NavSection }) {
   const navigate = useNavigate();
 
   const navSections: NavSection[] = ["overview", "products", "orders", "leads", "analytics", "settings"];
-  const [section, setSection] = useState<NavSection>("overview");
+  const [section, setSection] = useState<NavSection>(initialSection);
 
   const [isDark, setIsDark] = useState<boolean>(() => {
     if (typeof document !== "undefined") {
@@ -937,9 +937,10 @@ function AdminPage() {
               );
             }
             return (
-              <a key={s} href={`/admin/${s}`} className={itemCls(false)}>
+              <a key={s} href={`/admin/${s}`} className={itemCls(section === s)}>
                 <span className="text-[13px] w-4 text-center leading-none opacity-80">{icons[s] || "·"}</span>
                 {s}
+                {section === s && <span className={`ml-auto w-1 h-1 rounded-full ${isDark ? "bg-white" : "bg-black"}`} />}
               </a>
             );
           })}
@@ -1051,7 +1052,7 @@ function AdminPage() {
                   key={s}
                   href={`/admin/${s}`}
                   onClick={() => setMobileMenuOpen(false)}
-                  className="text-2xl font-normal uppercase tracking-tight opacity-40 transition-opacity hover:opacity-70"
+                  className={`text-2xl font-normal uppercase tracking-tight transition-opacity ${section === s ? "opacity-100" : "opacity-40 hover:opacity-70"}`}
                 >
                   {s}
                 </a>

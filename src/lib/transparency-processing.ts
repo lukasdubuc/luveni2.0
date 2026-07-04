@@ -72,8 +72,11 @@ export interface ProcessSummary {
 export type RemoveBackgroundFn = (blob: Blob) => Promise<Blob>;
 
 // Quality-gate thresholds on the fraction of opaque pixels in the result.
-const MIN_OPAQUE_FRACTION = 0.03; // subject almost fully erased ⇒ bad
-const MAX_OPAQUE_FRACTION = 0.97; // almost nothing removed ⇒ bad
+// Kept permissive: the owner wants CJ imagery transparent wherever the cutout
+// is usable and curates the rest by hand in the product gallery, so only
+// reject truly-destroyed (subject erased) or untouched (nothing removed).
+const MIN_OPAQUE_FRACTION = 0.02; // subject almost fully erased ⇒ bad
+const MAX_OPAQUE_FRACTION = 0.985; // almost nothing removed ⇒ bad
 
 // ── Image fetch (CORS-dodging, mirrors the old panel) ──────────
 async function fetchImageBlob(url: string): Promise<Blob> {

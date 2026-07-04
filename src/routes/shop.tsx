@@ -78,6 +78,12 @@ function gridImage(images?: string[]): string | null {
 // placeholder instead of a broken tile.
 function pickThumbnail(images?: string[]): { raw: string; transparent: boolean } | null {
   if (!Array.isArray(images) || images.length === 0) return null;
+  // Printful lists the bare print/design artwork first; skip it when real
+  // mockups follow, so the grid thumbnail matches the offer page's primary
+  // (no design flashes on click). Same rule the offer gallery applies.
+  if (images.length > 1 && /files\.cdn\.printful\.com/i.test(images[0])) {
+    images = images.slice(1);
+  }
   const primary = images[0];
   if (primary && isLikelyTransparentImage(primary)) {
     return { raw: primary, transparent: true };
