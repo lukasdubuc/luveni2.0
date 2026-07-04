@@ -36,6 +36,7 @@ import { Route as AdminOrdersRouteImport } from './routes/admin.orders'
 import { Route as AdminLeadsRouteImport } from './routes/admin.leads'
 import { Route as AdminJarvisRouteImport } from './routes/admin.jarvis'
 import { Route as AdminCompareRouteImport } from './routes/admin.compare'
+import { Route as AdminAnalyticsRouteImport } from './routes/admin.analytics'
 import { Route as ApiPublicStripeWebhookRouteImport } from './routes/api/public/stripe-webhook'
 
 const Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRoute =
@@ -177,6 +178,11 @@ const AdminCompareRoute = AdminCompareRouteImport.update({
   path: '/admin/compare',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminAnalyticsRoute = AdminAnalyticsRouteImport.update({
+  id: '/admin/analytics',
+  path: '/admin/analytics',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicStripeWebhookRoute = ApiPublicStripeWebhookRouteImport.update({
   id: '/api/public/stripe-webhook',
   path: '/api/public/stripe-webhook',
@@ -197,6 +203,7 @@ export interface FileRoutesByFullPath {
   '/terms': typeof TermsRoute
   '/thank-you': typeof ThankYouRoute
   '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt': typeof Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/compare': typeof AdminCompareRoute
   '/admin/jarvis': typeof AdminJarvisRoute
   '/admin/leads': typeof AdminLeadsRoute
@@ -227,6 +234,7 @@ export interface FileRoutesByTo {
   '/terms': typeof TermsRoute
   '/thank-you': typeof ThankYouRoute
   '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt': typeof Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/compare': typeof AdminCompareRoute
   '/admin/jarvis': typeof AdminJarvisRoute
   '/admin/leads': typeof AdminLeadsRoute
@@ -258,6 +266,7 @@ export interface FileRoutesById {
   '/terms': typeof TermsRoute
   '/thank-you': typeof ThankYouRoute
   '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt': typeof Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/compare': typeof AdminCompareRoute
   '/admin/jarvis': typeof AdminJarvisRoute
   '/admin/leads': typeof AdminLeadsRoute
@@ -290,6 +299,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/thank-you'
     | '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt'
+    | '/admin/analytics'
     | '/admin/compare'
     | '/admin/jarvis'
     | '/admin/leads'
@@ -320,6 +330,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/thank-you'
     | '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt'
+    | '/admin/analytics'
     | '/admin/compare'
     | '/admin/jarvis'
     | '/admin/leads'
@@ -350,6 +361,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/thank-you'
     | '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt'
+    | '/admin/analytics'
     | '/admin/compare'
     | '/admin/jarvis'
     | '/admin/leads'
@@ -381,6 +393,7 @@ export interface RootRouteChildren {
   TermsRoute: typeof TermsRoute
   ThankYouRoute: typeof ThankYouRoute
   Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRoute: typeof Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRoute
+  AdminAnalyticsRoute: typeof AdminAnalyticsRoute
   AdminCompareRoute: typeof AdminCompareRoute
   AdminJarvisRoute: typeof AdminJarvisRoute
   AdminLeadsRoute: typeof AdminLeadsRoute
@@ -589,6 +602,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminCompareRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/analytics': {
+      id: '/admin/analytics'
+      path: '/admin/analytics'
+      fullPath: '/admin/analytics'
+      preLoaderRoute: typeof AdminAnalyticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/stripe-webhook': {
       id: '/api/public/stripe-webhook'
       path: '/api/public/stripe-webhook'
@@ -614,6 +634,7 @@ const rootRouteChildren: RootRouteChildren = {
   ThankYouRoute: ThankYouRoute,
   Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRoute:
     Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRoute,
+  AdminAnalyticsRoute: AdminAnalyticsRoute,
   AdminCompareRoute: AdminCompareRoute,
   AdminJarvisRoute: AdminJarvisRoute,
   AdminLeadsRoute: AdminLeadsRoute,
