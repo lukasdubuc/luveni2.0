@@ -1,15 +1,19 @@
 // ─────────────────────────────────────────────────────────────
-//  Luveni — storefront display images (quality-gated, deduped)
+//  Luveni — storefront display images (curated, transparent-preferred)
 //
 //  Single source of truth for "which images does a customer see for this
-//  product". Consumes the transparency pipeline's product_media rows:
-//    • only GOOD cutouts are shown — metadata.quality_ok === false marks a
-//      bad background removal, which is hidden so a customer never sees it;
-//    • a transparent row supersedes the opaque original it came from
-//      (metadata.original_url), so there are never look-alike duplicates;
-//    • ordered by product_media.position (primary first).
-//  Falls back to the raw image_urls when a product has no processed media
-//  yet (e.g. a Printful product that never needed treatment).
+//  product". Consumes the transparency pipeline's product_media rows and
+//  the product's own image_urls, and returns EVERY photo the shopper
+//  should see — not just the one clean cutout:
+//    • admin-hidden photos (product_media.hidden) are never shown, and
+//      they suppress the opaque original they came from too;
+//    • a GOOD transparent cutout is preferred over the opaque original it
+//      replaced (metadata.original_url), so there are no look-alike dupes;
+//    • originals that never got a good cutout are STILL shown (framed by
+//      the caller), so a product with model/lifestyle shots that resist
+//      background removal shows its whole gallery instead of a lone image;
+//    • deduped, ordered primary/position first then catalog order.
+//  Falls back to the raw image_urls when a product has no processed media.
 // ─────────────────────────────────────────────────────────────
 
 import { useMemo } from "react";
@@ -24,27 +28,47 @@ export function useDisplayImages(
   const { media, loading } = useProductMedia(productId);
 
   const images = useMemo(() => {
-    // URLs that a transparent row has already replaced — never show these.
-    const superseded = new Set(
-      media.map((m) => m.metadata?.original_url).filter((u): u is string => !!u),
-    );
-
-    const good = media
-      .filter((m) => m.is_transparent && (m.metadata as any)?.quality_ok !== false)
-      .filter((m) => !superseded.has(m.url))
-      .sort((a, b) => (a.is_primary === b.is_primary ? a.position - b.position : a.is_primary ? -1 : 1));
-
-    const seen = new Set<string>();
-    const dedupe = (urls: string[]) => urls.filter((u) => u && !seen.has(u) && (seen.add(u), true));
-
-    if (good.length > 0) {
-      return dedupe(good.map((m) => proxyImageUrl(m.url)));
+    // Every URL an admin deliberately hid — both the (bad) cutout row's URL
+    // and the opaque original it came from. These never surface again.
+    const hiddenUrls = new Set<string>();
+    for (const m of media) {
+      if (!m.hidden) continue;
+      if (m.url) hiddenUrls.add(m.url);
+      const orig = m.metadata?.original_url;
+      if (orig) hiddenUrls.add(orig);
     }
 
-    // No processed media — fall back to the raw catalog images.
+    // Good cutouts (transparent + passed quality gate + not hidden).
+    const good = media
+      .filter((m) => !m.hidden && m.is_transparent && m.metadata?.quality_ok !== false)
+      .sort((a, b) => (a.is_primary === b.is_primary ? a.position - b.position : a.is_primary ? -1 : 1));
+
+    // Opaque originals a good cutout already replaced — prefer the cutout.
+    const superseded = new Set(
+      good.map((m) => m.metadata?.original_url).filter((u): u is string => !!u),
+    );
+
+    const seen = new Set<string>();
+    const out: string[] = [];
+    const push = (raw: string | undefined | null) => {
+      if (!raw || hiddenUrls.has(raw) || superseded.has(raw)) return;
+      const u = proxyImageUrl(raw);
+      if (seen.has(u)) return;
+      seen.add(u);
+      out.push(u);
+    };
+
+    // 1. Clean transparent cutouts first (primary leads).
+    for (const m of good) push(m.url);
+
+    // 2. Then every remaining catalog photo that never got a good cutout, so
+    //    the gallery is complete. Only strip the leading design/logo mockup
+    //    when nothing has been processed yet (unprocessed Printful import).
     let base = Array.isArray(fallbackImageUrls) ? fallbackImageUrls.filter(Boolean) : [];
-    if (opts.stripFirstFallback && base.length > 1) base = base.slice(1);
-    return dedupe(base.map(proxyImageUrl));
+    if (opts.stripFirstFallback && good.length === 0 && base.length > 1) base = base.slice(1);
+    for (const b of base) push(b);
+
+    return out;
   }, [media, fallbackImageUrls, opts.stripFirstFallback]);
 
   return { images, loading };
