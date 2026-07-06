@@ -928,6 +928,17 @@ export function AdminPage({ initialSection = "overview" }: { initialSection?: Na
             // Overview is this dashboard; every other section now lives on its
             // own /admin/* page — link out instead of switching an inline view.
             if (s === "overview") {
+              // On the dashboard itself, switch inline; on /admin/settings or
+              // /admin/analytics (same component, different URL), navigate home
+              // so the address bar follows the section.
+              if (initialSection !== "overview") {
+                return (
+                  <a key={s} href="/admin" className={itemCls(false)}>
+                    <span className="text-[13px] w-4 text-center leading-none opacity-80">{icons[s]}</span>
+                    {s}
+                  </a>
+                );
+              }
               return (
                 <button key={s} onClick={() => setSection("overview")} className={itemCls(section === "overview")}>
                   <span className="text-[13px] w-4 text-center leading-none opacity-80">{icons[s]}</span>
@@ -1040,6 +1051,16 @@ export function AdminPage({ initialSection = "overview" }: { initialSection?: Na
           <nav className="flex flex-1 flex-col items-center justify-center gap-6 px-6 text-center">
             {navSections.map(s => (
               s === "overview" ? (
+                initialSection !== "overview" ? (
+                  <a
+                    key={s}
+                    href="/admin"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="text-2xl font-normal uppercase tracking-tight opacity-40 transition-opacity hover:opacity-70"
+                  >
+                    {s}
+                  </a>
+                ) : (
                 <button
                   key={s}
                   onClick={() => { setSection("overview"); setMobileMenuOpen(false); }}
@@ -1047,6 +1068,7 @@ export function AdminPage({ initialSection = "overview" }: { initialSection?: Na
                 >
                   {s}
                 </button>
+                )
               ) : (
                 <a
                   key={s}

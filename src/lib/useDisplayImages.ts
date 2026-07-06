@@ -72,11 +72,18 @@ export function useDisplayImages(
     // 1. Clean transparent cutouts first (primary leads).
     for (const m of good) push(m.url);
 
-    // 2. Then every remaining catalog photo that never got a good cutout, so
-    //    the gallery is complete. Only strip the leading design/logo mockup
-    //    when nothing has been processed yet (unprocessed Printful import).
+    // Once a product has clean cutouts, the gallery is transparent-ONLY —
+    // every catalog photo either has a cutout (which replaced it) or failed
+    // the quality gate (and must not appear as a look-alike opaque duplicate).
+    // Old pipeline rows that never recorded original_url would otherwise
+    // resurface their source photo next to its own cutout.
+    if (out.length > 0) return out;
+
+    // 2. No processed media at all — show the raw catalog so the page is
+    //    never empty. Strip the leading design/logo mockup (Printful lists
+    //    the bare print file first).
     let base = Array.isArray(fallbackImageUrls) ? fallbackImageUrls.filter(Boolean) : [];
-    if (opts.stripFirstFallback && good.length === 0 && base.length > 1) base = base.slice(1);
+    if (opts.stripFirstFallback && base.length > 1) base = base.slice(1);
     for (const b of base) push(b);
 
     return out;
