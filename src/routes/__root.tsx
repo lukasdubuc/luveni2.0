@@ -144,7 +144,9 @@ function RootComponent() {
   useEffect(() => {
     let canceled = false;
     const fetchConfig = async () => {
-      const { data } = await supabase.from("site_config").select("*").eq("id", "main").limit(1);
+      // Public-safe view: site_config.metadata carries integration secrets and
+      // is no longer anon-readable; the view exposes only storefront fields.
+      const { data } = await (supabase as any).from("site_config_public").select("*").eq("id", "main").limit(1);
       if (canceled || !data?.length) return;
       const configRow = data[0];
       if (!configRow) return;

@@ -107,19 +107,31 @@ export function computeRetail(costCents: number, rule: PricingRule): PriceBreakd
 
 const SMALL_WORDS = new Set(["a", "an", "and", "as", "at", "but", "by", "for", "in", "of", "on", "or", "the", "to", "with"]);
 
-/** Vendor keyword-soup → clean storefront name.
+/** Vendor keyword-soup → clean, SHORT storefront name (Luveni aesthetic:
+ *  minimal and punchy — "Letter Plaid Bucket Hat", not a 70-char keyword chain).
  *  "2023 New Men's Hip Hop Retro Washed T-shirt Street..." → "Men's Hip Hop Retro Washed T-Shirt" */
-export function formatTitle(raw: string, maxLen = 70): string {
+export function formatTitle(raw: string, maxLen = 45): string {
   let t = String(raw ?? "")
     .replace(/[\[\(【（][^\]\)】）]*[\]\)】）]/g, " ")       // bracketed vendor junk
     .replace(/\b(19|20)\d{2}\b/g, " ")                        // years
-    .replace(/\b(new|hot|sale|wholesale|dropshipping|drop\s*shipping|free\s*shipping|in\s*stock|high\s*quality|fashion(?:able)?|cross[- ]?border|amazon|ebay|wish|aliexpress)\b/gi, " ")
+    .replace(/\b(new|hot|sale|wholesale|dropshipping|drop\s*shipping|free\s*shipping|in\s*stock|high\s*quality|fashion(?:able)?|cross[- ]?border|amazon|ebay|wish|aliexpress|trendy\s*brand|ins\s*style|euro[- ]?american|casual\s*couple|couple\s*models?)\b/gi, " ")
     .replace(/[|_/\\]+/g, " ")
     .replace(/\s*,\s*/g, ", ")
     .replace(/\s{2,}/g, " ")
     .trim()
     .replace(/^[,\-–—\s]+|[,\-–—\s]+$/g, "");
   if (!t) t = String(raw ?? "").trim();
+
+  // Vendors repeat the product noun ("… Bucket Hat Women's Wear Bucket Hat"):
+  // drop a trailing phrase that already appears earlier in the title.
+  const w = t.split(" ");
+  for (let n = Math.min(4, Math.floor(w.length / 2)); n >= 2; n--) {
+    const tail = w.slice(-n).join(" ").toLowerCase();
+    if (w.slice(0, -n).join(" ").toLowerCase().includes(tail)) {
+      t = w.slice(0, -n).join(" ").replace(/[,\-–—\s]+$/g, "");
+      break;
+    }
+  }
 
   // Cut at a word boundary if too long.
   if (t.length > maxLen) {

@@ -4,10 +4,44 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts } from "@/lib/useProducts";
 import { offer } from "@/config/site";
 import { toast } from "sonner";
-import { Edit3, Archive, X, Menu, RefreshCw, BarChart2, Lock, CheckSquare, Square, Trash2, Eye, EyeOff, GripVertical, Users, TrendingUp, TrendingDown, Minus, Terminal, Cpu, Zap, Activity, AlertTriangle, Play } from "lucide-react";
+import { Edit3, Archive, X, Menu, RefreshCw, BarChart2, Lock, CheckSquare, Square, Trash2, Eye, EyeOff, GripVertical, Users, TrendingUp, TrendingDown, Minus, Terminal, Cpu, Zap, Activity, AlertTriangle, Play, Images } from "lucide-react";
 import { requireAdmin } from "@/lib/admin-guard";
 import { AdminIntegrations } from "@/components/admin/AdminIntegrations";
 import { AdminPricing } from "@/components/admin/AdminPricing";
+import { ProductMediaCurator } from "@/components/admin/ProductMediaCurator";
+import { CjTransparencyPanel } from "@/components/admin/CjTransparencyPanel";
+import { processProductImages } from "@/lib/transparency-processing";
+
+/**
+ * Fire-and-forget transparent-PNG treatment for a product the admin just
+ * published/added. Treats EVERY image in the browser and never blocks or
+ * breaks the publish action; the CjTransparencyPanel sweep is the backstop.
+ */
+function autoTreatOnPublish(product: {
+  id: string;
+  title?: string;
+  image_urls?: string[] | null;
+  variants?: any[] | null;
+  source?: string | null;
+}) {
+  void (async () => {
+    try {
+      const summary = await processProductImages({
+        id: product.id,
+        title: product.title,
+        image_urls: Array.isArray(product.image_urls) ? product.image_urls : [],
+        variants: product.variants ?? [],
+        source: product.source ?? null,
+      });
+      if (summary.processed > 0) {
+        toast.success(`Cleaned ${summary.processed} image${summary.processed === 1 ? "" : "s"} for "${product.title ?? "product"}".`);
+        window.dispatchEvent(new Event("productsUpdated"));
+      }
+    } catch {
+      /* best-effort; publishing must never fail because of image treatment */
+    }
+  })();
+}
 
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -125,6 +159,8 @@ export function AdminPage({ initialSection = "overview" }: { initialSection?: Na
 
   const navSections: NavSection[] = ["overview", "products", "orders", "leads", "analytics", "settings"];
   const [section, setSection] = useState<NavSection>(initialSection);
+  // Per-product photo curation overlay (show/hide individual gallery photos).
+  const [curating, setCurating] = useState<{ id: string; title: string } | null>(null);
 
   const [isDark, setIsDark] = useState<boolean>(() => {
     if (typeof document !== "undefined") {
@@ -438,15 +474,21 @@ export function AdminPage({ initialSection = "overview" }: { initialSection?: Na
         source_url: productForm.source_url,
         updated_at: new Date().toISOString(),
       };
+      let savedRow: any = null;
       if (productForm.editingId) {
-        const { error } = await supabase.from("products").update(payload as any).eq("id", productForm.editingId);
+        const { data, error } = await supabase.from("products").update(payload as any).eq("id", productForm.editingId).select().limit(1);
         if (error) throw error;
+        savedRow = data?.[0] ?? null;
         toast.success("Product updated.");
       } else {
-        const { error } = await supabase.from("products").insert([payload] as any);
+        const { data, error } = await supabase.from("products").insert([payload] as any).select().limit(1);
         if (error) throw error;
+        savedRow = data?.[0] ?? null;
         toast.success("Product created.");
       }
+      // Published products get their images treated immediately (non-blocking)
+      // so every future product converges to the transparent gallery on its own.
+      if (savedRow?.is_published) autoTreatOnPublish(savedRow);
       resetProductForm();
       await fetchData();
     } catch (e: any) {
@@ -458,6 +500,11 @@ export function AdminPage({ initialSection = "overview" }: { initialSection?: Na
     try {
       const { error } = await supabase.from("products").update({ is_published: !currentState }).eq("id", id);
       if (error) throw error;
+      // Newly-published products get immediate image treatment (non-blocking).
+      if (!currentState) {
+        const p = products.find((x: any) => x.id === id);
+        if (p) autoTreatOnPublish(p as any);
+      }
       await fetchData();
     } catch (e: any) {
       toast.error(`Toggle failed: ${e.message}`);
@@ -1597,6 +1644,11 @@ export function AdminPage({ initialSection = "overview" }: { initialSection?: Na
                         <div className="flex items-center justify-end gap-2.5 mt-2 pt-2 border-t border-neutral-200/20 dark:border-neutral-900/40">
                           <button onClick={e => { e.stopPropagation(); togglePublished(p.id, p.is_published); }}
                             className={`w-1.5 h-1.5 rounded-full transition-all ${p.is_published ? "bg-emerald-555" : "bg-rose-500"}`} />
+                          <button onClick={e => { e.stopPropagation(); setCurating({ id: p.id, title: p.title }); }}
+                            title="Curate photos"
+                            className={`${isDark ? "text-neutral-500 hover:text-white" : "text-neutral-400 hover:text-black"} transition-colors`}>
+                            <Images size={11} />
+                          </button>
                           {isPrintful || isApliq ? (
                             <span className={`${isDark ? "text-neutral-800" : "text-neutral-305"} cursor-not-allowed`} title={`${isPrintful ? "Printful" : "Apliq"} products are synced from supplier hub`}>
                               <Edit3 size={11} />
@@ -1616,6 +1668,44 @@ export function AdminPage({ initialSection = "overview" }: { initialSection?: Na
                 );
               })}
             </div>
+
+            {/* ── CJ transparency sweep (auto-treats untreated vendor imagery) ── */}
+            <div className={`border rounded-[24px] overflow-hidden ${isDark ? "border-neutral-900 bg-neutral-955/20" : "border-[#D1D1D6] bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06)]"}`}>
+              <CjTransparencyPanel
+                products={products.map((p: any) => ({
+                  id: p.id, title: p.title,
+                  image_urls: p.image_urls ?? [], variants: p.variants ?? [],
+                  source: p.source ?? null,
+                }))}
+                onUpdated={fetchData}
+              />
+            </div>
+
+            {/* ── Per-product photo curator overlay ── */}
+            {curating && (
+              <div className="fixed inset-0 z-[120] flex items-center justify-center p-4" onClick={() => setCurating(null)}>
+                <div className={`absolute inset-0 ${isDark ? "bg-black/80" : "bg-black/40"} backdrop-blur-sm`} />
+                <div
+                  onClick={e => e.stopPropagation()}
+                  className={`relative w-full max-w-3xl max-h-[85vh] overflow-y-auto rounded-[24px] border p-6 ${
+                    isDark ? "bg-neutral-955 border-neutral-800 text-white" : "bg-white border-[#D1D1D6] text-black shadow-[0_24px_80px_rgba(0,0,0,0.25)]"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h2 className="text-sm font-medium tracking-tight">{curating.title}</h2>
+                      <p className={`text-[9px] font-mono uppercase tracking-widest mt-0.5 ${isDark ? "text-neutral-500" : "text-neutral-400"}`}>
+                        Photo curation — uncheck to hide from storefront
+                      </p>
+                    </div>
+                    <button onClick={() => setCurating(null)} className={`${isDark ? "text-neutral-500 hover:text-white" : "text-neutral-400 hover:text-black"} transition-colors`}>
+                      <X size={16} />
+                    </button>
+                  </div>
+                  <ProductMediaCurator productId={curating.id} onChanged={fetchData} />
+                </div>
+              </div>
+            )}
           </div>
         )}
 

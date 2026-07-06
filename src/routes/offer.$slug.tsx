@@ -7,6 +7,7 @@ import { useCart } from "@/context/CartContext";
 import { ZoomPanImage } from "@/components/site/ZoomPanImage";
 import { isLikelyTransparentImage } from "@/lib/img";
 import { useDisplayImages } from "@/lib/useDisplayImages";
+import { pickDarkHeroUrl } from "@/lib/darkHero";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -540,8 +541,16 @@ function OfferSlugPage() {
   // opaque originals superseded so there are never look-alike duplicates,
   // primary first), falling back to raw image_urls when a product has no
   // processed media. This guarantees no poor images or duplicates on the page.
+  // Dark-colorway hero: the same image the shop tile leads with, so the
+  // click-through morph is seamless (catalog aesthetic leads with black).
+  const heroUrl = useMemo(
+    () => pickDarkHeroUrl(product?.variants, product?.image_urls),
+    [product?.variants, product?.image_urls],
+  );
+
   const { images: displayImages } = useDisplayImages(product?.id, product?.image_urls, {
     stripFirstFallback: true,
+    heroUrl,
   });
 
   // Sentinel [""] means "no images" — the gallery renders a tasteful
@@ -837,9 +846,10 @@ function OfferSlugPage() {
         .pdp-plus-btn:hover { opacity: 0.5; }
         .pdp-plus-btn:active { transform: scale(0.92); }
         .pdp-img-nav-btn { background: transparent; border: none; cursor: pointer; padding: 0.75rem 1.25rem; color: inherit; line-height: 1; transition: opacity 0.2s; font-family: inherit; }
-        .pdp-img-nav-btn:hover { opacity: 0.4; }
-        .pdp-img-nav-btn:disabled { opacity: 0.12; cursor: default; }
-        @media (max-width: 640px) { .pdp-img-nav-btn { font-size: 44px !important; padding: 0.5rem 0.875rem; } }
+        .pdp-edge-btn:hover:not(:disabled) { opacity: 0.85 !important; }
+        .pdp-img-nav-btn:disabled { cursor: default; }
+        .pdp-exit-btn:hover { opacity: 1 !important; }
+        @media (max-width: 640px) { .pdp-edge-btn { font-size: 40px !important; padding: 0.6rem 0.7rem; } }
         html, body { background-color: var(--background) !important; color: var(--foreground) !important; }
       `}</style>
 
@@ -855,7 +865,8 @@ function OfferSlugPage() {
             overflow: "hidden", zIndex: 0,
           }}
         >
-          {/* ── Top-left: back arrow (guarded against ghost clicks during zoom cooldown) ── */}
+          {/* ── Top-right: × exit back to the grid (Yeezy convention), guarded
+                 against ghost clicks during the zoom-close cooldown ── */}
           <Link
             to="/shop"
             preload="intent"
@@ -864,21 +875,23 @@ function OfferSlugPage() {
                 e.preventDefault();
               }
             }}
+            className="pdp-exit-btn"
             style={{
-              position: "absolute", top: "1.25rem", left: "1.25rem", zIndex: 20,
+              position: "absolute", top: "1.1rem", right: "1.25rem", zIndex: 20,
               color: "inherit", textDecoration: "none",
-              fontSize: "38px", fontWeight: 200, lineHeight: 1,
-              opacity: 0.7, display: "flex", alignItems: "center",
+              fontSize: "26px", fontWeight: 200, lineHeight: 1,
+              opacity: 0.55, display: "flex", alignItems: "center",
+              padding: "0.4rem", transition: "opacity 0.2s",
             }}
-            aria-label="Back to shop"
+            aria-label="Close and return to shop"
           >
-            ‹
+            ×
           </Link>
 
-          {/* ── Top-right: sold out status ── */}
+          {/* ── Top-left: sold out status ── */}
           <div
             style={{
-              position: "absolute", top: "1.25rem", right: "1.25rem", zIndex: 20,
+              position: "absolute", top: "1.35rem", left: "1.25rem", zIndex: 20,
               fontSize: "11px", fontWeight: 400, letterSpacing: "0.02em",
               color: isSoldOut ? "#c00" : "inherit",
               opacity: isSoldOut ? 1 : 0.5,
@@ -886,6 +899,41 @@ function OfferSlugPage() {
           >
             {isSoldOut ? "SOLD OUT" : ""}
           </div>
+
+          {/* ── Viewport-edge image arrows (Yeezy convention: thin chevrons
+                 pinned to the screen edges, vertically centered) ── */}
+          {galleryImages.length > 1 && (
+            <>
+              <button
+                className="pdp-img-nav-btn pdp-edge-btn"
+                onClick={goPrevImage}
+                disabled={activeImageIndex === 0}
+                aria-label="Previous image"
+                style={{
+                  position: "absolute", left: "0.4rem", top: "50%",
+                  transform: "translateY(-50%)", zIndex: 15,
+                  fontSize: "34px", fontWeight: 100,
+                  opacity: activeImageIndex === 0 ? 0.1 : 0.35,
+                }}
+              >
+                ‹
+              </button>
+              <button
+                className="pdp-img-nav-btn pdp-edge-btn"
+                onClick={goNextImage}
+                disabled={activeImageIndex === galleryImages.length - 1}
+                aria-label="Next image"
+                style={{
+                  position: "absolute", right: "0.4rem", top: "50%",
+                  transform: "translateY(-50%)", zIndex: 15,
+                  fontSize: "34px", fontWeight: 100,
+                  opacity: activeImageIndex === galleryImages.length - 1 ? 0.1 : 0.35,
+                }}
+              >
+                ›
+              </button>
+            </>
+          )}
 
           {/* ── Center column ── */}
           <div
@@ -909,11 +957,6 @@ function OfferSlugPage() {
               onTouchStart={handleImgTouchStart}
               onTouchEnd={handleImgTouchEnd}
             >
-              <button className="pdp-img-nav-btn" onClick={goPrevImage} disabled={activeImageIndex === 0} aria-label="Previous image"
-                style={{ fontSize: "38px", fontWeight: 200, opacity: activeImageIndex === 0 ? 0.12 : 0.75 }}>
-                ‹
-              </button>
-
               <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <div style={{
                   position: "relative",
@@ -949,10 +992,6 @@ function OfferSlugPage() {
                 </div>
               </div>
 
-              <button className="pdp-img-nav-btn" onClick={goNextImage} disabled={activeImageIndex === galleryImages.length - 1} aria-label="Next image"
-                style={{ fontSize: "38px", fontWeight: 200, opacity: activeImageIndex === galleryImages.length - 1 ? 0.15 : 0.75 }}>
-                ›
-              </button>
             </div>
 
             {/* Image dots */}
