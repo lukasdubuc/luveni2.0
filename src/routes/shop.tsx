@@ -3,6 +3,7 @@ import { fetchProducts, useProducts } from "@/lib/useProducts";
 import { useMemo, memo, useEffect } from "react";
 import { trackEvent } from "@/lib/track";
 import { proxyImageUrl, isLikelyTransparentImage, isOwnProductMediaUrl } from "@/lib/img";
+import { pickDarkHeroUrl } from "@/lib/darkHero";
 
 type Product = {
   id: string;
@@ -12,6 +13,7 @@ type Product = {
   price_cents_discounted?: number | null;
   discounted_price_cents?: number | null;
   image_urls?: string[];
+  variants?: any[];
 };
 
 export const Route = createFileRoute("/shop")({
@@ -94,7 +96,14 @@ function pickThumbnail(images?: string[]): { raw: string; transparent: boolean }
 }
 
 const ProductCell = memo(({ product, index }: { product: Product; index: number }) => {
-  const thumb = pickThumbnail(product.image_urls);
+  // Catalog leads with the black/dark colorway when the product has one and
+  // its image is directly usable (Printful positional mockups). CJ products
+  // get their dark cutout first in image_urls at the data layer instead.
+  const hero = pickDarkHeroUrl(product.variants, product.image_urls);
+  const heroUsable = hero && (product.image_urls ?? []).includes(hero);
+  const thumb = heroUsable
+    ? { raw: hero!, transparent: isLikelyTransparentImage(hero!) }
+    : pickThumbnail(product.image_urls);
   const imageUrl = thumb ? proxyImageUrl(thumb.raw) : null;
   // Transparent PNGs (Printful mockups, admin-treated CJ uploads) float on the
   // bare grid. Untreated vendor photos (CJ JPGs on studio backdrops) get a

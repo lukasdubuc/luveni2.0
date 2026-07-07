@@ -36,7 +36,10 @@ export function useProductMedia(productId: string | undefined) {
         .from("product_media")
         .select("id, variant_key, view_type, url, is_primary, is_transparent, position, hidden, metadata")
         .eq("product_id", productId)
-        .order("position", { ascending: true });
+        // Stable order: position collides across rows (per-variant mockups all
+        // share 0/1), so tiebreak on id or the gallery reshuffles per request.
+        .order("position", { ascending: true })
+        .order("id", { ascending: true });
       if (cancelled) return;
       if (error) { console.warn("useProductMedia:", error.message); setMedia([]); }
       else setMedia((data ?? []) as ProductMedia[]);

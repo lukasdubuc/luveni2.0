@@ -23,7 +23,7 @@ import { proxyImageUrl } from "./img";
 export function useDisplayImages(
   productId: string | undefined,
   fallbackImageUrls: string[] | undefined,
-  opts: { stripFirstFallback?: boolean } = {},
+  opts: { stripFirstFallback?: boolean; heroUrl?: string | null } = {},
 ): { images: string[]; loading: boolean } {
   const { media, loading } = useProductMedia(productId);
 
@@ -49,10 +49,36 @@ export function useDisplayImages(
       hiddenUrls.add(base0[0]);
     }
 
+    // Catalog rank: image_urls (design-skipped) is the one ordering both the
+    // shop tile and this gallery share. Rank each media row by where its url
+    // (or the original it was cut from) sits in the catalog, so the first
+    // gallery image is EXACTLY the shop thumbnail — deterministic even when
+    // per-variant rows collide on position (Printful mockups all sit at 0/1).
+    const catalogRank = new Map<string, number>();
+    base0.forEach((u, i) => {
+      if (!hiddenUrls.has(u) && !catalogRank.has(u)) catalogRank.set(u, i);
+    });
+    const rankOf = (m: (typeof media)[number]) => {
+      // The dark-colorway hero (opts.heroUrl) leads the gallery — matched by
+      // the row's own url or the opaque original its cutout came from.
+      if (opts.heroUrl && (m.url === opts.heroUrl || m.metadata?.original_url === opts.heroUrl)) return -1;
+      return (
+        catalogRank.get(m.url) ??
+        (m.metadata?.original_url ? catalogRank.get(m.metadata.original_url) : undefined) ??
+        Number.MAX_SAFE_INTEGER
+      );
+    };
+
     // Good cutouts (transparent + passed quality gate + not hidden).
     const good = media
       .filter((m) => !m.hidden && m.is_transparent && m.metadata?.quality_ok !== false)
-      .sort((a, b) => (a.is_primary === b.is_primary ? a.position - b.position : a.is_primary ? -1 : 1));
+      .sort((a, b) => {
+        const ra = rankOf(a), rb = rankOf(b);
+        if (ra !== rb) return ra - rb;
+        if (a.is_primary !== b.is_primary) return a.is_primary ? -1 : 1;
+        if (a.position !== b.position) return a.position - b.position;
+        return a.url.localeCompare(b.url);
+      });
 
     // Opaque originals a good cutout already replaced — prefer the cutout.
     const superseded = new Set(
@@ -84,10 +110,13 @@ export function useDisplayImages(
     //    the bare print file first).
     let base = Array.isArray(fallbackImageUrls) ? fallbackImageUrls.filter(Boolean) : [];
     if (opts.stripFirstFallback && base.length > 1) base = base.slice(1);
+    if (opts.heroUrl && base.includes(opts.heroUrl)) {
+      base = [opts.heroUrl, ...base.filter((u) => u !== opts.heroUrl)];
+    }
     for (const b of base) push(b);
 
     return out;
-  }, [media, fallbackImageUrls, opts.stripFirstFallback]);
+  }, [media, fallbackImageUrls, opts.stripFirstFallback, opts.heroUrl]);
 
   return { images, loading };
 }
