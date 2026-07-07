@@ -155,12 +155,10 @@ function RootComponent() {
       setTheme(config.theme || "light");
     };
     fetchConfig();
-    const sub = supabase.channel("site_config_changes").on("postgres_changes", { event: "UPDATE", schema: "public", table: "site_config", filter: "id=eq.main" }, (p) => {
-      const config = mergeSiteConfig(p.new as any);
-      setFooterDescription(config.metadata?.footer_description ?? "");
-      setTheme(config.theme || "light");
-    }).subscribe();
-    return () => { canceled = true; sub.unsubscribe(); };
+    // No realtime channel here: anon realtime is blocked by RLS, so the old
+    // subscription only produced failed-websocket reconnect churn on every
+    // page. Config changes are rare; the fetch above covers page loads.
+    return () => { canceled = true; };
   }, []);
 
   return (
