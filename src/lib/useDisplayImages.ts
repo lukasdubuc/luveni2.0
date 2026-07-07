@@ -2,34 +2,42 @@
 //  Luveni — storefront display images (curated, transparent-preferred)
 //
 //  Single source of truth for "which images does a customer see for this
-//  product". Consumes the transparency pipeline's product_media rows and
-//  the product's own image_urls, and returns EVERY photo the shopper
-//  should see — not just the one clean cutout:
-//    • admin-hidden photos (product_media.hidden) are never shown, and
-//      they suppress the opaque original they came from too;
-//    • a GOOD transparent cutout is preferred over the opaque original it
-//      replaced (metadata.original_url), so there are no look-alike dupes;
-//    • originals that never got a good cutout are STILL shown (framed by
-//      the caller), so a product with model/lifestyle shots that resist
-//      background removal shows its whole gallery instead of a lone image;
-//    • deduped, ordered primary/position first then catalog order.
-//  Falls back to the raw image_urls when a product has no processed media.
+//  product", built on orderCatalogImages() — the SAME canonical ordering
+//  the shop tile uses — so the offer gallery's first image is always the
+//  shop thumbnail (no click-through flash, ever):
+//    • admin-hidden photos (product_media.hidden) never show, and they
+//      suppress the opaque original they came from;
+//    • a GOOD transparent cutout replaces the opaque original it came from
+//      (metadata.original_url) — galleries are transparent-only once a
+//      product has clean cutouts;
+//    • rows rank by their photo's position in the canonical catalog list
+//      (deterministic; per-variant position collisions can't shuffle it),
+//      with ungraded legacy cutouts demoted within a slot;
+//    • raw catalog photos remain the never-empty fallback.
+//
+//  Also returns displayUrlFor(sourceUrl): the display URL representing any
+//  raw catalog/variant photo (its cutout when one exists), so color pickers
+//  can jump the gallery to the right slide without positional guesswork.
 // ─────────────────────────────────────────────────────────────
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useMemo } from "react";
 import { useProductMedia } from "./useProductMedia";
 import { proxyImageUrl } from "./img";
+import { orderCatalogImages } from "./darkHero";
 
 export function useDisplayImages(
   productId: string | undefined,
-  fallbackImageUrls: string[] | undefined,
-  opts: { stripFirstFallback?: boolean; heroUrl?: string | null } = {},
-): { images: string[]; loading: boolean } {
+  imageUrls: string[] | undefined,
+  variants?: any[] | null,
+): { images: string[]; loading: boolean; displayUrlFor: (sourceUrl?: string | null) => string | null } {
   const { media, loading } = useProductMedia(productId);
 
-  const images = useMemo(() => {
-    // Every URL an admin deliberately hid — both the (bad) cutout row's URL
-    // and the opaque original it came from. These never surface again.
+  const { images, sourceToDisplay } = useMemo(() => {
+    const { images: catalog, heroSourceUrl } = orderCatalogImages(imageUrls, variants);
+
+    // Photos the admin deliberately hid — the row's URL and its source.
     const hiddenUrls = new Set<string>();
     for (const m of media) {
       if (!m.hidden) continue;
@@ -38,85 +46,70 @@ export function useDisplayImages(
       if (orig) hiddenUrls.add(orig);
     }
 
-    // Printful lists the bare print/design file first (files.cdn.printful.com),
-    // which is just the flat artwork, not a wearable mockup. Skip that first
-    // image whenever the product has real mockups after it — for existing AND
-    // future Printful products, and for both the good-cutout list and the
-    // catalog fallback below. (The design row's product_media.url is the same
-    // printful CDN url, so excluding by url removes it everywhere.)
-    const base0 = Array.isArray(fallbackImageUrls) ? fallbackImageUrls.filter(Boolean) : [];
-    if (base0.length > 1 && /files\.cdn\.printful\.com/i.test(base0[0])) {
-      hiddenUrls.add(base0[0]);
+    // Good cutouts (transparent + not hidden + not failed the quality gate).
+    const good = media.filter(
+      (m) => !m.hidden && m.is_transparent && m.metadata?.quality_ok !== false,
+    );
+
+    // Map every source photo → its display URL (the cutout when one exists).
+    const sourceToDisplay = new Map<string, string>();
+    for (const m of good) {
+      const orig = m.metadata?.original_url;
+      if (orig && !sourceToDisplay.has(orig)) sourceToDisplay.set(orig, m.url);
+      sourceToDisplay.set(m.url, m.url);
     }
 
-    // Catalog rank: image_urls (design-skipped) is the one ordering both the
-    // shop tile and this gallery share. Rank each media row by where its url
-    // (or the original it was cut from) sits in the catalog, so the first
-    // gallery image is EXACTLY the shop thumbnail — deterministic even when
-    // per-variant rows collide on position (Printful mockups all sit at 0/1).
     const catalogRank = new Map<string, number>();
-    base0.forEach((u, i) => {
+    catalog.forEach((u, i) => {
       if (!hiddenUrls.has(u) && !catalogRank.has(u)) catalogRank.set(u, i);
     });
-    const rankOf = (m: (typeof media)[number]) => {
-      // The dark-colorway hero (opts.heroUrl) leads the gallery — matched by
-      // the row's own url or the opaque original its cutout came from.
-      if (opts.heroUrl && (m.url === opts.heroUrl || m.metadata?.original_url === opts.heroUrl)) return -1;
-      return (
-        catalogRank.get(m.url) ??
-        (m.metadata?.original_url ? catalogRank.get(m.metadata.original_url) : undefined) ??
-        Number.MAX_SAFE_INTEGER
-      );
-    };
+    // Rank rows purely by the canonical catalog list — the SAME list the shop
+    // tile reads — never by a page-local heuristic. Dark-first for CJ is a
+    // DATA rule (the dark cutout is image_urls[0]), so both surfaces follow
+    // it identically and one page can never drift from the other.
+    void heroSourceUrl;
+    const rankOf = (m: (typeof media)[number]) =>
+      catalogRank.get(m.url) ??
+      (m.metadata?.original_url ? catalogRank.get(m.metadata.original_url) : undefined) ??
+      Number.MAX_SAFE_INTEGER;
 
-    // Good cutouts (transparent + passed quality gate + not hidden).
-    const good = media
-      .filter((m) => !m.hidden && m.is_transparent && m.metadata?.quality_ok !== false)
-      .sort((a, b) => {
-        const ra = rankOf(a), rb = rankOf(b);
-        if (ra !== rb) return ra - rb;
-        if (a.is_primary !== b.is_primary) return a.is_primary ? -1 : 1;
-        if (a.position !== b.position) return a.position - b.position;
-        return a.url.localeCompare(b.url);
-      });
-
-    // Opaque originals a good cutout already replaced — prefer the cutout.
-    const superseded = new Set(
-      good.map((m) => m.metadata?.original_url).filter((u): u is string => !!u),
-    );
+    const ordered = [...good].sort((a, b) => {
+      const ra = rankOf(a), rb = rankOf(b);
+      if (ra !== rb) return ra - rb;
+      // Within a slot, quality-graded cutouts beat ungraded legacy ones.
+      const qa = a.metadata?.quality_ok === true ? 0 : 1;
+      const qb = b.metadata?.quality_ok === true ? 0 : 1;
+      if (qa !== qb) return qa - qb;
+      if (a.is_primary !== b.is_primary) return a.is_primary ? -1 : 1;
+      if (a.position !== b.position) return a.position - b.position;
+      return a.url.localeCompare(b.url);
+    });
 
     const seen = new Set<string>();
     const out: string[] = [];
     const push = (raw: string | undefined | null) => {
-      if (!raw || hiddenUrls.has(raw) || superseded.has(raw)) return;
+      if (!raw || hiddenUrls.has(raw)) return;
       const u = proxyImageUrl(raw);
       if (seen.has(u)) return;
       seen.add(u);
       out.push(u);
     };
 
-    // 1. Clean transparent cutouts first (primary leads).
-    for (const m of good) push(m.url);
+    for (const m of ordered) push(m.url);
 
-    // Once a product has clean cutouts, the gallery is transparent-ONLY —
-    // every catalog photo either has a cutout (which replaced it) or failed
-    // the quality gate (and must not appear as a look-alike opaque duplicate).
-    // Old pipeline rows that never recorded original_url would otherwise
-    // resurface their source photo next to its own cutout.
-    if (out.length > 0) return out;
+    // Transparent-only once cutouts exist; raw catalog only as the
+    // never-empty fallback for unprocessed products.
+    if (out.length === 0) for (const u of catalog) push(u);
 
-    // 2. No processed media at all — show the raw catalog so the page is
-    //    never empty. Strip the leading design/logo mockup (Printful lists
-    //    the bare print file first).
-    let base = Array.isArray(fallbackImageUrls) ? fallbackImageUrls.filter(Boolean) : [];
-    if (opts.stripFirstFallback && base.length > 1) base = base.slice(1);
-    if (opts.heroUrl && base.includes(opts.heroUrl)) {
-      base = [opts.heroUrl, ...base.filter((u) => u !== opts.heroUrl)];
-    }
-    for (const b of base) push(b);
+    return { images: out, sourceToDisplay };
+  }, [media, imageUrls, variants]);
 
-    return out;
-  }, [media, fallbackImageUrls, opts.stripFirstFallback, opts.heroUrl]);
+  const displayUrlFor = (sourceUrl?: string | null): string | null => {
+    if (!sourceUrl) return null;
+    const display = sourceToDisplay.get(sourceUrl) ?? sourceUrl;
+    const proxied = proxyImageUrl(display);
+    return images.includes(proxied) ? proxied : null;
+  };
 
-  return { images, loading };
+  return { images, loading, displayUrlFor };
 }

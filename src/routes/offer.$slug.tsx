@@ -7,7 +7,7 @@ import { useCart } from "@/context/CartContext";
 import { ZoomPanImage } from "@/components/site/ZoomPanImage";
 import { isLikelyTransparentImage } from "@/lib/img";
 import { useDisplayImages } from "@/lib/useDisplayImages";
-import { pickDarkHeroUrl } from "@/lib/darkHero";
+import { tryResolveColor } from "@/lib/colors";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -58,6 +58,10 @@ export const Route = createFileRoute("/offer/$slug")({
       allProducts: allProducts ?? [],
     };
   },
+  // Prev/next product flips reuse the cached loader data instead of
+  // refetching the whole catalog on every wheel/swipe — no lag between
+  // products.
+  staleTime: 60_000,
   head: ({ loaderData }: any) => {
     const product = loaderData?.product;
     const title = product ? formatTitle(product.slug) : offer.name;
@@ -139,159 +143,10 @@ export function pickVariantImage(
   return resolveVariantImage(imageUrls, colorValue, colorValues);
 }
 
-// ─── Color Resolution Utility ────────────────────────────────────────────────
-
-const _colorCache: Record<string, string> = {};
-
-// Map remains constant; added explicit typing for clarity
-const _colorMap: Record<string, string> = {
-  white: "#ffffff", "off-white": "#f8f5f0", "off white": "#f8f5f0",
-  black: "#111111", "jet black": "#0a0a0a", "vintage black": "#2a2a2a",
-  charcoal: "#4a5568", gray: "#808080", grey: "#808080",
-  blue: "#3182ce", navy: "#001f5b",
-  green: "#38a169", forest: "#228b22",
-  red: "#e53e3e", maroon: "#800000",
-  pink: "#ed64a6", orange: "#ed8936",
-  yellow: "#ecc94b", gold: "#d69e2e",
-  purple: "#9f7aea", brown: "#a0522d",
-
-  // Explicit garment color names — these follow a "{qualifier} {basecolor}"
-  // pattern where the qualifier (heather/ice/carolina/stone/brick/etc.) is
-  // neither a real CSS color nor a shading modifier, so the canvas check and
-  // heuristic below both miss them. Mapped directly against every color name
-  // actually present in the catalog rather than guessed at.
-  agave: "#a7ab93",
-  anthracite: "#33363a",
-  ash: "#c7c8c6",
-  "bio white": "#f5f5f0",
-  birch: "#d7ccc0",
-  bone: "#e3dac9",
-  "brick red": "#a03c34",
-  "carolina blue": "#7bafd4",
-  cranberry: "#8c1f3b",
-  "dark chocolate": "#3b2313",
-  "dark green": "#1e4620",
-  "dark grey": "#4a4a4a",
-  "desert dust": "#c9a98d",
-  "desert pink": "#d8a398",
-  "green camo": "#5d6b3f",
-  "heather charcoal": "#4b4b4d",
-  "heather grey": "#a9a9ab",
-  "heather royal": "#3f5fa0",
-  heliconia: "#e0218a",
-  "ice grey": "#d6d6d8",
-  "jade dome": "#2e8b83",
-  khaki: "#c3b091",
-  "light blue": "#add8e6",
-  "light pink": "#ffb6c1",
-  mineral: "#7b8b8e",
-  natural: "#ede6d6",
-  "petrol blue": "#1f4e5f",
-  sand: "#c2b280",
-  "slate blue": "#647a8d",
-  spruce: "#1f3a2e",
-  stone: "#a79e8e",
-  "stone grey": "#8f8a82",
-  "vintage gold": "#c9a227",
-  "vintage white": "#f0ead6",
-
-  // Common vendor (CJ) color words the canvas/heuristic miss, so every
-  // swatch resolves to a real fill instead of a grey blank.
-  coffee: "#6f4e37", "dark brown": "#3b2313", "light brown": "#b07d52",
-  wine: "#722f37", burgundy: "#800020", apricot: "#fbceb1",
-  beige: "#e8dcc4", cream: "#fffdd0", ivory: "#fffff0",
-  olive: "#808000", "army green": "#4b5320", mustard: "#e1ad01",
-  rust: "#b7410e", lavender: "#b57edc", mint: "#98ff98",
-  coral: "#ff7f50", salmon: "#fa8072", tan: "#d2b48c",
-  camel: "#c19a6b", chocolate: "#7b3f00", teal: "#008080",
-  turquoise: "#40e0d0", cyan: "#00b7eb", magenta: "#c71585",
-  peach: "#ffcba4", plum: "#8e4585", "rose red": "#c21e56",
-  "light green": "#90ee90", "dark blue": "#00008b", "sky blue": "#87ceeb",
-  "wine red": "#722f37", "light grey": "#d3d3d3", "light gray": "#d3d3d3",
-  "dark gray": "#4a4a4a", silver: "#c0c0c0",
-};
-
-/**
- * Uses browser canvas to validate if a string is a valid CSS color.
- */
-function _canvasColor(name: string): string | null {
-  if (typeof document === 'undefined') return null; // SSR safety
-  try {
-    const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = 1;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return null;
-    ctx.fillStyle = "#010101";
-    ctx.fillStyle = name;
-    return ctx.fillStyle !== "#010101" ? ctx.fillStyle : null;
-  } catch { return null; }
-}
-
-/**
- * Attempts to resolve a string to a Hex CSS color. Returns null when the value
- * is not recognizable as a color (e.g. "1Style", a product title, a SKU) so
- * callers can decide to fall back to an image swatch instead of a grey dot.
- */
-export function tryResolveColor(value: string): string | null {
-  const key = value.toLowerCase().trim();
-  if (key in _colorCache) return _colorCache[key] || null;
-
-  // 1. Direct Map
-  if (_colorMap[key]) return (_colorCache[key] = _colorMap[key]);
-
-  // 2. Already a valid CSS color (Hex/RGB/HSL)
-  if (/^#([0-9a-f]{3,8})$/i.test(key) || /^rgba?\(|^hsla?\(/i.test(key)) {
-    return (_colorCache[key] = key);
-  }
-
-  // 3. Browser Canvas Check — but reject bare CSS keywords that also happen to
-  //    be nouns we don't want to treat as colors is unnecessary here; canvas
-  //    only accepts real CSS color names.
-  const canvasCheck = _canvasColor(key);
-  if (canvasCheck) return (_colorCache[key] = canvasCheck);
-
-  // 4. Heuristic Modifier Logic for "{qualifier} {basecolor}" names.
-  const words = key.split(/[\s_\-\/]+/).filter(Boolean);
-  if (words.length > 1) {
-    const modifiers: Record<string, number> = {
-      light: 60, pale: 70, soft: 50, bright: 30, neon: 40,
-      dark: -60, deep: -70, vintage: -20, faded: 40, washed: 35
-    };
-
-    let shift = 0;
-    const nonModifierWords: string[] = [];
-
-    for (const word of words) {
-      if (modifiers[word] !== undefined) shift += modifiers[word];
-      else nonModifierWords.push(word);
-    }
-
-    const candidates = [
-      nonModifierWords[nonModifierWords.length - 1],
-      nonModifierWords[0],
-    ].filter(Boolean);
-
-    for (const baseWord of candidates) {
-      const baseHex = _colorMap[baseWord] ?? _canvasColor(baseWord);
-      if (baseHex && /^#[0-9a-f]{6}$/i.test(baseHex)) {
-        const r = Math.max(0, Math.min(255, parseInt(baseHex.slice(1, 3), 16) + shift));
-        const g = Math.max(0, Math.min(255, parseInt(baseHex.slice(3, 5), 16) + shift));
-        const b = Math.max(0, Math.min(255, parseInt(baseHex.slice(5, 7), 16) + shift));
-        const adjusted = `#${[r, g, b].map(v => v.toString(16).padStart(2, "0")).join("")}`;
-        return (_colorCache[key] = adjusted);
-      }
-    }
-  }
-
-  return (_colorCache[key] = ""); // cache the miss; "" → null via `|| null`
-}
-
-/**
- * Resolves any string to a Hex CSS color code, falling back to neutral grey.
- */
-export function resolveColor(value: string): string {
-  return tryResolveColor(value) ?? "#888888";
-}
+// ─── Color Resolution ─────────────────────────────────────────────────────────
+// Single source of truth lives in @/lib/colors (shared with the dark-hero
+// catalog ordering rule) — re-exported here for existing importers.
+export { tryResolveColor, resolveColor } from "@/lib/colors";
 
 /** Size tokens (S/M/L/XL/2XL…, numeric, one-size). Used to classify options. */
 const _sizeToken =
@@ -541,17 +396,14 @@ function OfferSlugPage() {
   // opaque originals superseded so there are never look-alike duplicates,
   // primary first), falling back to raw image_urls when a product has no
   // processed media. This guarantees no poor images or duplicates on the page.
-  // Dark-colorway hero: the same image the shop tile leads with, so the
-  // click-through morph is seamless (catalog aesthetic leads with black).
-  const heroUrl = useMemo(
-    () => pickDarkHeroUrl(product?.variants, product?.image_urls),
-    [product?.variants, product?.image_urls],
+  // Gallery images come from the shared display pipeline, ranked by the SAME
+  // canonical catalog order the shop tile reads — first image always equals
+  // the tile, so the click-through morph never flashes.
+  const { images: displayImages, displayUrlFor } = useDisplayImages(
+    product?.id,
+    product?.image_urls,
+    variants,
   );
-
-  const { images: displayImages } = useDisplayImages(product?.id, product?.image_urls, {
-    stripFirstFallback: true,
-    heroUrl,
-  });
 
   // Sentinel [""] means "no images" — the gallery renders a tasteful
   // placeholder rather than a broken/opaque image.
@@ -688,23 +540,23 @@ function OfferSlugPage() {
 
   const hasVariants = variants.length > 0 && visibleOptionKeys.length > 0;
 
-  // ── Jump gallery to the image matching the selected color ─────────────────
-  // colorIndex 0 → galleryImages[0] (which is image_urls[1]), etc.
-  const jumpGalleryToColor = useCallback((colorValue: string) => {
-    if (!colorOptionKey || colorValues.length === 0) return;
-    const colorIndex = colorValues.indexOf(colorValue);
-    if (colorIndex === -1) return;
-    // galleryImages already has logo stripped, so colorIndex maps directly
-    const target = Math.min(colorIndex, galleryImages.length - 1);
-    setActiveImageIndex(target);
-  }, [colorOptionKey, colorValues, galleryImages.length]);
-
-  // Jump the gallery to a specific image URL (used for per-variant images).
+  // Jump the gallery to the slide representing a source image URL — resolved
+  // through the display pipeline (a photo's cutout supersedes it), never by
+  // positional guessing, so reordering rules can't break color→image jumps.
   const jumpGalleryToImage = useCallback((rawUrl?: string) => {
-    if (!rawUrl) return;
-    const idx = galleryImages.indexOf(proxyImageUrl(rawUrl));
+    const display = displayUrlFor(rawUrl);
+    if (!display) return;
+    const idx = galleryImages.indexOf(display);
     if (idx >= 0) setActiveImageIndex(idx);
-  }, [galleryImages]);
+  }, [galleryImages, displayUrlFor]);
+
+  // ── Jump gallery to the image matching the selected color ─────────────────
+  const jumpGalleryToColor = useCallback((colorValue: string) => {
+    const variant = variants.find((v) =>
+      colorOptionKey ? v.attributes?.[colorOptionKey] === colorValue : false,
+    );
+    jumpGalleryToImage(pickVariantImage(variant, product?.image_urls ?? [], colorValue, colorValues));
+  }, [variants, colorOptionKey, colorValues, product?.image_urls, jumpGalleryToImage]);
 
   // For variant-image products (CJ), keep the gallery locked to whatever variant
   // is currently selected — colour OR size change lands on the exact image, so
@@ -907,13 +759,14 @@ function OfferSlugPage() {
               <button
                 className="pdp-img-nav-btn pdp-edge-btn"
                 onClick={goPrevImage}
-                disabled={activeImageIndex === 0}
                 aria-label="Previous image"
                 style={{
-                  position: "absolute", left: "0.4rem", top: "50%",
+                  position: "absolute", left: "0.5rem", top: "50%",
                   transform: "translateY(-50%)", zIndex: 15,
-                  fontSize: "34px", fontWeight: 100,
-                  opacity: activeImageIndex === 0 ? 0.1 : 0.35,
+                  fontSize: "28px", fontWeight: 100, opacity: 0.45,
+                  // Yeezy convention: the arrow simply isn't there at the end
+                  // of the gallery — no greyed-out disabled state.
+                  visibility: activeImageIndex === 0 ? "hidden" : "visible",
                 }}
               >
                 ‹
@@ -921,13 +774,12 @@ function OfferSlugPage() {
               <button
                 className="pdp-img-nav-btn pdp-edge-btn"
                 onClick={goNextImage}
-                disabled={activeImageIndex === galleryImages.length - 1}
                 aria-label="Next image"
                 style={{
-                  position: "absolute", right: "0.4rem", top: "50%",
+                  position: "absolute", right: "0.5rem", top: "50%",
                   transform: "translateY(-50%)", zIndex: 15,
-                  fontSize: "34px", fontWeight: 100,
-                  opacity: activeImageIndex === galleryImages.length - 1 ? 0.1 : 0.35,
+                  fontSize: "28px", fontWeight: 100, opacity: 0.45,
+                  visibility: activeImageIndex === galleryImages.length - 1 ? "hidden" : "visible",
                 }}
               >
                 ›

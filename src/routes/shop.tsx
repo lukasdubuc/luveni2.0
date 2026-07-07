@@ -2,8 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { fetchProducts, useProducts } from "@/lib/useProducts";
 import { useMemo, memo, useEffect } from "react";
 import { trackEvent } from "@/lib/track";
-import { proxyImageUrl, isLikelyTransparentImage, isOwnProductMediaUrl } from "@/lib/img";
-import { pickDarkHeroUrl } from "@/lib/darkHero";
+import { proxyImageUrl, isLikelyTransparentImage } from "@/lib/img";
+import { orderCatalogImages } from "@/lib/darkHero";
 
 type Product = {
   id: string;
@@ -21,6 +21,9 @@ export const Route = createFileRoute("/shop")({
     const products = await fetchProducts({ onlyPublished: true });
     return { products: products ?? [] };
   },
+  // Serve the cached catalog instantly on back/forward navigation; the
+  // useProducts hook refreshes it in the background.
+  staleTime: 60_000,
   head: () => ({
     meta: [
       { title: "Shop" },
@@ -62,48 +65,17 @@ function ShopPage() {
   );
 }
 
-// Choose the storefront thumbnail: the flat product mockup, never the bare
-// design/logo (Printful lists the print file first, so skip index 0 when
-// there's a real mockup after it).
-function gridImage(images?: string[]): string | null {
-  if (!Array.isArray(images) || images.length === 0) return null;
-  // Once processed, image_urls[0] is the clean transparent primary — prefer it.
-  // Otherwise fall back to skipping index 0 (Printful lists the bare print file
-  // first, so the real mockup is at [1]).
-  if (isOwnProductMediaUrl(images[0]) || isLikelyTransparentImage(images[0])) return images[0];
-  return images.length > 1 ? images[1] : images[0];
-}
-
-// Resolve the single thumbnail for a product. Prefer an already-transparent
-// primary (image_urls[0]); otherwise use the gridImage() mockup choice. Returns
-// null when the product has no usable image so the cell renders the "No Image"
-// placeholder instead of a broken tile.
-function pickThumbnail(images?: string[]): { raw: string; transparent: boolean } | null {
-  if (!Array.isArray(images) || images.length === 0) return null;
-  // Printful lists the bare print/design artwork first; skip it when real
-  // mockups follow, so the grid thumbnail matches the offer page's primary
-  // (no design flashes on click). Same rule the offer gallery applies.
-  if (images.length > 1 && /files\.cdn\.printful\.com/i.test(images[0])) {
-    images = images.slice(1);
-  }
-  const primary = images[0];
-  if (primary && isLikelyTransparentImage(primary)) {
-    return { raw: primary, transparent: true };
-  }
-  const raw = gridImage(images);
+// The tile is simply the first image of the canonical catalog order — the
+// exact list the offer gallery ranks against, so click-through never flashes.
+function pickThumbnail(product: Product): { raw: string; transparent: boolean } | null {
+  const { images } = orderCatalogImages(product.image_urls, product.variants);
+  const raw = images[0];
   if (!raw) return null;
   return { raw, transparent: isLikelyTransparentImage(raw) };
 }
 
 const ProductCell = memo(({ product, index }: { product: Product; index: number }) => {
-  // Catalog leads with the black/dark colorway when the product has one and
-  // its image is directly usable (Printful positional mockups). CJ products
-  // get their dark cutout first in image_urls at the data layer instead.
-  const hero = pickDarkHeroUrl(product.variants, product.image_urls);
-  const heroUsable = hero && (product.image_urls ?? []).includes(hero);
-  const thumb = heroUsable
-    ? { raw: hero!, transparent: isLikelyTransparentImage(hero!) }
-    : pickThumbnail(product.image_urls);
+  const thumb = pickThumbnail(product);
   const imageUrl = thumb ? proxyImageUrl(thumb.raw) : null;
   // Transparent PNGs (Printful mockups, admin-treated CJ uploads) float on the
   // bare grid. Untreated vendor photos (CJ JPGs on studio backdrops) get a
