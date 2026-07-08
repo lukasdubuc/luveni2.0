@@ -4,7 +4,7 @@
 //  The transparency pipeline auto-decides which photos are "good", but CJ
 //  imagery ships near-identical shots and photos that resist background
 //  removal. This panel lets the owner eyeball every photo and uncheck the
-//  bad/duplicate ones — the storefront (useDisplayImages) reads the same
+//  bad/duplicate ones — the storefront (lib/displayImages) reads the same
 //  product_media.hidden flag, so unchecking a photo here removes it from
 //  the shop grid, offer gallery and modal instantly.
 //

@@ -10,6 +10,10 @@ export const getRouter = () => {
     routeTree,
     context: { queryClient },
     scrollRestoration: true,
+    // Applies to EVERY navigation, including browser back/forward — exiting a
+    // product via history.back() morphs the image back into its grid tile
+    // instead of hard-swapping. Per-transition CSS lives in styles.css.
+    defaultViewTransition: true,
     defaultPreload: "intent",
     defaultPreloadStaleTime: 0,
     defaultPreloadDelay: 30,

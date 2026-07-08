@@ -2,3 +2,6 @@ User-agent: *
 Allow: /
 Disallow: /checkout
 Disallow: /thank-you
+Disallow: /admin
+
+Sitemap: https://luveni.lovable.app/sitemap.xml
