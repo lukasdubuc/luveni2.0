@@ -13,6 +13,8 @@ export type MediaViewType =
 
 export interface ProductMedia {
   id: string;
+  /** Present when rows are fetched catalog-wide (shop grid loader). */
+  product_id?: string;
   variant_key: string | null;
   view_type: MediaViewType;
   url: string;

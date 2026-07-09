@@ -193,34 +193,36 @@ html [data-sonner-toast] [data-close-button] {
   display: none !important; 
 }
 
-/* ── Mobile-only: zoom-in transition shop → offer/$slug only ── */
-@media (max-width: 767px) {
-  @keyframes vt-zoom-in {
-    from {
-      opacity: 0;
-      transform: scale(0.93) translateZ(0);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1) translateZ(0);
-    }
-  }
+/* ── View transitions: shop ⇄ product (Yeezy-style zoom) ─────────────────────
+   The product image is the ONLY shared element (viewTransitionName:
+   product-media-<id> on the grid tile and the PDP gallery slide). The page
+   cross-fades quickly around it while the image itself glides between the
+   tile and the gallery — the product "stays" while the page changes.       */
 
-  @keyframes vt-hold {
-    from { opacity: 1; transform: translateZ(0); }
-    to   { opacity: 1; transform: translateZ(0); }
-  }
+/* Fast, quiet page cross-fade underneath the morphing product. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 180ms;
+  animation-timing-function: ease;
+}
 
-  ::view-transition-old(root) {
-    animation: vt-hold 200ms ease both;
-    will-change: opacity;
-    backface-visibility: hidden;
-  }
+/* The shared product image: a single smooth glide (decelerating, no bounce).
+   Old/new snapshots are the SAME already-cached URL on both pages, so the
+   default cross-fade inside the pair is invisible — no flash. */
+::view-transition-group(*) {
+  animation-duration: 340ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+::view-transition-group(root) {
+  animation-duration: 180ms;
+  animation-timing-function: ease;
+}
 
-  ::view-transition-new(root) {
-    animation: vt-zoom-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
-    will-change: transform, opacity;
-    backface-visibility: hidden;
-    transform-origin: center center;
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-image-pair(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
   }
 }

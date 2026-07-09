@@ -52,7 +52,11 @@ export function darkestColor(variants: VariantLike[]): string | null {
   let best: string | null = null;
   let bestLum = Infinity;
   for (const c of colorValues(variants)) {
-    const lum = colorLuminance(c) ?? (DARK_NAME.test(c) ? 0.06 : null);
+    // An explicit "black" always wins — mapped hexes would otherwise let a
+    // very dark navy (#001f5b) numerically outrank black (#111111).
+    const lum = /\bblack\b/i.test(c)
+      ? 0
+      : colorLuminance(c) ?? (DARK_NAME.test(c) ? 0.06 : null);
     if (lum != null && lum < bestLum) { bestLum = lum; best = c; }
   }
   // Only lead with it when it's actually dark — a catalog whose darkest

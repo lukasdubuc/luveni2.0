@@ -2,9 +2,9 @@
 // Swap these to re-skin the site for any niche — no other files need changes.
 
 export const site = {
-  brand: "",
+  brand: "LUVENI",
   tagline: "A simple, modern way to get the result you actually want.",
-  domain: "example.com",
+  domain: "luveni.lovable.app",
   supportEmail: "hello@example.com",
   social: {
     twitter: "https://twitter.com/",

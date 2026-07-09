@@ -2,7 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import type {} from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 
-const BASE_URL = "";
+// Absolute origin is REQUIRED — relative <loc> entries are invalid and search
+// engines discard the whole sitemap.
+const BASE_URL = "https://luveni.lovable.app";
 
 interface SitemapEntry {
   path: string;
@@ -16,7 +18,7 @@ export const Route = createFileRoute("/sitemap.xml")({
       GET: async () => {
         const entries: SitemapEntry[] = [
           { path: "/", changefreq: "weekly", priority: "1.0" },
-          { path: "/offer", changefreq: "weekly", priority: "0.9" },
+          { path: "/shop", changefreq: "daily", priority: "0.9" },
           { path: "/about", changefreq: "monthly", priority: "0.6" },
           { path: "/contact", changefreq: "monthly", priority: "0.6" },
           { path: "/privacy", changefreq: "yearly", priority: "0.3" },

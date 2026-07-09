@@ -27,6 +27,13 @@ export function ContactPopup() {
     if (hasShownThisSession) return;
     if (hasSubmittedContact()) { hasShownThisSession = true; return; }
     const t = window.setTimeout(() => {
+      // Never interrupt an active shopper: a non-empty cart means they are
+      // mid-funnel — the popup is where checkouts go to die. Read the
+      // persisted cart at fire time so the check is never stale.
+      try {
+        const items = JSON.parse(localStorage.getItem("cart_items") || "[]");
+        if (Array.isArray(items) && items.length > 0) return;
+      } catch { /* no cart */ }
       hasShownThisSession = true;
       setOpen(true);
     }, 60_000);

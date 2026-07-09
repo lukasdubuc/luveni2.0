@@ -1,4 +1,10 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  useNavigate,
+  useRouter,
+  useCanGoBack,
+  Link,
+} from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts } from "@/lib/useProducts";
@@ -6,7 +12,13 @@ import { offer } from "@/config/site";
 import { useCart } from "@/context/CartContext";
 import { ZoomPanImage } from "@/components/site/ZoomPanImage";
 import { isLikelyTransparentImage } from "@/lib/img";
-import { useDisplayImages } from "@/lib/useDisplayImages";
+import {
+  computeDisplayImages,
+  displayUrlFor as resolveDisplayUrl,
+  fetchProductMedia,
+  LAST_VIEWED_PRODUCT_KEY,
+} from "@/lib/displayImages";
+import type { ProductMedia } from "@/lib/useProductMedia";
 import { tryResolveColor } from "@/lib/colors";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -53,9 +65,15 @@ export const Route = createFileRoute("/offer/$slug")({
         .maybeSingle(),
       fetchProducts({ onlyPublished: true }),
     ]);
+    const product = productResult.data ?? null;
+    // Curated media resolves IN the loader, so the gallery renders its final
+    // image list on first paint — no post-paint reshuffle, and the first image
+    // is byte-identical to the shop tile (the morph never flashes).
+    const media = product ? await fetchProductMedia(product.id) : [];
     return {
-      product: productResult.data ?? null,
+      product,
       allProducts: allProducts ?? [],
+      media,
     };
   },
   // Prev/next product flips reuse the cached loader data instead of
@@ -66,13 +84,42 @@ export const Route = createFileRoute("/offer/$slug")({
     const product = loaderData?.product;
     const title = product ? formatTitle(product.slug) : offer.name;
     const description = product?.description ?? offer.shortPitch;
+    const canonical = product ? `https://luveni.lovable.app/offer/${product.slug}` : undefined;
+    // Same hero the shop tile and gallery show — for link previews.
+    const heroImage = product
+      ? computeDisplayImages(loaderData?.media, product.image_urls, product.variants).images[0]
+      : undefined;
+    const priceCents = product?.price_cents_discounted ?? product?.price_cents;
+    // schema.org Product + Offer → price/availability rich results in search.
+    const jsonLd = product
+      ? JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "Product",
+          name: product.title,
+          ...(heroImage ? { image: [heroImage] } : {}),
+          ...(product.description ? { description: product.description } : {}),
+          offers: {
+            "@type": "Offer",
+            url: canonical,
+            priceCurrency: (product.currency || "usd").toUpperCase(),
+            price: priceCents != null ? (priceCents / 100).toFixed(2) : undefined,
+            availability: "https://schema.org/InStock",
+          },
+        })
+      : null;
     return {
       meta: [
         { title },
         { name: "description", content: description },
         { property: "og:title", content: title },
         { property: "og:description", content: description },
+        ...(heroImage ? [{ property: "og:image", content: heroImage }] : []),
+        { property: "og:type", content: "product" },
       ],
+      links: canonical ? [{ rel: "canonical", href: canonical }] : [],
+      scripts: jsonLd
+        ? [{ type: "application/ld+json", children: jsonLd }]
+        : [],
     };
   },
   component: OfferSlugPage,
@@ -100,7 +147,9 @@ function sortOptionKeys(keys: string[]) {
 
 function formatPrice(cents?: number | null) {
   if (cents == null) return "PRICE PENDING";
-  return `$${(cents / 100).toFixed(2)}`;
+  // Whole-dollar prices drop the ".00" so the PDP matches the grid ($25, not
+  // $25.00); real cents are kept ($32.99 never rounds to $33).
+  return cents % 100 === 0 ? `$${cents / 100}` : `$${(cents / 100).toFixed(2)}`;
 }
 
 // ─── Color → image mapping ────────────────────────────────────────────────────
@@ -239,13 +288,20 @@ function GalleryImg({
 // ─── Main Page Component ──────────────────────────────────────────────────────
 
 function OfferSlugPage() {
-  const { product, allProducts } = Route.useLoaderData() as {
+  const { product, allProducts, media } = Route.useLoaderData() as {
     product: Product | null;
     allProducts: Product[];
+    media: ProductMedia[];
   };
   const navigate = useNavigate();
+  const router = useRouter();
+  const canGoBack = useCanGoBack();
+  // Set when the shopper arrived from the shop grid (Link state). Exiting via
+  // history.back() then restores the grid's scroll position AND lets the
+  // shared-element morph land on the exact tile — no more "back at the top".
+  const cameFromShop = !!(router.state.location.state as any)?.fromShop;
 
-  const { addItem } = useCart();
+  const { addItem, count: cartCount } = useCart();
   const [addedFeedback, setAddedFeedback] = useState(false);
   const [currentStep, setCurrentStep] = useState<number | null>(null);
 
@@ -264,19 +320,48 @@ function OfferSlugPage() {
   // not immediately flip to the next product (the "glitch on open").
   const navSettleUntil = useRef(0);
 
+  // Product flips REPLACE the history entry (never push): history stays
+  // [shop, product], so the browser back button / × always returns to the
+  // grid in one step with its scroll position intact, no matter how many
+  // products were flipped through. `fromShop` rides along.
   const goToPrev = useCallback(() => {
     if (navigateCooldown.current || !prevProduct) return;
     navigateCooldown.current = true;
-    navigate({ to: "/offer/$slug", params: { slug: prevProduct.slug } });
+    navigate({
+      to: "/offer/$slug",
+      params: { slug: prevProduct.slug },
+      replace: true,
+      state: { fromShop: cameFromShop } as any,
+    });
     setTimeout(() => { navigateCooldown.current = false; }, 500);
-  }, [prevProduct, navigate]);
+  }, [prevProduct, navigate, cameFromShop]);
 
   const goToNext = useCallback(() => {
     if (navigateCooldown.current || !nextProduct) return;
     navigateCooldown.current = true;
-    navigate({ to: "/offer/$slug", params: { slug: nextProduct.slug } });
+    navigate({
+      to: "/offer/$slug",
+      params: { slug: nextProduct.slug },
+      replace: true,
+      state: { fromShop: cameFromShop } as any,
+    });
     setTimeout(() => { navigateCooldown.current = false; }, 500);
-  }, [nextProduct, navigate]);
+  }, [nextProduct, navigate, cameFromShop]);
+
+  // The shop grid names ONLY this product's tile as the shared morph target,
+  // so exiting zooms the image back into the exact cell being viewed.
+  useEffect(() => {
+    if (!product?.id) return;
+    try {
+      sessionStorage.setItem(LAST_VIEWED_PRODUCT_KEY, product.id);
+    } catch { /* private mode */ }
+  }, [product?.id]);
+
+  const exitToShop = useCallback(() => {
+    if (justClosedZoom.current) return;
+    if (cameFromShop && canGoBack) router.history.back();
+    else navigate({ to: "/shop" });
+  }, [cameFromShop, canGoBack, router, navigate]);
 
   useEffect(() => {
     if (!product || allProducts.length === 0) return;
@@ -395,14 +480,17 @@ function OfferSlugPage() {
   // quality-gated, deduped, transparent product media (bad cutouts hidden,
   // opaque originals superseded so there are never look-alike duplicates,
   // primary first), falling back to raw image_urls when a product has no
-  // processed media. This guarantees no poor images or duplicates on the page.
-  // Gallery images come from the shared display pipeline, ranked by the SAME
-  // canonical catalog order the shop tile reads — first image always equals
-  // the tile, so the click-through morph never flashes.
-  const { images: displayImages, displayUrlFor } = useDisplayImages(
-    product?.id,
-    product?.image_urls,
-    variants,
+  // processed media. The media rows arrive via the route LOADER, so this list
+  // is final on first paint — no async reshuffle — and images[0] is the exact
+  // URL the shop tile shows (seamless, cache-hit morph).
+  const display = useMemo(
+    () => computeDisplayImages(media, product?.image_urls, variants),
+    [media, product?.image_urls, variants],
+  );
+  const displayImages = display.images;
+  const displayUrlFor = useCallback(
+    (sourceUrl?: string | null) => resolveDisplayUrl(display, sourceUrl),
+    [display],
   );
 
   // Sentinel [""] means "no images" — the gallery renders a tasteful
@@ -539,6 +627,18 @@ function OfferSlugPage() {
   const isSoldOut = selectedVariant?.stock != null && selectedVariant.stock <= 0;
 
   const hasVariants = variants.length > 0 && visibleOptionKeys.length > 0;
+
+  // Vendor descriptions often arrive as HTML — render as clean plain text.
+  const descriptionText = useMemo(() => {
+    const raw = product?.description ?? "";
+    const text = raw
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/\s+/g, " ")
+      .trim();
+    return text.length > 5 ? text : null;
+  }, [product?.description]);
 
   // Jump the gallery to the slide representing a source image URL — resolved
   // through the display pipeline (a photo's cutout supersedes it), never by
@@ -697,11 +797,12 @@ function OfferSlugPage() {
         }
         .pdp-plus-btn:hover { opacity: 0.5; }
         .pdp-plus-btn:active { transform: scale(0.92); }
-        .pdp-img-nav-btn { background: transparent; border: none; cursor: pointer; padding: 0.75rem 1.25rem; color: inherit; line-height: 1; transition: opacity 0.2s; font-family: inherit; }
-        .pdp-edge-btn:hover:not(:disabled) { opacity: 0.85 !important; }
+        .pdp-img-nav-btn { background: transparent; border: none; cursor: pointer; padding: 0.75rem 1rem; color: inherit; line-height: 1; transition: opacity 0.2s; font-family: inherit; }
+        .pdp-edge-btn:hover:not(:disabled) { opacity: 1 !important; }
         .pdp-img-nav-btn:disabled { cursor: default; }
         .pdp-exit-btn:hover { opacity: 1 !important; }
-        @media (max-width: 640px) { .pdp-edge-btn { font-size: 40px !important; padding: 0.6rem 0.7rem; } }
+        /* Same large chevrons on every viewport — they must never shrink. */
+        @media (max-width: 640px) { .pdp-edge-btn { padding: 0.75rem 0.6rem; } }
         html, body { background-color: var(--background) !important; color: var(--foreground) !important; }
       `}</style>
 
@@ -717,40 +818,57 @@ function OfferSlugPage() {
             overflow: "hidden", zIndex: 0,
           }}
         >
-          {/* ── Top-right: × exit back to the grid (Yeezy convention), guarded
-                 against ghost clicks during the zoom-close cooldown ── */}
-          <Link
-            to="/shop"
-            preload="intent"
-            onClick={(e) => {
-              if (justClosedZoom.current) {
-                e.preventDefault();
-              }
-            }}
+          {/* ── Top-right: × exit back to the grid (Yeezy convention). Goes
+                 BACK in history when the shopper came from the grid, so the
+                 grid reopens at the same scroll position and the image morphs
+                 into its tile. Guarded against ghost clicks during the
+                 zoom-close cooldown. ── */}
+          <button
+            type="button"
+            onClick={exitToShop}
             className="pdp-exit-btn"
             style={{
-              position: "absolute", top: "1.1rem", right: "1.25rem", zIndex: 20,
+              position: "absolute", top: "0.9rem", right: "1rem", zIndex: 20,
+              background: "transparent", border: "none", cursor: "pointer",
               color: "inherit", textDecoration: "none",
-              fontSize: "26px", fontWeight: 200, lineHeight: 1,
-              opacity: 0.55, display: "flex", alignItems: "center",
-              padding: "0.4rem", transition: "opacity 0.2s",
+              fontSize: "34px", fontWeight: 200, lineHeight: 1,
+              opacity: 0.65, display: "flex", alignItems: "center",
+              padding: "0.5rem", transition: "opacity 0.2s",
+              fontFamily: "inherit",
             }}
             aria-label="Close and return to shop"
           >
             ×
-          </Link>
+          </button>
 
-          {/* ── Top-left: sold out status ── */}
-          <div
-            style={{
-              position: "absolute", top: "1.35rem", left: "1.25rem", zIndex: 20,
-              fontSize: "11px", fontWeight: 400, letterSpacing: "0.02em",
-              color: isSoldOut ? "#c00" : "inherit",
-              opacity: isSoldOut ? 1 : 0.5,
-            }}
-          >
-            {isSoldOut ? "SOLD OUT" : ""}
-          </div>
+          {/* ── Top-left: sold-out flag, or CART(n) once something's in the
+                 bag (Yeezy convention) — the PDP is no longer a checkout
+                 dead-end ── */}
+          {isSoldOut ? (
+            <div
+              style={{
+                position: "absolute", top: "1.35rem", left: "1.25rem", zIndex: 20,
+                fontSize: "11px", fontWeight: 400, letterSpacing: "0.02em",
+                color: "#c00",
+              }}
+            >
+              SOLD OUT
+            </div>
+          ) : cartCount > 0 ? (
+            <Link
+              to="/checkout"
+              preload="intent"
+              style={{
+                position: "absolute", top: "1.35rem", left: "1.25rem", zIndex: 20,
+                fontSize: "11px", fontWeight: 400, letterSpacing: "0.06em",
+                color: "inherit", textDecoration: "none", opacity: 0.75,
+                padding: "0.35rem 0.4rem", margin: "-0.35rem -0.4rem",
+              }}
+              aria-label={`Cart with ${cartCount} item${cartCount === 1 ? "" : "s"}`}
+            >
+              CART({cartCount})
+            </Link>
+          ) : null}
 
           {/* ── Viewport-edge image arrows (Yeezy convention: thin chevrons
                  pinned to the screen edges, vertically centered) ── */}
@@ -763,7 +881,9 @@ function OfferSlugPage() {
                 style={{
                   position: "absolute", left: "0.5rem", top: "50%",
                   transform: "translateY(-50%)", zIndex: 15,
-                  fontSize: "28px", fontWeight: 100, opacity: 0.45,
+                  // Big, thin, unmissable — matches the zoom overlay's arrows
+                  // so the chrome reads identically everywhere.
+                  fontSize: "44px", fontWeight: 100, opacity: 0.7,
                   // Yeezy convention: the arrow simply isn't there at the end
                   // of the gallery — no greyed-out disabled state.
                   visibility: activeImageIndex === 0 ? "hidden" : "visible",
@@ -778,7 +898,7 @@ function OfferSlugPage() {
                 style={{
                   position: "absolute", right: "0.5rem", top: "50%",
                   transform: "translateY(-50%)", zIndex: 15,
-                  fontSize: "28px", fontWeight: 100, opacity: 0.45,
+                  fontSize: "44px", fontWeight: 100, opacity: 0.7,
                   visibility: activeImageIndex === galleryImages.length - 1 ? "hidden" : "visible",
                 }}
               >
@@ -787,16 +907,18 @@ function OfferSlugPage() {
             </>
           )}
 
-          {/* ── Center column ── */}
+          {/* ── Center column. NOTE: no entry animation on this wrapper — the
+                 gallery inside is the shared view-transition element, and any
+                 ancestor opacity animation gets baked into its snapshot and
+                 makes the product image flash during the morph. The text block
+                 below fades on its own. ── */}
           <div
             style={{
               display: "flex", flexDirection: "column",
               alignItems: "center", justifyContent: "center",
               width: "100%", maxWidth: "480px",
               padding: "3.5rem 2rem 2rem", boxSizing: "border-box",
-              animation: "pdp-fade-in 0.15s linear both",
             }}
-            key={product.slug}
           >
             {/* ── Image gallery ── */}
             <div
@@ -863,6 +985,16 @@ function OfferSlugPage() {
               </div>
             )}
 
+            {/* ── Info block: fades in per product (the gallery above does
+                   NOT — it must stay snapshot-clean for the morph) ── */}
+            <div
+              key={product.slug}
+              style={{
+                width: "100%", display: "flex", flexDirection: "column",
+                alignItems: "center",
+                animation: "pdp-fade-in 0.15s linear both",
+              }}
+            >
             {/* Title */}
             <div style={{
               fontSize: "clamp(0.85rem, 2vw, 1rem)", fontWeight: 400,
@@ -1114,6 +1246,36 @@ function OfferSlugPage() {
                 )}
               </div>
             )}
+
+            {/* ── Trust line: quiet chrome at the moment of decision ── */}
+            <div style={{
+              marginTop: "1.6rem", fontSize: "9px", fontWeight: 500,
+              letterSpacing: "0.18em", textTransform: "uppercase",
+              opacity: 0.45, color: "var(--foreground)", textAlign: "center",
+            }}>
+              SECURE CHECKOUT ·{" "}
+              <Link
+                to="/refund"
+                preload="intent"
+                style={{ color: "inherit", textDecoration: "none" }}
+              >
+                30-DAY RETURNS
+              </Link>
+            </div>
+
+            {/* ── Short description (plain text, clamped) ── */}
+            {descriptionText && (
+              <p style={{
+                marginTop: "0.9rem", maxWidth: "340px",
+                fontSize: "10px", lineHeight: 1.7, letterSpacing: "0.04em",
+                opacity: 0.55, color: "var(--foreground)", textAlign: "center",
+                display: "-webkit-box", WebkitLineClamp: 3,
+                WebkitBoxOrient: "vertical", overflow: "hidden",
+              }}>
+                {descriptionText}
+              </p>
+            )}
+            </div>
           </div>
 
           {/* ── Counter ── */}
@@ -1159,8 +1321,8 @@ function OfferSlugPage() {
             style={{
               position: "absolute", top: "1.25rem", right: "1.25rem",
               background: "transparent", border: "none",
-              color: "#fff", fontSize: "32px", fontWeight: 200,
-              lineHeight: 1, cursor: "pointer", opacity: 0.7,
+              color: "#fff", fontSize: "34px", fontWeight: 200,
+              lineHeight: 1, cursor: "pointer", opacity: 0.75,
               fontFamily: "inherit",
             }}
           >
@@ -1175,7 +1337,7 @@ function OfferSlugPage() {
                 position: "absolute", left: "1rem", top: "50%", transform: "translateY(-50%)",
                 background: "transparent", border: "none", color: "#fff",
                 fontSize: "48px", fontWeight: 200, lineHeight: 1,
-                cursor: "pointer", opacity: 0.6, fontFamily: "inherit",
+                cursor: "pointer", opacity: 0.75, fontFamily: "inherit",
               }}
             >‹</button>
           )}
@@ -1188,7 +1350,7 @@ function OfferSlugPage() {
                 position: "absolute", right: "1rem", top: "50%", transform: "translateY(-50%)",
                 background: "transparent", border: "none", color: "#fff",
                 fontSize: "48px", fontWeight: 200, lineHeight: 1,
-                cursor: "pointer", opacity: 0.6, fontFamily: "inherit",
+                cursor: "pointer", opacity: 0.75, fontFamily: "inherit",
               }}
             >›</button>
           )}
