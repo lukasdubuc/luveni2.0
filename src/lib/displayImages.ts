@@ -94,6 +94,14 @@ export function computeDisplayImages(
     if (orig) hiddenUrls.add(orig);
   }
 
+  // The Printful design artwork that orderCatalogImages dropped from the
+  // catalog head must never resurface: its own media rows are unranked
+  // (rank MAX) and would otherwise trail the gallery as a bare print file.
+  const raw = Array.isArray(imageUrls) ? imageUrls.filter(Boolean) : [];
+  if (raw.length > 1 && /files\.cdn\.printful\.com/i.test(raw[0]) && !catalog.includes(raw[0])) {
+    hiddenUrls.add(raw[0]);
+  }
+
   // Good cutouts (transparent + not hidden + not failed the quality gate).
   const good = rows.filter(
     (m) => !m.hidden && m.is_transparent && m.metadata?.quality_ok !== false,
