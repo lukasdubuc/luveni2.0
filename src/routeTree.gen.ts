@@ -8,375 +8,375 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRouteImport } from './routes/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y[.]txt'
-import { Route as ThankYouRouteImport } from './routes/thank-you'
-import { Route as TermsRouteImport } from './routes/terms'
-import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
-import { Route as ShopRouteImport } from './routes/shop'
-import { Route as ShippingRouteImport } from './routes/shipping'
-import { Route as RefundRouteImport } from './routes/refund'
-import { Route as PrivacyRouteImport } from './routes/privacy'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as ContactRouteImport } from './routes/contact'
-import { Route as CheckoutRouteImport } from './routes/checkout'
-import { Route as AboutRouteImport } from './routes/about'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as AdminIndexRouteImport } from './routes/admin.index'
-import { Route as OfferSlugRouteImport } from './routes/offer.$slug'
-import { Route as ApiShipmentCompleteRouteImport } from './routes/api/shipment-complete'
-import { Route as ApiProductSearchWebhookUrlRouteImport } from './routes/api/product-search-webhook-url'
-import { Route as ApiProductAddOrUpdateWebhookUrlRouteImport } from './routes/api/product-add-or-update-webhook-url'
-import { Route as ApiPrintfulSyncRouteImport } from './routes/api/printful-sync'
-import { Route as ApiFulfillmentWebhookUrlRouteImport } from './routes/api/fulfillment-webhook-url'
-import { Route as AdminStudioRouteImport } from './routes/admin.studio'
-import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
-import { Route as AdminProductsRouteImport } from './routes/admin.products'
-import { Route as AdminOrdersRouteImport } from './routes/admin.orders'
-import { Route as AdminLeadsRouteImport } from './routes/admin.leads'
-import { Route as AdminJarvisRouteImport } from './routes/admin.jarvis'
-import { Route as AdminCompareRouteImport } from './routes/admin.compare'
-import { Route as AdminAnalyticsRouteImport } from './routes/admin.analytics'
-import { Route as ApiPublicStripeWebhookRouteImport } from './routes/api/public/stripe-webhook'
+import { Route as rootRouteImport } from "./routes/__root"
+import { Route as Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRouteImport } from "./routes/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y[.]txt"
+import { Route as ThankYouRouteImport } from "./routes/thank-you"
+import { Route as TermsRouteImport } from "./routes/terms"
+import { Route as SitemapDotxmlRouteImport } from "./routes/sitemap[.]xml"
+import { Route as ShopRouteImport } from "./routes/shop"
+import { Route as ShippingRouteImport } from "./routes/shipping"
+import { Route as RefundRouteImport } from "./routes/refund"
+import { Route as PrivacyRouteImport } from "./routes/privacy"
+import { Route as LoginRouteImport } from "./routes/login"
+import { Route as ContactRouteImport } from "./routes/contact"
+import { Route as CheckoutRouteImport } from "./routes/checkout"
+import { Route as AboutRouteImport } from "./routes/about"
+import { Route as IndexRouteImport } from "./routes/index"
+import { Route as AdminIndexRouteImport } from "./routes/admin.index"
+import { Route as OfferSlugRouteImport } from "./routes/offer.$slug"
+import { Route as ApiShipmentCompleteRouteImport } from "./routes/api/shipment-complete"
+import { Route as ApiProductSearchWebhookUrlRouteImport } from "./routes/api/product-search-webhook-url"
+import { Route as ApiProductAddOrUpdateWebhookUrlRouteImport } from "./routes/api/product-add-or-update-webhook-url"
+import { Route as ApiPrintfulSyncRouteImport } from "./routes/api/printful-sync"
+import { Route as ApiFulfillmentWebhookUrlRouteImport } from "./routes/api/fulfillment-webhook-url"
+import { Route as AdminStudioRouteImport } from "./routes/admin.studio"
+import { Route as AdminSettingsRouteImport } from "./routes/admin.settings"
+import { Route as AdminProductsRouteImport } from "./routes/admin.products"
+import { Route as AdminOrdersRouteImport } from "./routes/admin.orders"
+import { Route as AdminLeadsRouteImport } from "./routes/admin.leads"
+import { Route as AdminJarvisRouteImport } from "./routes/admin.jarvis"
+import { Route as AdminCompareRouteImport } from "./routes/admin.compare"
+import { Route as AdminAnalyticsRouteImport } from "./routes/admin.analytics"
+import { Route as ApiPublicStripeWebhookRouteImport } from "./routes/api/public/stripe-webhook"
 
 const Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRoute =
   Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRouteImport.update({
-    id: '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt',
-    path: '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt',
+    id: "/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt",
+    path: "/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt",
     getParentRoute: () => rootRouteImport,
   } as any)
 const ThankYouRoute = ThankYouRouteImport.update({
-  id: '/thank-you',
-  path: '/thank-you',
+  id: "/thank-you",
+  path: "/thank-you",
   getParentRoute: () => rootRouteImport,
 } as any)
 const TermsRoute = TermsRouteImport.update({
-  id: '/terms',
-  path: '/terms',
+  id: "/terms",
+  path: "/terms",
   getParentRoute: () => rootRouteImport,
 } as any)
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
-  id: '/sitemap.xml',
-  path: '/sitemap.xml',
+  id: "/sitemap.xml",
+  path: "/sitemap.xml",
   getParentRoute: () => rootRouteImport,
 } as any)
 const ShopRoute = ShopRouteImport.update({
-  id: '/shop',
-  path: '/shop',
+  id: "/shop",
+  path: "/shop",
   getParentRoute: () => rootRouteImport,
 } as any)
 const ShippingRoute = ShippingRouteImport.update({
-  id: '/shipping',
-  path: '/shipping',
+  id: "/shipping",
+  path: "/shipping",
   getParentRoute: () => rootRouteImport,
 } as any)
 const RefundRoute = RefundRouteImport.update({
-  id: '/refund',
-  path: '/refund',
+  id: "/refund",
+  path: "/refund",
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacyRoute = PrivacyRouteImport.update({
-  id: '/privacy',
-  path: '/privacy',
+  id: "/privacy",
+  path: "/privacy",
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
+  id: "/login",
+  path: "/login",
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContactRoute = ContactRouteImport.update({
-  id: '/contact',
-  path: '/contact',
+  id: "/contact",
+  path: "/contact",
   getParentRoute: () => rootRouteImport,
 } as any)
 const CheckoutRoute = CheckoutRouteImport.update({
-  id: '/checkout',
-  path: '/checkout',
+  id: "/checkout",
+  path: "/checkout",
   getParentRoute: () => rootRouteImport,
 } as any)
 const AboutRoute = AboutRouteImport.update({
-  id: '/about',
-  path: '/about',
+  id: "/about",
+  path: "/about",
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+  id: "/",
+  path: "/",
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
-  id: '/admin/',
-  path: '/admin/',
+  id: "/admin/",
+  path: "/admin/",
   getParentRoute: () => rootRouteImport,
 } as any)
 const OfferSlugRoute = OfferSlugRouteImport.update({
-  id: '/offer/$slug',
-  path: '/offer/$slug',
+  id: "/offer/$slug",
+  path: "/offer/$slug",
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiShipmentCompleteRoute = ApiShipmentCompleteRouteImport.update({
-  id: '/api/shipment-complete',
-  path: '/api/shipment-complete',
+  id: "/api/shipment-complete",
+  path: "/api/shipment-complete",
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiProductSearchWebhookUrlRoute =
   ApiProductSearchWebhookUrlRouteImport.update({
-    id: '/api/product-search-webhook-url',
-    path: '/api/product-search-webhook-url',
+    id: "/api/product-search-webhook-url",
+    path: "/api/product-search-webhook-url",
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiProductAddOrUpdateWebhookUrlRoute =
   ApiProductAddOrUpdateWebhookUrlRouteImport.update({
-    id: '/api/product-add-or-update-webhook-url',
-    path: '/api/product-add-or-update-webhook-url',
+    id: "/api/product-add-or-update-webhook-url",
+    path: "/api/product-add-or-update-webhook-url",
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiPrintfulSyncRoute = ApiPrintfulSyncRouteImport.update({
-  id: '/api/printful-sync',
-  path: '/api/printful-sync',
+  id: "/api/printful-sync",
+  path: "/api/printful-sync",
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiFulfillmentWebhookUrlRoute =
   ApiFulfillmentWebhookUrlRouteImport.update({
-    id: '/api/fulfillment-webhook-url',
-    path: '/api/fulfillment-webhook-url',
+    id: "/api/fulfillment-webhook-url",
+    path: "/api/fulfillment-webhook-url",
     getParentRoute: () => rootRouteImport,
   } as any)
 const AdminStudioRoute = AdminStudioRouteImport.update({
-  id: '/admin/studio',
-  path: '/admin/studio',
+  id: "/admin/studio",
+  path: "/admin/studio",
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
-  id: '/admin/settings',
-  path: '/admin/settings',
+  id: "/admin/settings",
+  path: "/admin/settings",
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminProductsRoute = AdminProductsRouteImport.update({
-  id: '/admin/products',
-  path: '/admin/products',
+  id: "/admin/products",
+  path: "/admin/products",
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminOrdersRoute = AdminOrdersRouteImport.update({
-  id: '/admin/orders',
-  path: '/admin/orders',
+  id: "/admin/orders",
+  path: "/admin/orders",
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminLeadsRoute = AdminLeadsRouteImport.update({
-  id: '/admin/leads',
-  path: '/admin/leads',
+  id: "/admin/leads",
+  path: "/admin/leads",
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminJarvisRoute = AdminJarvisRouteImport.update({
-  id: '/admin/jarvis',
-  path: '/admin/jarvis',
+  id: "/admin/jarvis",
+  path: "/admin/jarvis",
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminCompareRoute = AdminCompareRouteImport.update({
-  id: '/admin/compare',
-  path: '/admin/compare',
+  id: "/admin/compare",
+  path: "/admin/compare",
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminAnalyticsRoute = AdminAnalyticsRouteImport.update({
-  id: '/admin/analytics',
-  path: '/admin/analytics',
+  id: "/admin/analytics",
+  path: "/admin/analytics",
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicStripeWebhookRoute = ApiPublicStripeWebhookRouteImport.update({
-  id: '/api/public/stripe-webhook',
-  path: '/api/public/stripe-webhook',
+  id: "/api/public/stripe-webhook",
+  path: "/api/public/stripe-webhook",
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/about': typeof AboutRoute
-  '/checkout': typeof CheckoutRoute
-  '/contact': typeof ContactRoute
-  '/login': typeof LoginRoute
-  '/privacy': typeof PrivacyRoute
-  '/refund': typeof RefundRoute
-  '/shipping': typeof ShippingRoute
-  '/shop': typeof ShopRoute
-  '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/terms': typeof TermsRoute
-  '/thank-you': typeof ThankYouRoute
-  '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt': typeof Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRoute
-  '/admin/analytics': typeof AdminAnalyticsRoute
-  '/admin/compare': typeof AdminCompareRoute
-  '/admin/jarvis': typeof AdminJarvisRoute
-  '/admin/leads': typeof AdminLeadsRoute
-  '/admin/orders': typeof AdminOrdersRoute
-  '/admin/products': typeof AdminProductsRoute
-  '/admin/settings': typeof AdminSettingsRoute
-  '/admin/studio': typeof AdminStudioRoute
-  '/api/fulfillment-webhook-url': typeof ApiFulfillmentWebhookUrlRoute
-  '/api/printful-sync': typeof ApiPrintfulSyncRoute
-  '/api/product-add-or-update-webhook-url': typeof ApiProductAddOrUpdateWebhookUrlRoute
-  '/api/product-search-webhook-url': typeof ApiProductSearchWebhookUrlRoute
-  '/api/shipment-complete': typeof ApiShipmentCompleteRoute
-  '/offer/$slug': typeof OfferSlugRoute
-  '/admin/': typeof AdminIndexRoute
-  '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
+  "/": typeof IndexRoute
+  "/about": typeof AboutRoute
+  "/checkout": typeof CheckoutRoute
+  "/contact": typeof ContactRoute
+  "/login": typeof LoginRoute
+  "/privacy": typeof PrivacyRoute
+  "/refund": typeof RefundRoute
+  "/shipping": typeof ShippingRoute
+  "/shop": typeof ShopRoute
+  "/sitemap.xml": typeof SitemapDotxmlRoute
+  "/terms": typeof TermsRoute
+  "/thank-you": typeof ThankYouRoute
+  "/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt": typeof Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRoute
+  "/admin/analytics": typeof AdminAnalyticsRoute
+  "/admin/compare": typeof AdminCompareRoute
+  "/admin/jarvis": typeof AdminJarvisRoute
+  "/admin/leads": typeof AdminLeadsRoute
+  "/admin/orders": typeof AdminOrdersRoute
+  "/admin/products": typeof AdminProductsRoute
+  "/admin/settings": typeof AdminSettingsRoute
+  "/admin/studio": typeof AdminStudioRoute
+  "/api/fulfillment-webhook-url": typeof ApiFulfillmentWebhookUrlRoute
+  "/api/printful-sync": typeof ApiPrintfulSyncRoute
+  "/api/product-add-or-update-webhook-url": typeof ApiProductAddOrUpdateWebhookUrlRoute
+  "/api/product-search-webhook-url": typeof ApiProductSearchWebhookUrlRoute
+  "/api/shipment-complete": typeof ApiShipmentCompleteRoute
+  "/offer/$slug": typeof OfferSlugRoute
+  "/admin/": typeof AdminIndexRoute
+  "/api/public/stripe-webhook": typeof ApiPublicStripeWebhookRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/about': typeof AboutRoute
-  '/checkout': typeof CheckoutRoute
-  '/contact': typeof ContactRoute
-  '/login': typeof LoginRoute
-  '/privacy': typeof PrivacyRoute
-  '/refund': typeof RefundRoute
-  '/shipping': typeof ShippingRoute
-  '/shop': typeof ShopRoute
-  '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/terms': typeof TermsRoute
-  '/thank-you': typeof ThankYouRoute
-  '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt': typeof Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRoute
-  '/admin/analytics': typeof AdminAnalyticsRoute
-  '/admin/compare': typeof AdminCompareRoute
-  '/admin/jarvis': typeof AdminJarvisRoute
-  '/admin/leads': typeof AdminLeadsRoute
-  '/admin/orders': typeof AdminOrdersRoute
-  '/admin/products': typeof AdminProductsRoute
-  '/admin/settings': typeof AdminSettingsRoute
-  '/admin/studio': typeof AdminStudioRoute
-  '/api/fulfillment-webhook-url': typeof ApiFulfillmentWebhookUrlRoute
-  '/api/printful-sync': typeof ApiPrintfulSyncRoute
-  '/api/product-add-or-update-webhook-url': typeof ApiProductAddOrUpdateWebhookUrlRoute
-  '/api/product-search-webhook-url': typeof ApiProductSearchWebhookUrlRoute
-  '/api/shipment-complete': typeof ApiShipmentCompleteRoute
-  '/offer/$slug': typeof OfferSlugRoute
-  '/admin': typeof AdminIndexRoute
-  '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
+  "/": typeof IndexRoute
+  "/about": typeof AboutRoute
+  "/checkout": typeof CheckoutRoute
+  "/contact": typeof ContactRoute
+  "/login": typeof LoginRoute
+  "/privacy": typeof PrivacyRoute
+  "/refund": typeof RefundRoute
+  "/shipping": typeof ShippingRoute
+  "/shop": typeof ShopRoute
+  "/sitemap.xml": typeof SitemapDotxmlRoute
+  "/terms": typeof TermsRoute
+  "/thank-you": typeof ThankYouRoute
+  "/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt": typeof Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRoute
+  "/admin/analytics": typeof AdminAnalyticsRoute
+  "/admin/compare": typeof AdminCompareRoute
+  "/admin/jarvis": typeof AdminJarvisRoute
+  "/admin/leads": typeof AdminLeadsRoute
+  "/admin/orders": typeof AdminOrdersRoute
+  "/admin/products": typeof AdminProductsRoute
+  "/admin/settings": typeof AdminSettingsRoute
+  "/admin/studio": typeof AdminStudioRoute
+  "/api/fulfillment-webhook-url": typeof ApiFulfillmentWebhookUrlRoute
+  "/api/printful-sync": typeof ApiPrintfulSyncRoute
+  "/api/product-add-or-update-webhook-url": typeof ApiProductAddOrUpdateWebhookUrlRoute
+  "/api/product-search-webhook-url": typeof ApiProductSearchWebhookUrlRoute
+  "/api/shipment-complete": typeof ApiShipmentCompleteRoute
+  "/offer/$slug": typeof OfferSlugRoute
+  "/admin": typeof AdminIndexRoute
+  "/api/public/stripe-webhook": typeof ApiPublicStripeWebhookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/about': typeof AboutRoute
-  '/checkout': typeof CheckoutRoute
-  '/contact': typeof ContactRoute
-  '/login': typeof LoginRoute
-  '/privacy': typeof PrivacyRoute
-  '/refund': typeof RefundRoute
-  '/shipping': typeof ShippingRoute
-  '/shop': typeof ShopRoute
-  '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/terms': typeof TermsRoute
-  '/thank-you': typeof ThankYouRoute
-  '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt': typeof Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRoute
-  '/admin/analytics': typeof AdminAnalyticsRoute
-  '/admin/compare': typeof AdminCompareRoute
-  '/admin/jarvis': typeof AdminJarvisRoute
-  '/admin/leads': typeof AdminLeadsRoute
-  '/admin/orders': typeof AdminOrdersRoute
-  '/admin/products': typeof AdminProductsRoute
-  '/admin/settings': typeof AdminSettingsRoute
-  '/admin/studio': typeof AdminStudioRoute
-  '/api/fulfillment-webhook-url': typeof ApiFulfillmentWebhookUrlRoute
-  '/api/printful-sync': typeof ApiPrintfulSyncRoute
-  '/api/product-add-or-update-webhook-url': typeof ApiProductAddOrUpdateWebhookUrlRoute
-  '/api/product-search-webhook-url': typeof ApiProductSearchWebhookUrlRoute
-  '/api/shipment-complete': typeof ApiShipmentCompleteRoute
-  '/offer/$slug': typeof OfferSlugRoute
-  '/admin/': typeof AdminIndexRoute
-  '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
+  "/": typeof IndexRoute
+  "/about": typeof AboutRoute
+  "/checkout": typeof CheckoutRoute
+  "/contact": typeof ContactRoute
+  "/login": typeof LoginRoute
+  "/privacy": typeof PrivacyRoute
+  "/refund": typeof RefundRoute
+  "/shipping": typeof ShippingRoute
+  "/shop": typeof ShopRoute
+  "/sitemap.xml": typeof SitemapDotxmlRoute
+  "/terms": typeof TermsRoute
+  "/thank-you": typeof ThankYouRoute
+  "/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt": typeof Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRoute
+  "/admin/analytics": typeof AdminAnalyticsRoute
+  "/admin/compare": typeof AdminCompareRoute
+  "/admin/jarvis": typeof AdminJarvisRoute
+  "/admin/leads": typeof AdminLeadsRoute
+  "/admin/orders": typeof AdminOrdersRoute
+  "/admin/products": typeof AdminProductsRoute
+  "/admin/settings": typeof AdminSettingsRoute
+  "/admin/studio": typeof AdminStudioRoute
+  "/api/fulfillment-webhook-url": typeof ApiFulfillmentWebhookUrlRoute
+  "/api/printful-sync": typeof ApiPrintfulSyncRoute
+  "/api/product-add-or-update-webhook-url": typeof ApiProductAddOrUpdateWebhookUrlRoute
+  "/api/product-search-webhook-url": typeof ApiProductSearchWebhookUrlRoute
+  "/api/shipment-complete": typeof ApiShipmentCompleteRoute
+  "/offer/$slug": typeof OfferSlugRoute
+  "/admin/": typeof AdminIndexRoute
+  "/api/public/stripe-webhook": typeof ApiPublicStripeWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    | '/'
-    | '/about'
-    | '/checkout'
-    | '/contact'
-    | '/login'
-    | '/privacy'
-    | '/refund'
-    | '/shipping'
-    | '/shop'
-    | '/sitemap.xml'
-    | '/terms'
-    | '/thank-you'
-    | '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt'
-    | '/admin/analytics'
-    | '/admin/compare'
-    | '/admin/jarvis'
-    | '/admin/leads'
-    | '/admin/orders'
-    | '/admin/products'
-    | '/admin/settings'
-    | '/admin/studio'
-    | '/api/fulfillment-webhook-url'
-    | '/api/printful-sync'
-    | '/api/product-add-or-update-webhook-url'
-    | '/api/product-search-webhook-url'
-    | '/api/shipment-complete'
-    | '/offer/$slug'
-    | '/admin/'
-    | '/api/public/stripe-webhook'
+    | "/"
+    | "/about"
+    | "/checkout"
+    | "/contact"
+    | "/login"
+    | "/privacy"
+    | "/refund"
+    | "/shipping"
+    | "/shop"
+    | "/sitemap.xml"
+    | "/terms"
+    | "/thank-you"
+    | "/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt"
+    | "/admin/analytics"
+    | "/admin/compare"
+    | "/admin/jarvis"
+    | "/admin/leads"
+    | "/admin/orders"
+    | "/admin/products"
+    | "/admin/settings"
+    | "/admin/studio"
+    | "/api/fulfillment-webhook-url"
+    | "/api/printful-sync"
+    | "/api/product-add-or-update-webhook-url"
+    | "/api/product-search-webhook-url"
+    | "/api/shipment-complete"
+    | "/offer/$slug"
+    | "/admin/"
+    | "/api/public/stripe-webhook"
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/'
-    | '/about'
-    | '/checkout'
-    | '/contact'
-    | '/login'
-    | '/privacy'
-    | '/refund'
-    | '/shipping'
-    | '/shop'
-    | '/sitemap.xml'
-    | '/terms'
-    | '/thank-you'
-    | '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt'
-    | '/admin/analytics'
-    | '/admin/compare'
-    | '/admin/jarvis'
-    | '/admin/leads'
-    | '/admin/orders'
-    | '/admin/products'
-    | '/admin/settings'
-    | '/admin/studio'
-    | '/api/fulfillment-webhook-url'
-    | '/api/printful-sync'
-    | '/api/product-add-or-update-webhook-url'
-    | '/api/product-search-webhook-url'
-    | '/api/shipment-complete'
-    | '/offer/$slug'
-    | '/admin'
-    | '/api/public/stripe-webhook'
+    | "/"
+    | "/about"
+    | "/checkout"
+    | "/contact"
+    | "/login"
+    | "/privacy"
+    | "/refund"
+    | "/shipping"
+    | "/shop"
+    | "/sitemap.xml"
+    | "/terms"
+    | "/thank-you"
+    | "/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt"
+    | "/admin/analytics"
+    | "/admin/compare"
+    | "/admin/jarvis"
+    | "/admin/leads"
+    | "/admin/orders"
+    | "/admin/products"
+    | "/admin/settings"
+    | "/admin/studio"
+    | "/api/fulfillment-webhook-url"
+    | "/api/printful-sync"
+    | "/api/product-add-or-update-webhook-url"
+    | "/api/product-search-webhook-url"
+    | "/api/shipment-complete"
+    | "/offer/$slug"
+    | "/admin"
+    | "/api/public/stripe-webhook"
   id:
-    | '__root__'
-    | '/'
-    | '/about'
-    | '/checkout'
-    | '/contact'
-    | '/login'
-    | '/privacy'
-    | '/refund'
-    | '/shipping'
-    | '/shop'
-    | '/sitemap.xml'
-    | '/terms'
-    | '/thank-you'
-    | '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt'
-    | '/admin/analytics'
-    | '/admin/compare'
-    | '/admin/jarvis'
-    | '/admin/leads'
-    | '/admin/orders'
-    | '/admin/products'
-    | '/admin/settings'
-    | '/admin/studio'
-    | '/api/fulfillment-webhook-url'
-    | '/api/printful-sync'
-    | '/api/product-add-or-update-webhook-url'
-    | '/api/product-search-webhook-url'
-    | '/api/shipment-complete'
-    | '/offer/$slug'
-    | '/admin/'
-    | '/api/public/stripe-webhook'
+    | "__root__"
+    | "/"
+    | "/about"
+    | "/checkout"
+    | "/contact"
+    | "/login"
+    | "/privacy"
+    | "/refund"
+    | "/shipping"
+    | "/shop"
+    | "/sitemap.xml"
+    | "/terms"
+    | "/thank-you"
+    | "/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt"
+    | "/admin/analytics"
+    | "/admin/compare"
+    | "/admin/jarvis"
+    | "/admin/leads"
+    | "/admin/orders"
+    | "/admin/products"
+    | "/admin/settings"
+    | "/admin/studio"
+    | "/api/fulfillment-webhook-url"
+    | "/api/printful-sync"
+    | "/api/product-add-or-update-webhook-url"
+    | "/api/product-search-webhook-url"
+    | "/api/shipment-complete"
+    | "/offer/$slug"
+    | "/admin/"
+    | "/api/public/stripe-webhook"
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -411,208 +411,208 @@ export interface RootRouteChildren {
   ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
 }
 
-declare module '@tanstack/react-router' {
+declare module "@tanstack/react-router" {
   interface FileRoutesByPath {
-    '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt': {
-      id: '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt'
-      path: '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt'
-      fullPath: '/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt'
+    "/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt": {
+      id: "/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt"
+      path: "/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt"
+      fullPath: "/tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477y.txt"
       preLoaderRoute: typeof Tiktoks7OhwqSNMkKjhQ9hTqqztfhXYNk2477yDottxtRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/thank-you': {
-      id: '/thank-you'
-      path: '/thank-you'
-      fullPath: '/thank-you'
+    "/thank-you": {
+      id: "/thank-you"
+      path: "/thank-you"
+      fullPath: "/thank-you"
       preLoaderRoute: typeof ThankYouRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/terms': {
-      id: '/terms'
-      path: '/terms'
-      fullPath: '/terms'
+    "/terms": {
+      id: "/terms"
+      path: "/terms"
+      fullPath: "/terms"
       preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/sitemap.xml': {
-      id: '/sitemap.xml'
-      path: '/sitemap.xml'
-      fullPath: '/sitemap.xml'
+    "/sitemap.xml": {
+      id: "/sitemap.xml"
+      path: "/sitemap.xml"
+      fullPath: "/sitemap.xml"
       preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/shop': {
-      id: '/shop'
-      path: '/shop'
-      fullPath: '/shop'
+    "/shop": {
+      id: "/shop"
+      path: "/shop"
+      fullPath: "/shop"
       preLoaderRoute: typeof ShopRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/shipping': {
-      id: '/shipping'
-      path: '/shipping'
-      fullPath: '/shipping'
+    "/shipping": {
+      id: "/shipping"
+      path: "/shipping"
+      fullPath: "/shipping"
       preLoaderRoute: typeof ShippingRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/refund': {
-      id: '/refund'
-      path: '/refund'
-      fullPath: '/refund'
+    "/refund": {
+      id: "/refund"
+      path: "/refund"
+      fullPath: "/refund"
       preLoaderRoute: typeof RefundRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/privacy': {
-      id: '/privacy'
-      path: '/privacy'
-      fullPath: '/privacy'
+    "/privacy": {
+      id: "/privacy"
+      path: "/privacy"
+      fullPath: "/privacy"
       preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
+    "/login": {
+      id: "/login"
+      path: "/login"
+      fullPath: "/login"
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/contact': {
-      id: '/contact'
-      path: '/contact'
-      fullPath: '/contact'
+    "/contact": {
+      id: "/contact"
+      path: "/contact"
+      fullPath: "/contact"
       preLoaderRoute: typeof ContactRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/checkout': {
-      id: '/checkout'
-      path: '/checkout'
-      fullPath: '/checkout'
+    "/checkout": {
+      id: "/checkout"
+      path: "/checkout"
+      fullPath: "/checkout"
       preLoaderRoute: typeof CheckoutRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/about': {
-      id: '/about'
-      path: '/about'
-      fullPath: '/about'
+    "/about": {
+      id: "/about"
+      path: "/about"
+      fullPath: "/about"
       preLoaderRoute: typeof AboutRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
+    "/": {
+      id: "/"
+      path: "/"
+      fullPath: "/"
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/': {
-      id: '/admin/'
-      path: '/admin'
-      fullPath: '/admin/'
+    "/admin/": {
+      id: "/admin/"
+      path: "/admin"
+      fullPath: "/admin/"
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/offer/$slug': {
-      id: '/offer/$slug'
-      path: '/offer/$slug'
-      fullPath: '/offer/$slug'
+    "/offer/$slug": {
+      id: "/offer/$slug"
+      path: "/offer/$slug"
+      fullPath: "/offer/$slug"
       preLoaderRoute: typeof OfferSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/shipment-complete': {
-      id: '/api/shipment-complete'
-      path: '/api/shipment-complete'
-      fullPath: '/api/shipment-complete'
+    "/api/shipment-complete": {
+      id: "/api/shipment-complete"
+      path: "/api/shipment-complete"
+      fullPath: "/api/shipment-complete"
       preLoaderRoute: typeof ApiShipmentCompleteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/product-search-webhook-url': {
-      id: '/api/product-search-webhook-url'
-      path: '/api/product-search-webhook-url'
-      fullPath: '/api/product-search-webhook-url'
+    "/api/product-search-webhook-url": {
+      id: "/api/product-search-webhook-url"
+      path: "/api/product-search-webhook-url"
+      fullPath: "/api/product-search-webhook-url"
       preLoaderRoute: typeof ApiProductSearchWebhookUrlRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/product-add-or-update-webhook-url': {
-      id: '/api/product-add-or-update-webhook-url'
-      path: '/api/product-add-or-update-webhook-url'
-      fullPath: '/api/product-add-or-update-webhook-url'
+    "/api/product-add-or-update-webhook-url": {
+      id: "/api/product-add-or-update-webhook-url"
+      path: "/api/product-add-or-update-webhook-url"
+      fullPath: "/api/product-add-or-update-webhook-url"
       preLoaderRoute: typeof ApiProductAddOrUpdateWebhookUrlRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/printful-sync': {
-      id: '/api/printful-sync'
-      path: '/api/printful-sync'
-      fullPath: '/api/printful-sync'
+    "/api/printful-sync": {
+      id: "/api/printful-sync"
+      path: "/api/printful-sync"
+      fullPath: "/api/printful-sync"
       preLoaderRoute: typeof ApiPrintfulSyncRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/fulfillment-webhook-url': {
-      id: '/api/fulfillment-webhook-url'
-      path: '/api/fulfillment-webhook-url'
-      fullPath: '/api/fulfillment-webhook-url'
+    "/api/fulfillment-webhook-url": {
+      id: "/api/fulfillment-webhook-url"
+      path: "/api/fulfillment-webhook-url"
+      fullPath: "/api/fulfillment-webhook-url"
       preLoaderRoute: typeof ApiFulfillmentWebhookUrlRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/studio': {
-      id: '/admin/studio'
-      path: '/admin/studio'
-      fullPath: '/admin/studio'
+    "/admin/studio": {
+      id: "/admin/studio"
+      path: "/admin/studio"
+      fullPath: "/admin/studio"
       preLoaderRoute: typeof AdminStudioRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/settings': {
-      id: '/admin/settings'
-      path: '/admin/settings'
-      fullPath: '/admin/settings'
+    "/admin/settings": {
+      id: "/admin/settings"
+      path: "/admin/settings"
+      fullPath: "/admin/settings"
       preLoaderRoute: typeof AdminSettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/products': {
-      id: '/admin/products'
-      path: '/admin/products'
-      fullPath: '/admin/products'
+    "/admin/products": {
+      id: "/admin/products"
+      path: "/admin/products"
+      fullPath: "/admin/products"
       preLoaderRoute: typeof AdminProductsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/orders': {
-      id: '/admin/orders'
-      path: '/admin/orders'
-      fullPath: '/admin/orders'
+    "/admin/orders": {
+      id: "/admin/orders"
+      path: "/admin/orders"
+      fullPath: "/admin/orders"
       preLoaderRoute: typeof AdminOrdersRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/leads': {
-      id: '/admin/leads'
-      path: '/admin/leads'
-      fullPath: '/admin/leads'
+    "/admin/leads": {
+      id: "/admin/leads"
+      path: "/admin/leads"
+      fullPath: "/admin/leads"
       preLoaderRoute: typeof AdminLeadsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/jarvis': {
-      id: '/admin/jarvis'
-      path: '/admin/jarvis'
-      fullPath: '/admin/jarvis'
+    "/admin/jarvis": {
+      id: "/admin/jarvis"
+      path: "/admin/jarvis"
+      fullPath: "/admin/jarvis"
       preLoaderRoute: typeof AdminJarvisRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/compare': {
-      id: '/admin/compare'
-      path: '/admin/compare'
-      fullPath: '/admin/compare'
+    "/admin/compare": {
+      id: "/admin/compare"
+      path: "/admin/compare"
+      fullPath: "/admin/compare"
       preLoaderRoute: typeof AdminCompareRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/analytics': {
-      id: '/admin/analytics'
-      path: '/admin/analytics'
-      fullPath: '/admin/analytics'
+    "/admin/analytics": {
+      id: "/admin/analytics"
+      path: "/admin/analytics"
+      fullPath: "/admin/analytics"
       preLoaderRoute: typeof AdminAnalyticsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/stripe-webhook': {
-      id: '/api/public/stripe-webhook'
-      path: '/api/public/stripe-webhook'
-      fullPath: '/api/public/stripe-webhook'
+    "/api/public/stripe-webhook": {
+      id: "/api/public/stripe-webhook"
+      path: "/api/public/stripe-webhook"
+      fullPath: "/api/public/stripe-webhook"
       preLoaderRoute: typeof ApiPublicStripeWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
@@ -654,13 +654,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
