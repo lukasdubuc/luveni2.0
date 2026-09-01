@@ -436,7 +436,7 @@ export function useSpeechOutput({ onStart, onBoundary, onEnd }: UseSpeechOutputO
         catch (e) {
           // Server TTS failed (e.g. ELEVENLABS_API_KEY missing → { error }).
           if (!playedAny) nativeFallback(e);
-          else { if (nextP && idx < chunks.length) void playNext(); else finish(); }
+          else { if (idx < chunks.length) void playNext(); else finish(); }
           return;
         }
         if (!speaking.current) { try { URL.revokeObjectURL(url); } catch (_) {} finish(); return; }

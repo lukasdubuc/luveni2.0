@@ -35,6 +35,333 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_messages: {
+        Row: {
+          content: string
+          created_at: string
+          data: Json | null
+          from_agent: string
+          id: string
+          role: string
+          task_id: string | null
+          to_agent: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          data?: Json | null
+          from_agent: string
+          id?: string
+          role?: string
+          task_id?: string | null
+          to_agent?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          data?: Json | null
+          from_agent?: string
+          id?: string
+          role?: string
+          task_id?: string | null
+          to_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_messages_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "agent_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_runs: {
+        Row: {
+          agent: string
+          created_at: string
+          duration_ms: number | null
+          id: string
+          input_tokens: number | null
+          output_tokens: number | null
+          status: string
+          summary: string | null
+          task_id: string | null
+          tool_calls: Json | null
+        }
+        Insert: {
+          agent: string
+          created_at?: string
+          duration_ms?: number | null
+          id?: string
+          input_tokens?: number | null
+          output_tokens?: number | null
+          status: string
+          summary?: string | null
+          task_id?: string | null
+          tool_calls?: Json | null
+        }
+        Update: {
+          agent?: string
+          created_at?: string
+          duration_ms?: number | null
+          id?: string
+          input_tokens?: number | null
+          output_tokens?: number | null
+          status?: string
+          summary?: string | null
+          task_id?: string | null
+          tool_calls?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_runs_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "agent_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_tasks: {
+        Row: {
+          assignee: string | null
+          claimed_at: string | null
+          created_at: string
+          created_by: string
+          depends_on: string | null
+          error: string | null
+          finished_at: string | null
+          id: string
+          input: Json
+          kind: string
+          priority: number
+          result: Json | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          assignee?: string | null
+          claimed_at?: string | null
+          created_at?: string
+          created_by?: string
+          depends_on?: string | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          input?: Json
+          kind: string
+          priority?: number
+          result?: Json | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          assignee?: string | null
+          claimed_at?: string | null
+          created_at?: string
+          created_by?: string
+          depends_on?: string | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          input?: Json
+          kind?: string
+          priority?: number
+          result?: Json | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_tasks_depends_on_fkey"
+            columns: ["depends_on"]
+            isOneToOne: false
+            referencedRelation: "agent_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_envelopes: {
+        Row: {
+          allocation: number
+          balance_cents: number
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          allocation?: number
+          balance_cents?: number
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          allocation?: number
+          balance_cents?: number
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      budget_ledger: {
+        Row: {
+          created_at: string
+          delta_cents: number
+          envelope: string
+          id: string
+          memo: string | null
+          order_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          delta_cents: number
+          envelope: string
+          id?: string
+          memo?: string | null
+          order_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          delta_cents?: number
+          envelope?: string
+          id?: string
+          memo?: string | null
+          order_id?: string | null
+        }
+        Relationships: []
+      }
+      channel_publications: {
+        Row: {
+          channel: string
+          created_at: string
+          external_id: string | null
+          id: string
+          last_error: string | null
+          payload: Json | null
+          product_id: string
+          published_at: string | null
+          selected_media: Json
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          channel: string
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          last_error?: string | null
+          payload?: Json | null
+          product_id: string
+          published_at?: string | null
+          selected_media?: Json
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          last_error?: string | null
+          payload?: Json | null
+          product_id?: string
+          published_at?: string | null
+          selected_media?: Json
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_publications_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_publications_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cj_webhook_events: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          payload: Json | null
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          payload?: Json | null
+          type?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          payload?: Json | null
+          type?: string
+        }
+        Relationships: []
+      }
+      designs: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          height: number | null
+          id: string
+          image_path: string | null
+          image_url: string
+          metadata: Json | null
+          model: string | null
+          prompt: string | null
+          status: string
+          title: string
+          updated_at: string
+          width: number | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          height?: number | null
+          id?: string
+          image_path?: string | null
+          image_url: string
+          metadata?: Json | null
+          model?: string | null
+          prompt?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          width?: number | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          height?: number | null
+          id?: string
+          image_path?: string | null
+          image_url?: string
+          metadata?: Json | null
+          model?: string | null
+          prompt?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          width?: number | null
+        }
+        Relationships: []
+      }
       leads: {
         Row: {
           created_at: string
@@ -194,23 +521,131 @@ export type Database = {
           },
         ]
       }
+      pricing_rules: {
+        Row: {
+          active: boolean
+          category: string
+          examples: string | null
+          fee_rate: number
+          key: string
+          match_keywords: string[]
+          min_profit_cents: number
+          ship_addl_cents: number
+          ship_first_cents: number
+          target_margin: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          category: string
+          examples?: string | null
+          fee_rate?: number
+          key: string
+          match_keywords?: string[]
+          min_profit_cents?: number
+          ship_addl_cents?: number
+          ship_first_cents?: number
+          target_margin?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          category?: string
+          examples?: string | null
+          fee_rate?: number
+          key?: string
+          match_keywords?: string[]
+          min_profit_cents?: number
+          ship_addl_cents?: number
+          ship_first_cents?: number
+          target_margin?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      product_media: {
+        Row: {
+          created_at: string
+          id: string
+          is_primary: boolean
+          is_transparent: boolean
+          metadata: Json
+          position: number
+          product_id: string
+          source: string
+          url: string
+          variant_key: string | null
+          view_type: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          is_transparent?: boolean
+          metadata?: Json
+          position?: number
+          product_id: string
+          source?: string
+          url: string
+          variant_key?: string | null
+          view_type?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          is_transparent?: boolean
+          metadata?: Json
+          position?: number
+          product_id?: string
+          source?: string
+          url?: string
+          variant_key?: string | null
+          view_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_media_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_media_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           api_synced_at: string | null
           apliq_id: string | null
+          buffer_qty: number
+          category: string | null
+          cost_cents: number | null
           created_at: string
           currency: string
           description: string | null
           display_order: number | null
+          external_product_id: string | null
           fulfillment_type: string | null
           id: string
           image_urls: string[]
           is_archived: boolean | null
           is_published: boolean
+          last_low_stock_alert_at: string | null
+          low_stock_threshold: number
           price_cents: number
           price_cents_discounted: number | null
           printful_id: string | null
+          raw_payload: Json | null
+          shipping_cents: number | null
           slug: string
+          source: string
           title: string
           updated_at: string
           variants: Json
@@ -218,19 +653,28 @@ export type Database = {
         Insert: {
           api_synced_at?: string | null
           apliq_id?: string | null
+          buffer_qty?: number
+          category?: string | null
+          cost_cents?: number | null
           created_at?: string
           currency?: string
           description?: string | null
           display_order?: number | null
+          external_product_id?: string | null
           fulfillment_type?: string | null
           id?: string
           image_urls?: string[]
           is_archived?: boolean | null
           is_published?: boolean
+          last_low_stock_alert_at?: string | null
+          low_stock_threshold?: number
           price_cents?: number
           price_cents_discounted?: number | null
           printful_id?: string | null
+          raw_payload?: Json | null
+          shipping_cents?: number | null
           slug: string
+          source?: string
           title: string
           updated_at?: string
           variants?: Json
@@ -238,19 +682,28 @@ export type Database = {
         Update: {
           api_synced_at?: string | null
           apliq_id?: string | null
+          buffer_qty?: number
+          category?: string | null
+          cost_cents?: number | null
           created_at?: string
           currency?: string
           description?: string | null
           display_order?: number | null
+          external_product_id?: string | null
           fulfillment_type?: string | null
           id?: string
           image_urls?: string[]
           is_archived?: boolean | null
           is_published?: boolean
+          last_low_stock_alert_at?: string | null
+          low_stock_threshold?: number
           price_cents?: number
           price_cents_discounted?: number | null
           printful_id?: string | null
+          raw_payload?: Json | null
+          shipping_cents?: number | null
           slug?: string
+          source?: string
           title?: string
           updated_at?: string
           variants?: Json
@@ -314,6 +767,295 @@ export type Database = {
         }
         Relationships: []
       }
+      studio_projects: {
+        Row: {
+          artboard_h: number | null
+          artboard_w: number | null
+          canvas: Json
+          canvas_kind: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          manufacturer: string | null
+          metadata: Json | null
+          name: string
+          price_cents: number | null
+          print_area: Json | null
+          source: string | null
+          status: string
+          template_image: string | null
+          template_key: string | null
+          thumbnail_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          artboard_h?: number | null
+          artboard_w?: number | null
+          canvas?: Json
+          canvas_kind?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          manufacturer?: string | null
+          metadata?: Json | null
+          name?: string
+          price_cents?: number | null
+          print_area?: Json | null
+          source?: string | null
+          status?: string
+          template_image?: string | null
+          template_key?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          artboard_h?: number | null
+          artboard_w?: number | null
+          canvas?: Json
+          canvas_kind?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          manufacturer?: string | null
+          metadata?: Json | null
+          name?: string
+          price_cents?: number | null
+          print_area?: Json | null
+          source?: string | null
+          status?: string
+          template_image?: string | null
+          template_key?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      supplier_integrations: {
+        Row: {
+          created_at: string
+          credentials: Json
+          enabled: boolean
+          id: string
+          name: string
+          notes: string | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          credentials?: Json
+          enabled?: boolean
+          id?: string
+          name: string
+          notes?: string | null
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          credentials?: Json
+          enabled?: boolean
+          id?: string
+          name?: string
+          notes?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tiktok_accounts: {
+        Row: {
+          access_expires_at: string
+          access_token: string
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          open_id: string
+          refresh_expires_at: string | null
+          refresh_token: string
+          scope: string | null
+          union_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_expires_at: string
+          access_token: string
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          open_id: string
+          refresh_expires_at?: string | null
+          refresh_token: string
+          scope?: string | null
+          union_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_expires_at?: string
+          access_token?: string
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          open_id?: string
+          refresh_expires_at?: string | null
+          refresh_token?: string
+          scope?: string | null
+          union_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tiktok_oauth_states: {
+        Row: {
+          code_verifier: string
+          created_at: string
+          state: string
+        }
+        Insert: {
+          code_verifier: string
+          created_at?: string
+          state: string
+        }
+        Update: {
+          code_verifier?: string
+          created_at?: string
+          state?: string
+        }
+        Relationships: []
+      }
+      tiktok_post_queue: {
+        Row: {
+          account_id: string | null
+          approved_at: string | null
+          caption: string
+          created_at: string
+          error: string | null
+          id: string
+          media_url: string
+          posted_at: string | null
+          privacy_level: string
+          product_id: string | null
+          publish_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          account_id?: string | null
+          approved_at?: string | null
+          caption?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          media_url: string
+          posted_at?: string | null
+          privacy_level?: string
+          product_id?: string | null
+          publish_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string | null
+          approved_at?: string | null
+          caption?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          media_url?: string
+          posted_at?: string | null
+          privacy_level?: string
+          product_id?: string | null
+          publish_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tiktok_post_queue_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "tiktok_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tiktok_post_queue_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tiktok_post_queue_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tiktok_posts: {
+        Row: {
+          created_at: string
+          id: string
+          media: Json
+          post_mode: string
+          post_type: string
+          privacy: string
+          product_id: string | null
+          publish_id: string | null
+          raw: Json | null
+          status: string
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          media?: Json
+          post_mode?: string
+          post_type: string
+          privacy?: string
+          product_id?: string | null
+          publish_id?: string | null
+          raw?: Json | null
+          status?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          media?: Json
+          post_mode?: string
+          post_type?: string
+          privacy?: string
+          product_id?: string | null
+          publish_id?: string | null
+          raw?: Json | null
+          status?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tiktok_posts_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tiktok_posts_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -350,6 +1092,7 @@ export type Database = {
           price_cents: number | null
           price_cents_discounted: number | null
           slug: string | null
+          source: string | null
           title: string | null
           updated_at: string | null
           variants: Json | null
@@ -366,9 +1109,10 @@ export type Database = {
           price_cents?: number | null
           price_cents_discounted?: number | null
           slug?: string | null
+          source?: string | null
           title?: string | null
           updated_at?: string | null
-          variants?: Json | null
+          variants?: never
         }
         Update: {
           created_at?: string | null
@@ -382,14 +1126,19 @@ export type Database = {
           price_cents?: number | null
           price_cents_discounted?: number | null
           slug?: string | null
+          source?: string | null
           title?: string | null
           updated_at?: string | null
-          variants?: Json | null
+          variants?: never
         }
         Relationships: []
       }
     }
     Functions: {
+      apply_inventory_buffer: {
+        Args: { buffer: number; variants: Json }
+        Returns: Json
+      }
       delete_order: { Args: { order_id: string }; Returns: undefined }
       generate_tts_audio: { Args: { text_to_speak: string }; Returns: string }
       has_role: {
